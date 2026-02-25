@@ -24,3 +24,4 @@ venv/
 artifacts/
 *.zip
 *.json
+*.egg-info/
