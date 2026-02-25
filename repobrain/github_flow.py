@@ -208,6 +208,10 @@ def _build_post_client() -> GitHubClient:
     return GitHubClient(repo=repo, token=token)
 
 
+def _internal_reactions_enabled() -> bool:
+    return os.environ.get("RB_DISABLE_INTERNAL_REACTIONS", "").strip() != "1"
+
+
 def question_from_command(cmd: str, query: str) -> str:
     """Convert parsed command into a retrieval/answering question string."""
     if cmd == "review":
@@ -339,7 +343,7 @@ def run_github_flow(
         if resolved_issue_number is None:
             raise ValueError("issue_number is required when dry_run=False")
         client = _build_post_client()
-        if event_ctx.comment_id is not None:
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
             client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
 
     if cmd == "help":

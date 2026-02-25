@@ -42,6 +42,7 @@ runs:
     - name: Run RepoBrain GitHub dry-run wiring
       shell: bash
       env:
+        RB_DISABLE_INTERNAL_REACTIONS: "1"
         GITHUB_TOKEN: ${{ github.token }}
       run: >
         python scripts/run_github.py
