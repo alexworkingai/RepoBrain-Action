@@ -22,3 +22,14 @@ GitHub Actions note:
 
 * `issue_number`: use digits only; `#` prefix is also accepted (for example `1` or `#1`).
 * Action uses `github.token` automatically; ensure workflow has `issues: write` permissions for posting comments.
+
+UX notes:
+
+* On `/repobrain ...` commands from users, the bot adds an `👀` reaction first (non-dry-run), then posts a reply comment.
+* Bot comments (for example `github-actions[bot]`) are ignored to avoid loops.
+
+PR Review:
+
+* Use `/repobrain review` in a Pull Request discussion (issue comments on a PR).
+* RepoBrain fetches changed files, builds a lightweight risk summary, and posts a markdown PR review comment.
+* `/repobrain review` is not available in regular Issues (non-PR threads).
