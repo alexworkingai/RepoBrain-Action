@@ -18,6 +18,10 @@ inputs:
     description: "If true, print comment instead of publishing to GitHub"
     required: false
     default: "true"
+  issue_number:
+    description: "Issue number to post comment to (used when dry_run=false)"
+    required: false
+    default: ""
   comment_text:
     description: "Optional comment text for workflow_dispatch dry-run tests"
     required: false
@@ -40,6 +44,7 @@ runs:
       run: >
         python scripts/run_github.py
         --dry-run "${{ inputs.dry_run }}"
+        --issue-number "${{ inputs.issue_number }}"
         --tky-mode "${{ inputs.tky_mode }}"
         --remote-url "${{ inputs.remote_url }}"
         --api-key "${{ inputs.api_key }}"

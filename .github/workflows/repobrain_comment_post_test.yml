@@ -1,0 +1,34 @@
+name: RepoBrain Comment Post Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to comment on"
+        required: true
+        type: string
+      comment_text:
+        description: "RepoBrain command text"
+        required: false
+        default: "/repobrain ask Где реализована логика TKYProvider?"
+        type: string
+      dry_run:
+        description: "true = print only, false = post to issue"
+        required: false
+        default: "true"
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  post-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./. 
+        with:
+          dry_run: ${{ inputs.dry_run }}
+          issue_number: ${{ inputs.issue_number }}
+          comment_text: ${{ inputs.comment_text }}

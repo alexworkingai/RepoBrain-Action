@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import tempfile
+
+import requests
 
 from repobrain.ask import answer_question, make_provider
 from repobrain.commands import parse_command
@@ -19,6 +22,35 @@ HELP_TEXT = """RepoBrain command examples:
 - /repobrain explain retrieve_topk
 - /repobrain review
 """
+
+
+def build_issue_comment_url(repo: str, issue_number: int) -> str:
+    """Build GitHub REST URL for creating an issue comment."""
+    return f"https://api.github.com/repos/{repo}/issues/{issue_number}/comments"
+
+
+class GitHubClient:
+    """Minimal GitHub REST client for issue comments."""
+
+    def __init__(self, repo: str, token: str) -> None:
+        self.repo = repo
+        self.token = token
+
+    def create_issue_comment(self, issue_number: int, body_markdown: str) -> None:
+        """POST a comment to a GitHub Issue or PR thread."""
+        url = build_issue_comment_url(self.repo, issue_number)
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        response = requests.post(
+            url,
+            json={"body": body_markdown},
+            headers=headers,
+            timeout=15,
+        )
+        response.raise_for_status()
 
 
 def extract_comment_text_from_event(event_path: Path | None) -> str:
@@ -65,53 +97,73 @@ def run_github_flow(
     *,
     repo_root: Path,
     dry_run: bool,
+    comment_text: str,
+    issue_number: int | None,
     tky_mode: str = "baseline",
     remote_url: str = "",
     api_key: str = "",
-    comment_text: str = "",
     event_path: Path | None = None,
 ) -> str:
-    """Run RepoBrain GitHub wiring flow and return the text that would be printed."""
+    """Run RepoBrain GitHub flow in dry-run or post mode."""
     source_text = comment_text or extract_comment_text_from_event(event_path)
+    mode_label = "DRY_RUN" if dry_run else "POST_MODE"
+
+    if not source_text.strip().startswith("/repobrain"):
+        print(f"Mode={mode_label}")
+        print("Cmd=ignored")
+        print("Query=")
+        print("Ignored: comment does not start with /repobrain")
+        return "IGNORED"
+
     parsed = parse_command(source_text)
     cmd = parsed["cmd"]
     query = parsed["query"]
-    mode_label = "DRY_RUN" if dry_run else "LIVE_NOT_IMPLEMENTED"
-
-    lines = [
-        f"Mode={mode_label}",
-        f"Cmd={cmd}",
-        f"Query={query}",
-    ]
+    print(f"Mode={mode_label}")
+    print(f"Cmd={cmd}")
+    print(f"Query={query}")
 
     if cmd == "help":
-        return "\n".join([*lines, "", HELP_TEXT.strip()])
+        body_markdown = HELP_TEXT.strip()
+    else:
+        cfg = load_config(repo_root)
+        index_path = repo_root / "artifacts" / "index-package.zip"
+        question = question_from_command(cmd, query)
+        chunks = load_or_build_chunks(repo_root, index_path)
+        candidates = retrieve_topk(question, chunks, topk=cfg.topk)
 
-    cfg = load_config(repo_root)
-    index_path = repo_root / "artifacts" / "index-package.zip"
-    question = question_from_command(cmd, query)
-    chunks = load_or_build_chunks(repo_root, index_path)
-    candidates = retrieve_topk(question, chunks, topk=cfg.topk)
+        provider = make_provider(
+            tky_mode,
+            remote_url=remote_url or None,
+            api_key=api_key or None,
+        )
+        result = answer_question(
+            question=question,
+            candidates=candidates,
+            provider=provider,
+            limits={"max_sources": cfg.max_sources},
+        )
+        body_markdown = format_github_comment(
+            result.answer_text,
+            result.evidence,
+            result.audit_summary,
+            result.next_steps,
+        )
 
-    provider = make_provider(
-        tky_mode,
-        remote_url=remote_url or None,
-        api_key=api_key or None,
-    )
-    result = answer_question(
-        question=question,
-        candidates=candidates,
-        provider=provider,
-        limits={"max_sources": cfg.max_sources},
-    )
-    markdown = format_github_comment(
-        result.answer_text,
-        result.evidence,
-        result.audit_summary,
-        result.next_steps,
-    )
+    if dry_run:
+        print(body_markdown)
+        return "DRY_RUN_OK"
 
-    if not dry_run:
-        lines.append("Note=Live GitHub comment publish is not implemented in Sprint 3.1")
+    if issue_number is None:
+        raise ValueError("issue_number is required when dry_run=False")
 
-    return "\n".join([*lines, "", markdown])
+    repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if not repo:
+        raise ValueError("GITHUB_REPOSITORY is required when dry_run=False")
+    if not token:
+        raise ValueError("GITHUB_TOKEN is required when dry_run=False")
+
+    client = GitHubClient(repo=repo, token=token)
+    client.create_issue_comment(issue_number=issue_number, body_markdown=body_markdown)
+    print(f"Posted comment to issue #{issue_number}")
+    return "POSTED_OK"
