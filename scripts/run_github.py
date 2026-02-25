@@ -4,18 +4,11 @@ import argparse
 import os
 from pathlib import Path
 
-from repobrain.github_flow import run_github_flow
+from repobrain.github_flow import parse_issue_number, run_github_flow
 
 
 def _parse_bool(value: str) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
-
-
-def _parse_issue_number(value: str) -> int | None:
-    raw = str(value).strip()
-    if not raw or raw == "0":
-        return None
-    return int(raw)
 
 
 def main() -> int:
@@ -29,9 +22,9 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        issue_number = _parse_issue_number(args.issue_number)
+        issue_number = parse_issue_number(args.issue_number)
     except ValueError as exc:
-        raise SystemExit(f"Invalid --issue-number: {args.issue_number}") from exc
+        raise SystemExit(str(exc)) from exc
 
     event_path_raw = os.environ.get("GITHUB_EVENT_PATH", "")
     event_path = Path(event_path_raw) if event_path_raw else None

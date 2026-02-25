@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: "Issue number to comment on"
+        description: "Issue number to comment on (digits only; # prefix also accepted)"
         required: true
         type: string
       comment_text:

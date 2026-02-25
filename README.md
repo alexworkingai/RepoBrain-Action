@@ -17,3 +17,8 @@ Quick start (PowerShell):
    pytest -q
 4. Lint:
    ruff check .
+
+GitHub Actions note:
+
+* `issue_number`: use digits only; `#` prefix is also accepted (for example `1` or `#1`).
+* Action uses `github.token` automatically; ensure workflow has `issues: write` permissions for posting comments.

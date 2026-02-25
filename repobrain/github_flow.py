@@ -24,6 +24,18 @@ HELP_TEXT = """RepoBrain command examples:
 """
 
 
+def parse_issue_number(value: str | None) -> int | None:
+    """Parse issue number from CLI/UI input (`1` or `#1`)."""
+    raw = (value or "").strip()
+    if not raw or raw == "0":
+        return None
+    if raw.startswith("#"):
+        raw = raw[1:].strip()
+    if not raw.isdigit():
+        raise ValueError(f"Invalid --issue-number: {value}")
+    return int(raw)
+
+
 def build_issue_comment_url(repo: str, issue_number: int) -> str:
     """Build GitHub REST URL for creating an issue comment."""
     return f"https://api.github.com/repos/{repo}/issues/{issue_number}/comments"
