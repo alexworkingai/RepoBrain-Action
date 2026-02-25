@@ -24,6 +24,18 @@ HELP_TEXT = """RepoBrain command examples:
 """
 
 
+def _load_event_payload(event_path: Path | None) -> dict[str, object]:
+    if event_path is None or not event_path.exists():
+        return {}
+
+    try:
+        payload = json.loads(event_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+    return payload if isinstance(payload, dict) else {}
+
+
 def parse_issue_number(value: str | None) -> int | None:
     """Parse issue number from CLI/UI input (`1` or `#1`)."""
     raw = (value or "").strip()
@@ -67,20 +79,28 @@ class GitHubClient:
 
 def extract_comment_text_from_event(event_path: Path | None) -> str:
     """Extract `comment.body` from a GitHub event payload file."""
-    if event_path is None or not event_path.exists():
-        return ""
-
-    try:
-        payload = json.loads(event_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return ""
-
+    payload = _load_event_payload(event_path)
     comment = payload.get("comment", {})
     if not isinstance(comment, dict):
         return ""
 
     body = comment.get("body")
     return body if isinstance(body, str) else ""
+
+
+def extract_issue_number_from_event(event_path: Path | None) -> int | None:
+    """Extract `issue.number` from a GitHub event payload file."""
+    payload = _load_event_payload(event_path)
+    issue = payload.get("issue", {})
+    if not isinstance(issue, dict):
+        return None
+
+    value = issue.get("number")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return parse_issue_number(value)
+    return None
 
 
 def question_from_command(cmd: str, query: str) -> str:
@@ -117,10 +137,19 @@ def run_github_flow(
     event_path: Path | None = None,
 ) -> str:
     """Run RepoBrain GitHub flow in dry-run or post mode."""
-    source_text = comment_text or extract_comment_text_from_event(event_path)
+    source_text = (comment_text or "").strip() or extract_comment_text_from_event(event_path)
+    if issue_number is None:
+        issue_number = extract_issue_number_from_event(event_path)
     mode_label = "DRY_RUN" if dry_run else "POST_MODE"
 
-    if not source_text.strip().startswith("/repobrain"):
+    if not source_text:
+        print(f"Mode={mode_label}")
+        print("Cmd=help")
+        print("Query=")
+        print(HELP_TEXT.strip())
+        return "IGNORED"
+
+    if not source_text.startswith("/repobrain"):
         print(f"Mode={mode_label}")
         print("Cmd=ignored")
         print("Query=")
