@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.run_github import run_github_flow
+from repobrain.github_flow import run_github_flow
 
 
 def test_run_github_flow_dry_run_outputs_markdown_sections() -> None:
