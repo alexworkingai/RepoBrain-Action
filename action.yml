@@ -1,0 +1,46 @@
+name: "RepoBrain Local MVP"
+description: "Run RepoBrain in GitHub Actions (dry-run by default)"
+
+inputs:
+  tky_mode:
+    description: "TKY provider mode: baseline|remote|local"
+    required: false
+    default: "baseline"
+  remote_url:
+    description: "Remote TKY endpoint URL"
+    required: false
+    default: ""
+  api_key:
+    description: "Remote TKY API key"
+    required: false
+    default: ""
+  dry_run:
+    description: "If true, print comment instead of publishing to GitHub"
+    required: false
+    default: "true"
+  comment_text:
+    description: "Optional comment text for workflow_dispatch dry-run tests"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    - name: Upgrade pip
+      shell: bash
+      run: python -m pip install -U pip
+    - name: Install dependencies
+      shell: bash
+      run: pip install -e ".[dev]"
+    - name: Run RepoBrain GitHub dry-run wiring
+      shell: bash
+      run: >
+        python scripts/run_github.py
+        --dry-run "${{ inputs.dry_run }}"
+        --tky-mode "${{ inputs.tky_mode }}"
+        --remote-url "${{ inputs.remote_url }}"
+        --api-key "${{ inputs.api_key }}"
+        --comment-text "${{ inputs.comment_text }}"

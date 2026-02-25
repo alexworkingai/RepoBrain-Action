@@ -1,0 +1,17 @@
+name: RepoBrain Local Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./. 
+        with:
+          dry_run: "true"
+          comment_text: "/repobrain ask Где реализована логика TKYProvider?"

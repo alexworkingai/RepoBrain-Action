@@ -1,0 +1,32 @@
+Metadata-Version: 2.4
+Name: repobrain
+Version: 0.1.0
+Summary: RepoBrain MVP skeleton (GitHub Action friendly)
+Requires-Python: <3.12,>=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: PyYAML>=6.0.1
+Requires-Dist: requests>=2.32.0
+Requires-Dist: orjson>=3.10.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: ruff>=0.6.0; extra == "dev"
+
+# RepoBrain Action (MVP Skeleton)
+
+This repository contains a minimal, GitHub-Actions-friendly skeleton for:
+
+* indexing a repo (placeholder),
+* answering questions with evidence trail (placeholder),
+* pluggable TKY provider modes: baseline / remote / local (local is a stub).
+
+No secrets, keys, or proprietary TKY internals are included.
+
+Quick start (PowerShell):
+
+1. Create venv (VS Code UI) with Python 3.11
+2. Install deps:
+   pip install -e ".[dev]"
+3. Run tests:
+   pytest -q
+4. Lint:
+   ruff check .
