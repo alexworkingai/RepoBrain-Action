@@ -9,6 +9,9 @@ from typing import Any
 
 import orjson
 
+from .topocore_lite import TopoCoreLite
+from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
+
 PRIVACY_FORBIDDEN_KEYS = {"text", "snippet", "content"}
 
 
@@ -40,7 +43,8 @@ def verify_signature(
     return hmac.compare_digest(expected, signature_hex)
 
 
-def _stub_response(payload: dict[str, Any]) -> dict[str, Any]:
+def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Build stub response via TopoCoreLite engine from a privacy-safe payload."""
     candidates = payload.get("candidates", [])
     if not isinstance(candidates, list):
         candidates = []
@@ -53,7 +57,7 @@ def _stub_response(payload: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, ValueError):
             max_sources = 8
 
-    scored = []
+    engine_candidates: list[EngineCandidate] = []
     for item in candidates:
         if not isinstance(item, dict):
             continue
@@ -61,17 +65,54 @@ def _stub_response(payload: dict[str, Any]) -> dict[str, Any]:
             score_local = float(item.get("score_local", 0) or 0)
         except (TypeError, ValueError):
             score_local = 0.0
-        scored.append((score_local, item))
-    scored.sort(key=lambda pair: pair[0], reverse=True)
-    selected = scored[: max(max_sources, 0)]
-    selected_ids = [str(item.get("chunk_id", "")) for _, item in selected if item.get("chunk_id")]
+        signature = item.get("signature", [])
+        if not isinstance(signature, list):
+            signature = []
+        engine_candidates.append(
+            EngineCandidate(
+                chunk_id=str(item.get("chunk_id", "")),
+                score_local=score_local,
+                signature=[int(x) for x in signature],
+                file_path=str(item.get("file_path", "")) or None,
+                line_start=int(item["line_start"]) if item.get("line_start") is not None else None,
+                line_end=int(item["line_end"]) if item.get("line_end") is not None else None,
+            )
+        )
+
+    task_type = str(payload.get("task_type", "ask")).lower()
+    if task_type not in {"ask", "locate", "explain", "review"}:
+        task_type = "ask"
+    query = payload.get("query", {})
+    if not isinstance(query, dict):
+        query = {}
+    query_signature = query.get("signature", [])
+    if not isinstance(query_signature, list):
+        query_signature = []
+
+    req = EngineRequest(
+        task_type=task_type,  # type: ignore[arg-type]
+        query=EngineQuery(
+            text=str(query.get("text", "")),
+            signature=[int(x) for x in query_signature],
+        ),
+        candidates=engine_candidates,
+        limits={**(limits if isinstance(limits, dict) else {}), "max_sources": max_sources},
+        policy={"corelocked": True},
+    )
+    decision = TopoCoreLite().decide(req)
 
     return {
         "schema_version": "1.0",
-        "decision": {"route": "FAST", "reason": "Stub: top-N by score_local"},
-        "selection": {"selected_chunk_ids": selected_ids},
-        "compression_stats": {"retrieved": len(candidates), "selected": len(selected_ids)},
-        "security": {"blocked": False, "injection_risk": "low", "exfiltration_risk": "low"},
+        "decision": {"route": decision.route, "reason": decision.rationale},
+        "selection": {"selected_chunk_ids": decision.selected_chunk_ids},
+        "compression_stats": dict(decision.compression_stats),
+        "security": {
+            "blocked": decision.security.blocked,
+            "injection_risk": decision.security.injection_risk,
+            "exfiltration_risk": decision.security.exfiltration_risk,
+            "signals": decision.security.signals,
+        },
+        "stable_tokens": decision.stable_tokens,
         "rationale": "Stub response",
     }
 
@@ -124,7 +165,7 @@ class _TKYStubHandler(BaseHTTPRequestHandler):
             self._send_json(422, {"error": "policy_violation", "reason": "raw_content_forbidden"})
             return
 
-        self._send_json(200, _stub_response(payload))
+        self._send_json(200, build_response_from_payload(payload))
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A003
         # Keep CI logs compact.
