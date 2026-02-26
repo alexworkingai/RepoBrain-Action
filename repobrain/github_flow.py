@@ -4,10 +4,12 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import time
 from typing import Any
 
 import requests
 
+from repobrain.audit import add_timing, build_audit_base
 from repobrain.ask import answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.config import load_config
@@ -35,6 +37,7 @@ HELP_TEXT = """RepoBrain command examples:
 """
 
 BOT_MARKER = "[bot]"
+_LAST_AUDIT: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,18 @@ class EventContext:
     comment_id: int | None = None
     comment_user_login: str = ""
     is_pull_request: bool = False
+
+
+def get_last_audit() -> dict[str, Any]:
+    """Return the last run audit payload (copy-safe shallow clone)."""
+    if _LAST_AUDIT is None:
+        return {}
+    return dict(_LAST_AUDIT)
+
+
+def _set_last_audit(audit: dict[str, Any]) -> None:
+    global _LAST_AUDIT
+    _LAST_AUDIT = audit
 
 
 def _load_event_payload(event_path: Path | None) -> dict[str, Any]:
@@ -282,12 +297,28 @@ def question_from_command(cmd: str, query: str) -> str:
 
 def load_or_build_chunks(repo_root: Path, index_path: Path) -> list[CandidateChunk]:
     """Load prebuilt index, or build and persist it if missing."""
-    if not should_build_index(index_path):
-        return load_index(index_path)
+    chunks, _, _ = load_or_build_chunks_with_meta(repo_root, index_path)
+    return chunks
+
+
+def load_or_build_chunks_with_meta(
+    repo_root: Path,
+    index_path: Path,
+) -> tuple[list[CandidateChunk], str, float]:
+    """Load/build index and return (chunks, source, elapsed_ms)."""
+    started = time.perf_counter()
+    existed_before = index_path.exists()
+    cache_restored = os.environ.get("RB_INDEX_CACHE_RESTORED", "").strip() == "1"
+
+    if existed_before:
+        chunks = load_index(index_path)
+        source = "cache_hit" if cache_restored else "artifact_present"
+        return chunks, source, (time.perf_counter() - started) * 1000.0
 
     index_path.parent.mkdir(parents=True, exist_ok=True)
     build_index(root=repo_root, out_zip=index_path, store_text=False)
-    return load_index(index_path)
+    chunks = load_index(index_path)
+    return chunks, "rebuilt", (time.perf_counter() - started) * 1000.0
 
 
 def should_build_index(index_path: Path) -> bool:
@@ -379,6 +410,7 @@ def run_qa_two_pass(
     provider: Any,
     cfg: Any,
     tky_mode_requested: str = "baseline",
+    timings_ms: dict[str, float] | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Run at most two retrieval+TKY passes using the TKY route from pass 1."""
     topk_fast = int(getattr(cfg, "topk_fast", getattr(cfg, "topk", 30)))
@@ -389,7 +421,10 @@ def run_qa_two_pass(
     max_sources_deep = int(getattr(cfg, "max_sources_deep", max_sources_fast))
 
     active_provider = provider
+    t0 = time.perf_counter()
     pass1_candidates = retrieve_topk(question, chunks, topk=topk_fast)
+    if timings_ms is not None:
+        timings_ms["retrieve_pass1"] = round((time.perf_counter() - t0) * 1000.0, 3)
     pass1_top_score = _top_score(pass1_candidates)
     pass1_limits = _qa_limits(
         cmd=cmd,
@@ -397,6 +432,7 @@ def run_qa_two_pass(
         min_score_keep=min_score_keep,
         route_hint=_route_hint_for_candidates(pass1_candidates, min_score_fast),
     )
+    t0 = time.perf_counter()
     result1, active_provider, pass1_meta = _answer_with_remote_fallback(
         question=question,
         candidates=pass1_candidates,
@@ -404,6 +440,8 @@ def run_qa_two_pass(
         provider=active_provider,
         tky_mode_requested=tky_mode_requested,
     )
+    if timings_ms is not None:
+        timings_ms["tky_pass1"] = round((time.perf_counter() - t0) * 1000.0, 3)
 
     final_result = result1
     final_meta = dict(pass1_meta)
@@ -412,7 +450,10 @@ def run_qa_two_pass(
 
     should_second_pass = cmd in {"ask", "explain"} and result1.tky.route == "DEEP"
     if should_second_pass:
+        t0 = time.perf_counter()
         pass2_candidates = retrieve_topk(question, chunks, topk=topk_deep)
+        if timings_ms is not None:
+            timings_ms["retrieve_pass2"] = round((time.perf_counter() - t0) * 1000.0, 3)
         pass2_top_score = _top_score(pass2_candidates)
         pass2_limits = _qa_limits(
             cmd=cmd,
@@ -420,6 +461,7 @@ def run_qa_two_pass(
             min_score_keep=min_score_keep,
             route_hint="DEEP",
         )
+        t0 = time.perf_counter()
         final_result, active_provider, pass2_meta = _answer_with_remote_fallback(
             question=question,
             candidates=pass2_candidates,
@@ -427,6 +469,8 @@ def run_qa_two_pass(
             provider=active_provider,
             tky_mode_requested=tky_mode_requested,
         )
+        if timings_ms is not None:
+            timings_ms["tky_pass2"] = round((time.perf_counter() - t0) * 1000.0, 3)
         final_meta.update(pass2_meta)
         pass_count = 2
 
@@ -465,11 +509,15 @@ def _build_qa_markdown(
     api_key: str,
     hmac_secret: str,
     enable_hmac: bool,
+    audit: dict[str, Any] | None = None,
 ) -> str:
     cfg = load_config(repo_root)
     index_path = repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
-    chunks = load_or_build_chunks(repo_root, index_path)
+    chunks, index_source, index_elapsed_ms = load_or_build_chunks_with_meta(repo_root, index_path)
+    if audit is not None:
+        audit["index_source"] = index_source
+        add_timing(audit, "index_load_build", index_elapsed_ms)
 
     provider = make_provider(
         tky_mode,
@@ -485,10 +533,24 @@ def _build_qa_markdown(
         provider=provider,
         cfg=cfg,
         tky_mode_requested=tky_mode,
+        timings_ms=(audit.get("timings_ms") if isinstance(audit, dict) else None),
     )
     audit_summary = dict(result.audit_summary)
     audit_summary.update(loop_audit)
-    return format_github_comment(
+    if audit is not None:
+        audit["route_final"] = str(audit_summary.get("route_final", result.tky.route))
+        audit["pass_count"] = int(audit_summary.get("pass_count", 1) or 1)
+        audit["retrieved"] = int(audit_summary.get("retrieved", 0) or 0)
+        audit["selected"] = int(audit_summary.get("selected", 0) or 0)
+        audit["top_score_pass1"] = audit_summary.get("pass1.top_score")
+        audit["top_score_pass2"] = audit_summary.get("pass2.top_score")
+        audit["tky_mode_requested"] = str(audit_summary.get("tky_mode_requested", tky_mode))
+        audit["tky_mode_used"] = str(audit_summary.get("tky_mode_used", tky_mode))
+        audit["tky_remote_status"] = audit_summary.get("tky_remote_status", "")
+        audit["tky_fallback_reason"] = audit_summary.get("tky_fallback_reason", "")
+
+    t0 = time.perf_counter()
+    body = format_github_comment(
         result.answer_text,
         result.evidence,
         audit_summary,
@@ -497,6 +559,9 @@ def _build_qa_markdown(
         repo=extract_repo_from_env() or None,
         sha=extract_sha_from_env() or None,
     )
+    if audit is not None:
+        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+    return body
 
 
 def _build_review_markdown(
@@ -505,11 +570,18 @@ def _build_review_markdown(
     issue_number: int | None,
     dry_run: bool,
     client: GitHubClient | None,
+    audit: dict[str, Any] | None = None,
 ) -> str:
     if not is_pull_request:
+        if audit is not None:
+            audit["route_final"] = "REVIEW"
+            audit["pass_count"] = 1
         return "Review is available in Pull Requests. Run /repobrain review in a PR discussion."
 
     if issue_number is None:
+        if audit is not None:
+            audit["route_final"] = "REVIEW"
+            audit["pass_count"] = 1
         return "Review is available in Pull Requests. Pull request number was not detected."
 
     files: list[dict[str, Any]]
@@ -521,7 +593,16 @@ def _build_review_markdown(
         files = client.get_pull_files(pull_number=issue_number)
 
     review = build_pr_review(files)
-    return format_pr_review_comment(review)
+    if audit is not None:
+        audit["route_final"] = "REVIEW"
+        audit["pass_count"] = 1
+        audit["retrieved"] = 0
+        audit["selected"] = 0
+    t0 = time.perf_counter()
+    body = format_pr_review_comment(review)
+    if audit is not None:
+        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+    return body
 
 
 def _build_verify_markdown(
@@ -530,18 +611,34 @@ def _build_verify_markdown(
     issue_number: int | None,
     dry_run: bool,
     client: GitHubClient | None,
+    audit: dict[str, Any] | None = None,
 ) -> str:
     if not is_pull_request:
+        if audit is not None:
+            audit["route_final"] = "VERIFY"
+            audit["pass_count"] = 1
         return (
             "Verify works in PRs (checks/CI). Create a PR and run `/repobrain verify` "
             "in PR discussion."
         )
     if issue_number is None:
+        if audit is not None:
+            audit["route_final"] = "VERIFY"
+            audit["pass_count"] = 1
         return "Verify is available in Pull Requests. Pull request number was not detected."
 
     if dry_run:
         report = build_verify_report({}, None)
-        return format_verify_comment(report)
+        if audit is not None:
+            audit["route_final"] = "VERIFY"
+            audit["pass_count"] = 1
+        t0 = time.perf_counter()
+        body = format_verify_comment(report)
+        if audit is not None:
+            audit["retrieved"] = 0
+            audit["selected"] = 0
+            add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+        return body
 
     if client is None:
         raise ValueError("GitHub client is required for verify in post mode")
@@ -556,7 +653,19 @@ def _build_verify_markdown(
     check_runs = client.get_check_runs(sha)
     status = client.get_combined_status(sha)
     report = build_verify_report(check_runs, status)
-    return format_verify_comment(report)
+    if audit is not None:
+        audit["route_final"] = "VERIFY"
+        audit["pass_count"] = 1
+        audit["retrieved"] = int(report.get("total", 0) or 0)
+        audit["selected"] = int(report.get("failure", 0) or 0)
+        audit["checks_total"] = int(report.get("total", 0) or 0)
+        audit["checks_failure"] = int(report.get("failure", 0) or 0)
+        audit["checks_pending"] = int(report.get("pending", 0) or 0)
+    t0 = time.perf_counter()
+    body = format_verify_comment(report)
+    if audit is not None:
+        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+    return body
 
 
 def run_github_flow(
@@ -577,12 +686,37 @@ def run_github_flow(
     source_text = (comment_text or "").strip() or event_ctx.comment_text.strip()
     resolved_issue_number = issue_number if issue_number is not None else event_ctx.issue_number
     mode_label = "DRY_RUN" if dry_run else "POST_MODE"
+    repo_name = extract_repo_from_env()
+    sha_value = extract_sha_from_env()
+    run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
+    audit = build_audit_base(
+        {
+            "repo": repo_name,
+            "sha": sha_value,
+            "run_id": run_id,
+            "issue_number": resolved_issue_number,
+            "pr_number": resolved_issue_number if event_ctx.is_pull_request else None,
+            "comment_id": event_ctx.comment_id,
+            "dry_run": dry_run,
+            "posted": False,
+            "mode": mode_label,
+            "tky_mode_requested": tky_mode,
+        }
+    )
 
     if not source_text:
         print(f"Mode={mode_label}")
         print("Cmd=help")
         print("Query=")
         print(HELP_TEXT.strip())
+        audit["command"] = "help"
+        audit["task_type"] = "help"
+        audit["route_final"] = "HELP"
+        audit["pass_count"] = 1
+        t0 = time.perf_counter()
+        _ = HELP_TEXT.strip()
+        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+        _set_last_audit(audit)
         return "IGNORED"
 
     if _is_bot_login(event_ctx.comment_user_login):
@@ -590,6 +724,11 @@ def run_github_flow(
         print("Cmd=ignored_bot")
         print("Query=")
         print(f"Ignored bot comment from {event_ctx.comment_user_login}")
+        audit["command"] = "ignored_bot"
+        audit["task_type"] = "ignored_bot"
+        audit["route_final"] = "IGNORED_BOT"
+        audit["pass_count"] = 1
+        _set_last_audit(audit)
         return "IGNORED_BOT"
 
     if not source_text.startswith("/repobrain"):
@@ -597,17 +736,34 @@ def run_github_flow(
         print("Cmd=ignored")
         print("Query=")
         print("Ignored: comment does not start with /repobrain")
+        audit["command"] = "ignored"
+        audit["task_type"] = "ignored"
+        audit["route_final"] = "IGNORED"
+        audit["pass_count"] = 1
+        _set_last_audit(audit)
         return "IGNORED"
 
+    t0 = time.perf_counter()
     parsed = parse_command(source_text)
+    add_timing(audit, "parse", (time.perf_counter() - t0) * 1000.0)
     cmd = parsed["cmd"]
     query = parsed["query"]
+    audit["command"] = cmd
+    audit["task_type"] = cmd
     print(f"Mode={mode_label}")
     print(f"Cmd={cmd}")
     print(f"Query={query}")
 
+    t0 = time.perf_counter()
     sec = detect_injection_or_exfiltration(source_text)
+    add_timing(audit, "security_check", (time.perf_counter() - t0) * 1000.0)
+    audit["security"] = {
+        "blocked": bool(sec["blocked"]),
+        "risk": sec["risk"],
+        "signals": list(sec["signals"]),
+    }
     if sec["blocked"]:
+        t0 = time.perf_counter()
         body_markdown = format_refusal_comment(
             reason="Possible prompt-injection / exfiltration attempt was blocked.",
             audit_summary={
@@ -619,45 +775,65 @@ def run_github_flow(
                 },
             },
         )
+        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+        audit["route_final"] = "REFUSE"
+        audit["pass_count"] = 1
+        audit["index_source"] = "n/a"
 
         if dry_run:
             print(body_markdown)
+            _set_last_audit(audit)
             return "DRY_RUN_OK"
 
         if resolved_issue_number is None:
+            _set_last_audit(audit)
             raise ValueError("issue_number is required when dry_run=False")
 
         client = _build_post_client()
         if _internal_reactions_enabled() and event_ctx.comment_id is not None:
             client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        t0 = time.perf_counter()
         client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+        add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+        audit["posted"] = True
         print(f"Posted comment to issue #{resolved_issue_number}")
+        _set_last_audit(audit)
         return "POSTED_OK"
 
     client: GitHubClient | None = None
     if not dry_run:
         if resolved_issue_number is None:
+            _set_last_audit(audit)
             raise ValueError("issue_number is required when dry_run=False")
         client = _build_post_client()
         if _internal_reactions_enabled() and event_ctx.comment_id is not None:
             client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
 
     if cmd == "help":
+        t0 = time.perf_counter()
         body_markdown = HELP_TEXT.strip()
+        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+        audit["route_final"] = "HELP"
+        audit["pass_count"] = 1
+        audit["index_source"] = "n/a"
     elif cmd == "review":
         body_markdown = _build_review_markdown(
             is_pull_request=event_ctx.is_pull_request,
             issue_number=resolved_issue_number,
             dry_run=dry_run,
             client=client,
+            audit=audit,
         )
+        audit["index_source"] = "n/a"
     elif cmd == "verify":
         body_markdown = _build_verify_markdown(
             is_pull_request=event_ctx.is_pull_request,
             issue_number=resolved_issue_number,
             dry_run=dry_run,
             client=client,
+            audit=audit,
         )
+        audit["index_source"] = "n/a"
     else:
         body_markdown = _build_qa_markdown(
             repo_root=repo_root,
@@ -668,15 +844,22 @@ def run_github_flow(
             api_key=api_key,
             hmac_secret=hmac_secret,
             enable_hmac=enable_hmac,
+            audit=audit,
         )
 
     if dry_run:
         print(body_markdown)
+        _set_last_audit(audit)
         return "DRY_RUN_OK"
 
     if client is None:
+        _set_last_audit(audit)
         raise ValueError("GitHub client was not initialized")
 
+    t0 = time.perf_counter()
     client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+    add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+    audit["posted"] = True
     print(f"Posted comment to issue #{resolved_issue_number}")
+    _set_last_audit(audit)
     return "POSTED_OK"

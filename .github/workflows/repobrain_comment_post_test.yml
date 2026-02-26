@@ -1,4 +1,4 @@
-name: RepoBrain Comment Post Test
+﻿name: RepoBrain Comment Post Test
 
 on:
   workflow_dispatch:
@@ -29,8 +29,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./. 
+      - uses: ./.
         with:
           dry_run: ${{ inputs.dry_run }}
           issue_number: ${{ inputs.issue_number }}
           comment_text: ${{ inputs.comment_text }}
+      - name: Upload RepoBrain audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-audit
+          path: artifacts/audit/*.json
+          if-no-files-found: ignore

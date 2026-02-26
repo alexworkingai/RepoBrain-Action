@@ -4,6 +4,9 @@ from .evidence import EvidenceItem
 from .links import make_line_link
 
 
+AUDIT_ARTIFACT_NOTE = "Audit: workflow artifact `repobrain-audit` (hash-only)."
+
+
 def _format_audit_summary(audit_summary: dict[str, object]) -> list[str]:
     audit_lines = [f"- `{key}`: {value}" for key, value in audit_summary.items()]
     return audit_lines or ["- No audit data."]
@@ -46,6 +49,8 @@ def format_github_comment(
             "",
             "### 🧾 Audit summary",
             *_format_audit_summary(audit_summary),
+            "",
+            AUDIT_ARTIFACT_NOTE,
         ]
         return "\n".join(sections)
 
@@ -64,6 +69,8 @@ def format_github_comment(
             "",
             "### 🧾 Audit summary",
             *_format_audit_summary(audit_summary),
+            "",
+            AUDIT_ARTIFACT_NOTE,
         ]
     )
     return "\n".join(sections)
@@ -97,6 +104,8 @@ def format_pr_review_comment(review: dict[str, object]) -> str:
         "",
         "### 🧾 Audit summary",
         *_format_audit_summary(audit_summary),
+        "",
+        AUDIT_ARTIFACT_NOTE,
     ]
     return "\n".join(sections)
 
@@ -119,6 +128,8 @@ def format_refusal_comment(
         "",
         "### 🧾 Audit summary",
         *_format_audit_summary(audit_summary),
+        "",
+        AUDIT_ARTIFACT_NOTE,
     ]
     return "\n".join(sections)
 
@@ -197,6 +208,8 @@ def format_verify_comment(report: dict[str, object]) -> str:
             "",
             "### 🧾 Audit summary",
             *_format_audit_summary(audit_summary),
+            "",
+            AUDIT_ARTIFACT_NOTE,
         ]
     )
     return "\n".join(sections)

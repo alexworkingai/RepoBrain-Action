@@ -1,4 +1,4 @@
-name: RepoBrain Local Test
+﻿name: RepoBrain Local Test
 
 on:
   workflow_dispatch:
@@ -11,7 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./. 
+      - uses: ./.
         with:
           dry_run: "true"
           comment_text: "/repobrain ask Где реализована логика TKYProvider?"
+      - name: Upload RepoBrain audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-audit
+          path: artifacts/audit/*.json
+          if-no-files-found: ignore
