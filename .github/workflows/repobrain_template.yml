@@ -1,0 +1,64 @@
+name: RepoBrain (Template)
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = print only, false = post comment"
+        required: false
+        default: "true"
+        type: string
+      comment_text:
+        description: "RepoBrain command text (manual testing)"
+        required: false
+        default: "/repobrain help"
+        type: string
+      issue_number:
+        description: "Issue/PR number for workflow_dispatch (digits or #N)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  repobrain:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/repobrain')
+    steps:
+      - uses: actions/checkout@v4
+
+      # Optional: restore a prebuilt RepoBrain index cache
+      - name: Restore RepoBrain index cache
+        id: index_cache
+        uses: actions/cache@v4
+        with:
+          path: artifacts/index-package.zip
+          key: repobrain-index-main-${{ github.sha }}
+          restore-keys: |
+            repobrain-index-main-
+
+      - name: Run RepoBrain Action
+        uses: TODO_OWNER/TODO_REPO@v0.1.0
+        env:
+          RB_INDEX_CACHE_RESTORED: ${{ steps.index_cache.outputs.cache-hit == 'true' && '1' || '' }}
+        with:
+          tky_mode: baseline
+          dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+          comment_text: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.comment_text || '' }}
+          issue_number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.issue_number || '' }}
+
+      - name: Upload RepoBrain audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-audit
+          path: artifacts/audit/*.json
+          if-no-files-found: ignore

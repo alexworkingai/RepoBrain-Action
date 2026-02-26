@@ -9,7 +9,7 @@ from typing import Any
 
 import requests
 
-from repobrain.audit import add_timing, build_audit_base
+from repobrain.audit import add_timing, build_audit_base, finalize_audit
 from repobrain.ask import answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.config import load_config
@@ -58,7 +58,7 @@ def get_last_audit() -> dict[str, Any]:
 
 def _set_last_audit(audit: dict[str, Any]) -> None:
     global _LAST_AUDIT
-    _LAST_AUDIT = audit
+    _LAST_AUDIT = finalize_audit(audit)
 
 
 def _load_event_payload(event_path: Path | None) -> dict[str, Any]:
@@ -368,8 +368,8 @@ def _answer_with_remote_fallback(
         "tky_mode_requested": tky_mode_requested,
         "tky_mode_used": tky_mode_requested,
         "remote_used": tky_mode_requested == "remote",
-        "tky_fallback_reason": "",
-        "tky_remote_status": "",
+        "tky_fallback_reason": "n/a",
+        "tky_remote_status": None,
         "tky_remote_error": "",
     }
     active_provider = provider
@@ -382,7 +382,7 @@ def _answer_with_remote_fallback(
             limits=limits,
         )
         if isinstance(active_provider, RemoteTKYProvider):
-            meta["tky_remote_status"] = active_provider.last_status_code or "ok"
+            meta["tky_remote_status"] = active_provider.last_status_code
         return result, active_provider, meta
     except RemoteTKYError as exc:
         if tky_mode_requested != "remote":
@@ -394,10 +394,10 @@ def _answer_with_remote_fallback(
             provider=fallback_provider,
             limits=limits,
         )
-        meta["tky_mode_used"] = "baseline"
+        meta["tky_mode_used"] = "fallback_baseline"
         meta["remote_used"] = False
         meta["tky_fallback_reason"] = "remote_error"
-        meta["tky_remote_status"] = exc.status_code if exc.status_code is not None else "network"
+        meta["tky_remote_status"] = exc.status_code
         meta["tky_remote_error"] = exc.short_reason or "remote_error"
         return result, fallback_provider, meta
 
@@ -488,8 +488,8 @@ def run_qa_two_pass(
         audit_extra["tky_mode_requested"] = "remote"
         audit_extra["tky_mode_used"] = final_meta.get("tky_mode_used", "remote")
         audit_extra["remote_used"] = bool(final_meta.get("remote_used", False))
-        remote_status = final_meta.get("tky_remote_status", "")
-        if remote_status != "":
+        remote_status = final_meta.get("tky_remote_status", None)
+        if remote_status is not None:
             audit_extra["tky_remote_status"] = remote_status
         fallback_reason = str(final_meta.get("tky_fallback_reason", "") or "")
         if fallback_reason:
@@ -545,9 +545,9 @@ def _build_qa_markdown(
         audit["top_score_pass1"] = audit_summary.get("pass1.top_score")
         audit["top_score_pass2"] = audit_summary.get("pass2.top_score")
         audit["tky_mode_requested"] = str(audit_summary.get("tky_mode_requested", tky_mode))
-        audit["tky_mode_used"] = str(audit_summary.get("tky_mode_used", tky_mode))
-        audit["tky_remote_status"] = audit_summary.get("tky_remote_status", "")
-        audit["tky_fallback_reason"] = audit_summary.get("tky_fallback_reason", "")
+        audit["tky_mode_used"] = str(audit_summary.get("tky_mode_used", tky_mode or "n/a"))
+        audit["tky_remote_status"] = audit_summary.get("tky_remote_status", None)
+        audit["tky_fallback_reason"] = str(audit_summary.get("tky_fallback_reason", "n/a") or "n/a")
 
     t0 = time.perf_counter()
     body = format_github_comment(

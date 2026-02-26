@@ -63,3 +63,29 @@ Remote TKY mode:
 * HMAC signing adds `x-ts`, `x-nonce`, `x-signature` headers over the exact JSON body.
 * If remote TKY fails (network/HTTP), RepoBrain falls back to baseline selection and records fallback diagnostics in audit summary.
 
+2-minute setup:
+
+1. Add a workflow (see `.github/workflows/repobrain_template.yml`) with:
+   * `issue_comment` + `workflow_dispatch`
+   * permissions: `contents`, `issues`, `pull-requests`, `checks`, `statuses`
+2. Trigger in PR/Issue comments with:
+   * `/repobrain help`
+3. Find audit output in workflow artifacts:
+   * artifact name: `repobrain-audit` (hash-only JSON)
+
+Demo scenarios:
+
+1. `/repobrain ask Где реализована логика TKYProvider?`
+2. `/repobrain locate TKYProvider`
+3. `/repobrain review` (inside PR discussion)
+4. `/repobrain verify` (PR checks/status verification)
+5. Security-blocked request (e.g. asking for secrets/system prompt) -> safe refusal
+6. Download `repobrain-audit` artifact to inspect timings, route, cache source, and TKY diagnostics
+
+Release versioning:
+
+* Tag a release:
+  * `git tag v0.1.0`
+  * `git push origin v0.1.0`
+* Consumers can pin the action version:
+  * `uses: OWNER/REPO@v0.1.0`
