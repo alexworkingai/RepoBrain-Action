@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from .signatures import build_chunk_signature, build_query_signature, compact_ascii, extract_latin_identifiers
 from .tky_provider import CandidateChunk
@@ -87,3 +88,22 @@ def retrieve_topk(
 
     scored.sort(key=lambda c: (-c.score, c.file_path, c.line_start, c.line_end))
     return scored[: max(topk, 0)]
+
+
+def retrieve_adaptive(
+    question: str,
+    chunks: list[CandidateChunk],
+    cfg: Any,
+) -> tuple[list[CandidateChunk], str]:
+    """Adaptive two-pass retrieval with FAST/DEEP routing hint."""
+    topk_fast = int(getattr(cfg, "topk_fast", getattr(cfg, "topk", 30)))
+    topk_deep = int(getattr(cfg, "topk_deep", max(topk_fast, 80)))
+    min_score_fast = float(getattr(cfg, "min_score_fast", 0.05))
+
+    fast_candidates = retrieve_topk(question, chunks, topk=topk_fast)
+    top_score = fast_candidates[0].score if fast_candidates else 0.0
+    if top_score >= min_score_fast:
+        return fast_candidates, "FAST"
+
+    deep_candidates = retrieve_topk(question, chunks, topk=topk_deep)
+    return deep_candidates, "DEEP"

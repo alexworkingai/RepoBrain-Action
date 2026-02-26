@@ -13,7 +13,7 @@ from repobrain.commands import parse_command
 from repobrain.config import load_config
 from repobrain.formatting import format_github_comment, format_pr_review_comment
 from repobrain.index_store import build_index, load_index
-from repobrain.retrieve import retrieve_topk
+from repobrain.retrieve import retrieve_adaptive
 from repobrain.review import build_pr_review
 from repobrain.tky_provider import CandidateChunk
 
@@ -192,6 +192,10 @@ def extract_repo_from_env() -> str:
     return os.environ.get("GITHUB_REPOSITORY", "").strip()
 
 
+def extract_sha_from_env() -> str:
+    return os.environ.get("GITHUB_SHA", "").strip()
+
+
 def _is_bot_login(login: str) -> bool:
     normalized = (login or "").strip().lower()
     return bool(normalized) and BOT_MARKER in normalized
@@ -250,7 +254,9 @@ def _build_qa_markdown(
     index_path = repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
     chunks = load_or_build_chunks(repo_root, index_path)
-    candidates = retrieve_topk(question, chunks, topk=cfg.topk)
+    candidates, route_mode = retrieve_adaptive(question, chunks, cfg)
+
+    max_sources = cfg.max_sources_fast if route_mode == "FAST" else cfg.max_sources_deep
 
     provider = make_provider(
         tky_mode,
@@ -261,13 +267,20 @@ def _build_qa_markdown(
         question=question,
         candidates=candidates,
         provider=provider,
-        limits={"max_sources": cfg.max_sources},
+        limits={
+            "max_sources": max_sources,
+            "min_score_keep": cfg.min_score_keep,
+            "route_hint": route_mode,
+        },
     )
     return format_github_comment(
         result.answer_text,
         result.evidence,
         result.audit_summary,
         result.next_steps,
+        command=cmd,
+        repo=extract_repo_from_env() or None,
+        sha=extract_sha_from_env() or None,
     )
 
 

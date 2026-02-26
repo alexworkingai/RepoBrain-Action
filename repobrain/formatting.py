@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .evidence import EvidenceItem
+from .links import make_line_link
 
 
 def _format_audit_summary(audit_summary: dict[str, object]) -> list[str]:
@@ -8,21 +9,43 @@ def _format_audit_summary(audit_summary: dict[str, object]) -> list[str]:
     return audit_lines or ["- No audit data."]
 
 
+def _format_evidence_lines(
+    evidence: list[EvidenceItem],
+    *,
+    repo: str | None,
+    sha: str | None,
+) -> list[str]:
+    if not evidence:
+        return ["- No evidence selected."]
+    return [
+        f"- {make_line_link(repo, sha, item.file_path, item.line_start, item.line_end)} "
+        f"(score={item.score:.4f})"
+        for item in evidence
+    ]
+
+
 def format_github_comment(
     answer_text: str,
     evidence: list[EvidenceItem],
     audit_summary: dict[str, object],
     next_steps: str,
+    *,
+    command: str = "ask",
+    repo: str | None = None,
+    sha: str | None = None,
 ) -> str:
     """Format a GitHub-style markdown comment for ask/locate/explain commands."""
-    evidence_lines = (
-        [
-            f"- `{item.file_path}:L{item.line_start}-L{item.line_end}` (score={item.score:.4f})"
-            for item in evidence
+    evidence_lines = _format_evidence_lines(evidence, repo=repo, sha=sha)
+
+    if command == "locate":
+        sections = [
+            "### 📌 Evidence",
+            *evidence_lines,
+            "",
+            "### 🧾 Audit summary",
+            *_format_audit_summary(audit_summary),
         ]
-        if evidence
-        else ["- No evidence selected."]
-    )
+        return "\n".join(sections)
 
     sections = [
         "### ✅ Answer",
