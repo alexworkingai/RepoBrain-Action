@@ -11,13 +11,19 @@ import requests
 from repobrain.ask import answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.config import load_config
-from repobrain.formatting import format_github_comment, format_pr_review_comment, format_refusal_comment
+from repobrain.formatting import (
+    format_github_comment,
+    format_pr_review_comment,
+    format_refusal_comment,
+    format_verify_comment,
+)
 from repobrain.index_store import build_index, load_index
 from repobrain.retrieve import retrieve_topk
 from repobrain.review import build_pr_review
 from repobrain.security import detect_injection_or_exfiltration
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
 from repobrain.tky_provider import CandidateChunk
+from repobrain.verify import build_verify_report
 
 HELP_TEXT = """RepoBrain command examples:
 - /repobrain help
@@ -25,6 +31,7 @@ HELP_TEXT = """RepoBrain command examples:
 - /repobrain locate TKYProvider
 - /repobrain explain retrieve_topk
 - /repobrain review
+- /repobrain verify (PR checks-based verification ladder v0)
 """
 
 BOT_MARKER = "[bot]"
@@ -188,6 +195,39 @@ class GitHubClient:
         if not isinstance(data, list):
             return []
         return [item for item in data if isinstance(item, dict)]
+
+    def get_pull(self, pull_number: int) -> dict[str, Any]:
+        """Fetch PR metadata (used for head SHA lookup)."""
+        response = requests.get(
+            f"https://api.github.com/repos/{self.repo}/pulls/{pull_number}",
+            headers=self._headers(),
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
+    def get_check_runs(self, sha: str) -> dict[str, Any]:
+        """Fetch check-runs for a commit SHA."""
+        response = requests.get(
+            f"https://api.github.com/repos/{self.repo}/commits/{sha}/check-runs",
+            headers=self._headers(),
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
+    def get_combined_status(self, sha: str) -> dict[str, Any]:
+        """Fetch combined commit status (fallback when no check-runs exist)."""
+        response = requests.get(
+            f"https://api.github.com/repos/{self.repo}/commits/{sha}/status",
+            headers=self._headers(),
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
 
 
 def extract_repo_from_env() -> str:
@@ -472,6 +512,41 @@ def _build_review_markdown(
     return format_pr_review_comment(review)
 
 
+def _build_verify_markdown(
+    *,
+    is_pull_request: bool,
+    issue_number: int | None,
+    dry_run: bool,
+    client: GitHubClient | None,
+) -> str:
+    if not is_pull_request:
+        return (
+            "Verify works in PRs (checks/CI). Create a PR and run `/repobrain verify` "
+            "in PR discussion."
+        )
+    if issue_number is None:
+        return "Verify is available in Pull Requests. Pull request number was not detected."
+
+    if dry_run:
+        report = build_verify_report({}, None)
+        return format_verify_comment(report)
+
+    if client is None:
+        raise ValueError("GitHub client is required for verify in post mode")
+
+    pull = client.get_pull(issue_number)
+    head = pull.get("head", {})
+    sha = str(head.get("sha", "")) if isinstance(head, dict) else ""
+    if not sha:
+        report = build_verify_report({}, None)
+        return format_verify_comment(report)
+
+    check_runs = client.get_check_runs(sha)
+    status = client.get_combined_status(sha)
+    report = build_verify_report(check_runs, status)
+    return format_verify_comment(report)
+
+
 def run_github_flow(
     *,
     repo_root: Path,
@@ -559,6 +634,13 @@ def run_github_flow(
         body_markdown = HELP_TEXT.strip()
     elif cmd == "review":
         body_markdown = _build_review_markdown(
+            is_pull_request=event_ctx.is_pull_request,
+            issue_number=resolved_issue_number,
+            dry_run=dry_run,
+            client=client,
+        )
+    elif cmd == "verify":
+        body_markdown = _build_verify_markdown(
             is_pull_request=event_ctx.is_pull_request,
             issue_number=resolved_issue_number,
             dry_run=dry_run,
