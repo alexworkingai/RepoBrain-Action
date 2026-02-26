@@ -214,10 +214,13 @@ class GitHubClient:
             headers=self._headers(),
             timeout=15,
         )
+        if response.status_code == 403:
+            print("Check-runs not accessible, falling back to combined status")
+            return {"total_count": 0, "check_runs": [], "_error": "forbidden"}
         try:
             response.raise_for_status()
         except requests.HTTPError:
-            if response.status_code in {403, 404}:
+            if response.status_code == 404:
                 print("Check-runs not accessible, falling back to combined status")
                 return {"total_count": 0, "check_runs": []}
             raise
@@ -231,9 +234,12 @@ class GitHubClient:
             headers=self._headers(),
             timeout=15,
         )
+        if response.status_code == 403:
+            print("Combined status not accessible due to token permissions")
+            return {"state": "unknown", "statuses": [], "_error": "forbidden"}
         response.raise_for_status()
         data = response.json()
-        return data if isinstance(data, dict) else {}
+        return data if isinstance(data, dict) else {"state": "unknown", "statuses": []}
 
 
 def extract_repo_from_env() -> str:

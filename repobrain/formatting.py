@@ -126,6 +126,7 @@ def format_refusal_comment(
 def format_verify_comment(report: dict[str, object]) -> str:
     """Format a PR verification report based on GitHub checks/status APIs."""
     state = str(report.get("state", "unknown")).lower()
+    message = str(report.get("message", "")).strip()
     total = int(report.get("total", 0) or 0)
     success = int(report.get("success", 0) or 0)
     failure = int(report.get("failure", 0) or 0)
@@ -172,12 +173,19 @@ def format_verify_comment(report: dict[str, object]) -> str:
         "### ✅ Verification report",
         f"Status: {status_icon} `{state}`",
         "",
+    ]
+    if message:
+        sections.extend([message, ""])
+
+    sections.extend(
+        [
         f"- Total checks: {total}",
         f"- Success: {success}",
         f"- Failure: {failure}",
         f"- Pending: {pending}",
         f"- Neutral/Skipped: {neutral}",
-    ]
+        ]
+    )
     if failing_lines:
         sections.extend(["", "Failing checks:", *failing_lines])
 
