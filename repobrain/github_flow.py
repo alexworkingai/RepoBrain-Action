@@ -11,10 +11,11 @@ import requests
 from repobrain.ask import answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.config import load_config
-from repobrain.formatting import format_github_comment, format_pr_review_comment
+from repobrain.formatting import format_github_comment, format_pr_review_comment, format_refusal_comment
 from repobrain.index_store import build_index, load_index
 from repobrain.retrieve import retrieve_adaptive
 from repobrain.review import build_pr_review
+from repobrain.security import detect_injection_or_exfiltration
 from repobrain.tky_provider import CandidateChunk
 
 HELP_TEXT = """RepoBrain command examples:
@@ -353,6 +354,34 @@ def run_github_flow(
     print(f"Mode={mode_label}")
     print(f"Cmd={cmd}")
     print(f"Query={query}")
+
+    sec = detect_injection_or_exfiltration(source_text)
+    if sec["blocked"]:
+        body_markdown = format_refusal_comment(
+            reason="Possible prompt-injection / exfiltration attempt was blocked.",
+            audit_summary={
+                "route": "REFUSE",
+                "security": {
+                    "blocked": sec["blocked"],
+                    "risk": sec["risk"],
+                    "signals": sec["signals"],
+                },
+            },
+        )
+
+        if dry_run:
+            print(body_markdown)
+            return "DRY_RUN_OK"
+
+        if resolved_issue_number is None:
+            raise ValueError("issue_number is required when dry_run=False")
+
+        client = _build_post_client()
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+            client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+        print(f"Posted comment to issue #{resolved_issue_number}")
+        return "POSTED_OK"
 
     client: GitHubClient | None = None
     if not dry_run:

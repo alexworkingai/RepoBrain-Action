@@ -93,3 +93,25 @@ def format_pr_review_comment(review: dict[str, object]) -> str:
         *_format_audit_summary(audit_summary),
     ]
     return "\n".join(sections)
+
+
+def format_refusal_comment(
+    *,
+    reason: str,
+    audit_summary: dict[str, object],
+) -> str:
+    """Format a safe refusal response for blocked requests."""
+    sections = [
+        "### ⛔️ Request blocked",
+        reason or "This request looks like a prompt-injection or exfiltration attempt.",
+        "",
+        "### ✅ What you can ask instead",
+        "- `/repobrain ask Где реализована логика TKYProvider?`",
+        "- `/repobrain locate BaselineTKYProvider`",
+        "- `/repobrain explain retrieve_adaptive`",
+        "- `/repobrain review` (in a PR discussion)",
+        "",
+        "### 🧾 Audit summary",
+        *_format_audit_summary(audit_summary),
+    ]
+    return "\n".join(sections)

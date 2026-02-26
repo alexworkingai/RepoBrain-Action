@@ -14,11 +14,26 @@ DEFAULT_INCLUDE_GLOBS = [
 
 DEFAULT_EXCLUDE_GLOBS = [
     ".venv/**",
+    "**/.venv/**",
     "venv/**",
     ".git/**",
     "**/node_modules/**",
     "**/dist/**",
     "**/build/**",
+    ".env",
+    ".env.*",
+    "**/.env",
+    "**/.env.*",
+    "*.pem",
+    "**/*.pem",
+    "*.key",
+    "**/*.key",
+    "*id_rsa*",
+    "**/*id_rsa*",
+    "*secrets*",
+    "**/*secrets*",
+    "*credential*",
+    "**/*credential*",
 ]
 
 

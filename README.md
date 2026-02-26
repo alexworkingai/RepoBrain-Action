@@ -47,3 +47,9 @@ Retrieval quality / privacy:
 * Unicode-friendly tokenization improves RU/EN queries.
 * Retrieval uses Jaccard over hashed signatures plus small path-based boosts.
 * Raw chunk text is still omitted by default (`store_text=False`).
+
+Security:
+
+* RepoBrain does not index common secret files, large files, or binary files.
+* Prompt-injection / exfiltration-like requests are blocked with a safe refusal response.
+* Trace data is hash/signature-based; raw text is not stored by default.
