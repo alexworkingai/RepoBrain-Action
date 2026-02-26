@@ -46,6 +46,7 @@ Retrieval quality / privacy:
 * Signatures are built from chunk metadata and can be compared without storing source text.
 * Unicode-friendly tokenization improves RU/EN queries.
 * Retrieval uses Jaccard over hashed signatures plus small path-based boosts.
+* If TKY returns `route=DEEP`, RepoBrain performs a second retrieval pass with a larger `topK`.
 * Raw chunk text is still omitted by default (`store_text=False`).
 
 Security:

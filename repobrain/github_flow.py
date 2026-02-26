@@ -13,7 +13,7 @@ from repobrain.commands import parse_command
 from repobrain.config import load_config
 from repobrain.formatting import format_github_comment, format_pr_review_comment, format_refusal_comment
 from repobrain.index_store import build_index, load_index
-from repobrain.retrieve import retrieve_adaptive
+from repobrain.retrieve import retrieve_topk
 from repobrain.review import build_pr_review
 from repobrain.security import detect_injection_or_exfiltration
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
@@ -243,6 +243,166 @@ def should_build_index(index_path: Path) -> bool:
     return not index_path.exists()
 
 
+def _top_score(candidates: list[CandidateChunk]) -> float:
+    return float(candidates[0].score) if candidates else 0.0
+
+
+def _route_hint_for_candidates(candidates: list[CandidateChunk], min_score_fast: float) -> str:
+    return "DEEP" if _top_score(candidates) < float(min_score_fast) else "FAST"
+
+
+def _qa_limits(
+    *,
+    cmd: str,
+    max_sources: int,
+    min_score_keep: float,
+    route_hint: str,
+) -> dict[str, Any]:
+    return {
+        "max_sources": max_sources,
+        "min_score_keep": min_score_keep,
+        "route_hint": route_hint,
+        "task_type": cmd,
+        "privacy_mode": "signatures_only",
+        "policy": {"no_raw_text": True, "privacy_mode": "signatures_only"},
+        "repo_ctx": {
+            "repo": extract_repo_from_env(),
+            "sha": extract_sha_from_env(),
+        },
+    }
+
+
+def _answer_with_remote_fallback(
+    *,
+    question: str,
+    candidates: list[CandidateChunk],
+    limits: dict[str, Any],
+    provider: Any,
+    tky_mode_requested: str,
+) -> tuple[Any, Any, dict[str, Any]]:
+    """Run `answer_question`, falling back to baseline if remote provider fails."""
+    meta: dict[str, Any] = {
+        "tky_mode_requested": tky_mode_requested,
+        "tky_mode_used": tky_mode_requested,
+        "remote_used": tky_mode_requested == "remote",
+        "tky_fallback_reason": "",
+        "tky_remote_status": "",
+        "tky_remote_error": "",
+    }
+    active_provider = provider
+
+    try:
+        result = answer_question(
+            question=question,
+            candidates=candidates,
+            provider=active_provider,
+            limits=limits,
+        )
+        if isinstance(active_provider, RemoteTKYProvider):
+            meta["tky_remote_status"] = active_provider.last_status_code or "ok"
+        return result, active_provider, meta
+    except RemoteTKYError as exc:
+        if tky_mode_requested != "remote":
+            raise
+        fallback_provider = make_provider("baseline")
+        result = answer_question(
+            question=question,
+            candidates=candidates,
+            provider=fallback_provider,
+            limits=limits,
+        )
+        meta["tky_mode_used"] = "baseline"
+        meta["remote_used"] = False
+        meta["tky_fallback_reason"] = "remote_error"
+        meta["tky_remote_status"] = exc.status_code if exc.status_code is not None else "network"
+        meta["tky_remote_error"] = exc.short_reason or "remote_error"
+        return result, fallback_provider, meta
+
+
+def run_qa_two_pass(
+    *,
+    question: str,
+    cmd: str,
+    chunks: list[CandidateChunk],
+    provider: Any,
+    cfg: Any,
+    tky_mode_requested: str = "baseline",
+) -> tuple[Any, dict[str, Any]]:
+    """Run at most two retrieval+TKY passes using the TKY route from pass 1."""
+    topk_fast = int(getattr(cfg, "topk_fast", getattr(cfg, "topk", 30)))
+    topk_deep = int(getattr(cfg, "topk_deep", 80))
+    min_score_fast = float(getattr(cfg, "min_score_fast", 0.05))
+    min_score_keep = float(getattr(cfg, "min_score_keep", 0.02))
+    max_sources_fast = int(getattr(cfg, "max_sources_fast", getattr(cfg, "max_sources", 6)))
+    max_sources_deep = int(getattr(cfg, "max_sources_deep", max_sources_fast))
+
+    active_provider = provider
+    pass1_candidates = retrieve_topk(question, chunks, topk=topk_fast)
+    pass1_top_score = _top_score(pass1_candidates)
+    pass1_limits = _qa_limits(
+        cmd=cmd,
+        max_sources=max_sources_fast,
+        min_score_keep=min_score_keep,
+        route_hint=_route_hint_for_candidates(pass1_candidates, min_score_fast),
+    )
+    result1, active_provider, pass1_meta = _answer_with_remote_fallback(
+        question=question,
+        candidates=pass1_candidates,
+        limits=pass1_limits,
+        provider=active_provider,
+        tky_mode_requested=tky_mode_requested,
+    )
+
+    final_result = result1
+    final_meta = dict(pass1_meta)
+    pass_count = 1
+    pass2_top_score: float | None = None
+
+    should_second_pass = cmd in {"ask", "explain"} and result1.tky.route == "DEEP"
+    if should_second_pass:
+        pass2_candidates = retrieve_topk(question, chunks, topk=topk_deep)
+        pass2_top_score = _top_score(pass2_candidates)
+        pass2_limits = _qa_limits(
+            cmd=cmd,
+            max_sources=max_sources_deep,
+            min_score_keep=min_score_keep,
+            route_hint="DEEP",
+        )
+        final_result, active_provider, pass2_meta = _answer_with_remote_fallback(
+            question=question,
+            candidates=pass2_candidates,
+            limits=pass2_limits,
+            provider=active_provider,
+            tky_mode_requested=tky_mode_requested,
+        )
+        final_meta.update(pass2_meta)
+        pass_count = 2
+
+    audit_extra: dict[str, Any] = {
+        "pass_count": pass_count,
+        "pass1.top_score": round(pass1_top_score, 6),
+        "route_final": final_result.tky.route,
+        "top_score": round(pass2_top_score if pass2_top_score is not None else pass1_top_score, 6),
+    }
+    if pass2_top_score is not None:
+        audit_extra["pass2.top_score"] = round(pass2_top_score, 6)
+        audit_extra["top_score_pass2"] = round(pass2_top_score, 6)
+
+    if tky_mode_requested == "remote":
+        audit_extra["tky_mode_requested"] = "remote"
+        audit_extra["tky_mode_used"] = final_meta.get("tky_mode_used", "remote")
+        audit_extra["remote_used"] = bool(final_meta.get("remote_used", False))
+        remote_status = final_meta.get("tky_remote_status", "")
+        if remote_status != "":
+            audit_extra["tky_remote_status"] = remote_status
+        fallback_reason = str(final_meta.get("tky_fallback_reason", "") or "")
+        if fallback_reason:
+            audit_extra["tky_fallback_reason"] = fallback_reason
+            audit_extra["tky_remote_error"] = str(final_meta.get("tky_remote_error", "") or "remote_error")
+
+    return final_result, audit_extra
+
+
 def _build_qa_markdown(
     *,
     repo_root: Path,
@@ -258,9 +418,6 @@ def _build_qa_markdown(
     index_path = repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
     chunks = load_or_build_chunks(repo_root, index_path)
-    candidates, route_mode = retrieve_adaptive(question, chunks, cfg)
-
-    max_sources = cfg.max_sources_fast if route_mode == "FAST" else cfg.max_sources_deep
 
     provider = make_provider(
         tky_mode,
@@ -269,59 +426,16 @@ def _build_qa_markdown(
         hmac_secret=hmac_secret or None,
         enable_hmac=enable_hmac,
     )
-    limits = {
-        "max_sources": max_sources,
-        "min_score_keep": cfg.min_score_keep,
-        "route_hint": route_mode,
-        "task_type": cmd,
-        "privacy_mode": "signatures_only",
-        "policy": {"no_raw_text": True, "privacy_mode": "signatures_only"},
-        "repo_ctx": {
-            "repo": extract_repo_from_env(),
-            "sha": extract_sha_from_env(),
-        },
-    }
-
-    fallback_reason = ""
-    remote_status: str | int = ""
-    remote_short_reason = ""
-    mode_requested = tky_mode
-    mode_used = tky_mode
-
-    try:
-        result = answer_question(
-            question=question,
-            candidates=candidates,
-            provider=provider,
-            limits=limits,
-        )
-        if isinstance(provider, RemoteTKYProvider):
-            remote_status = provider.last_status_code or "ok"
-    except RemoteTKYError as exc:
-        if tky_mode != "remote":
-            raise
-        fallback_reason = "remote_error"
-        remote_status = exc.status_code if exc.status_code is not None else "network"
-        remote_short_reason = exc.short_reason
-        mode_used = "baseline"
-        baseline_provider = make_provider("baseline")
-        result = answer_question(
-            question=question,
-            candidates=candidates,
-            provider=baseline_provider,
-            limits=limits,
-        )
-
+    result, loop_audit = run_qa_two_pass(
+        question=question,
+        cmd=cmd,
+        chunks=chunks,
+        provider=provider,
+        cfg=cfg,
+        tky_mode_requested=tky_mode,
+    )
     audit_summary = dict(result.audit_summary)
-    if mode_requested == "remote":
-        audit_summary["tky_mode_requested"] = "remote"
-        audit_summary["tky_mode_used"] = mode_used
-        audit_summary["remote_used"] = mode_used == "remote"
-        if remote_status != "":
-            audit_summary["tky_remote_status"] = remote_status
-        if fallback_reason:
-            audit_summary["tky_fallback_reason"] = fallback_reason
-            audit_summary["tky_remote_error"] = remote_short_reason or "remote_error"
+    audit_summary.update(loop_audit)
     return format_github_comment(
         result.answer_text,
         result.evidence,

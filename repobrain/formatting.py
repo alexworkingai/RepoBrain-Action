@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from .evidence import EvidenceItem
 from .links import make_line_link
@@ -36,6 +36,8 @@ def format_github_comment(
 ) -> str:
     """Format a GitHub-style markdown comment for ask/locate/explain commands."""
     evidence_lines = _format_evidence_lines(evidence, repo=repo, sha=sha)
+    route_value = str(audit_summary.get("route_final", audit_summary.get("route", ""))).strip()
+    mode_line = f"Mode: {route_value}" if route_value else ""
 
     if command == "locate":
         sections = [
@@ -47,19 +49,23 @@ def format_github_comment(
         ]
         return "\n".join(sections)
 
-    sections = [
-        "### ✅ Answer",
-        answer_text.strip() or "No answer generated.",
-        "",
-        "### 📌 Evidence",
-        *evidence_lines,
-        "",
-        "### ✅ Next steps",
-        f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
-        "",
-        "### 🧾 Audit summary",
-        *_format_audit_summary(audit_summary),
-    ]
+    sections = ["### ✅ Answer"]
+    if mode_line:
+        sections.append(mode_line)
+    sections.extend(
+        [
+            answer_text.strip() or "No answer generated.",
+            "",
+            "### 📌 Evidence",
+            *evidence_lines,
+            "",
+            "### ✅ Next steps",
+            f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
+            "",
+            "### 🧾 Audit summary",
+            *_format_audit_summary(audit_summary),
+        ]
+    )
     return "\n".join(sections)
 
 
