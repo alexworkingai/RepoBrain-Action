@@ -16,6 +16,7 @@ from repobrain.index_store import build_index, load_index
 from repobrain.retrieve import retrieve_adaptive
 from repobrain.review import build_pr_review
 from repobrain.security import detect_injection_or_exfiltration
+from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
 from repobrain.tky_provider import CandidateChunk
 
 HELP_TEXT = """RepoBrain command examples:
@@ -250,6 +251,8 @@ def _build_qa_markdown(
     tky_mode: str,
     remote_url: str,
     api_key: str,
+    hmac_secret: str,
+    enable_hmac: bool,
 ) -> str:
     cfg = load_config(repo_root)
     index_path = repo_root / "artifacts" / "index-package.zip"
@@ -263,21 +266,66 @@ def _build_qa_markdown(
         tky_mode,
         remote_url=remote_url or None,
         api_key=api_key or None,
+        hmac_secret=hmac_secret or None,
+        enable_hmac=enable_hmac,
     )
-    result = answer_question(
-        question=question,
-        candidates=candidates,
-        provider=provider,
-        limits={
-            "max_sources": max_sources,
-            "min_score_keep": cfg.min_score_keep,
-            "route_hint": route_mode,
+    limits = {
+        "max_sources": max_sources,
+        "min_score_keep": cfg.min_score_keep,
+        "route_hint": route_mode,
+        "task_type": cmd,
+        "privacy_mode": "signatures_only",
+        "policy": {"no_raw_text": True, "privacy_mode": "signatures_only"},
+        "repo_ctx": {
+            "repo": extract_repo_from_env(),
+            "sha": extract_sha_from_env(),
         },
-    )
+    }
+
+    fallback_reason = ""
+    remote_status: str | int = ""
+    remote_short_reason = ""
+    mode_requested = tky_mode
+    mode_used = tky_mode
+
+    try:
+        result = answer_question(
+            question=question,
+            candidates=candidates,
+            provider=provider,
+            limits=limits,
+        )
+        if isinstance(provider, RemoteTKYProvider):
+            remote_status = provider.last_status_code or "ok"
+    except RemoteTKYError as exc:
+        if tky_mode != "remote":
+            raise
+        fallback_reason = "remote_error"
+        remote_status = exc.status_code if exc.status_code is not None else "network"
+        remote_short_reason = exc.short_reason
+        mode_used = "baseline"
+        baseline_provider = make_provider("baseline")
+        result = answer_question(
+            question=question,
+            candidates=candidates,
+            provider=baseline_provider,
+            limits=limits,
+        )
+
+    audit_summary = dict(result.audit_summary)
+    if mode_requested == "remote":
+        audit_summary["tky_mode_requested"] = "remote"
+        audit_summary["tky_mode_used"] = mode_used
+        audit_summary["remote_used"] = mode_used == "remote"
+        if remote_status != "":
+            audit_summary["tky_remote_status"] = remote_status
+        if fallback_reason:
+            audit_summary["tky_fallback_reason"] = fallback_reason
+            audit_summary["tky_remote_error"] = remote_short_reason or "remote_error"
     return format_github_comment(
         result.answer_text,
         result.evidence,
-        result.audit_summary,
+        audit_summary,
         result.next_steps,
         command=cmd,
         repo=extract_repo_from_env() or None,
@@ -319,6 +367,8 @@ def run_github_flow(
     tky_mode: str = "baseline",
     remote_url: str = "",
     api_key: str = "",
+    hmac_secret: str = "",
+    enable_hmac: bool = False,
     event_path: Path | None = None,
 ) -> str:
     """Run RepoBrain GitHub flow in dry-run or post mode."""
@@ -408,6 +458,8 @@ def run_github_flow(
             tky_mode=tky_mode,
             remote_url=remote_url,
             api_key=api_key,
+            hmac_secret=hmac_secret,
+            enable_hmac=enable_hmac,
         )
 
     if dry_run:

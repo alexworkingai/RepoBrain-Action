@@ -14,6 +14,14 @@ inputs:
     description: "Remote TKY API key"
     required: false
     default: ""
+  hmac_secret:
+    description: "Optional HMAC secret for Remote TKY payload signing"
+    required: false
+    default: ""
+  enable_hmac:
+    description: "Enable HMAC signing for Remote TKY requests"
+    required: false
+    default: "false"
   dry_run:
     description: "If true, print comment instead of publishing to GitHub"
     required: false
@@ -51,4 +59,6 @@ runs:
         --tky-mode "${{ inputs.tky_mode }}"
         --remote-url "${{ inputs.remote_url }}"
         --api-key "${{ inputs.api_key }}"
+        --hmac-secret "${{ inputs.hmac_secret }}"
+        --enable-hmac "${{ inputs.enable_hmac }}"
         --comment-text "${{ inputs.comment_text }}"

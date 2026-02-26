@@ -53,3 +53,11 @@ Security:
 * RepoBrain does not index common secret files, large files, or binary files.
 * Prompt-injection / exfiltration-like requests are blocked with a safe refusal response.
 * Trace data is hash/signature-based; raw text is not stored by default.
+
+Remote TKY mode:
+
+* Endpoint contract: `POST /v1/tky/decide` (JSON payload contract `v1`).
+* Privacy mode is `signatures_only`: outbound payload includes query text + query signature + candidate metadata/signatures (no raw code snippets).
+* Configure action inputs for remote mode: `tky_mode=remote`, `remote_url`, `api_key` (optional), `enable_hmac=true|false`, `hmac_secret` (optional).
+* HMAC signing adds `x-ts`, `x-nonce`, `x-signature` headers over the exact JSON body.
+* If remote TKY fails (network/HTTP), RepoBrain falls back to baseline selection and records fallback diagnostics in audit summary.
