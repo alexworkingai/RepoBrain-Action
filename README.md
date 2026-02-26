@@ -62,3 +62,4 @@ Remote TKY mode:
 * Configure action inputs for remote mode: `tky_mode=remote`, `remote_url`, `api_key` (optional), `enable_hmac=true|false`, `hmac_secret` (optional).
 * HMAC signing adds `x-ts`, `x-nonce`, `x-signature` headers over the exact JSON body.
 * If remote TKY fails (network/HTTP), RepoBrain falls back to baseline selection and records fallback diagnostics in audit summary.
+
