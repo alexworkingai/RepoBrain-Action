@@ -33,3 +33,9 @@ PR Review:
 * Use `/repobrain review` in a Pull Request discussion (issue comments on a PR).
 * RepoBrain fetches changed files, builds a lightweight risk summary, and posts a markdown PR review comment.
 * `/repobrain review` is not available in regular Issues (non-PR threads).
+
+Index cache / prebuild:
+
+* `artifacts/index-package.zip` is reused when present; RepoBrain skips rebuild for `help` and `review`.
+* GitHub Actions can prebuild/cache the index via `.github/workflows/repobrain_index_cache.yml`.
+* The issue-comment workflow restores the Actions cache before running the local action.

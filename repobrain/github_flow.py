@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
-import tempfile
 from typing import Any
 
 import requests
@@ -224,14 +223,18 @@ def question_from_command(cmd: str, query: str) -> str:
 
 
 def load_or_build_chunks(repo_root: Path, index_path: Path) -> list[CandidateChunk]:
-    """Load prebuilt index, or build a temporary one if missing."""
-    if index_path.exists():
+    """Load prebuilt index, or build and persist it if missing."""
+    if not should_build_index(index_path):
         return load_index(index_path)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        temp_index = Path(tmp_dir) / "index-package.zip"
-        build_index(root=repo_root, out_zip=temp_index, store_text=True)
-        return load_index(temp_index)
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    build_index(root=repo_root, out_zip=index_path, store_text=False)
+    return load_index(index_path)
+
+
+def should_build_index(index_path: Path) -> bool:
+    """Return True when index file is missing and needs to be built."""
+    return not index_path.exists()
 
 
 def _build_qa_markdown(
