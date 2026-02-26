@@ -103,9 +103,22 @@ class RemoteTKYProvider(TKYProvider):
             ) from exc
 
         data = response.json()
+        decision = data.get("decision", {}) if isinstance(data, dict) else {}
+        selection = data.get("selection", {}) if isinstance(data, dict) else {}
+
+        route = data.get("route", None) if isinstance(data, dict) else None
+        if route is None and isinstance(decision, dict):
+            route = decision.get("route", None)
+
+        selected_chunk_ids = (
+            data.get("selected_chunk_ids", None) if isinstance(data, dict) else None
+        )
+        if selected_chunk_ids is None and isinstance(selection, dict):
+            selected_chunk_ids = selection.get("selected_chunk_ids", None)
+
         return TKYResult(
-            selected_chunk_ids=list(data.get("selected_chunk_ids", [])),
-            route=str(data.get("route", "FAST")),
+            selected_chunk_ids=list(selected_chunk_ids or []),
+            route=str(route or "FAST"),
             compression_stats=dict(data.get("compression_stats", {})),
             rationale=str(data.get("rationale", "Remote TKY decision.")),
         )

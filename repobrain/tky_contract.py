@@ -33,6 +33,7 @@ def build_remote_request(
                 "line_start": c.line_start,
                 "line_end": c.line_end,
                 "score": c.score,
+                "score_local": c.score,
                 "signature": [int(item) for item in (c.signature or [])],
             }
             for c in candidates
