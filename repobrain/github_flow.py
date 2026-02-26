@@ -214,9 +214,15 @@ class GitHubClient:
             headers=self._headers(),
             timeout=15,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            if response.status_code in {403, 404}:
+                print("Check-runs not accessible, falling back to combined status")
+                return {"total_count": 0, "check_runs": []}
+            raise
         data = response.json()
-        return data if isinstance(data, dict) else {}
+        return data if isinstance(data, dict) else {"total_count": 0, "check_runs": []}
 
     def get_combined_status(self, sha: str) -> dict[str, Any]:
         """Fetch combined commit status (fallback when no check-runs exist)."""
