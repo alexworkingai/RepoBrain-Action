@@ -39,3 +39,11 @@ Index cache / prebuild:
 * `artifacts/index-package.zip` is reused when present; RepoBrain skips rebuild for `help` and `review`.
 * GitHub Actions can prebuild/cache the index via `.github/workflows/repobrain_index_cache.yml`.
 * The issue-comment workflow restores the Actions cache before running the local action.
+
+Retrieval quality / privacy:
+
+* Index stores hashed token signatures (no raw text by default) to improve retrieval quality safely.
+* Signatures are built from chunk metadata and can be compared without storing source text.
+* Unicode-friendly tokenization improves RU/EN queries.
+* Retrieval uses Jaccard over hashed signatures plus small path-based boosts.
+* Raw chunk text is still omitted by default (`store_text=False`).

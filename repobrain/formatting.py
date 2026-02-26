@@ -17,7 +17,7 @@ def format_github_comment(
     """Format a GitHub-style markdown comment for ask/locate/explain commands."""
     evidence_lines = (
         [
-            f"- `{item.file_path}:L{item.line_start}-L{item.line_end}` (score={item.score:.2f})"
+            f"- `{item.file_path}:L{item.line_start}-L{item.line_end}` (score={item.score:.4f})"
             for item in evidence
         ]
         if evidence

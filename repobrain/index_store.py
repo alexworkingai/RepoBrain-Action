@@ -9,6 +9,7 @@ import orjson
 
 from .chunk import chunk_text
 from .scan import scan_files
+from .signatures import build_chunk_signature
 from .tky_provider import CandidateChunk
 
 
@@ -69,6 +70,12 @@ def build_index(root: Path, out_zip: Path, store_text: bool = False) -> None:
                     "line_start": chunk.line_start,
                     "line_end": chunk.line_end,
                     "text_snippet_hash": _snippet_hash(chunk.text),
+                    "signature": build_chunk_signature(
+                        file_path=chunk.file_path,
+                        chunk_id=chunk.chunk_id,
+                        text=chunk.text,
+                        include_text=store_text,
+                    ),
                 }
                 if store_text:
                     row["text"] = chunk.text
@@ -93,6 +100,7 @@ def load_index(zip_path: Path) -> list[CandidateChunk]:
                         line_end=int(row["line_end"]),
                         score=0.0,
                         text=row.get("text"),
+                        signature=[int(item) for item in row.get("signature", [])],
                     )
                 )
     return chunks
