@@ -13,6 +13,12 @@ class RepoBrainConfig:
 
     max_sources: int = 8
     topk: int = 30
+    min_score_fast: float = 0.05
+    min_score_keep: float = 0.02
+    max_sources_fast: int = 6
+    max_sources_deep: int = 12
+    topk_fast: int = 30
+    topk_deep: int = 80
 
 
 def load_config(root: Path) -> RepoBrainConfig:
@@ -25,7 +31,27 @@ def load_config(root: Path) -> RepoBrainConfig:
     answer = data.get("answer", {}) or {}
     limits = data.get("limits", {}) or {}
 
-    max_sources = int(answer.get("max_sources", 8))
-    topk = int(limits.get("topk", 30))
+    legacy_max_sources = answer.get("max_sources", None)
+    legacy_topk = limits.get("topk", None)
 
-    return RepoBrainConfig(max_sources=max_sources, topk=topk)
+    max_sources_fast = int(answer.get("max_sources_fast", legacy_max_sources or 6))
+    max_sources_deep = int(answer.get("max_sources_deep", legacy_max_sources or 12))
+    max_sources = int(legacy_max_sources or max_sources_fast)
+
+    topk_fast = int(limits.get("topk_fast", legacy_topk or 30))
+    topk_deep = int(limits.get("topk_deep", legacy_topk or 80))
+    topk = int(legacy_topk or topk_fast)
+
+    min_score_fast = float(answer.get("min_score_fast", 0.05))
+    min_score_keep = float(answer.get("min_score_keep", 0.02))
+
+    return RepoBrainConfig(
+        max_sources=max_sources,
+        topk=topk,
+        min_score_fast=min_score_fast,
+        min_score_keep=min_score_keep,
+        max_sources_fast=max_sources_fast,
+        max_sources_deep=max_sources_deep,
+        topk_fast=topk_fast,
+        topk_deep=topk_deep,
+    )

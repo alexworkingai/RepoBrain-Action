@@ -19,6 +19,8 @@ def main() -> int:
     parser.add_argument("--tky-mode", default="baseline", choices=["baseline", "remote", "local"])
     parser.add_argument("--remote-url", default="")
     parser.add_argument("--api-key", default="")
+    parser.add_argument("--hmac-secret", default="")
+    parser.add_argument("--enable-hmac", default="false")
     args = parser.parse_args()
 
     try:
@@ -36,6 +38,8 @@ def main() -> int:
         tky_mode=args.tky_mode,
         remote_url=args.remote_url,
         api_key=args.api_key,
+        hmac_secret=args.hmac_secret,
+        enable_hmac=_parse_bool(args.enable_hmac),
         event_path=event_path,
     )
     return 0

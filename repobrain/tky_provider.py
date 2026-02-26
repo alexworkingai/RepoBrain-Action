@@ -17,6 +17,7 @@ class CandidateChunk:
     line_end: int
     score: float
     text: str | None = None  # Optional: keep None by default for safety
+    signature: list[int] | None = None  # Hashed token signature (no raw tokens/text)
 
 
 @dataclass(frozen=True)

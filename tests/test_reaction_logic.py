@@ -94,3 +94,47 @@ def test_github_client_get_pr_files_uses_endpoint(monkeypatch) -> None:
     assert captured["url"] == build_pr_files_url("owner/repo", 15)
     assert captured["timeout"] == 15
     assert data and data[0]["filename"] == "repobrain/github_flow.py"
+
+
+def test_internal_reactions_can_be_disabled_by_env(monkeypatch, tmp_path: Path) -> None:
+    event_path = tmp_path / "event.json"
+    event_path.write_text(
+        """
+{
+  "issue": {"number": 11},
+  "comment": {
+    "id": 222,
+    "body": "/repobrain help",
+    "user": {"login": "alice"}
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.reaction_called = False
+            self.comment_called = False
+
+        def add_reaction_to_issue_comment(self, comment_id: int, content: str = "eyes") -> None:
+            self.reaction_called = True
+
+        def create_issue_comment(self, issue_number: int, body_markdown: str) -> None:
+            self.comment_called = True
+
+    fake_client = FakeClient()
+    monkeypatch.setenv("RB_DISABLE_INTERNAL_REACTIONS", "1")
+    monkeypatch.setattr("repobrain.github_flow._build_post_client", lambda: fake_client)
+
+    status = run_github_flow(
+        repo_root=Path(__file__).resolve().parents[1],
+        dry_run=False,
+        comment_text="",
+        issue_number=None,
+        event_path=event_path,
+    )
+
+    assert status == "POSTED_OK"
+    assert fake_client.reaction_called is False
+    assert fake_client.comment_called is True

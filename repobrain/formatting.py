@@ -1,6 +1,7 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from .evidence import EvidenceItem
+from .links import make_line_link
 
 
 def _format_audit_summary(audit_summary: dict[str, object]) -> list[str]:
@@ -8,35 +9,63 @@ def _format_audit_summary(audit_summary: dict[str, object]) -> list[str]:
     return audit_lines or ["- No audit data."]
 
 
+def _format_evidence_lines(
+    evidence: list[EvidenceItem],
+    *,
+    repo: str | None,
+    sha: str | None,
+) -> list[str]:
+    if not evidence:
+        return ["- No evidence selected."]
+    return [
+        f"- {make_line_link(repo, sha, item.file_path, item.line_start, item.line_end)} "
+        f"(score={item.score:.4f})"
+        for item in evidence
+    ]
+
+
 def format_github_comment(
     answer_text: str,
     evidence: list[EvidenceItem],
     audit_summary: dict[str, object],
     next_steps: str,
+    *,
+    command: str = "ask",
+    repo: str | None = None,
+    sha: str | None = None,
 ) -> str:
     """Format a GitHub-style markdown comment for ask/locate/explain commands."""
-    evidence_lines = (
-        [
-            f"- `{item.file_path}:L{item.line_start}-L{item.line_end}` (score={item.score:.2f})"
-            for item in evidence
-        ]
-        if evidence
-        else ["- No evidence selected."]
-    )
+    evidence_lines = _format_evidence_lines(evidence, repo=repo, sha=sha)
+    route_value = str(audit_summary.get("route_final", audit_summary.get("route", ""))).strip()
+    mode_line = f"Mode: {route_value}" if route_value else ""
 
-    sections = [
-        "### ✅ Answer",
-        answer_text.strip() or "No answer generated.",
-        "",
-        "### 📌 Evidence",
-        *evidence_lines,
-        "",
-        "### ✅ Next steps",
-        f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
-        "",
-        "### 🧾 Audit summary",
-        *_format_audit_summary(audit_summary),
-    ]
+    if command == "locate":
+        sections = [
+            "### 📌 Evidence",
+            *evidence_lines,
+            "",
+            "### 🧾 Audit summary",
+            *_format_audit_summary(audit_summary),
+        ]
+        return "\n".join(sections)
+
+    sections = ["### ✅ Answer"]
+    if mode_line:
+        sections.append(mode_line)
+    sections.extend(
+        [
+            answer_text.strip() or "No answer generated.",
+            "",
+            "### 📌 Evidence",
+            *evidence_lines,
+            "",
+            "### ✅ Next steps",
+            f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
+            "",
+            "### 🧾 Audit summary",
+            *_format_audit_summary(audit_summary),
+        ]
+    )
     return "\n".join(sections)
 
 
@@ -69,4 +98,97 @@ def format_pr_review_comment(review: dict[str, object]) -> str:
         "### 🧾 Audit summary",
         *_format_audit_summary(audit_summary),
     ]
+    return "\n".join(sections)
+
+
+def format_refusal_comment(
+    *,
+    reason: str,
+    audit_summary: dict[str, object],
+) -> str:
+    """Format a safe refusal response for blocked requests."""
+    sections = [
+        "### ⛔️ Request blocked",
+        reason or "This request looks like a prompt-injection or exfiltration attempt.",
+        "",
+        "### ✅ What you can ask instead",
+        "- `/repobrain ask Где реализована логика TKYProvider?`",
+        "- `/repobrain locate BaselineTKYProvider`",
+        "- `/repobrain explain retrieve_adaptive`",
+        "- `/repobrain review` (in a PR discussion)",
+        "",
+        "### 🧾 Audit summary",
+        *_format_audit_summary(audit_summary),
+    ]
+    return "\n".join(sections)
+
+
+def format_verify_comment(report: dict[str, object]) -> str:
+    """Format a PR verification report based on GitHub checks/status APIs."""
+    state = str(report.get("state", "unknown")).lower()
+    total = int(report.get("total", 0) or 0)
+    success = int(report.get("success", 0) or 0)
+    failure = int(report.get("failure", 0) or 0)
+    pending = int(report.get("pending", 0) or 0)
+    neutral = int(report.get("neutral", 0) or 0)
+    failures = list(report.get("failures", []))
+
+    status_icon = {
+        "success": "✅",
+        "pending": "🟡",
+        "failure": "❌",
+    }.get(state, "❔")
+
+    failing_lines: list[str] = []
+    for item in failures:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "Unnamed check"))
+        conclusion = str(item.get("conclusion", "failure"))
+        details_url = item.get("details_url")
+        if isinstance(details_url, str) and details_url.strip():
+            label = f"`{name}` ({conclusion})"
+            failing_lines.append(f"- [{label}]({details_url})")
+        else:
+            failing_lines.append(f"- `{name}` ({conclusion})")
+
+    if state == "pending":
+        next_steps = ["Wait for checks to finish, then run `/repobrain verify` again."]
+    elif state == "failure":
+        next_steps = ["Open failing checks, fix issues, push changes, then verify again."]
+    elif state == "success":
+        next_steps = ["Looks good; proceed with review or merge when ready."]
+    else:
+        next_steps = ["No checks/statuses detected yet. Re-run `/repobrain verify` later."]
+
+    audit_summary = {
+        "route": "VERIFY",
+        "checks_total": total,
+        "checks_failure": failure,
+        "checks_pending": pending,
+    }
+
+    sections = [
+        "### ✅ Verification report",
+        f"Status: {status_icon} `{state}`",
+        "",
+        f"- Total checks: {total}",
+        f"- Success: {success}",
+        f"- Failure: {failure}",
+        f"- Pending: {pending}",
+        f"- Neutral/Skipped: {neutral}",
+    ]
+    if failing_lines:
+        sections.extend(["", "Failing checks:", *failing_lines])
+
+    sections.extend(
+        [
+            "",
+            "### ✅ Next steps",
+            *[f"- {line}" for line in next_steps],
+            "",
+            "### 🧾 Audit summary",
+            *_format_audit_summary(audit_summary),
+        ]
+    )
     return "\n".join(sections)

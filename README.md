@@ -33,4 +33,32 @@ PR Review:
 * Use `/repobrain review` in a Pull Request discussion (issue comments on a PR).
 * RepoBrain fetches changed files, builds a lightweight risk summary, and posts a markdown PR review comment.
 * `/repobrain review` is not available in regular Issues (non-PR threads).
-PR test
+
+Index cache / prebuild:
+
+* `artifacts/index-package.zip` is reused when present; RepoBrain skips rebuild for `help` and `review`.
+* GitHub Actions can prebuild/cache the index via `.github/workflows/repobrain_index_cache.yml`.
+* The issue-comment workflow restores the Actions cache before running the local action.
+
+Retrieval quality / privacy:
+
+* Index stores hashed token signatures (no raw text by default) to improve retrieval quality safely.
+* Signatures are built from chunk metadata and can be compared without storing source text.
+* Unicode-friendly tokenization improves RU/EN queries.
+* Retrieval uses Jaccard over hashed signatures plus small path-based boosts.
+* If TKY returns `route=DEEP`, RepoBrain performs a second retrieval pass with a larger `topK`.
+* Raw chunk text is still omitted by default (`store_text=False`).
+
+Security:
+
+* RepoBrain does not index common secret files, large files, or binary files.
+* Prompt-injection / exfiltration-like requests are blocked with a safe refusal response.
+* Trace data is hash/signature-based; raw text is not stored by default.
+
+Remote TKY mode:
+
+* Endpoint contract: `POST /v1/tky/decide` (JSON payload contract `v1`).
+* Privacy mode is `signatures_only`: outbound payload includes query text + query signature + candidate metadata/signatures (no raw code snippets).
+* Configure action inputs for remote mode: `tky_mode=remote`, `remote_url`, `api_key` (optional), `enable_hmac=true|false`, `hmac_secret` (optional).
+* HMAC signing adds `x-ts`, `x-nonce`, `x-signature` headers over the exact JSON body.
+* If remote TKY fails (network/HTTP), RepoBrain falls back to baseline selection and records fallback diagnostics in audit summary.

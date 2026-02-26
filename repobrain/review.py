@@ -46,7 +46,7 @@ def build_pr_review(files: list[dict[str, object]]) -> dict[str, object]:
     )
     next_steps = [
         "Run `pytest -q`.",
-        "Run `ruff check .`.",
+        "Run ruff check .",
         "Open changed files and verify behavior matches intent.",
     ]
 

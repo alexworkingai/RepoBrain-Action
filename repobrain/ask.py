@@ -24,6 +24,8 @@ def make_provider(
     *,
     remote_url: str | None = None,
     api_key: str | None = None,
+    hmac_secret: str | None = None,
+    enable_hmac: bool = False,
 ) -> TKYProvider:
     """Factory for TKY providers.
 
@@ -38,7 +40,12 @@ def make_provider(
     if mode == "remote":
         if not remote_url:
             raise ValueError("remote_url is required for mode=remote")
-        return RemoteTKYProvider(endpoint_url=remote_url, api_key=api_key)
+        return RemoteTKYProvider(
+            endpoint_url=remote_url,
+            api_key=api_key,
+            hmac_secret=hmac_secret,
+            enable_hmac=enable_hmac,
+        )
     if mode == "local":
         return LocalTKYProvider()
     raise ValueError(f"Unknown TKY mode: {mode}")

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
-import tempfile
 from typing import Any
 
 import requests
@@ -12,11 +11,19 @@ import requests
 from repobrain.ask import answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.config import load_config
-from repobrain.formatting import format_github_comment, format_pr_review_comment
+from repobrain.formatting import (
+    format_github_comment,
+    format_pr_review_comment,
+    format_refusal_comment,
+    format_verify_comment,
+)
 from repobrain.index_store import build_index, load_index
 from repobrain.retrieve import retrieve_topk
 from repobrain.review import build_pr_review
+from repobrain.security import detect_injection_or_exfiltration
+from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
 from repobrain.tky_provider import CandidateChunk
+from repobrain.verify import build_verify_report
 
 HELP_TEXT = """RepoBrain command examples:
 - /repobrain help
@@ -24,6 +31,7 @@ HELP_TEXT = """RepoBrain command examples:
 - /repobrain locate TKYProvider
 - /repobrain explain retrieve_topk
 - /repobrain review
+- /repobrain verify (PR checks-based verification ladder v0)
 """
 
 BOT_MARKER = "[bot]"
@@ -188,9 +196,52 @@ class GitHubClient:
             return []
         return [item for item in data if isinstance(item, dict)]
 
+    def get_pull(self, pull_number: int) -> dict[str, Any]:
+        """Fetch PR metadata (used for head SHA lookup)."""
+        response = requests.get(
+            f"https://api.github.com/repos/{self.repo}/pulls/{pull_number}",
+            headers=self._headers(),
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
+    def get_check_runs(self, sha: str) -> dict[str, Any]:
+        """Fetch check-runs for a commit SHA."""
+        response = requests.get(
+            f"https://api.github.com/repos/{self.repo}/commits/{sha}/check-runs",
+            headers=self._headers(),
+            timeout=15,
+        )
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            if response.status_code in {403, 404}:
+                print("Check-runs not accessible, falling back to combined status")
+                return {"total_count": 0, "check_runs": []}
+            raise
+        data = response.json()
+        return data if isinstance(data, dict) else {"total_count": 0, "check_runs": []}
+
+    def get_combined_status(self, sha: str) -> dict[str, Any]:
+        """Fetch combined commit status (fallback when no check-runs exist)."""
+        response = requests.get(
+            f"https://api.github.com/repos/{self.repo}/commits/{sha}/status",
+            headers=self._headers(),
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
 
 def extract_repo_from_env() -> str:
     return os.environ.get("GITHUB_REPOSITORY", "").strip()
+
+
+def extract_sha_from_env() -> str:
+    return os.environ.get("GITHUB_SHA", "").strip()
 
 
 def _is_bot_login(login: str) -> bool:
@@ -208,6 +259,10 @@ def _build_post_client() -> GitHubClient:
     return GitHubClient(repo=repo, token=token)
 
 
+def _internal_reactions_enabled() -> bool:
+    return os.environ.get("RB_DISABLE_INTERNAL_REACTIONS", "").strip() != "1"
+
+
 def question_from_command(cmd: str, query: str) -> str:
     """Convert parsed command into a retrieval/answering question string."""
     if cmd == "review":
@@ -220,14 +275,178 @@ def question_from_command(cmd: str, query: str) -> str:
 
 
 def load_or_build_chunks(repo_root: Path, index_path: Path) -> list[CandidateChunk]:
-    """Load prebuilt index, or build a temporary one if missing."""
-    if index_path.exists():
+    """Load prebuilt index, or build and persist it if missing."""
+    if not should_build_index(index_path):
         return load_index(index_path)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        temp_index = Path(tmp_dir) / "index-package.zip"
-        build_index(root=repo_root, out_zip=temp_index, store_text=True)
-        return load_index(temp_index)
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    build_index(root=repo_root, out_zip=index_path, store_text=False)
+    return load_index(index_path)
+
+
+def should_build_index(index_path: Path) -> bool:
+    """Return True when index file is missing and needs to be built."""
+    return not index_path.exists()
+
+
+def _top_score(candidates: list[CandidateChunk]) -> float:
+    return float(candidates[0].score) if candidates else 0.0
+
+
+def _route_hint_for_candidates(candidates: list[CandidateChunk], min_score_fast: float) -> str:
+    return "DEEP" if _top_score(candidates) < float(min_score_fast) else "FAST"
+
+
+def _qa_limits(
+    *,
+    cmd: str,
+    max_sources: int,
+    min_score_keep: float,
+    route_hint: str,
+) -> dict[str, Any]:
+    return {
+        "max_sources": max_sources,
+        "min_score_keep": min_score_keep,
+        "route_hint": route_hint,
+        "task_type": cmd,
+        "privacy_mode": "signatures_only",
+        "policy": {"no_raw_text": True, "privacy_mode": "signatures_only"},
+        "repo_ctx": {
+            "repo": extract_repo_from_env(),
+            "sha": extract_sha_from_env(),
+        },
+    }
+
+
+def _answer_with_remote_fallback(
+    *,
+    question: str,
+    candidates: list[CandidateChunk],
+    limits: dict[str, Any],
+    provider: Any,
+    tky_mode_requested: str,
+) -> tuple[Any, Any, dict[str, Any]]:
+    """Run `answer_question`, falling back to baseline if remote provider fails."""
+    meta: dict[str, Any] = {
+        "tky_mode_requested": tky_mode_requested,
+        "tky_mode_used": tky_mode_requested,
+        "remote_used": tky_mode_requested == "remote",
+        "tky_fallback_reason": "",
+        "tky_remote_status": "",
+        "tky_remote_error": "",
+    }
+    active_provider = provider
+
+    try:
+        result = answer_question(
+            question=question,
+            candidates=candidates,
+            provider=active_provider,
+            limits=limits,
+        )
+        if isinstance(active_provider, RemoteTKYProvider):
+            meta["tky_remote_status"] = active_provider.last_status_code or "ok"
+        return result, active_provider, meta
+    except RemoteTKYError as exc:
+        if tky_mode_requested != "remote":
+            raise
+        fallback_provider = make_provider("baseline")
+        result = answer_question(
+            question=question,
+            candidates=candidates,
+            provider=fallback_provider,
+            limits=limits,
+        )
+        meta["tky_mode_used"] = "baseline"
+        meta["remote_used"] = False
+        meta["tky_fallback_reason"] = "remote_error"
+        meta["tky_remote_status"] = exc.status_code if exc.status_code is not None else "network"
+        meta["tky_remote_error"] = exc.short_reason or "remote_error"
+        return result, fallback_provider, meta
+
+
+def run_qa_two_pass(
+    *,
+    question: str,
+    cmd: str,
+    chunks: list[CandidateChunk],
+    provider: Any,
+    cfg: Any,
+    tky_mode_requested: str = "baseline",
+) -> tuple[Any, dict[str, Any]]:
+    """Run at most two retrieval+TKY passes using the TKY route from pass 1."""
+    topk_fast = int(getattr(cfg, "topk_fast", getattr(cfg, "topk", 30)))
+    topk_deep = int(getattr(cfg, "topk_deep", 80))
+    min_score_fast = float(getattr(cfg, "min_score_fast", 0.05))
+    min_score_keep = float(getattr(cfg, "min_score_keep", 0.02))
+    max_sources_fast = int(getattr(cfg, "max_sources_fast", getattr(cfg, "max_sources", 6)))
+    max_sources_deep = int(getattr(cfg, "max_sources_deep", max_sources_fast))
+
+    active_provider = provider
+    pass1_candidates = retrieve_topk(question, chunks, topk=topk_fast)
+    pass1_top_score = _top_score(pass1_candidates)
+    pass1_limits = _qa_limits(
+        cmd=cmd,
+        max_sources=max_sources_fast,
+        min_score_keep=min_score_keep,
+        route_hint=_route_hint_for_candidates(pass1_candidates, min_score_fast),
+    )
+    result1, active_provider, pass1_meta = _answer_with_remote_fallback(
+        question=question,
+        candidates=pass1_candidates,
+        limits=pass1_limits,
+        provider=active_provider,
+        tky_mode_requested=tky_mode_requested,
+    )
+
+    final_result = result1
+    final_meta = dict(pass1_meta)
+    pass_count = 1
+    pass2_top_score: float | None = None
+
+    should_second_pass = cmd in {"ask", "explain"} and result1.tky.route == "DEEP"
+    if should_second_pass:
+        pass2_candidates = retrieve_topk(question, chunks, topk=topk_deep)
+        pass2_top_score = _top_score(pass2_candidates)
+        pass2_limits = _qa_limits(
+            cmd=cmd,
+            max_sources=max_sources_deep,
+            min_score_keep=min_score_keep,
+            route_hint="DEEP",
+        )
+        final_result, active_provider, pass2_meta = _answer_with_remote_fallback(
+            question=question,
+            candidates=pass2_candidates,
+            limits=pass2_limits,
+            provider=active_provider,
+            tky_mode_requested=tky_mode_requested,
+        )
+        final_meta.update(pass2_meta)
+        pass_count = 2
+
+    audit_extra: dict[str, Any] = {
+        "pass_count": pass_count,
+        "pass1.top_score": round(pass1_top_score, 6),
+        "route_final": final_result.tky.route,
+        "top_score": round(pass2_top_score if pass2_top_score is not None else pass1_top_score, 6),
+    }
+    if pass2_top_score is not None:
+        audit_extra["pass2.top_score"] = round(pass2_top_score, 6)
+        audit_extra["top_score_pass2"] = round(pass2_top_score, 6)
+
+    if tky_mode_requested == "remote":
+        audit_extra["tky_mode_requested"] = "remote"
+        audit_extra["tky_mode_used"] = final_meta.get("tky_mode_used", "remote")
+        audit_extra["remote_used"] = bool(final_meta.get("remote_used", False))
+        remote_status = final_meta.get("tky_remote_status", "")
+        if remote_status != "":
+            audit_extra["tky_remote_status"] = remote_status
+        fallback_reason = str(final_meta.get("tky_fallback_reason", "") or "")
+        if fallback_reason:
+            audit_extra["tky_fallback_reason"] = fallback_reason
+            audit_extra["tky_remote_error"] = str(final_meta.get("tky_remote_error", "") or "remote_error")
+
+    return final_result, audit_extra
 
 
 def _build_qa_markdown(
@@ -238,29 +457,39 @@ def _build_qa_markdown(
     tky_mode: str,
     remote_url: str,
     api_key: str,
+    hmac_secret: str,
+    enable_hmac: bool,
 ) -> str:
     cfg = load_config(repo_root)
     index_path = repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
     chunks = load_or_build_chunks(repo_root, index_path)
-    candidates = retrieve_topk(question, chunks, topk=cfg.topk)
 
     provider = make_provider(
         tky_mode,
         remote_url=remote_url or None,
         api_key=api_key or None,
+        hmac_secret=hmac_secret or None,
+        enable_hmac=enable_hmac,
     )
-    result = answer_question(
+    result, loop_audit = run_qa_two_pass(
         question=question,
-        candidates=candidates,
+        cmd=cmd,
+        chunks=chunks,
         provider=provider,
-        limits={"max_sources": cfg.max_sources},
+        cfg=cfg,
+        tky_mode_requested=tky_mode,
     )
+    audit_summary = dict(result.audit_summary)
+    audit_summary.update(loop_audit)
     return format_github_comment(
         result.answer_text,
         result.evidence,
-        result.audit_summary,
+        audit_summary,
         result.next_steps,
+        command=cmd,
+        repo=extract_repo_from_env() or None,
+        sha=extract_sha_from_env() or None,
     )
 
 
@@ -289,6 +518,41 @@ def _build_review_markdown(
     return format_pr_review_comment(review)
 
 
+def _build_verify_markdown(
+    *,
+    is_pull_request: bool,
+    issue_number: int | None,
+    dry_run: bool,
+    client: GitHubClient | None,
+) -> str:
+    if not is_pull_request:
+        return (
+            "Verify works in PRs (checks/CI). Create a PR and run `/repobrain verify` "
+            "in PR discussion."
+        )
+    if issue_number is None:
+        return "Verify is available in Pull Requests. Pull request number was not detected."
+
+    if dry_run:
+        report = build_verify_report({}, None)
+        return format_verify_comment(report)
+
+    if client is None:
+        raise ValueError("GitHub client is required for verify in post mode")
+
+    pull = client.get_pull(issue_number)
+    head = pull.get("head", {})
+    sha = str(head.get("sha", "")) if isinstance(head, dict) else ""
+    if not sha:
+        report = build_verify_report({}, None)
+        return format_verify_comment(report)
+
+    check_runs = client.get_check_runs(sha)
+    status = client.get_combined_status(sha)
+    report = build_verify_report(check_runs, status)
+    return format_verify_comment(report)
+
+
 def run_github_flow(
     *,
     repo_root: Path,
@@ -298,6 +562,8 @@ def run_github_flow(
     tky_mode: str = "baseline",
     remote_url: str = "",
     api_key: str = "",
+    hmac_secret: str = "",
+    enable_hmac: bool = False,
     event_path: Path | None = None,
 ) -> str:
     """Run RepoBrain GitHub flow in dry-run or post mode."""
@@ -334,18 +600,53 @@ def run_github_flow(
     print(f"Cmd={cmd}")
     print(f"Query={query}")
 
+    sec = detect_injection_or_exfiltration(source_text)
+    if sec["blocked"]:
+        body_markdown = format_refusal_comment(
+            reason="Possible prompt-injection / exfiltration attempt was blocked.",
+            audit_summary={
+                "route": "REFUSE",
+                "security": {
+                    "blocked": sec["blocked"],
+                    "risk": sec["risk"],
+                    "signals": sec["signals"],
+                },
+            },
+        )
+
+        if dry_run:
+            print(body_markdown)
+            return "DRY_RUN_OK"
+
+        if resolved_issue_number is None:
+            raise ValueError("issue_number is required when dry_run=False")
+
+        client = _build_post_client()
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+            client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+        print(f"Posted comment to issue #{resolved_issue_number}")
+        return "POSTED_OK"
+
     client: GitHubClient | None = None
     if not dry_run:
         if resolved_issue_number is None:
             raise ValueError("issue_number is required when dry_run=False")
         client = _build_post_client()
-        if event_ctx.comment_id is not None:
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
             client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
 
     if cmd == "help":
         body_markdown = HELP_TEXT.strip()
     elif cmd == "review":
         body_markdown = _build_review_markdown(
+            is_pull_request=event_ctx.is_pull_request,
+            issue_number=resolved_issue_number,
+            dry_run=dry_run,
+            client=client,
+        )
+    elif cmd == "verify":
+        body_markdown = _build_verify_markdown(
             is_pull_request=event_ctx.is_pull_request,
             issue_number=resolved_issue_number,
             dry_run=dry_run,
@@ -359,6 +660,8 @@ def run_github_flow(
             tky_mode=tky_mode,
             remote_url=remote_url,
             api_key=api_key,
+            hmac_secret=hmac_secret,
+            enable_hmac=enable_hmac,
         )
 
     if dry_run:
