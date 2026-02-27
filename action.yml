@@ -51,6 +51,7 @@ runs:
       shell: bash
       env:
         RB_DISABLE_INTERNAL_REACTIONS: "1"
+        RB_INDEX_CACHE_RESTORED: ${{ env.RB_INDEX_CACHE_RESTORED }}
         GITHUB_TOKEN: ${{ github.token }}
       run: >
         python scripts/run_github.py

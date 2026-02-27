@@ -4,6 +4,9 @@ from .evidence import EvidenceItem
 from .links import make_line_link
 
 
+AUDIT_ARTIFACT_NOTE = "Audit: workflow artifact `repobrain-audit` (hash-only)."
+
+
 def _format_audit_summary(audit_summary: dict[str, object]) -> list[str]:
     audit_lines = [f"- `{key}`: {value}" for key, value in audit_summary.items()]
     return audit_lines or ["- No audit data."]
@@ -46,6 +49,8 @@ def format_github_comment(
             "",
             "### 🧾 Audit summary",
             *_format_audit_summary(audit_summary),
+            "",
+            AUDIT_ARTIFACT_NOTE,
         ]
         return "\n".join(sections)
 
@@ -64,6 +69,8 @@ def format_github_comment(
             "",
             "### 🧾 Audit summary",
             *_format_audit_summary(audit_summary),
+            "",
+            AUDIT_ARTIFACT_NOTE,
         ]
     )
     return "\n".join(sections)
@@ -72,19 +79,28 @@ def format_github_comment(
 def format_pr_review_comment(review: dict[str, object]) -> str:
     """Format a PR review markdown comment from `repobrain.review.build_pr_review` output."""
     summary_text = str(review.get("summary_text", "")).strip() or "No summary available."
+    risk_level = str(review.get("risk_level", "low")).strip().lower() or "low"
     files_block = list(review.get("files_block", []))
     risks = list(review.get("risks", []))
-    next_steps = list(review.get("next_steps", []))
+    suggested_tests = list(review.get("suggested_tests", review.get("next_steps", [])))
+    notes = list(review.get("notes", []))
     audit_summary = dict(review.get("audit_summary", {}))
 
     file_lines = files_block or ["- No changed files detected."]
     risk_lines = [f"- {item}" for item in risks] or ["- No obvious risks detected."]
-    next_step_lines = [f"- {item}" for item in next_steps] or ["- Run checks and review changes."]
+    test_lines = [f"- {item}" for item in suggested_tests] or ["- Run checks and review changes."]
+    impact_lines = [f"- {item}" for item in notes] or ["- No additional impact notes."]
+
+    risk_badge = {
+        "high": "🔴 HIGH",
+        "medium": "🟠 MEDIUM",
+        "low": "🟢 LOW",
+    }.get(risk_level, f"⚪ {risk_level.upper()}")
 
     sections = [
         "### ✅ PR Review",
         "",
-        f"TL;DR: {summary_text}",
+        f"TL;DR: {summary_text}  \nRisk level: **{risk_badge}**",
         "",
         "### 🗂️ Files changed",
         *file_lines,
@@ -92,11 +108,16 @@ def format_pr_review_comment(review: dict[str, object]) -> str:
         "### ⚠️ Risks",
         *risk_lines,
         "",
-        "### ✅ Next steps",
-        *next_step_lines,
+        "### ✅ Suggested tests",
+        *test_lines,
+        "",
+        "### 🧭 Impact map",
+        *impact_lines,
         "",
         "### 🧾 Audit summary",
         *_format_audit_summary(audit_summary),
+        "",
+        AUDIT_ARTIFACT_NOTE,
     ]
     return "\n".join(sections)
 
@@ -119,6 +140,8 @@ def format_refusal_comment(
         "",
         "### 🧾 Audit summary",
         *_format_audit_summary(audit_summary),
+        "",
+        AUDIT_ARTIFACT_NOTE,
     ]
     return "\n".join(sections)
 
@@ -126,6 +149,7 @@ def format_refusal_comment(
 def format_verify_comment(report: dict[str, object]) -> str:
     """Format a PR verification report based on GitHub checks/status APIs."""
     state = str(report.get("state", "unknown")).lower()
+    message = str(report.get("message", "")).strip()
     total = int(report.get("total", 0) or 0)
     success = int(report.get("success", 0) or 0)
     failure = int(report.get("failure", 0) or 0)
@@ -172,12 +196,19 @@ def format_verify_comment(report: dict[str, object]) -> str:
         "### ✅ Verification report",
         f"Status: {status_icon} `{state}`",
         "",
+    ]
+    if message:
+        sections.extend([message, ""])
+
+    sections.extend(
+        [
         f"- Total checks: {total}",
         f"- Success: {success}",
         f"- Failure: {failure}",
         f"- Pending: {pending}",
         f"- Neutral/Skipped: {neutral}",
-    ]
+        ]
+    )
     if failing_lines:
         sections.extend(["", "Failing checks:", *failing_lines])
 
@@ -189,6 +220,8 @@ def format_verify_comment(report: dict[str, object]) -> str:
             "",
             "### 🧾 Audit summary",
             *_format_audit_summary(audit_summary),
+            "",
+            AUDIT_ARTIFACT_NOTE,
         ]
     )
     return "\n".join(sections)

@@ -130,6 +130,25 @@ def build_verify_report(
     status_json: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Build a lightweight verification report from GitHub checks/status APIs."""
+    if (
+        str(check_runs_json.get("_error", "")).lower() == "forbidden"
+        and isinstance(status_json, dict)
+        and str(status_json.get("_error", "")).lower() == "forbidden"
+    ):
+        return {
+            "state": "unknown",
+            "total": 0,
+            "success": 0,
+            "failure": 0,
+            "pending": 0,
+            "neutral": 0,
+            "failures": [],
+            "message": (
+                "Verification unavailable due to token permissions. "
+                "Add `checks: read` and `statuses: read` to workflow permissions."
+            ),
+        }
+
     total_count = check_runs_json.get("total_count", 0)
     if isinstance(total_count, int) and total_count > 0:
         return _report_from_check_runs(check_runs_json)

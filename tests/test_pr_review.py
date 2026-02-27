@@ -30,7 +30,8 @@ def test_build_pr_review_returns_risks_and_next_steps() -> None:
     review = build_pr_review(files)
 
     assert review["risks"]
-    assert review["next_steps"]
+    assert review["suggested_tests"]
+    assert review["risk_level"] in {"low", "medium", "high"}
     assert review["audit_summary"]["route"] == "REVIEW"
 
 
@@ -51,4 +52,4 @@ def test_format_pr_review_comment_sections() -> None:
     assert "PR Review" in text
     assert "Files changed" in text
     assert "Risks" in text
-    assert "Next steps" in text
+    assert "Suggested tests" in text

@@ -43,6 +43,7 @@ Index cache / prebuild:
 Retrieval quality / privacy:
 
 * Index stores hashed token signatures (no raw text by default) to improve retrieval quality safely.
+* Retrieval Pro uses a hybrid score (signature overlap + path overlap + exact identifier hits) and file diversity caps.
 * Signatures are built from chunk metadata and can be compared without storing source text.
 * Unicode-friendly tokenization improves RU/EN queries.
 * Retrieval uses Jaccard over hashed signatures plus small path-based boosts.
@@ -62,3 +63,37 @@ Remote TKY mode:
 * Configure action inputs for remote mode: `tky_mode=remote`, `remote_url`, `api_key` (optional), `enable_hmac=true|false`, `hmac_secret` (optional).
 * HMAC signing adds `x-ts`, `x-nonce`, `x-signature` headers over the exact JSON body.
 * If remote TKY fails (network/HTTP), RepoBrain falls back to baseline selection and records fallback diagnostics in audit summary.
+
+PR Review Pro:
+
+* Review output includes file links pinned to PR head SHA and risk-level scoring (low/medium/high).
+* Patch-based heuristics detect conflict markers, TODO/FIXME, possible secret leakage, and workflow risk signals.
+* Patch text is analyzed at runtime only and is not stored in audit artifacts.
+
+2-minute setup:
+
+1. Add a workflow (see `.github/workflows/repobrain_template.yml`) with:
+   * `issue_comment` + `workflow_dispatch`
+   * permissions: `contents`, `issues`, `pull-requests`, `checks`, `statuses`
+2. Trigger in PR/Issue comments with:
+   * `/repobrain help`
+3. Find audit output in workflow artifacts:
+   * artifact name: `repobrain-audit` (hash-only JSON)
+
+Demo scenarios:
+
+1. `/repobrain ask Где реализована логика TKYProvider?`
+2. `/repobrain locate TKYProvider`
+3. `/repobrain review` (inside PR discussion)
+4. `/repobrain verify` (PR checks/status verification)
+5. Security-blocked request (e.g. asking for secrets/system prompt) -> safe refusal
+6. Download `repobrain-audit` artifact to inspect timings, route, cache source, and TKY diagnostics
+
+Release versioning:
+
+* Tag a release:
+  * `git tag v0.1.0`
+  * `git push origin v0.1.0`
+* Consumers can pin the action version:
+  * `uses: OWNER/REPO@v0.1.0`
+

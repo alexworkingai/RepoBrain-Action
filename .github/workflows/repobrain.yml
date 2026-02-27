@@ -24,6 +24,7 @@ on:
 permissions:
   contents: read
   checks: read
+  statuses: read
   issues: write
   pull-requests: write
 
@@ -46,6 +47,7 @@ jobs:
             core.setOutput("reaction_id", String(res.data.id));
       - uses: actions/checkout@v4
       - name: Restore RepoBrain index cache
+        id: index_cache
         uses: actions/cache@v4
         with:
           path: artifacts/index-package.zip
@@ -53,6 +55,8 @@ jobs:
           restore-keys: |
             repobrain-index-main-
       - uses: ./. 
+        env:
+          RB_INDEX_CACHE_RESTORED: ${{ steps.index_cache.outputs.cache-hit == 'true' && '1' || '' }}
         with:
           tky_mode: "baseline"
           dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
@@ -81,3 +85,10 @@ jobs:
             const status = (process.env.JOB_STATUS || "").toLowerCase();
             const content = status === "success" ? "rocket" : "confused";
             await github.rest.reactions.createForIssueComment({ owner, repo, comment_id, content });
+      - name: Upload RepoBrain audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-audit
+          path: artifacts/audit/*.json
+          if-no-files-found: ignore

@@ -1,4 +1,4 @@
-name: RepoBrain Remote Stub Test
+﻿name: RepoBrain Remote Stub Test
 
 on:
   workflow_dispatch:
@@ -6,6 +6,7 @@ on:
 permissions:
   contents: read
   checks: read
+  statuses: read
   issues: write
   pull-requests: write
 
@@ -26,10 +27,17 @@ jobs:
           nohup python -m repobrain.tky_stub_server --host 127.0.0.1 --port 8787 > /tmp/tky-stub.log 2>&1 &
           sleep 1
       - name: Run RepoBrain action in remote mode (stub)
-        uses: ./. 
+        uses: ./.
         with:
           tky_mode: remote
           remote_url: "http://127.0.0.1:8787/v1/tky/decide"
           enable_hmac: "false"
           dry_run: "true"
           comment_text: "/repobrain ask Где реализована логика TKYProvider?"
+      - name: Upload RepoBrain audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-audit
+          path: artifacts/audit/*.json
+          if-no-files-found: ignore
