@@ -22,6 +22,7 @@ class RepoBrainConfig:
     config_loaded: bool = False
     config_path: str = "<missing>"
     tky_remote_enabled: bool = False
+    tky_remote_url: str = ""
     tky_remote_allow_commands: list[str] = field(default_factory=lambda: ["ask", "explain"])
     tky_remote_allow_branches: list[str] = field(default_factory=lambda: ["main"])
     tky_remote_allow_repos: list[str] = field(default_factory=list)
@@ -82,6 +83,7 @@ def load_config(root: Path) -> RepoBrainConfig:
         tky.get("remote_enabled", tky.get("remoteEnabled", False)),
         False,
     )
+    tky_remote_url = str(tky.get("remote_url", tky.get("remoteUrl", "")) or "").strip()
     tky_remote_allow_commands = _as_str_list(
         tky.get("remote_allow_commands", tky.get("remoteAllowCommands")),
         ["ask", "explain"],
@@ -111,6 +113,7 @@ def load_config(root: Path) -> RepoBrainConfig:
         config_loaded=True,
         config_path=str(cfg_path),
         tky_remote_enabled=tky_remote_enabled,
+        tky_remote_url=tky_remote_url,
         tky_remote_allow_commands=tky_remote_allow_commands,
         tky_remote_allow_branches=tky_remote_allow_branches,
         tky_remote_allow_repos=tky_remote_allow_repos,

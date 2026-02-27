@@ -3,9 +3,9 @@ description: "Run RepoBrain in GitHub Actions (dry-run by default)"
 
 inputs:
   tky_mode:
-    description: "TKY provider mode: baseline|remote|local"
+    description: "TKY provider mode: auto|baseline|remote|local"
     required: false
-    default: "baseline"
+    default: "auto"
   remote_url:
     description: "Remote TKY endpoint URL"
     required: false

@@ -66,7 +66,8 @@ Remote TKY mode:
 
 * Endpoint contract: `POST /v1/tky/decide` (JSON payload contract `v1`).
 * Privacy mode is `signatures_only`: outbound payload includes query text + query signature + candidate metadata/signatures (no raw code snippets).
-* Configure action inputs for remote mode: `tky_mode=remote`, `remote_url`, `api_key` (optional), `enable_hmac=true|false`, `hmac_secret` (optional).
+* `tky_mode=auto` is the default. In `auto`, RepoBrain uses remote only when rollout policy allows it and a remote URL is available.
+* Configure action inputs for explicit remote mode: `tky_mode=remote`, `remote_url`, `api_key` (optional), `enable_hmac=true|false`, `hmac_secret` (optional).
 * HMAC signing adds `x-ts`, `x-nonce`, `x-signature` headers over the exact JSON body.
 * If remote TKY fails (network/HTTP), RepoBrain falls back to baseline selection and records fallback diagnostics in audit summary.
 * Contract compatibility supports both response formats:
@@ -76,6 +77,7 @@ Remote TKY mode:
 Remote TKY rollout controls:
 
 * `tky.remote_enabled` toggles remote globally (default `false`).
+* `tky.remote_url` is optional and can be used for local/stub setups; production should pass `remote_url` via workflow input/secrets.
 * `tky.remote_allow_commands` limits where remote can run (default `ask`, `explain`).
 * `tky.remote_allow_branches` limits branches (default `main`; empty list means any branch).
 * `tky.remote_allow_repos` limits repositories (empty list means any repo).
@@ -95,6 +97,7 @@ Example `.repobrain.yml`:
 ```yaml
 tky:
   remote_enabled: false
+  remote_url: ""
   remote_allow_commands: ["ask", "explain"]
   remote_allow_branches: ["main"]
   remote_allow_repos: []
@@ -103,7 +106,7 @@ tky:
 
 Example workflow/action inputs:
 
-* `tky_mode: remote`
+* `tky_mode: auto` (default)
 * `remote_url: https://your-service.example/v1/tky/decide`
 * `api_key: ${{ secrets.REPOBRAIN_TKY_API_KEY }}`
 * `enable_hmac: "true"`

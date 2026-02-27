@@ -443,6 +443,38 @@ def decide_remote_usage(
     return True, None
 
 
+def resolve_tky_mode(
+    *,
+    requested_mode: str,
+    cfg: RepoBrainConfig,
+    cmd: str,
+    repo_name: str,
+    branch_name: str,
+    remote_url_input: str,
+) -> tuple[str, str | None, str]:
+    """Resolve requested TKY mode into used mode + skip reason + effective remote URL."""
+    mode = (requested_mode or "auto").strip().lower()
+    effective_remote_url = (remote_url_input or "").strip() or str(getattr(cfg, "tky_remote_url", "") or "").strip()
+
+    if mode == "baseline":
+        return "baseline", None, ""
+    if mode == "local":
+        return "local", None, ""
+    if mode not in {"remote", "auto"}:
+        return "baseline", None, ""
+
+    use_remote, reason = decide_remote_usage(
+        cfg=cfg,
+        cmd=cmd,
+        repo_name=repo_name,
+        branch_name=branch_name,
+        remote_url=effective_remote_url,
+    )
+    if use_remote:
+        return "remote", None, effective_remote_url
+    return "baseline", reason, ""
+
+
 def _build_refuse_answer_result(question: str, reason: str) -> AnswerResult:
     tky = TKYResult(
         selected_chunk_ids=[],
@@ -897,21 +929,15 @@ def _build_qa_markdown(
     cfg = load_config(resolved_repo_root)
     repo_name = extract_repo_from_env()
     branch_name = extract_branch_from_env()
-    remote_skipped_reason = "n/a"
-    effective_tky_mode = (tky_mode or "baseline").strip().lower()
-    if effective_tky_mode == "remote":
-        use_remote, remote_skip = decide_remote_usage(
-            cfg=cfg,
-            cmd=cmd,
-            repo_name=repo_name,
-            branch_name=branch_name,
-            remote_url=remote_url,
-        )
-        if use_remote:
-            effective_tky_mode = "remote"
-        else:
-            effective_tky_mode = "baseline"
-            remote_skipped_reason = str(remote_skip or "remote_disabled_by_config")
+    effective_tky_mode, remote_skip, effective_remote_url = resolve_tky_mode(
+        requested_mode=tky_mode,
+        cfg=cfg,
+        cmd=cmd,
+        repo_name=repo_name,
+        branch_name=branch_name,
+        remote_url_input=remote_url,
+    )
+    remote_skipped_reason = str(remote_skip or "n/a")
     remote_fail_open = bool(getattr(cfg, "tky_remote_fail_open", True))
     index_path = resolved_repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
@@ -937,7 +963,7 @@ def _build_qa_markdown(
 
     provider = make_provider(
         effective_tky_mode,
-        remote_url=remote_url or None,
+        remote_url=effective_remote_url or None,
         api_key=api_key or None,
         hmac_secret=hmac_secret or None,
         enable_hmac=enable_hmac,
@@ -1139,7 +1165,7 @@ def run_github_flow(
     dry_run: bool,
     comment_text: str,
     issue_number: int | None,
-    tky_mode: str = "baseline",
+    tky_mode: str = "auto",
     remote_url: str = "",
     api_key: str = "",
     hmac_secret: str = "",

@@ -29,6 +29,18 @@ tky:
     cfg2 = load_config(tmp_path)
     assert cfg2.tky_remote_enabled is True
 
+    cfg_file.write_text(
+        """
+tky:
+  remoteEnabled: 1
+  remoteUrl: "http://127.0.0.1:8787/v1/tky/decide"
+""".strip(),
+        encoding="utf-8",
+    )
+    cfg3 = load_config(tmp_path)
+    assert cfg3.tky_remote_enabled is True
+    assert cfg3.tky_remote_url == "http://127.0.0.1:8787/v1/tky/decide"
+
 
 def test_config_missing_file_sets_metadata(tmp_path: Path) -> None:
     cfg = load_config(tmp_path)

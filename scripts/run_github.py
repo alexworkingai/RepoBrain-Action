@@ -18,7 +18,7 @@ def main() -> int:
     parser.add_argument("--dry-run", default="true")
     parser.add_argument("--comment-text", default="")
     parser.add_argument("--issue-number", default="")
-    parser.add_argument("--tky-mode", default="baseline", choices=["baseline", "remote", "local"])
+    parser.add_argument("--tky-mode", default="auto", choices=["auto", "baseline", "remote", "local"])
     parser.add_argument("--remote-url", default="")
     parser.add_argument("--api-key", default="")
     parser.add_argument("--hmac-secret", default="")

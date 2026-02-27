@@ -7,6 +7,7 @@ from repobrain.ask import answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.config import load_config
 from repobrain.formatting import format_github_comment
+from repobrain.github_flow import extract_branch_from_env, extract_repo_from_env, resolve_tky_mode
 from repobrain.index_store import load_index
 from repobrain.retrieve import retrieve_topk
 from repobrain.tky_remote import RemoteTKYError
@@ -31,7 +32,7 @@ def main() -> int:
     parser.add_argument("--question", default="")
     parser.add_argument("--comment-text", default="")
     parser.add_argument("--index-path", default="artifacts/index-package.zip")
-    parser.add_argument("--tky-mode", default="baseline", choices=["baseline", "remote", "local"])
+    parser.add_argument("--tky-mode", default="auto", choices=["auto", "baseline", "remote", "local"])
     parser.add_argument("--remote-url", default="")
     parser.add_argument("--api-key", default="")
     args = parser.parse_args()
@@ -58,14 +59,22 @@ def main() -> int:
     chunks = load_index(index_path)
     candidates = retrieve_topk(question, chunks, topk=cfg.topk)
 
+    mode_requested = args.tky_mode
+    mode_used, remote_skip, effective_remote_url = resolve_tky_mode(
+        requested_mode=mode_requested,
+        cfg=cfg,
+        cmd=parsed["cmd"],
+        repo_name=extract_repo_from_env(),
+        branch_name=extract_branch_from_env(),
+        remote_url_input=args.remote_url,
+    )
+
     provider = make_provider(
-        args.tky_mode,
-        remote_url=args.remote_url or None,
+        mode_used,
+        remote_url=effective_remote_url or None,
         api_key=args.api_key or None,
     )
     limits = {"max_sources": cfg.max_sources}
-    mode_requested = args.tky_mode
-    mode_used = args.tky_mode
     fallback_reason_code: str | None = None
     try:
         res = answer_question(
@@ -75,7 +84,7 @@ def main() -> int:
             limits=limits,
         )
     except RemoteTKYError as exc:
-        if args.tky_mode != "remote" or not cfg.tky_remote_fail_open:
+        if mode_used != "remote" or not cfg.tky_remote_fail_open:
             raise
         provider = make_provider("baseline")
         res = answer_question(
@@ -92,8 +101,9 @@ def main() -> int:
             "tky_engine": "topocore_lite" if mode_used == "local" else mode_used,
             "tky_mode_requested": mode_requested,
             "tky_mode_used": mode_used,
-            "remote_used": args.tky_mode == "remote" and mode_used == "remote",
+            "remote_used": mode_used == "remote",
             "fallback_reason_code": fallback_reason_code,
+            "remote_skipped_reason": str(remote_skip or "n/a"),
         }
     )
 

@@ -59,7 +59,7 @@ jobs:
         env:
           RB_INDEX_CACHE_RESTORED: ${{ steps.index_cache.outputs.cache-hit == 'true' && '1' || '' }}
         with:
-          tky_mode: "baseline"
+          tky_mode: "auto"
           dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
           comment_text: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.comment_text || '' }}
           issue_number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.issue_number || '' }}
