@@ -1,7 +1,18 @@
 ﻿from __future__ import annotations
 
-HIGH_PATCH_MARKERS = ("<<<<<<<", ">>>>>>>", "BEGIN PRIVATE KEY", "API_KEY", "PASSWORD", "SECRET")
+import re
+
 TODO_MARKERS = ("TODO", "FIXME")
+
+GITHUB_TOKEN_RE = re.compile(r"\bghp_[A-Za-z0-9]{20,}\b")
+AWS_ACCESS_KEY_RE = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
+KEY_VALUE_SECRET_RE = re.compile(
+    r'''(?i)\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*['"]?.{8,}'''
+)
+ENV_SECRET_LINE_RE = re.compile(
+    r"""(?im)^(?:export\s+)?(api[_-]?key|secret|token|password)\s*=\s*.+$"""
+)
+SECURITY_WORDING_RE = re.compile(r"(?i)\b(secret|secrets|token|password|api[_-]?key)\b")
 
 
 def _normalize_path(file_item: dict[str, object]) -> str:
@@ -28,15 +39,26 @@ def _scan_patch_for_signals(patch: str) -> tuple[list[str], list[str], int, bool
     high_found = False
     upper_patch = patch.upper()
 
-    if "<<<<<<<" in patch or ">>>>>>>" in patch:
+    has_conflict_markers = "<<<<<<<" in patch or "=======" in patch or ">>>>>>>" in patch
+    if has_conflict_markers:
         risks.append("Merge conflict markers present")
         risk_score += 4
         high_found = True
 
-    if any(marker in upper_patch for marker in ("BEGIN PRIVATE KEY", "API_KEY", "PASSWORD", "SECRET")):
+    strong_secret_signal = (
+        "BEGIN PRIVATE KEY" in upper_patch
+        or "BEGIN RSA PRIVATE KEY" in upper_patch
+        or bool(GITHUB_TOKEN_RE.search(patch))
+        or bool(AWS_ACCESS_KEY_RE.search(patch))
+        or bool(KEY_VALUE_SECRET_RE.search(patch))
+        or bool(ENV_SECRET_LINE_RE.search(patch))
+    )
+    if strong_secret_signal:
         risks.append("Possible secret leakage in patch")
         risk_score += 4
         high_found = True
+    elif SECURITY_WORDING_RE.search(patch):
+        notes.append("Contains security-related wording in docs; verify no real secrets are included.")
 
     if any(marker in upper_patch for marker in TODO_MARKERS):
         notes.append("Patch contains TODO/FIXME markers")
@@ -126,6 +148,10 @@ def build_pr_review(
     has_python = any(path.lower().endswith(".py") for path in paths)
     workflows_changed = any(path.lower().startswith(".github/workflows/") for path in paths)
     security_changed = any(any(token in path.lower() for token in ("auth", "security", "crypto")) for path in paths)
+    has_conflict_markers = any("Merge conflict markers present" in item for item in risks)
+
+    if has_conflict_markers:
+        suggested_tests.append("Resolve merge conflict markers and re-run /repobrain review")
 
     if _is_docs_only(paths):
         suggested_tests.append("No tests required (optional).")

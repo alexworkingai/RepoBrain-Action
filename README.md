@@ -56,6 +56,12 @@ Security:
 * Prompt-injection / exfiltration-like requests are blocked with a safe refusal response.
 * Trace data is hash/signature-based; raw text is not stored by default.
 
+Merge safety:
+
+* CI blocks merge conflict markers automatically (`<<<<<<<`, `=======`, `>>>>>>>`).
+* `.gitattributes` normalizes line endings to reduce Windows/Linux conflicts.
+* `README.md` uses `merge=union`; this can duplicate lines, so review README diffs in PRs.
+
 Remote TKY mode:
 
 * Endpoint contract: `POST /v1/tky/decide` (JSON payload contract `v1`).
