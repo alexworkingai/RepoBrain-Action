@@ -156,6 +156,10 @@ def format_verify_comment(report: dict[str, object]) -> str:
     pending = int(report.get("pending", 0) or 0)
     neutral = int(report.get("neutral", 0) or 0)
     failures = list(report.get("failures", []))
+    verify_source = str(report.get("verify_source", "none") or "none")
+    sources = report.get("sources", {})
+    if not isinstance(sources, dict):
+        sources = {}
 
     status_icon = {
         "success": "✅",
@@ -190,6 +194,7 @@ def format_verify_comment(report: dict[str, object]) -> str:
         "checks_total": total,
         "checks_failure": failure,
         "checks_pending": pending,
+        "verify_source": verify_source,
     }
 
     sections = [
@@ -202,15 +207,25 @@ def format_verify_comment(report: dict[str, object]) -> str:
 
     sections.extend(
         [
-        f"- Total checks: {total}",
-        f"- Success: {success}",
-        f"- Failure: {failure}",
-        f"- Pending: {pending}",
-        f"- Neutral/Skipped: {neutral}",
+            f"- Total checks: {total}",
+            f"- Success: {success}",
+            f"- Failure: {failure}",
+            f"- Pending: {pending}",
+            f"- Neutral/Skipped: {neutral}",
         ]
     )
     if failing_lines:
         sections.extend(["", "Failing checks:", *failing_lines])
+
+    sections.extend(
+        [
+            "",
+            "### 🧩 Sources",
+            f"- checks: {sources.get('checks', 'empty')}",
+            f"- statuses: {sources.get('statuses', 'empty')}",
+            f"- workflow_runs: {sources.get('workflow_runs', 'empty')}",
+        ]
+    )
 
     sections.extend(
         [

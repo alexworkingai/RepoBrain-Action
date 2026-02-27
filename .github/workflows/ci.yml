@@ -24,6 +24,14 @@ jobs:
             echo "Merge conflict markers detected. Remove <<<<<<< ======= >>>>>>> lines and resolve conflicts."
             exit 1
           fi
+      - name: Guard workflow placeholders
+        run: |
+          grep -RIn -E "TODO_[A-Z]+" .github/workflows > /tmp/workflow_placeholders.txt || true
+          if [ -s /tmp/workflow_placeholders.txt ]; then
+            cat /tmp/workflow_placeholders.txt
+            echo "Workflow placeholders detected in .github/workflows. Move templates to docs/ and replace TODO_* placeholders."
+            exit 1
+          fi
       - name: Lint
         run: ruff check .
       - name: Tests

@@ -20,3 +20,4 @@ def test_verify_fallback_on_empty_check_runs_uses_combined_status() -> None:
     assert report["total"] == 1
     assert report["pending"] == 1
     assert report["failure"] == 0
+    assert report["verify_source"] == "status"

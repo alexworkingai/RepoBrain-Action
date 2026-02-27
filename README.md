@@ -78,7 +78,7 @@ PR Review Pro:
 
 2-minute setup:
 
-1. Add a workflow (see `.github/workflows/repobrain_template.yml`) with:
+1. Copy `docs/repobrain_template.yml` into your repository workflow (for example `.github/workflows/repobrain.yml`) with:
    * `issue_comment` + `workflow_dispatch`
    * permissions: `contents`, `issues`, `pull-requests`, `checks`, `statuses`
 2. Trigger in PR/Issue comments with:

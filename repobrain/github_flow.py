@@ -201,12 +201,24 @@ class GitHubClient:
 
     def get_pull_files(self, pull_number: int) -> list[dict[str, Any]]:
         """Fetch PR files metadata from GitHub REST API."""
-        response = requests.get(
-            build_pr_files_url(self.repo, pull_number),
-            headers=self._headers(),
-            timeout=15,
-        )
-        response.raise_for_status()
+        try:
+            response = requests.get(
+                build_pr_files_url(self.repo, pull_number),
+                headers=self._headers(),
+                timeout=15,
+            )
+        except requests.RequestException:
+            print("PR files endpoint not accessible, using empty file list")
+            return []
+        status_code = int(getattr(response, "status_code", 200))
+        if status_code in {403, 404} or status_code >= 500:
+            print(f"PR files endpoint returned {status_code}, using empty file list")
+            return []
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            print("PR files endpoint returned unexpected error, using empty file list")
+            return []
         data = response.json()
         if not isinstance(data, list):
             return []
@@ -214,48 +226,116 @@ class GitHubClient:
 
     def get_pull(self, pull_number: int) -> dict[str, Any]:
         """Fetch PR metadata (used for head SHA lookup)."""
-        response = requests.get(
-            f"https://api.github.com/repos/{self.repo}/pulls/{pull_number}",
-            headers=self._headers(),
-            timeout=15,
-        )
-        response.raise_for_status()
+        try:
+            response = requests.get(
+                f"https://api.github.com/repos/{self.repo}/pulls/{pull_number}",
+                headers=self._headers(),
+                timeout=15,
+            )
+        except requests.RequestException:
+            print("PR metadata endpoint not accessible")
+            return {"_error": "network"}
+        status_code = int(getattr(response, "status_code", 200))
+        if status_code in {403, 404}:
+            print("PR metadata endpoint not accessible (forbidden/not found)")
+            return {"_error": "forbidden" if status_code == 403 else "not_found"}
+        if status_code >= 500:
+            print("PR metadata endpoint returned server error")
+            return {"_error": f"http_{status_code}"}
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            return {"_error": f"http_{status_code}"}
         data = response.json()
         return data if isinstance(data, dict) else {}
 
     def get_check_runs(self, sha: str) -> dict[str, Any]:
         """Fetch check-runs for a commit SHA."""
-        response = requests.get(
-            f"https://api.github.com/repos/{self.repo}/commits/{sha}/check-runs",
-            headers=self._headers(),
-            timeout=15,
-        )
-        if response.status_code == 403:
+        try:
+            response = requests.get(
+                f"https://api.github.com/repos/{self.repo}/commits/{sha}/check-runs",
+                headers=self._headers(),
+                timeout=15,
+            )
+        except requests.RequestException:
+            print("Check-runs endpoint not accessible, falling back")
+            return {"total_count": 0, "check_runs": [], "_error": "network"}
+        status_code = int(getattr(response, "status_code", 200))
+        if status_code == 403:
             print("Check-runs not accessible, falling back to combined status")
             return {"total_count": 0, "check_runs": [], "_error": "forbidden"}
+        if status_code == 404:
+            print("Check-runs not accessible, falling back to combined status")
+            return {"total_count": 0, "check_runs": [], "_error": "not_found"}
+        if status_code >= 500:
+            print("Check-runs endpoint returned server error, falling back")
+            return {"total_count": 0, "check_runs": [], "_error": f"http_{status_code}"}
         try:
             response.raise_for_status()
         except requests.HTTPError:
-            if response.status_code == 404:
-                print("Check-runs not accessible, falling back to combined status")
-                return {"total_count": 0, "check_runs": []}
-            raise
+            return {"total_count": 0, "check_runs": [], "_error": f"http_{status_code}"}
         data = response.json()
         return data if isinstance(data, dict) else {"total_count": 0, "check_runs": []}
 
     def get_combined_status(self, sha: str) -> dict[str, Any]:
         """Fetch combined commit status (fallback when no check-runs exist)."""
-        response = requests.get(
-            f"https://api.github.com/repos/{self.repo}/commits/{sha}/status",
-            headers=self._headers(),
-            timeout=15,
-        )
-        if response.status_code == 403:
+        try:
+            response = requests.get(
+                f"https://api.github.com/repos/{self.repo}/commits/{sha}/status",
+                headers=self._headers(),
+                timeout=15,
+            )
+        except requests.RequestException:
+            print("Combined status endpoint not accessible")
+            return {"state": "unknown", "statuses": [], "_error": "network"}
+        status_code = int(getattr(response, "status_code", 200))
+        if status_code == 403:
             print("Combined status not accessible due to token permissions")
             return {"state": "unknown", "statuses": [], "_error": "forbidden"}
-        response.raise_for_status()
+        if status_code == 404:
+            return {"state": "unknown", "statuses": [], "_error": "not_found"}
+        if status_code >= 500:
+            return {"state": "unknown", "statuses": [], "_error": f"http_{status_code}"}
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            return {"state": "unknown", "statuses": [], "_error": f"http_{status_code}"}
         data = response.json()
         return data if isinstance(data, dict) else {"state": "unknown", "statuses": []}
+
+    def get_workflow_runs(self, *, head_sha: str | None = None, per_page: int = 20) -> dict[str, Any]:
+        """Fetch recent workflow runs (used as verify fallback source)."""
+        url = f"https://api.github.com/repos/{self.repo}/actions/runs?per_page={int(per_page)}"
+        try:
+            response = requests.get(
+                url,
+                headers=self._headers(),
+                timeout=15,
+            )
+        except requests.RequestException:
+            print("Workflow runs endpoint not accessible")
+            return {"total_count": 0, "workflow_runs": [], "_error": "network"}
+        status_code = int(getattr(response, "status_code", 200))
+        if status_code == 403:
+            return {"total_count": 0, "workflow_runs": [], "_error": "forbidden"}
+        if status_code == 404:
+            return {"total_count": 0, "workflow_runs": [], "_error": "not_found"}
+        if status_code >= 500:
+            return {"total_count": 0, "workflow_runs": [], "_error": f"http_{status_code}"}
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            return {"total_count": 0, "workflow_runs": [], "_error": f"http_{status_code}"}
+        data = response.json()
+        if not isinstance(data, dict):
+            return {"total_count": 0, "workflow_runs": []}
+        runs = data.get("workflow_runs", [])
+        if isinstance(runs, list) and head_sha:
+            runs = [run for run in runs if isinstance(run, dict) and str(run.get("head_sha", "")) == head_sha]
+            data = dict(data)
+            data["workflow_runs"] = runs
+            data["total_count"] = len(runs)
+        return data
 
 
 def extract_repo_from_env() -> str:
@@ -774,6 +854,7 @@ def _build_verify_markdown(
         if audit is not None:
             audit["route_final"] = "VERIFY"
             audit["pass_count"] = 1
+            audit["verify_source"] = "none"
         return (
             "Verify works in PRs (checks/CI). Create a PR and run `/repobrain verify` "
             "in PR discussion."
@@ -782,10 +863,11 @@ def _build_verify_markdown(
         if audit is not None:
             audit["route_final"] = "VERIFY"
             audit["pass_count"] = 1
+            audit["verify_source"] = "none"
         return "Verify is available in Pull Requests. Pull request number was not detected."
 
     if dry_run:
-        report = build_verify_report({}, None)
+        report = build_verify_report({}, None, {})
         if audit is not None:
             audit["route_final"] = "VERIFY"
             audit["pass_count"] = 1
@@ -794,6 +876,10 @@ def _build_verify_markdown(
         if audit is not None:
             audit["retrieved"] = 0
             audit["selected"] = 0
+            audit["checks_total"] = int(report.get("total", 0) or 0)
+            audit["checks_failure"] = int(report.get("failure", 0) or 0)
+            audit["checks_pending"] = int(report.get("pending", 0) or 0)
+            audit["verify_source"] = str(report.get("verify_source", "none") or "none")
             add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
         return body
 
@@ -804,12 +890,13 @@ def _build_verify_markdown(
     head = pull.get("head", {})
     sha = str(head.get("sha", "")) if isinstance(head, dict) else ""
     if not sha:
-        report = build_verify_report({}, None)
-        return format_verify_comment(report)
+        fallback_sha = extract_sha_from_env()
+        sha = fallback_sha or ""
 
-    check_runs = client.get_check_runs(sha)
-    status = client.get_combined_status(sha)
-    report = build_verify_report(check_runs, status)
+    check_runs = client.get_check_runs(sha) if sha else {"total_count": 0, "check_runs": []}
+    status = client.get_combined_status(sha) if sha else {"state": "unknown", "statuses": []}
+    workflow_runs = client.get_workflow_runs(head_sha=sha or None)
+    report = build_verify_report(check_runs, status, workflow_runs, head_sha=sha or None)
     if audit is not None:
         audit["route_final"] = "VERIFY"
         audit["pass_count"] = 1
@@ -818,6 +905,7 @@ def _build_verify_markdown(
         audit["checks_total"] = int(report.get("total", 0) or 0)
         audit["checks_failure"] = int(report.get("failure", 0) or 0)
         audit["checks_pending"] = int(report.get("pending", 0) or 0)
+        audit["verify_source"] = str(report.get("verify_source", "none") or "none")
     t0 = time.perf_counter()
     body = format_verify_comment(report)
     if audit is not None:

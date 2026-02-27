@@ -27,6 +27,7 @@ permissions:
   pull-requests: write
   checks: read
   statuses: read
+  actions: read
 
 jobs:
   repobrain:
@@ -46,7 +47,8 @@ jobs:
             repobrain-index-main-
 
       - name: Run RepoBrain Action
-        uses: TODO_OWNER/TODO_REPO@v0.1.0
+        # Replace OWNER/REPO with your published action repository.
+        uses: OWNER/REPO@v0.1.0
         env:
           RB_INDEX_CACHE_RESTORED: ${{ steps.index_cache.outputs.cache-hit == 'true' && '1' || '' }}
         with:
