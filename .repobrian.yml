@@ -1,5 +1,5 @@
 tky:
-  remote_enabled: false
+  remote_enabled: true
   remote_allow_commands: ["ask", "explain"]
   remote_allow_branches: []      # пусто = разрешено в любой ветке локально
   remote_allow_repos: []         # пусто = разрешено в любом репо
