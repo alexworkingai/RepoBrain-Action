@@ -69,6 +69,45 @@ Remote TKY mode:
 * Configure action inputs for remote mode: `tky_mode=remote`, `remote_url`, `api_key` (optional), `enable_hmac=true|false`, `hmac_secret` (optional).
 * HMAC signing adds `x-ts`, `x-nonce`, `x-signature` headers over the exact JSON body.
 * If remote TKY fails (network/HTTP), RepoBrain falls back to baseline selection and records fallback diagnostics in audit summary.
+* Contract compatibility supports both response formats:
+  * flat: `route` + `selected_chunk_ids`
+  * nested: `decision.route` + `selection.selected_chunk_ids`
+
+Remote TKY rollout controls:
+
+* `tky.remote_enabled` toggles remote globally (default `false`).
+* `tky.remote_allow_commands` limits where remote can run (default `ask`, `explain`).
+* `tky.remote_allow_branches` limits branches (default `main`; empty list means any branch).
+* `tky.remote_allow_repos` limits repositories (empty list means any repo).
+* `tky.remote_fail_open`:
+  * `true` (default): fallback to baseline on remote errors.
+  * `false`: return REFUSE when remote is unavailable.
+
+Reliability:
+
+* Remote calls use separate connect/read timeouts (`5s/15s` by default).
+* Retries with backoff are applied for timeout/network errors, HTTP `429`, and `5xx`.
+* `Retry-After` is respected for `429` (capped wait).
+* Diagnostics in audit: latency, retries, rate limit flag, error class, fallback reason code.
+
+Example `.repobrain.yml`:
+
+```yaml
+tky:
+  remote_enabled: false
+  remote_allow_commands: ["ask", "explain"]
+  remote_allow_branches: ["main"]
+  remote_allow_repos: []
+  remote_fail_open: true
+```
+
+Example workflow/action inputs:
+
+* `tky_mode: remote`
+* `remote_url: https://your-service.example/v1/tky/decide`
+* `api_key: ${{ secrets.REPOBRAIN_TKY_API_KEY }}`
+* `enable_hmac: "true"`
+* `hmac_secret: ${{ secrets.REPOBRAIN_TKY_HMAC_SECRET }}`
 
 PR Review Pro:
 

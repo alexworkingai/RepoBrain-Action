@@ -20,6 +20,8 @@ def build_remote_request(
     """Build remote TKY request payload v1 using signatures + metadata only."""
     payload = {
         "version": "v1",
+        "schema_version": "1.0",
+        "capabilities_requested": ["route", "selection", "security", "stable_tokens"],
         "task_type": task_type,
         "privacy_mode": privacy_mode,
         "query": {

@@ -10,9 +10,9 @@ from typing import Any
 import requests
 
 from repobrain.audit import add_timing, build_audit_base, finalize_audit
-from repobrain.ask import answer_question, make_provider
+from repobrain.ask import AnswerResult, answer_question, make_provider
 from repobrain.commands import parse_command
-from repobrain.config import load_config
+from repobrain.config import RepoBrainConfig, load_config
 from repobrain.evidence import EvidenceItem
 from repobrain.formatting import (
     format_github_comment,
@@ -24,8 +24,9 @@ from repobrain.index_store import build_index, load_index
 from repobrain.retrieve_pro import retrieve_topk_pro
 from repobrain.review import build_pr_review
 from repobrain.security import detect_injection_or_exfiltration
+from repobrain.tky_local import LocalTKYProvider
+from repobrain.tky_provider import CandidateChunk, TKYResult
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
-from repobrain.tky_provider import CandidateChunk
 from repobrain.verify import build_verify_report
 
 HELP_TEXT = """RepoBrain command examples:
@@ -346,6 +347,17 @@ def extract_sha_from_env() -> str:
     return os.environ.get("GITHUB_SHA", "").strip()
 
 
+def extract_branch_from_env() -> str:
+    name = os.environ.get("GITHUB_REF_NAME", "").strip()
+    if name:
+        return name
+    raw_ref = os.environ.get("GITHUB_REF", "").strip()
+    prefix = "refs/heads/"
+    if raw_ref.startswith(prefix):
+        return raw_ref[len(prefix) :]
+    return "unknown"
+
+
 def _is_bot_login(login: str) -> bool:
     normalized = (login or "").strip().lower()
     return bool(normalized) and BOT_MARKER in normalized
@@ -363,6 +375,85 @@ def _build_post_client() -> GitHubClient:
 
 def _internal_reactions_enabled() -> bool:
     return os.environ.get("RB_DISABLE_INTERNAL_REACTIONS", "").strip() != "1"
+
+
+def _provider_engine_name(provider: Any) -> str:
+    if isinstance(provider, RemoteTKYProvider):
+        return "remote"
+    if isinstance(provider, LocalTKYProvider):
+        return "topocore_lite"
+    return "baseline"
+
+
+def _allow_match(value: str, allowed: tuple[str, ...]) -> bool:
+    if not allowed:
+        return True
+    normalized = value.strip().lower()
+    return normalized in {item.strip().lower() for item in allowed}
+
+
+def _resolve_tky_mode_for_command(
+    *,
+    requested_mode: str,
+    cmd: str,
+    cfg: RepoBrainConfig,
+    repo_name: str,
+    branch_name: str,
+) -> tuple[str, str]:
+    mode = (requested_mode or "baseline").strip().lower()
+    if mode != "remote":
+        return mode, "n/a"
+
+    if not bool(getattr(cfg, "tky_remote_enabled", False)):
+        return "baseline", "remote_disabled"
+
+    allowed_commands = tuple(
+        str(item).strip().lower()
+        for item in getattr(cfg, "tky_remote_allow_commands", ("ask", "explain"))
+        if str(item).strip()
+    )
+    if allowed_commands and cmd.strip().lower() not in allowed_commands:
+        return "baseline", "command_not_allowed"
+
+    allowed_branches = tuple(
+        str(item).strip().lower()
+        for item in getattr(cfg, "tky_remote_allow_branches", ("main",))
+        if str(item).strip()
+    )
+    if allowed_branches and branch_name.strip().lower() not in allowed_branches:
+        return "baseline", "branch_not_allowed"
+
+    allowed_repos = tuple(
+        str(item).strip().lower()
+        for item in getattr(cfg, "tky_remote_allow_repos", ())
+        if str(item).strip()
+    )
+    if allowed_repos and repo_name.strip().lower() not in allowed_repos:
+        return "baseline", "repo_not_allowed"
+
+    return "remote", "n/a"
+
+
+def _build_refuse_answer_result(question: str, reason: str) -> AnswerResult:
+    tky = TKYResult(
+        selected_chunk_ids=[],
+        route="REFUSE",
+        compression_stats={"retrieved": 0, "selected": 0},
+        rationale=reason,
+    )
+    answer = (
+        f"Question: {question}\n"
+        "Route: REFUSE\n"
+        "Selected sources: 0\n"
+        f"Rationale: {reason}"
+    )
+    return AnswerResult(
+        answer_text=answer,
+        evidence=[],
+        tky=tky,
+        audit_summary={"retrieved": 0, "selected": 0, "route": "REFUSE"},
+        next_steps="Open evidence links and verify logic",
+    )
 
 
 def question_from_command(cmd: str, query: str) -> str:
@@ -517,15 +608,22 @@ def _answer_with_remote_fallback(
     limits: dict[str, Any],
     provider: Any,
     tky_mode_requested: str,
+    remote_fail_open: bool,
 ) -> tuple[Any, Any, dict[str, Any]]:
     """Run `answer_question`, falling back to baseline if remote provider fails."""
+    engine_name = _provider_engine_name(provider)
     meta: dict[str, Any] = {
         "tky_mode_requested": tky_mode_requested,
         "tky_mode_used": tky_mode_requested,
         "remote_used": tky_mode_requested == "remote",
+        "tky_engine": engine_name,
         "tky_fallback_reason": "n/a",
+        "fallback_reason_code": "n/a",
         "tky_remote_status": None,
-        "tky_remote_error": "",
+        "remote_latency_ms": None,
+        "remote_retry_count": 0,
+        "remote_rate_limited": False,
+        "remote_error_class": "n/a",
     }
     active_provider = provider
 
@@ -538,11 +636,45 @@ def _answer_with_remote_fallback(
         )
         if isinstance(active_provider, RemoteTKYProvider):
             meta["tky_remote_status"] = active_provider.last_status_code
+            diagnostics = active_provider.last_diagnostics
+            if diagnostics is not None:
+                meta["remote_latency_ms"] = diagnostics.latency_ms
+                meta["remote_retry_count"] = diagnostics.retry_count
+                meta["remote_rate_limited"] = diagnostics.rate_limited
+                meta["remote_error_class"] = diagnostics.error_class or "n/a"
+                meta["fallback_reason_code"] = diagnostics.fallback_reason_code or "n/a"
+            meta["remote_used"] = True
+            meta["tky_engine"] = "remote"
+        elif isinstance(active_provider, LocalTKYProvider):
+            meta["tky_engine"] = "topocore_lite"
+            meta["remote_used"] = False
+        else:
+            meta["tky_engine"] = "baseline"
+            meta["remote_used"] = False
         return result, active_provider, meta
     except RemoteTKYError as exc:
         if tky_mode_requested != "remote":
             raise
+        diagnostics = exc.diagnostics
+        if diagnostics is not None:
+            meta["remote_latency_ms"] = diagnostics.latency_ms
+            meta["remote_retry_count"] = diagnostics.retry_count
+            meta["remote_rate_limited"] = diagnostics.rate_limited
+            meta["remote_error_class"] = diagnostics.error_class or "n/a"
         fallback_provider = make_provider("baseline")
+        meta["tky_remote_status"] = exc.status_code
+        meta["fallback_reason_code"] = exc.fallback_reason_code or "REMOTE_NETWORK"
+        meta["remote_error_class"] = exc.error_class or "unknown"
+        if not remote_fail_open:
+            refuse = _build_refuse_answer_result(
+                question,
+                "Remote TKY unavailable and fail-open disabled by policy.",
+            )
+            meta["tky_mode_used"] = "remote"
+            meta["remote_used"] = True
+            meta["tky_engine"] = "remote"
+            meta["tky_fallback_reason"] = "remote_refuse"
+            return refuse, active_provider, meta
         result = answer_question(
             question=question,
             candidates=candidates,
@@ -552,8 +684,7 @@ def _answer_with_remote_fallback(
         meta["tky_mode_used"] = "fallback_baseline"
         meta["remote_used"] = False
         meta["tky_fallback_reason"] = "remote_error"
-        meta["tky_remote_status"] = exc.status_code
-        meta["tky_remote_error"] = exc.short_reason or "remote_error"
+        meta["tky_engine"] = "baseline"
         return result, fallback_provider, meta
 
 
@@ -565,6 +696,7 @@ def run_qa_two_pass(
     provider: Any,
     cfg: Any,
     tky_mode_requested: str = "baseline",
+    remote_fail_open: bool = True,
     timings_ms: dict[str, float] | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Run at most two retrieval+TKY passes using the TKY route from pass 1."""
@@ -599,6 +731,7 @@ def run_qa_two_pass(
         limits=pass1_limits,
         provider=active_provider,
         tky_mode_requested=tky_mode_requested,
+        remote_fail_open=remote_fail_open,
     )
     if timings_ms is not None:
         timings_ms["tky_pass1"] = round((time.perf_counter() - t0) * 1000.0, 3)
@@ -637,6 +770,7 @@ def run_qa_two_pass(
             limits=pass2_limits,
             provider=active_provider,
             tky_mode_requested=tky_mode_requested,
+            remote_fail_open=remote_fail_open,
         )
         if timings_ms is not None:
             timings_ms["tky_pass2"] = round((time.perf_counter() - t0) * 1000.0, 3)
@@ -657,13 +791,32 @@ def run_qa_two_pass(
         audit_extra["tky_mode_requested"] = "remote"
         audit_extra["tky_mode_used"] = final_meta.get("tky_mode_used", "remote")
         audit_extra["remote_used"] = bool(final_meta.get("remote_used", False))
+        audit_extra["tky_engine"] = str(final_meta.get("tky_engine", "remote"))
         remote_status = final_meta.get("tky_remote_status", None)
         if remote_status is not None:
             audit_extra["tky_remote_status"] = remote_status
         fallback_reason = str(final_meta.get("tky_fallback_reason", "") or "")
         if fallback_reason:
             audit_extra["tky_fallback_reason"] = fallback_reason
-            audit_extra["tky_remote_error"] = str(final_meta.get("tky_remote_error", "") or "remote_error")
+        audit_extra["fallback_reason_code"] = str(
+            final_meta.get("fallback_reason_code", "n/a") or "n/a"
+        )
+        audit_extra["remote_error_class"] = str(
+            final_meta.get("remote_error_class", "n/a") or "n/a"
+        )
+        audit_extra["remote_retry_count"] = int(final_meta.get("remote_retry_count", 0) or 0)
+        audit_extra["remote_rate_limited"] = bool(final_meta.get("remote_rate_limited", False))
+        audit_extra["remote_latency_ms"] = final_meta.get("remote_latency_ms")
+    else:
+        audit_extra["tky_mode_requested"] = tky_mode_requested
+        audit_extra["tky_mode_used"] = tky_mode_requested
+        audit_extra["tky_engine"] = _provider_engine_name(active_provider)
+        audit_extra["remote_used"] = False
+        audit_extra["fallback_reason_code"] = "n/a"
+        audit_extra["remote_error_class"] = "n/a"
+        audit_extra["remote_retry_count"] = 0
+        audit_extra["remote_rate_limited"] = False
+        audit_extra["remote_latency_ms"] = None
 
     return final_result, audit_extra
 
@@ -732,15 +885,31 @@ def _build_qa_markdown(
     audit: dict[str, Any] | None = None,
 ) -> str:
     cfg = load_config(repo_root)
+    repo_name = extract_repo_from_env()
+    branch_name = extract_branch_from_env()
+    effective_tky_mode, remote_skipped_reason = _resolve_tky_mode_for_command(
+        requested_mode=tky_mode,
+        cmd=cmd,
+        cfg=cfg,
+        repo_name=repo_name,
+        branch_name=branch_name,
+    )
+    if effective_tky_mode == "remote" and not (remote_url or "").strip():
+        effective_tky_mode = "baseline"
+        remote_skipped_reason = "remote_url_missing"
+    remote_fail_open = bool(getattr(cfg, "tky_remote_fail_open", True))
     index_path = repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
     chunks, index_source, index_elapsed_ms = load_or_build_chunks_with_meta(repo_root, index_path)
     if audit is not None:
         audit["index_source"] = index_source
         add_timing(audit, "index_load_build", index_elapsed_ms)
+        audit["remote_skipped_reason"] = remote_skipped_reason or "n/a"
+        audit["tky_mode_requested"] = tky_mode
+        audit["tky_mode_used"] = effective_tky_mode
 
     provider = make_provider(
-        tky_mode,
+        effective_tky_mode,
         remote_url=remote_url or None,
         api_key=api_key or None,
         hmac_secret=hmac_secret or None,
@@ -752,11 +921,19 @@ def _build_qa_markdown(
         chunks=chunks,
         provider=provider,
         cfg=cfg,
-        tky_mode_requested=tky_mode,
+        tky_mode_requested=effective_tky_mode,
+        remote_fail_open=remote_fail_open,
         timings_ms=(audit.get("timings_ms") if isinstance(audit, dict) else None),
     )
     audit_summary = dict(result.audit_summary)
     audit_summary.update(loop_audit)
+    audit_summary["remote_skipped_reason"] = remote_skipped_reason or "n/a"
+    audit_summary["tky_mode_requested"] = tky_mode
+    audit_summary["tky_mode_used"] = str(
+        audit_summary.get("tky_mode_used", effective_tky_mode or "baseline")
+    )
+    if "tky_engine" not in audit_summary:
+        audit_summary["tky_engine"] = _provider_engine_name(provider)
     evidence_out = result.evidence
     answer_text_out = result.answer_text
     if cmd == "locate":
@@ -773,8 +950,18 @@ def _build_qa_markdown(
         audit["selected"] = len(evidence_out)
         audit["top_score_pass1"] = audit_summary.get("pass1.top_score")
         audit["top_score_pass2"] = audit_summary.get("pass2.top_score")
-        audit["tky_mode_requested"] = str(audit_summary.get("tky_mode_requested", tky_mode))
-        audit["tky_mode_used"] = str(audit_summary.get("tky_mode_used", tky_mode or "n/a"))
+        audit["tky_mode_requested"] = str(audit_summary.get("tky_mode_requested", tky_mode or "n/a"))
+        audit["tky_mode_used"] = str(audit_summary.get("tky_mode_used", effective_tky_mode or "n/a"))
+        audit["tky_engine"] = str(audit_summary.get("tky_engine", _provider_engine_name(provider)))
+        audit["remote_used"] = bool(audit_summary.get("remote_used", False))
+        audit["remote_latency_ms"] = audit_summary.get("remote_latency_ms", None)
+        audit["remote_retry_count"] = int(audit_summary.get("remote_retry_count", 0) or 0)
+        audit["remote_rate_limited"] = bool(audit_summary.get("remote_rate_limited", False))
+        audit["remote_error_class"] = str(audit_summary.get("remote_error_class", "n/a") or "n/a")
+        audit["fallback_reason_code"] = str(audit_summary.get("fallback_reason_code", "n/a") or "n/a")
+        audit["remote_skipped_reason"] = str(
+            audit_summary.get("remote_skipped_reason", remote_skipped_reason or "n/a") or "n/a"
+        )
         audit["tky_remote_status"] = audit_summary.get("tky_remote_status", None)
         audit["tky_fallback_reason"] = str(audit_summary.get("tky_fallback_reason", "n/a") or "n/a")
 

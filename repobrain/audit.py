@@ -25,6 +25,14 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "index_source": "n/a",
         "tky_mode_requested": str(env_ctx.get("tky_mode_requested", "")),
         "tky_mode_used": "n/a",
+        "tky_engine": "n/a",
+        "remote_used": False,
+        "remote_latency_ms": None,
+        "remote_retry_count": 0,
+        "remote_rate_limited": False,
+        "remote_error_class": "n/a",
+        "fallback_reason_code": "n/a",
+        "remote_skipped_reason": "n/a",
         "tky_remote_status": None,
         "tky_fallback_reason": "n/a",
         "route_final": "",
@@ -62,8 +70,34 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
     tky_mode_used = str(normalized.get("tky_mode_used", "n/a") or "n/a")
     normalized["tky_mode_used"] = tky_mode_used
 
+    tky_engine = str(normalized.get("tky_engine", "n/a") or "n/a")
+    normalized["tky_engine"] = tky_engine
+
     fallback_reason = str(normalized.get("tky_fallback_reason", "n/a") or "n/a")
     normalized["tky_fallback_reason"] = fallback_reason
+
+    normalized["remote_used"] = bool(normalized.get("remote_used", False))
+    normalized["remote_rate_limited"] = bool(normalized.get("remote_rate_limited", False))
+
+    try:
+        normalized["remote_retry_count"] = int(normalized.get("remote_retry_count", 0) or 0)
+    except (TypeError, ValueError):
+        normalized["remote_retry_count"] = 0
+
+    remote_latency = normalized.get("remote_latency_ms", None)
+    if remote_latency in {"", "n/a"}:
+        normalized["remote_latency_ms"] = None
+    elif remote_latency is None:
+        normalized["remote_latency_ms"] = None
+    else:
+        try:
+            normalized["remote_latency_ms"] = round(max(0.0, float(remote_latency)), 3)
+        except (TypeError, ValueError):
+            normalized["remote_latency_ms"] = None
+
+    normalized["remote_error_class"] = str(normalized.get("remote_error_class", "n/a") or "n/a")
+    normalized["fallback_reason_code"] = str(normalized.get("fallback_reason_code", "n/a") or "n/a")
+    normalized["remote_skipped_reason"] = str(normalized.get("remote_skipped_reason", "n/a") or "n/a")
 
     remote_status = normalized.get("tky_remote_status", None)
     if remote_status in {"", "n/a"}:

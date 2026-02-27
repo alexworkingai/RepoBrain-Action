@@ -12,6 +12,26 @@ def _format_audit_summary(audit_summary: dict[str, object]) -> list[str]:
     return audit_lines or ["- No audit data."]
 
 
+def _build_tky_status_line(audit_summary: dict[str, object]) -> str:
+    fallback_code = str(audit_summary.get("fallback_reason_code", "n/a") or "n/a")
+    remote_skipped_reason = str(audit_summary.get("remote_skipped_reason", "n/a") or "n/a")
+    mode_used = str(audit_summary.get("tky_mode_used", "n/a") or "n/a")
+    engine = str(audit_summary.get("tky_engine", "n/a") or "n/a")
+    remote_used = bool(audit_summary.get("remote_used", False))
+
+    if remote_skipped_reason != "n/a":
+        return "TKY: skipped (policy)"
+    if mode_used == "fallback_baseline" or fallback_code != "n/a":
+        return f"TKY: fallback baseline ({fallback_code})"
+    if remote_used and engine == "remote":
+        return "TKY: remote (ok)"
+    if engine == "topocore_lite":
+        return "TKY: local TopoCoreLite"
+    if engine == "baseline" or mode_used == "baseline":
+        return "TKY: baseline"
+    return "TKY: n/a"
+
+
 def _format_evidence_lines(
     evidence: list[EvidenceItem],
     *,
@@ -48,6 +68,7 @@ def format_github_comment(
             *evidence_lines,
             "",
             "### 🧾 Audit summary",
+            f"- {_build_tky_status_line(audit_summary)}",
             *_format_audit_summary(audit_summary),
             "",
             AUDIT_ARTIFACT_NOTE,
@@ -68,6 +89,7 @@ def format_github_comment(
             f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
             "",
             "### 🧾 Audit summary",
+            f"- {_build_tky_status_line(audit_summary)}",
             *_format_audit_summary(audit_summary),
             "",
             AUDIT_ARTIFACT_NOTE,

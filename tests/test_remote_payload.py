@@ -24,6 +24,8 @@ def test_build_remote_request_is_privacy_safe_and_signature_only() -> None:
     )
 
     assert payload["version"] == "v1"
+    assert payload["schema_version"] == "1.0"
+    assert payload["capabilities_requested"] == ["route", "selection", "security", "stable_tokens"]
     assert payload["query"]["text"] == "Where is TKYProvider?"
     assert payload["query"]["signature"] == [1, 2, 3]
     assert "text" not in payload["candidates"][0]
