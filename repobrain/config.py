@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -19,37 +19,37 @@ class RepoBrainConfig:
     max_sources_deep: int = 12
     topk_fast: int = 30
     topk_deep: int = 80
+    config_loaded: bool = False
+    config_path: str = "<missing>"
     tky_remote_enabled: bool = False
-    tky_remote_allow_commands: tuple[str, ...] = ("ask", "explain")
-    tky_remote_allow_branches: tuple[str, ...] = ("main",)
-    tky_remote_allow_repos: tuple[str, ...] = ()
+    tky_remote_allow_commands: list[str] = field(default_factory=lambda: ["ask", "explain"])
+    tky_remote_allow_branches: list[str] = field(default_factory=lambda: ["main"])
+    tky_remote_allow_repos: list[str] = field(default_factory=list)
     tky_remote_fail_open: bool = True
 
 
-def _as_bool(value: Any, default: bool) -> bool:
+def _to_bool(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
+    if isinstance(value, (int, float)):
+        return value != 0
     if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"1", "true", "yes", "y", "on"}:
-            return True
-        if normalized in {"0", "false", "no", "n", "off"}:
-            return False
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
     return default
 
 
-def _as_str_tuple(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:
+def _as_str_list(value: Any, default: list[str]) -> list[str]:
     if value is None:
         return default
     if isinstance(value, str):
         item = value.strip()
-        return (item,) if item else default
+        return [item] if item else default
     if isinstance(value, list):
-        out = tuple(str(item).strip() for item in value if str(item).strip())
-        return out if out else ()
+        out = [str(item).strip() for item in value if str(item).strip()]
+        return out if out else []
     if isinstance(value, tuple):
-        out = tuple(str(item).strip() for item in value if str(item).strip())
-        return out if out else ()
+        out = [str(item).strip() for item in value if str(item).strip()]
+        return out if out else []
     return default
 
 
@@ -57,9 +57,10 @@ def load_config(root: Path) -> RepoBrainConfig:
     """Load .repobrain.yml if present, otherwise return defaults."""
     cfg_path = root / ".repobrain.yml"
     if not cfg_path.exists():
-        return RepoBrainConfig()
+        return RepoBrainConfig(config_loaded=False, config_path="<missing>")
 
-    data: dict[str, Any] = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+    data_raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+    data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
     answer = data.get("answer", {}) or {}
     limits = data.get("limits", {}) or {}
     tky = data.get("tky", {}) or {}
@@ -77,20 +78,26 @@ def load_config(root: Path) -> RepoBrainConfig:
 
     min_score_fast = float(answer.get("min_score_fast", 0.05))
     min_score_keep = float(answer.get("min_score_keep", 0.02))
-    tky_remote_enabled = _as_bool(tky.get("remote_enabled"), False)
-    tky_remote_allow_commands = _as_str_tuple(
-        tky.get("remote_allow_commands"),
-        ("ask", "explain"),
+    tky_remote_enabled = _to_bool(
+        tky.get("remote_enabled", tky.get("remoteEnabled", False)),
+        False,
     )
-    tky_remote_allow_branches = _as_str_tuple(
-        tky.get("remote_allow_branches"),
-        ("main",),
+    tky_remote_allow_commands = _as_str_list(
+        tky.get("remote_allow_commands", tky.get("remoteAllowCommands")),
+        ["ask", "explain"],
     )
-    tky_remote_allow_repos = _as_str_tuple(
-        tky.get("remote_allow_repos"),
-        (),
+    tky_remote_allow_branches = _as_str_list(
+        tky.get("remote_allow_branches", tky.get("remoteAllowBranches")),
+        ["main"],
     )
-    tky_remote_fail_open = _as_bool(tky.get("remote_fail_open"), True)
+    tky_remote_allow_repos = _as_str_list(
+        tky.get("remote_allow_repos", tky.get("remoteAllowRepos")),
+        [],
+    )
+    tky_remote_fail_open = _to_bool(
+        tky.get("remote_fail_open", tky.get("remoteFailOpen", True)),
+        True,
+    )
 
     return RepoBrainConfig(
         max_sources=max_sources,
@@ -101,6 +108,8 @@ def load_config(root: Path) -> RepoBrainConfig:
         max_sources_deep=max_sources_deep,
         topk_fast=topk_fast,
         topk_deep=topk_deep,
+        config_loaded=True,
+        config_path=str(cfg_path),
         tky_remote_enabled=tky_remote_enabled,
         tky_remote_allow_commands=tky_remote_allow_commands,
         tky_remote_allow_branches=tky_remote_allow_branches,

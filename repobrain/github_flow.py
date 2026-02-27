@@ -358,6 +358,22 @@ def extract_branch_from_env() -> str:
     return "unknown"
 
 
+def resolve_repo_root(start: Path | None = None, *, max_depth: int = 5) -> Path:
+    """Resolve repository root by walking up until `pyproject.toml` is found."""
+    current = start or Path(__file__).resolve()
+    if current.is_file():
+        current = current.parent
+
+    candidate = current.resolve()
+    for _ in range(max_depth + 1):
+        if (candidate / "pyproject.toml").exists():
+            return candidate
+        if candidate.parent == candidate:
+            break
+        candidate = candidate.parent
+    return Path.cwd().resolve()
+
+
 def _is_bot_login(login: str) -> bool:
     normalized = (login or "").strip().lower()
     return bool(normalized) and BOT_MARKER in normalized
@@ -385,53 +401,46 @@ def _provider_engine_name(provider: Any) -> str:
     return "baseline"
 
 
-def _allow_match(value: str, allowed: tuple[str, ...]) -> bool:
-    if not allowed:
-        return True
-    normalized = value.strip().lower()
-    return normalized in {item.strip().lower() for item in allowed}
-
-
-def _resolve_tky_mode_for_command(
+def decide_remote_usage(
     *,
-    requested_mode: str,
-    cmd: str,
     cfg: RepoBrainConfig,
+    cmd: str,
     repo_name: str,
     branch_name: str,
-) -> tuple[str, str]:
-    mode = (requested_mode or "baseline").strip().lower()
-    if mode != "remote":
-        return mode, "n/a"
-
+    remote_url: str,
+) -> tuple[bool, str | None]:
+    """Decide if remote TKY can be used and return precise reason code when skipped."""
     if not bool(getattr(cfg, "tky_remote_enabled", False)):
-        return "baseline", "remote_disabled"
+        return False, "remote_disabled_by_config"
 
-    allowed_commands = tuple(
+    if not (remote_url or "").strip():
+        return False, "remote_url_missing"
+
+    allowed_commands = [
         str(item).strip().lower()
         for item in getattr(cfg, "tky_remote_allow_commands", ("ask", "explain"))
         if str(item).strip()
-    )
+    ]
     if allowed_commands and cmd.strip().lower() not in allowed_commands:
-        return "baseline", "command_not_allowed"
+        return False, "command_not_allowed"
 
-    allowed_branches = tuple(
+    allowed_branches = [
         str(item).strip().lower()
         for item in getattr(cfg, "tky_remote_allow_branches", ("main",))
         if str(item).strip()
-    )
+    ]
     if allowed_branches and branch_name.strip().lower() not in allowed_branches:
-        return "baseline", "branch_not_allowed"
+        return False, "branch_not_allowed"
 
-    allowed_repos = tuple(
+    allowed_repos = [
         str(item).strip().lower()
         for item in getattr(cfg, "tky_remote_allow_repos", ())
         if str(item).strip()
-    )
+    ]
     if allowed_repos and repo_name.strip().lower() not in allowed_repos:
-        return "baseline", "repo_not_allowed"
+        return False, "repo_not_allowed"
 
-    return "remote", "n/a"
+    return True, None
 
 
 def _build_refuse_answer_result(question: str, reason: str) -> AnswerResult:
@@ -884,29 +893,47 @@ def _build_qa_markdown(
     enable_hmac: bool,
     audit: dict[str, Any] | None = None,
 ) -> str:
-    cfg = load_config(repo_root)
+    resolved_repo_root = resolve_repo_root(repo_root)
+    cfg = load_config(resolved_repo_root)
     repo_name = extract_repo_from_env()
     branch_name = extract_branch_from_env()
-    effective_tky_mode, remote_skipped_reason = _resolve_tky_mode_for_command(
-        requested_mode=tky_mode,
-        cmd=cmd,
-        cfg=cfg,
-        repo_name=repo_name,
-        branch_name=branch_name,
-    )
-    if effective_tky_mode == "remote" and not (remote_url or "").strip():
-        effective_tky_mode = "baseline"
-        remote_skipped_reason = "remote_url_missing"
+    remote_skipped_reason = "n/a"
+    effective_tky_mode = (tky_mode or "baseline").strip().lower()
+    if effective_tky_mode == "remote":
+        use_remote, remote_skip = decide_remote_usage(
+            cfg=cfg,
+            cmd=cmd,
+            repo_name=repo_name,
+            branch_name=branch_name,
+            remote_url=remote_url,
+        )
+        if use_remote:
+            effective_tky_mode = "remote"
+        else:
+            effective_tky_mode = "baseline"
+            remote_skipped_reason = str(remote_skip or "remote_disabled_by_config")
     remote_fail_open = bool(getattr(cfg, "tky_remote_fail_open", True))
-    index_path = repo_root / "artifacts" / "index-package.zip"
+    index_path = resolved_repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
-    chunks, index_source, index_elapsed_ms = load_or_build_chunks_with_meta(repo_root, index_path)
+    chunks, index_source, index_elapsed_ms = load_or_build_chunks_with_meta(resolved_repo_root, index_path)
     if audit is not None:
         audit["index_source"] = index_source
         add_timing(audit, "index_load_build", index_elapsed_ms)
         audit["remote_skipped_reason"] = remote_skipped_reason or "n/a"
+        audit["config_loaded"] = bool(getattr(cfg, "config_loaded", False))
+        audit["config_path"] = str(getattr(cfg, "config_path", "<missing>") or "<missing>")
+        audit["config_remote_enabled"] = bool(getattr(cfg, "tky_remote_enabled", False))
+        audit["config_allow_commands_count"] = len(getattr(cfg, "tky_remote_allow_commands", []))
+        audit["config_allow_branches_count"] = len(getattr(cfg, "tky_remote_allow_branches", []))
+        audit["config_allow_repos_count"] = len(getattr(cfg, "tky_remote_allow_repos", []))
         audit["tky_mode_requested"] = tky_mode
         audit["tky_mode_used"] = effective_tky_mode
+    print(
+        "CONFIG: "
+        f"loaded={bool(getattr(cfg, 'config_loaded', False))} "
+        f"path={str(getattr(cfg, 'config_path', '<missing>') or '<missing>')} "
+        f"remote_enabled={bool(getattr(cfg, 'tky_remote_enabled', False))}"
+    )
 
     provider = make_provider(
         effective_tky_mode,
@@ -928,6 +955,12 @@ def _build_qa_markdown(
     audit_summary = dict(result.audit_summary)
     audit_summary.update(loop_audit)
     audit_summary["remote_skipped_reason"] = remote_skipped_reason or "n/a"
+    audit_summary["config_loaded"] = bool(getattr(cfg, "config_loaded", False))
+    audit_summary["config_path"] = str(getattr(cfg, "config_path", "<missing>") or "<missing>")
+    audit_summary["config_remote_enabled"] = bool(getattr(cfg, "tky_remote_enabled", False))
+    audit_summary["config_allow_commands_count"] = len(getattr(cfg, "tky_remote_allow_commands", []))
+    audit_summary["config_allow_branches_count"] = len(getattr(cfg, "tky_remote_allow_branches", []))
+    audit_summary["config_allow_repos_count"] = len(getattr(cfg, "tky_remote_allow_repos", []))
     audit_summary["tky_mode_requested"] = tky_mode
     audit_summary["tky_mode_used"] = str(
         audit_summary.get("tky_mode_used", effective_tky_mode or "baseline")

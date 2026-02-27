@@ -23,6 +23,12 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "timings_ms": {},
         "security": {"blocked": False, "risk": "low", "signals": []},
         "index_source": "n/a",
+        "config_loaded": False,
+        "config_path": "<missing>",
+        "config_remote_enabled": False,
+        "config_allow_commands_count": 0,
+        "config_allow_branches_count": 0,
+        "config_allow_repos_count": 0,
         "tky_mode_requested": str(env_ctx.get("tky_mode_requested", "")),
         "tky_mode_used": "n/a",
         "tky_engine": "n/a",
@@ -98,6 +104,27 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
     normalized["remote_error_class"] = str(normalized.get("remote_error_class", "n/a") or "n/a")
     normalized["fallback_reason_code"] = str(normalized.get("fallback_reason_code", "n/a") or "n/a")
     normalized["remote_skipped_reason"] = str(normalized.get("remote_skipped_reason", "n/a") or "n/a")
+    normalized["config_loaded"] = bool(normalized.get("config_loaded", False))
+    normalized["config_path"] = str(normalized.get("config_path", "<missing>") or "<missing>")
+    normalized["config_remote_enabled"] = bool(normalized.get("config_remote_enabled", False))
+    try:
+        normalized["config_allow_commands_count"] = int(
+            normalized.get("config_allow_commands_count", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["config_allow_commands_count"] = 0
+    try:
+        normalized["config_allow_branches_count"] = int(
+            normalized.get("config_allow_branches_count", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["config_allow_branches_count"] = 0
+    try:
+        normalized["config_allow_repos_count"] = int(
+            normalized.get("config_allow_repos_count", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["config_allow_repos_count"] = 0
 
     remote_status = normalized.get("tky_remote_status", None)
     if remote_status in {"", "n/a"}:

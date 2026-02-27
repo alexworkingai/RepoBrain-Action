@@ -9,6 +9,7 @@ from repobrain.config import load_config
 from repobrain.formatting import format_github_comment
 from repobrain.index_store import load_index
 from repobrain.retrieve import retrieve_topk
+from repobrain.tky_remote import RemoteTKYError
 
 HELP_TEXT = """RepoBrain command examples:
 - /repobrain help
@@ -63,19 +64,36 @@ def main() -> int:
         api_key=args.api_key or None,
     )
     limits = {"max_sources": cfg.max_sources}
-    res = answer_question(
-        question=question,
-        candidates=candidates,
-        provider=provider,
-        limits=limits,
-    )
+    mode_requested = args.tky_mode
+    mode_used = args.tky_mode
+    fallback_reason_code: str | None = None
+    try:
+        res = answer_question(
+            question=question,
+            candidates=candidates,
+            provider=provider,
+            limits=limits,
+        )
+    except RemoteTKYError as exc:
+        if args.tky_mode != "remote" or not cfg.tky_remote_fail_open:
+            raise
+        provider = make_provider("baseline")
+        res = answer_question(
+            question=question,
+            candidates=candidates,
+            provider=provider,
+            limits=limits,
+        )
+        mode_used = "baseline"
+        fallback_reason_code = exc.fallback_reason_code or "REMOTE_NETWORK"
     audit_summary = dict(res.audit_summary)
     audit_summary.update(
         {
-            "tky_engine": args.tky_mode if args.tky_mode != "local" else "topocore_lite",
-            "tky_mode_used": args.tky_mode,
-            "remote_used": args.tky_mode == "remote",
-            "fallback_reason_code": None,
+            "tky_engine": "topocore_lite" if mode_used == "local" else mode_used,
+            "tky_mode_requested": mode_requested,
+            "tky_mode_used": mode_used,
+            "remote_used": args.tky_mode == "remote" and mode_used == "remote",
+            "fallback_reason_code": fallback_reason_code,
         }
     )
 

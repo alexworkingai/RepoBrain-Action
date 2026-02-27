@@ -30,8 +30,8 @@ def test_remote_disabled_skips_remote(monkeypatch) -> None:
         "load_config",
         lambda *_args, **_kwargs: RepoBrainConfig(
             tky_remote_enabled=False,
-            tky_remote_allow_branches=(),
-            tky_remote_allow_repos=(),
+            tky_remote_allow_branches=[],
+            tky_remote_allow_repos=[],
         ),
     )
     monkeypatch.setattr(
@@ -51,7 +51,7 @@ def test_remote_disabled_skips_remote(monkeypatch) -> None:
 
     assert status == "DRY_RUN_OK"
     assert audit["tky_mode_used"] == "baseline"
-    assert audit["remote_skipped_reason"] == "remote_disabled"
+    assert audit["remote_skipped_reason"] == "remote_disabled_by_config"
 
 
 def test_remote_command_allowlist_blocks_locate(monkeypatch) -> None:
@@ -62,9 +62,9 @@ def test_remote_command_allowlist_blocks_locate(monkeypatch) -> None:
         "load_config",
         lambda *_args, **_kwargs: RepoBrainConfig(
             tky_remote_enabled=True,
-            tky_remote_allow_commands=("ask", "explain"),
-            tky_remote_allow_branches=(),
-            tky_remote_allow_repos=(),
+            tky_remote_allow_commands=["ask", "explain"],
+            tky_remote_allow_branches=[],
+            tky_remote_allow_repos=[],
         ),
     )
     monkeypatch.setattr(
@@ -95,9 +95,9 @@ def test_remote_repo_allowlist_blocks_other_repo(monkeypatch) -> None:
         "load_config",
         lambda *_args, **_kwargs: RepoBrainConfig(
             tky_remote_enabled=True,
-            tky_remote_allow_commands=("ask",),
-            tky_remote_allow_branches=(),
-            tky_remote_allow_repos=("allowed/repo",),
+            tky_remote_allow_commands=["ask"],
+            tky_remote_allow_branches=[],
+            tky_remote_allow_repos=["allowed/repo"],
         ),
     )
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
