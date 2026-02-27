@@ -113,27 +113,58 @@ class TopoCoreLite(TKYEngine):
             min_keep = float(limits.get("min_score_keep", self.min_keep_score))
         except (TypeError, ValueError):
             min_keep = self.min_keep_score
-        keep_threshold = max(min_keep, top_score * 0.30)
+        try:
+            keep_ratio = float(limits.get("keep_ratio", 0.30))
+        except (TypeError, ValueError):
+            keep_ratio = 0.30
+        keep_threshold = max(min_keep, top_score * keep_ratio)
+
+        try:
+            max_per_file = int(limits.get("max_per_file", 999))
+        except (TypeError, ValueError):
+            max_per_file = 999
+        try:
+            max_files = int(limits.get("max_files", max_sources))
+        except (TypeError, ValueError):
+            max_files = max_sources
+        task_type = str(limits.get("task_type", "ask")).lower()
 
         selected: list[EngineCandidate] = [ranked[0]]
         selected_ids = {ranked[0].chunk_id}
+        per_file_counts: dict[str, int] = {ranked[0].file_path or "": 1}
+        used_files: set[str] = {ranked[0].file_path or ""}
 
         for candidate in ranked[1:]:
             if len(selected) >= max_sources:
                 break
+            file_key = candidate.file_path or ""
+            if per_file_counts.get(file_key, 0) >= max_per_file:
+                continue
+            if file_key not in used_files and len(used_files) >= max_files:
+                continue
             if candidate.score_local >= keep_threshold:
                 selected.append(candidate)
                 selected_ids.add(candidate.chunk_id)
+                per_file_counts[file_key] = per_file_counts.get(file_key, 0) + 1
+                used_files.add(file_key)
 
-        target_min = min(self.min_sources, max_sources, len(ranked))
+        min_sources = 1 if task_type == "locate" else self.min_sources
+        target_min = min(min_sources, max_sources, len(ranked))
         if len(selected) < target_min:
             for candidate in ranked:
                 if len(selected) >= target_min:
                     break
                 if candidate.chunk_id in selected_ids:
                     continue
+                file_key = candidate.file_path or ""
+                if per_file_counts.get(file_key, 0) >= max_per_file:
+                    continue
+                if file_key not in used_files and len(used_files) >= max_files:
+                    continue
                 selected.append(candidate)
                 selected_ids.add(candidate.chunk_id)
+                per_file_counts[file_key] = per_file_counts.get(file_key, 0) + 1
+                used_files.add(file_key)
 
         return [c.chunk_id for c in selected]
 

@@ -13,6 +13,7 @@ from repobrain.audit import add_timing, build_audit_base, finalize_audit
 from repobrain.ask import answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.config import load_config
+from repobrain.evidence import EvidenceItem
 from repobrain.formatting import (
     format_github_comment,
     format_pr_review_comment,
@@ -20,7 +21,7 @@ from repobrain.formatting import (
     format_verify_comment,
 )
 from repobrain.index_store import build_index, load_index
-from repobrain.retrieve import retrieve_topk
+from repobrain.retrieve_pro import retrieve_topk_pro
 from repobrain.review import build_pr_review
 from repobrain.security import detect_injection_or_exfiltration
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
@@ -334,16 +335,90 @@ def _route_hint_for_candidates(candidates: list[CandidateChunk], min_score_fast:
     return "DEEP" if _top_score(candidates) < float(min_score_fast) else "FAST"
 
 
+def _second_score(candidates: list[CandidateChunk]) -> float:
+    return float(candidates[1].score) if len(candidates) > 1 else 0.0
+
+
+def _selection_policy_for_candidates(
+    *,
+    cmd: str,
+    candidates: list[CandidateChunk],
+    cfg: Any,
+    phase: str,
+) -> dict[str, Any]:
+    top_score = _top_score(candidates)
+    gap = top_score - _second_score(candidates)
+    min_keep_base = float(getattr(cfg, "min_score_keep", 0.02))
+
+    if phase == "deep":
+        max_sources = int(getattr(cfg, "max_sources_deep", 12))
+    else:
+        max_sources = int(getattr(cfg, "max_sources_fast", getattr(cfg, "max_sources", 6)))
+
+    keep_ratio = 0.30
+    max_per_file = 2
+    max_files = max_sources
+
+    if cmd == "ask":
+        keep_ratio = 0.35
+        if gap > 0.08:
+            max_sources = min(max_sources, 3)
+    elif cmd == "explain":
+        keep_ratio = 0.25
+        max_per_file = 1
+    elif cmd == "locate":
+        keep_ratio = 0.30
+        max_per_file = 1
+        max_files = 5
+        max_sources = min(max_sources, 5)
+
+    min_score_keep = max(min_keep_base, top_score * keep_ratio)
+    return {
+        "max_sources": max_sources,
+        "min_score_keep": min_score_keep,
+        "keep_ratio": keep_ratio,
+        "max_per_file": max_per_file,
+        "max_files": max_files,
+    }
+
+
+def _retrieve_candidates(
+    question: str,
+    chunks: list[CandidateChunk],
+    *,
+    topk: int,
+    cmd: str,
+) -> list[CandidateChunk]:
+    if cmd == "ask":
+        return retrieve_topk(question, chunks, topk=topk)
+    return retrieve_topk_pro(question, chunks, topk=topk, task_type=cmd, max_per_file=2)
+
+
+def retrieve_topk(
+    question: str,
+    chunks: list[CandidateChunk],
+    topk: int,
+) -> list[CandidateChunk]:
+    """Compatibility wrapper used by existing tests and default ask retrieval."""
+    return retrieve_topk_pro(question, chunks, topk=topk, task_type="ask", max_per_file=2)
+
+
 def _qa_limits(
     *,
     cmd: str,
     max_sources: int,
     min_score_keep: float,
+    keep_ratio: float,
+    max_per_file: int,
+    max_files: int,
     route_hint: str,
 ) -> dict[str, Any]:
     return {
         "max_sources": max_sources,
         "min_score_keep": min_score_keep,
+        "keep_ratio": keep_ratio,
+        "max_per_file": max_per_file,
+        "max_files": max_files,
         "route_hint": route_hint,
         "task_type": cmd,
         "privacy_mode": "signatures_only",
@@ -416,20 +491,25 @@ def run_qa_two_pass(
     topk_fast = int(getattr(cfg, "topk_fast", getattr(cfg, "topk", 30)))
     topk_deep = int(getattr(cfg, "topk_deep", 80))
     min_score_fast = float(getattr(cfg, "min_score_fast", 0.05))
-    min_score_keep = float(getattr(cfg, "min_score_keep", 0.02))
-    max_sources_fast = int(getattr(cfg, "max_sources_fast", getattr(cfg, "max_sources", 6)))
-    max_sources_deep = int(getattr(cfg, "max_sources_deep", max_sources_fast))
-
     active_provider = provider
     t0 = time.perf_counter()
-    pass1_candidates = retrieve_topk(question, chunks, topk=topk_fast)
+    pass1_candidates = _retrieve_candidates(question, chunks, topk=topk_fast, cmd=cmd)
     if timings_ms is not None:
         timings_ms["retrieve_pass1"] = round((time.perf_counter() - t0) * 1000.0, 3)
     pass1_top_score = _top_score(pass1_candidates)
+    pass1_policy = _selection_policy_for_candidates(
+        cmd=cmd,
+        candidates=pass1_candidates,
+        cfg=cfg,
+        phase="fast",
+    )
     pass1_limits = _qa_limits(
         cmd=cmd,
-        max_sources=max_sources_fast,
-        min_score_keep=min_score_keep,
+        max_sources=int(pass1_policy["max_sources"]),
+        min_score_keep=float(pass1_policy["min_score_keep"]),
+        keep_ratio=float(pass1_policy["keep_ratio"]),
+        max_per_file=int(pass1_policy["max_per_file"]),
+        max_files=int(pass1_policy["max_files"]),
         route_hint=_route_hint_for_candidates(pass1_candidates, min_score_fast),
     )
     t0 = time.perf_counter()
@@ -451,14 +531,23 @@ def run_qa_two_pass(
     should_second_pass = cmd in {"ask", "explain"} and result1.tky.route == "DEEP"
     if should_second_pass:
         t0 = time.perf_counter()
-        pass2_candidates = retrieve_topk(question, chunks, topk=topk_deep)
+        pass2_candidates = _retrieve_candidates(question, chunks, topk=topk_deep, cmd=cmd)
         if timings_ms is not None:
             timings_ms["retrieve_pass2"] = round((time.perf_counter() - t0) * 1000.0, 3)
         pass2_top_score = _top_score(pass2_candidates)
+        pass2_policy = _selection_policy_for_candidates(
+            cmd=cmd,
+            candidates=pass2_candidates,
+            cfg=cfg,
+            phase="deep",
+        )
         pass2_limits = _qa_limits(
             cmd=cmd,
-            max_sources=max_sources_deep,
-            min_score_keep=min_score_keep,
+            max_sources=int(pass2_policy["max_sources"]),
+            min_score_keep=float(pass2_policy["min_score_keep"]),
+            keep_ratio=float(pass2_policy["keep_ratio"]),
+            max_per_file=int(pass2_policy["max_per_file"]),
+            max_files=int(pass2_policy["max_files"]),
             route_hint="DEEP",
         )
         t0 = time.perf_counter()
@@ -499,6 +588,57 @@ def run_qa_two_pass(
     return final_result, audit_extra
 
 
+def _dedupe_evidence_by_file(evidence: list[EvidenceItem], max_files: int = 5) -> list[EvidenceItem]:
+    result: list[EvidenceItem] = []
+    seen: set[str] = set()
+    for item in evidence:
+        if item.file_path in seen:
+            continue
+        seen.add(item.file_path)
+        result.append(item)
+        if len(result) >= max_files:
+            break
+    return result
+
+
+def _module_reason(file_path: str) -> str:
+    lower = file_path.lower()
+    if lower.endswith("tky_provider.py"):
+        return "provider interface and TKY result contract"
+    if lower.endswith("github_flow.py"):
+        return "command orchestration and runtime flow"
+    if lower.endswith("retrieve.py") or lower.endswith("retrieve_pro.py"):
+        return "retrieval ranking and candidate filtering"
+    if lower.endswith("review.py"):
+        return "PR review heuristics and risk scoring"
+    if lower.endswith("formatting.py"):
+        return "final markdown formatting for responses"
+    if lower.endswith("config.py"):
+        return "runtime thresholds and limits"
+    if lower.startswith("scripts/"):
+        return "CLI and workflow entrypoint behavior"
+    return "relevant to the requested behavior based on retrieval signals"
+
+
+def _build_explain_answer(evidence: list[EvidenceItem], question: str) -> str:
+    if not evidence:
+        return (
+            f"Question: {question}\n"
+            "Key modules likely involved:\n"
+            "- No strong module matches found."
+        )
+
+    modules = [item.file_path for item in evidence[:7]]
+    lines = [f"Question: {question}", "Key modules likely involved:"]
+    for path in modules:
+        lines.append(f"- `{path}`")
+    lines.append("")
+    lines.append("Why:")
+    for path in modules:
+        lines.append(f"- `{path}` — {_module_reason(path)}")
+    return "\n".join(lines)
+
+
 def _build_qa_markdown(
     *,
     repo_root: Path,
@@ -537,11 +677,20 @@ def _build_qa_markdown(
     )
     audit_summary = dict(result.audit_summary)
     audit_summary.update(loop_audit)
+    evidence_out = result.evidence
+    answer_text_out = result.answer_text
+    if cmd == "locate":
+        evidence_out = _dedupe_evidence_by_file(result.evidence, max_files=5)
+        audit_summary["route_final"] = "LOCATE"
+    elif cmd == "explain":
+        evidence_out = _dedupe_evidence_by_file(result.evidence, max_files=7)
+        answer_text_out = _build_explain_answer(evidence_out, question)
+
     if audit is not None:
         audit["route_final"] = str(audit_summary.get("route_final", result.tky.route))
         audit["pass_count"] = int(audit_summary.get("pass_count", 1) or 1)
         audit["retrieved"] = int(audit_summary.get("retrieved", 0) or 0)
-        audit["selected"] = int(audit_summary.get("selected", 0) or 0)
+        audit["selected"] = len(evidence_out)
         audit["top_score_pass1"] = audit_summary.get("pass1.top_score")
         audit["top_score_pass2"] = audit_summary.get("pass2.top_score")
         audit["tky_mode_requested"] = str(audit_summary.get("tky_mode_requested", tky_mode))
@@ -551,8 +700,8 @@ def _build_qa_markdown(
 
     t0 = time.perf_counter()
     body = format_github_comment(
-        result.answer_text,
-        result.evidence,
+        answer_text_out,
+        evidence_out,
         audit_summary,
         result.next_steps,
         command=cmd,
@@ -585,19 +734,27 @@ def _build_review_markdown(
         return "Review is available in Pull Requests. Pull request number was not detected."
 
     files: list[dict[str, Any]]
+    head_sha = ""
+    repo_name = extract_repo_from_env() or (client.repo if client is not None else "")
     if dry_run:
         files = []
     else:
         if client is None:
             raise ValueError("GitHub client is required for PR review in post mode")
+        pull = client.get_pull(pull_number=issue_number)
+        head = pull.get("head", {})
+        if isinstance(head, dict):
+            head_sha = str(head.get("sha", "") or "")
         files = client.get_pull_files(pull_number=issue_number)
 
-    review = build_pr_review(files)
+    if not head_sha:
+        head_sha = extract_sha_from_env()
+    review = build_pr_review(files, head_sha=head_sha or None, repo=repo_name or None)
     if audit is not None:
         audit["route_final"] = "REVIEW"
         audit["pass_count"] = 1
-        audit["retrieved"] = 0
-        audit["selected"] = 0
+        audit["retrieved"] = len(files)
+        audit["selected"] = len(files)
     t0 = time.perf_counter()
     body = format_pr_review_comment(review)
     if audit is not None:
