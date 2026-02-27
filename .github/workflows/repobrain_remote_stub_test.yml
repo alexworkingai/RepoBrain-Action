@@ -38,6 +38,12 @@ jobs:
           enable_hmac: "false"
           dry_run: "true"
           comment_text: "/repobrain ask Где реализована логика TKYProvider?"
+      - name: Verify remote was used (audit)
+        if: always()
+        run: |
+          ls -la artifacts/audit || true
+          cat artifacts/audit/*.json || true
+          grep -R "\"remote_used\": true" artifacts/audit/*.json
       - name: Upload RepoBrain audit artifact
         if: always()
         uses: actions/upload-artifact@v4

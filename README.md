@@ -92,6 +92,17 @@ Reliability:
 * `Retry-After` is respected for `429` (capped wait).
 * Diagnostics in audit: latency, retries, rate limit flag, error class, fallback reason code.
 
+Remote modes:
+
+* `issue_comment`/PR workflow (`.github/workflows/repobrain.yml`) runs with `tky_mode: auto` and intentionally does not set `remote_url`.
+* Remote stub testing uses `.github/workflows/repobrain_remote_stub_test.yml` with `remote_url: http://127.0.0.1:8787/v1/tky/decide`.
+* Production remote should pass `remote_url` (and credentials) via workflow inputs/secrets, not hardcoded in repo workflows.
+
+Local CLI behavior:
+
+* `scripts/run_ask.py --tky-mode auto|remote` falls back to baseline when remote is down if `tky.remote_fail_open: true`.
+* If `tky.remote_fail_open: false`, local CLI exits with non-zero and prints a short actionable error (no stacktrace dump).
+
 Example `.repobrain.yml`:
 
 ```yaml

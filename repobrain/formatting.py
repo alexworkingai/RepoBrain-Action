@@ -52,7 +52,7 @@ def _build_remote_skip_hint(audit_summary: dict[str, object]) -> str | None:
     reason = str(audit_summary.get("remote_skipped_reason", "n/a") or "n/a").strip().lower()
     if reason == "remote_url_missing":
         return (
-            "Remote TKY skipped: remote_url missing "
+            "Remote skipped: remote_url missing "
             "(set it via workflow input or tky.remote_url for stub tests)."
         )
     return None

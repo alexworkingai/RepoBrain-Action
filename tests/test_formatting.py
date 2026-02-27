@@ -58,4 +58,4 @@ def test_format_github_comment_shows_remote_url_missing_hint() -> None:
         "Open evidence links and verify logic",
     )
 
-    assert "Remote TKY skipped: remote_url missing" in text
+    assert "Remote skipped: remote_url missing" in text

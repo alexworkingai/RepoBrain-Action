@@ -76,6 +76,7 @@ def main() -> int:
     )
     limits = {"max_sources": cfg.max_sources}
     fallback_reason_code: str | None = None
+    remote_error_class: str | None = None
     try:
         res = answer_question(
             question=question,
@@ -84,8 +85,12 @@ def main() -> int:
             limits=limits,
         )
     except RemoteTKYError as exc:
-        if mode_used != "remote" or not cfg.tky_remote_fail_open:
+        if mode_used != "remote":
             raise
+        if not cfg.tky_remote_fail_open:
+            print("Remote TKY unavailable and fail-open is disabled.")
+            print("Set `tky.remote_fail_open: true` or provide a reachable remote_url.")
+            return 2
         provider = make_provider("baseline")
         res = answer_question(
             question=question,
@@ -95,6 +100,7 @@ def main() -> int:
         )
         mode_used = "baseline"
         fallback_reason_code = exc.fallback_reason_code or "REMOTE_NETWORK"
+        remote_error_class = exc.error_class or "unknown"
     audit_summary = dict(res.audit_summary)
     audit_summary.update(
         {
@@ -103,6 +109,7 @@ def main() -> int:
             "tky_mode_used": mode_used,
             "remote_used": mode_used == "remote",
             "fallback_reason_code": fallback_reason_code,
+            "remote_error_class": remote_error_class,
             "remote_skipped_reason": str(remote_skip or "n/a"),
         }
     )
