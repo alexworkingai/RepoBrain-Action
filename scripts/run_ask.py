@@ -69,12 +69,21 @@ def main() -> int:
         provider=provider,
         limits=limits,
     )
+    audit_summary = dict(res.audit_summary)
+    audit_summary.update(
+        {
+            "tky_engine": args.tky_mode if args.tky_mode != "local" else "topocore_lite",
+            "tky_mode_used": args.tky_mode,
+            "remote_used": args.tky_mode == "remote",
+            "fallback_reason_code": None,
+        }
+    )
 
     print(
         format_github_comment(
             res.answer_text,
             res.evidence,
-            res.audit_summary,
+            audit_summary,
             res.next_steps,
         )
     )

@@ -1,10 +1,15 @@
 ﻿from __future__ import annotations
 
+import os
+
 from .evidence import EvidenceItem
 from .links import make_line_link
 
 
-AUDIT_ARTIFACT_NOTE = "Audit: workflow artifact `repobrain-audit` (hash-only)."
+def _audit_artifact_note() -> str:
+    if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true":
+        return "Audit: workflow artifact `repobrain-audit` (hash-only)."
+    return "Audit: local run (no workflow artifacts)."
 
 
 def _format_audit_summary(audit_summary: dict[str, object]) -> list[str]:
@@ -13,22 +18,33 @@ def _format_audit_summary(audit_summary: dict[str, object]) -> list[str]:
 
 
 def _build_tky_status_line(audit_summary: dict[str, object]) -> str:
-    fallback_code = str(audit_summary.get("fallback_reason_code", "n/a") or "n/a")
-    remote_skipped_reason = str(audit_summary.get("remote_skipped_reason", "n/a") or "n/a")
-    mode_used = str(audit_summary.get("tky_mode_used", "n/a") or "n/a")
-    engine = str(audit_summary.get("tky_engine", "n/a") or "n/a")
+    fallback_raw = audit_summary.get("fallback_reason_code", None)
+    fallback_code = str(fallback_raw).strip() if fallback_raw is not None else ""
+    has_fallback = bool(fallback_code) and fallback_code.lower() not in {"n/a", "none", "null"}
+    mode_used = str(audit_summary.get("tky_mode_used", "n/a") or "n/a").strip().lower()
+    engine = str(audit_summary.get("tky_engine", "n/a") or "n/a").strip().lower()
     remote_used = bool(audit_summary.get("remote_used", False))
 
-    if remote_skipped_reason != "n/a":
-        return "TKY: skipped (policy)"
-    if mode_used == "fallback_baseline" or fallback_code != "n/a":
-        return f"TKY: fallback baseline ({fallback_code})"
-    if remote_used and engine == "remote":
+    if engine == "remote" and remote_used:
         return "TKY: remote (ok)"
+    if engine == "baseline" and has_fallback:
+        return f"TKY: fallback baseline ({fallback_code})"
+    if mode_used == "fallback_baseline" and has_fallback:
+        return f"TKY: fallback baseline ({fallback_code})"
+    if mode_used == "fallback_baseline":
+        return "TKY: fallback baseline (fallback)"
     if engine == "topocore_lite":
-        return "TKY: local TopoCoreLite"
-    if engine == "baseline" or mode_used == "baseline":
+        return "TKY: topocore_lite"
+    if engine == "baseline":
         return "TKY: baseline"
+    if mode_used == "remote" and remote_used:
+        return "TKY: remote (ok)"
+    if mode_used == "local":
+        return "TKY: topocore_lite"
+    if mode_used == "baseline":
+        return "TKY: baseline"
+    if has_fallback:
+        return f"TKY: fallback baseline ({fallback_code})"
     return "TKY: n/a"
 
 
@@ -71,7 +87,7 @@ def format_github_comment(
             f"- {_build_tky_status_line(audit_summary)}",
             *_format_audit_summary(audit_summary),
             "",
-            AUDIT_ARTIFACT_NOTE,
+            _audit_artifact_note(),
         ]
         return "\n".join(sections)
 
@@ -92,7 +108,7 @@ def format_github_comment(
             f"- {_build_tky_status_line(audit_summary)}",
             *_format_audit_summary(audit_summary),
             "",
-            AUDIT_ARTIFACT_NOTE,
+            _audit_artifact_note(),
         ]
     )
     return "\n".join(sections)
@@ -139,7 +155,7 @@ def format_pr_review_comment(review: dict[str, object]) -> str:
         "### 🧾 Audit summary",
         *_format_audit_summary(audit_summary),
         "",
-        AUDIT_ARTIFACT_NOTE,
+        _audit_artifact_note(),
     ]
     return "\n".join(sections)
 
@@ -163,7 +179,7 @@ def format_refusal_comment(
         "### 🧾 Audit summary",
         *_format_audit_summary(audit_summary),
         "",
-        AUDIT_ARTIFACT_NOTE,
+        _audit_artifact_note(),
     ]
     return "\n".join(sections)
 
@@ -258,7 +274,7 @@ def format_verify_comment(report: dict[str, object]) -> str:
             "### 🧾 Audit summary",
             *_format_audit_summary(audit_summary),
             "",
-            AUDIT_ARTIFACT_NOTE,
+            _audit_artifact_note(),
         ]
     )
     return "\n".join(sections)
