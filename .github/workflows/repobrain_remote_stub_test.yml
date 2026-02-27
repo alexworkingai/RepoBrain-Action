@@ -26,10 +26,14 @@ jobs:
         run: |
           nohup python -m repobrain.tky_stub_server --host 127.0.0.1 --port 8787 > /tmp/tky-stub.log 2>&1 &
           sleep 1
+      - name: Diagnostic config check
+        run: |
+          echo "Config exists?"
+          ls -la .repobrain.yml || true
       - name: Run RepoBrain action in remote mode (stub)
         uses: ./.
         with:
-          tky_mode: remote
+          tky_mode: auto
           remote_url: "http://127.0.0.1:8787/v1/tky/decide"
           enable_hmac: "false"
           dry_run: "true"

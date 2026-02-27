@@ -48,6 +48,16 @@ def _build_tky_status_line(audit_summary: dict[str, object]) -> str:
     return "TKY: n/a"
 
 
+def _build_remote_skip_hint(audit_summary: dict[str, object]) -> str | None:
+    reason = str(audit_summary.get("remote_skipped_reason", "n/a") or "n/a").strip().lower()
+    if reason == "remote_url_missing":
+        return (
+            "Remote TKY skipped: remote_url missing "
+            "(set it via workflow input or tky.remote_url for stub tests)."
+        )
+    return None
+
+
 def _format_evidence_lines(
     evidence: list[EvidenceItem],
     *,
@@ -79,12 +89,14 @@ def format_github_comment(
     mode_line = f"Mode: {route_value}" if route_value else ""
 
     if command == "locate":
+        remote_hint = _build_remote_skip_hint(audit_summary)
         sections = [
             "### 📌 Evidence",
             *evidence_lines,
             "",
             "### 🧾 Audit summary",
             f"- {_build_tky_status_line(audit_summary)}",
+            *([f"- {remote_hint}"] if remote_hint else []),
             *_format_audit_summary(audit_summary),
             "",
             _audit_artifact_note(),
@@ -92,6 +104,7 @@ def format_github_comment(
         return "\n".join(sections)
 
     sections = ["### ✅ Answer"]
+    remote_hint = _build_remote_skip_hint(audit_summary)
     if mode_line:
         sections.append(mode_line)
     sections.extend(
@@ -106,6 +119,7 @@ def format_github_comment(
             "",
             "### 🧾 Audit summary",
             f"- {_build_tky_status_line(audit_summary)}",
+            *([f"- {remote_hint}"] if remote_hint else []),
             *_format_audit_summary(audit_summary),
             "",
             _audit_artifact_note(),

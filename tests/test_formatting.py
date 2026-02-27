@@ -44,3 +44,18 @@ def test_format_github_comment_locate_omits_answer_section() -> None:
     assert "Audit summary" in text
     assert "Answer" not in text
     assert "Next steps" not in text
+
+
+def test_format_github_comment_shows_remote_url_missing_hint() -> None:
+    text = format_github_comment(
+        "Answer body",
+        [],
+        {
+            "tky_mode_requested": "auto",
+            "tky_mode_used": "baseline",
+            "remote_skipped_reason": "remote_url_missing",
+        },
+        "Open evidence links and verify logic",
+    )
+
+    assert "Remote TKY skipped: remote_url missing" in text
