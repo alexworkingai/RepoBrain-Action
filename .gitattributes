@@ -1,0 +1,17 @@
+# Normalize text files to LF to reduce Windows/Unix line-ending diffs
+* text=auto eol=lf
+
+# Keep Windows line endings for scripts if needed
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Markdown and code are text
+*.md text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+
+# README: union merge avoids conflict markers (no loss, may duplicate lines visibly)
+README.md merge=union
