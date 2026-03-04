@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .signatures import build_query_signature
-from .topocore_lite import TopoCoreLite
+from .tkya.engine import get_engine
 from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
 from .tky_provider import CandidateChunk, TKYProvider, TKYResult
 
@@ -14,7 +14,8 @@ class LocalTKYProvider(TKYProvider):
     """Local TKY provider stub.
 
     This skeleton intentionally does NOT include proprietary TKY code.
-    In private deployments, replace TopoCoreLite with your internal TopoCore engine.
+    In private deployments, place your original TopoCore file in `repobrain/tkya/vendor/`
+    and switch backend via RB_TKYA_BACKEND=original.
     """
 
     def compress_context(
@@ -24,7 +25,7 @@ class LocalTKYProvider(TKYProvider):
         candidates: list[CandidateChunk],
         limits: dict[str, Any],
     ) -> TKYResult:
-        engine = TopoCoreLite()
+        engine = get_engine()
         task_type = str(limits.get("task_type", "ask")).lower()
         if task_type not in {"ask", "locate", "explain", "review"}:
             task_type = "ask"

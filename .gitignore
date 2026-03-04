@@ -25,3 +25,6 @@ artifacts/
 *.zip
 *.json
 *.egg-info/
+
+# Proprietary TKYA vendor file (local-only, never commit)
+repobrain/tkya/vendor/TopoCore_TCX_v2-CAS.py

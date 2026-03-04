@@ -98,6 +98,15 @@ Remote modes:
 * Remote stub testing uses `.github/workflows/repobrain_remote_stub_test.yml` with `remote_url: http://127.0.0.1:8787/v1/tky/decide`.
 * Production remote should pass `remote_url` (and credentials) via workflow inputs/secrets, not hardcoded in repo workflows.
 
+Original TKYA backend (optional):
+
+* Place proprietary file at: `repobrain/tkya/vendor/TopoCore_TCX_v2-CAS.py`.
+* Enable it with env: `RB_TKYA_BACKEND=original`.
+* Safe default remains `RB_TKYA_BACKEND=lite`.
+* Remote/network path is disabled by default: `RB_TKYA_ALLOW_REMOTE=0`.
+* If you want hard failure when file is missing, set `RB_TKYA_STRICT_ORIGINAL=1`.
+* The proprietary vendor file is ignored by git via `.gitignore`.
+
 Local CLI behavior:
 
 * `scripts/run_ask.py --tky-mode auto|remote` falls back to baseline when remote is down if `tky.remote_fail_open: true`.

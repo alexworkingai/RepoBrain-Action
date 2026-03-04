@@ -9,7 +9,7 @@ from typing import Any
 
 import orjson
 
-from .topocore_lite import TopoCoreLite
+from .tkya.engine import get_engine
 from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
 
 PRIVACY_FORBIDDEN_KEYS = {"text", "snippet", "content"}
@@ -44,7 +44,7 @@ def verify_signature(
 
 
 def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Build stub response via TopoCoreLite engine from a privacy-safe payload."""
+    """Build stub response via selected TKYA engine from a privacy-safe payload."""
     candidates = payload.get("candidates", [])
     if not isinstance(candidates, list):
         candidates = []
@@ -99,7 +99,7 @@ def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         limits={**(limits if isinstance(limits, dict) else {}), "max_sources": max_sources},
         policy={"corelocked": True},
     )
-    decision = TopoCoreLite().decide(req)
+    decision = get_engine().decide(req)
 
     return {
         "schema_version": "1.0",
