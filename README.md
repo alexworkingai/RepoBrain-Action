@@ -116,6 +116,7 @@ Local TKYA backend options:
   * `RB_TKYA_V2_SHIM_PATH=/path/to/TopoCore_TCX_v2-CAS.py`
   * `RB_TKYA_V2_SHIM_STRICT=1`
 * v5 trace is hash-only and versioned (`trace_schema_version=1.1`, policy `1.x`).
+* Detailed permanent architecture doc: `docs/topocore_v5_architecture.md`.
 
 R&D track (R&D-1..R&D-9, local-safe):
 
