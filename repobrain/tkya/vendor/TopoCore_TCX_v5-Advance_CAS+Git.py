@@ -3,8 +3,9 @@
 Phase coverage in this file:
 - Phase 0: contract-compatible deterministic core.
 - Phase 1: codebook/symbolizer/HUK/action routing primitives.
-- Phase 2+: diff-aware ranking, MorseFlow-style gate, verification planner,
-  and hash-only trace packing for GitHub workflows.
+- Phase 2: diff-aware ranking and hash-only trace packing.
+- Phase 4: expanded MorseFlow confidence signals, verification ladder
+  PASS/FAIL/PENDING/NOT_RUN states, and DS graph/vector/path kernels.
 """
 
 from __future__ import annotations
@@ -254,27 +255,190 @@ class DataScienceTopologyKernel:
                 continue
         return out
 
+    @staticmethod
+    def _vectors(values: Any) -> list[list[float]]:
+        if not isinstance(values, list):
+            return []
+        out: list[list[float]] = []
+        for row in values:
+            if not isinstance(row, (list, tuple)):
+                continue
+            vector: list[float] = []
+            for item in row:
+                try:
+                    vector.append(float(item))
+                except (TypeError, ValueError):
+                    vector = []
+                    break
+            if vector:
+                out.append(vector)
+        return out
+
+    @staticmethod
+    def _extract_edges(values: Any) -> list[tuple[str, str]]:
+        if not isinstance(values, list):
+            return []
+        out: list[tuple[str, str]] = []
+        for item in values:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                a = str(item[0]).strip()
+                b = str(item[1]).strip()
+            elif isinstance(item, dict):
+                a = str(item.get("from", item.get("src", ""))).strip()
+                b = str(item.get("to", item.get("dst", ""))).strip()
+            else:
+                continue
+            if not a or not b:
+                continue
+            out.append((a, b))
+        return out
+
+    @staticmethod
+    def _graph_metrics(edges: list[tuple[str, str]]) -> dict[str, float]:
+        if not edges:
+            return {}
+        nodes = {node for edge in edges for node in edge}
+        n = len(nodes)
+        m = len(edges)
+        if n <= 0:
+            return {}
+
+        parent: dict[str, str] = {node: node for node in nodes}
+
+        def find(x: str) -> str:
+            root = x
+            while parent[root] != root:
+                root = parent[root]
+            while parent[x] != x:
+                nxt = parent[x]
+                parent[x] = root
+                x = nxt
+            return root
+
+        def union(a: str, b: str) -> None:
+            ra = find(a)
+            rb = find(b)
+            if ra != rb:
+                parent[rb] = ra
+
+        for a, b in edges:
+            union(a, b)
+
+        components = len({find(node) for node in nodes})
+        avg_degree = (2.0 * m) / float(n)
+        density = 0.0 if n <= 1 else _clip((2.0 * m) / float(n * (n - 1)))
+        return {
+            "graph_nodes": float(n),
+            "graph_edges": float(m),
+            "graph_components": float(components),
+            "graph_avg_degree": float(avg_degree),
+            "graph_density": float(density),
+        }
+
+    @staticmethod
+    def _vector_metrics(vectors: list[list[float]]) -> dict[str, float]:
+        if not vectors:
+            return {}
+        dim = max((len(row) for row in vectors), default=0)
+        if dim <= 0:
+            return {}
+        aligned: list[list[float]] = []
+        for row in vectors:
+            padded = list(row[:dim])
+            if len(padded) < dim:
+                padded.extend([0.0] * (dim - len(padded)))
+            aligned.append(padded)
+        centroid = [statistics.fmean(row[i] for row in aligned) for i in range(dim)]
+
+        def norm(row: list[float]) -> float:
+            return math.sqrt(sum(v * v for v in row))
+
+        dists = []
+        for row in aligned:
+            delta = [row[i] - centroid[i] for i in range(dim)]
+            dists.append(norm(delta))
+        return {
+            "vector_count": float(len(aligned)),
+            "vector_dim": float(dim),
+            "vector_dispersion": float(statistics.fmean(dists) if dists else 0.0),
+            "vector_centroid_norm": float(norm(centroid)),
+        }
+
+    @staticmethod
+    def _path_metrics(values: Any) -> dict[str, float]:
+        if not isinstance(values, list):
+            return {}
+        lengths: list[float] = []
+        for item in values:
+            try:
+                value = float(item)
+            except (TypeError, ValueError):
+                continue
+            if value >= 0:
+                lengths.append(value)
+        if not lengths:
+            return {}
+        mean = statistics.fmean(lengths)
+        stdev = statistics.pstdev(lengths) if len(lengths) > 1 else 0.0
+        return {
+            "path_count": float(len(lengths)),
+            "path_mean": float(mean),
+            "path_max": float(max(lengths)),
+            "path_cv": float(stdev / mean if mean > 1e-12 else 0.0),
+        }
+
     def analyze(self, query: str, policy: dict[str, Any], limits: dict[str, Any]) -> dict[str, Any]:
         ctx = policy.get("analytics_context") or limits.get("analytics_context") or {}
         if not isinstance(ctx, dict):
             ctx = {}
         series = self._series(ctx.get("series", []))
+        vectors = self._vectors(ctx.get("vectors", []))
+        edges = self._extract_edges(ctx.get("graph_edges", ctx.get("edges", [])))
+        paths = ctx.get("path_lengths", [])
         outliers = 0.0
         if len(series) > 1:
             mean = statistics.fmean(series)
             stdev = statistics.pstdev(series)
             if stdev > 1e-12:
                 outliers = sum(1 for v in series if abs((v - mean) / stdev) >= 2.5) / float(len(series))
-        hinted = bool(set(_tokens(query)) & {"topology", "graph", "cluster", "anomaly", "dataset"})
-        metric_count = 0
+        hinted = bool(
+            set(_tokens(query))
+            & {
+                "topology",
+                "graph",
+                "cluster",
+                "anomaly",
+                "dataset",
+                "path",
+                "community",
+            }
+        )
         metrics: dict[str, float] = {}
         if series:
-            metric_count += 3
             metrics["series_count"] = float(len(series))
             metrics["series_mean"] = float(statistics.fmean(series))
             metrics["outlier_ratio"] = float(outliers)
-        complexity = "high" if metric_count >= 6 else "medium" if metric_count >= 3 or hinted else "low"
-        mode = "analytics" if metric_count > 0 or hinted else "generic"
+        metrics.update(self._vector_metrics(vectors))
+        metrics.update(self._graph_metrics(edges))
+        metrics.update(self._path_metrics(paths))
+        metric_count = len(metrics)
+        has_graph = "graph_nodes" in metrics
+        has_vectors = "vector_count" in metrics
+        has_paths = "path_count" in metrics
+        if metric_count >= 10 or metrics.get("graph_nodes", 0.0) >= 500:
+            complexity = "high"
+        elif metric_count >= 4 or hinted:
+            complexity = "medium"
+        else:
+            complexity = "low"
+        if has_graph and has_vectors:
+            mode = "analytics_graph_vector"
+        elif has_graph:
+            mode = "analytics_graph"
+        elif has_vectors or has_paths or series:
+            mode = "analytics"
+        else:
+            mode = "generic"
         return {"mode": mode, "complexity": complexity, "metric_count": metric_count, "metrics": metrics}
 
 
@@ -323,6 +487,13 @@ class MorseFlowGate:
         r"\bAKIA[0-9A-Z]{16}\b",
         r"(?i)\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*['\"]?.{8,}",
     )
+    _WORKFLOW_RISK_PATTERNS = (
+        r"(?i)\bpull_request_target\b",
+        r"(?i)\bpermissions\s*:\s*write-all\b",
+        r"(?i)\bcurl\s+[^|]+\|\s*(sh|bash)\b",
+        r"(?i)\b--no-verify\b",
+        r"(?i)\bset-output\b",
+    )
 
     @classmethod
     def analyze(cls, github_context: GitHubContext, policy: dict[str, Any]) -> dict[str, Any]:
@@ -336,20 +507,56 @@ class MorseFlowGate:
         has_conflict_markers = any(token in patch_blob for token in ("<<<<<<<", "=======", ">>>>>>>"))
         todo_count = len(re.findall(r"(?i)\b(TODO|FIXME)\b", patch_blob))
         has_secret_signal = any(re.search(pattern, patch_blob) for pattern in cls._SECRET_PATTERNS)
+        workflow_risky = any(re.search(pattern, patch_blob) for pattern in cls._WORKFLOW_RISK_PATTERNS)
+        test_disable_signal = bool(
+            re.search(r"(?i)\b(pytest\s+-k\s+not|\bskipif\b|xfail|pragma:\s*no cover)\b", patch_blob)
+        )
+        workflow_files_changed = any(
+            path.startswith(".github/workflows/")
+            for path in github_context.changed_files
+        )
 
         policy_force_verify = _to_bool(policy.get("force_verify"), False)
-        verify_required = bool(policy_force_verify or has_conflict_markers or has_secret_signal)
-        if has_conflict_markers or has_secret_signal:
+        confidence = 0.0
+        signals: list[str] = []
+        if has_conflict_markers:
+            confidence += 0.70
+            signals.append("conflict_markers")
+        if has_secret_signal:
+            confidence += 0.55
+            signals.append("secret_signal")
+        if workflow_risky:
+            confidence += 0.35
+            signals.append("workflow_risky_pattern")
+        if workflow_files_changed:
+            confidence += 0.12
+            signals.append("workflow_files_changed")
+        if test_disable_signal:
+            confidence += 0.20
+            signals.append("test_disable_signal")
+        if todo_count > 0:
+            confidence += min(0.15, 0.03 * todo_count)
+            signals.append("todo_fixme_present")
+        confidence = _clip(confidence)
+        verify_required = bool(policy_force_verify or confidence >= 0.35)
+        if policy_force_verify:
+            signals.append("policy_force_verify")
+
+        if confidence >= 0.55:
             risk = "high"
-        elif todo_count > 0 and github_context.is_pr:
+        elif confidence >= 0.25 or (todo_count > 0 and github_context.is_pr):
             risk = "medium"
         else:
             risk = "low"
         return {
             "risk": risk,
             "verify_required": verify_required,
+            "confidence": round(confidence, 6),
+            "signals": sorted(set(signals)),
             "has_conflict_markers": has_conflict_markers,
             "has_secret_signal": has_secret_signal,
+            "workflow_risky": bool(workflow_risky or workflow_files_changed),
+            "test_disable_signal": test_disable_signal,
             "todo_count": int(todo_count),
         }
 
@@ -360,9 +567,21 @@ class VerificationPlanner:
     _DEFAULT_CHECKS = ("ruff check .", "pytest -q")
 
     @classmethod
-    def plan(cls, *, task: str, policy: dict[str, Any], morse: dict[str, Any]) -> tuple[list[str], list[str]]:
+    def plan(cls, *, task: str, policy: dict[str, Any], morse: dict[str, Any]) -> dict[str, Any]:
         if task != "review":
-            return [], []
+            return {
+                "verified": [],
+                "not_run": [],
+                "failed": [],
+                "pending": [],
+                "ladder": [],
+                "pass_count": 0,
+                "fail_count": 0,
+                "pending_count": 0,
+                "not_run_count": 0,
+                "completeness": 0.0,
+                "strict_pass": False,
+            }
 
         verified: list[str] = ["deterministic_ranking", "phase1_router_applied"]
         observed_pass: set[str] = set()
@@ -387,18 +606,37 @@ class VerificationPlanner:
                     elif state in {"pending", "queued", "running", "in_progress"}:
                         observed_pending.add(name)
 
-        for check in cls._DEFAULT_CHECKS:
-            if check in observed_pass:
-                verified.append(check)
+        required_checks = list(cls._DEFAULT_CHECKS)
+        if isinstance(verification_context, dict):
+            extra_required = verification_context.get("required_checks", [])
+            if isinstance(extra_required, list):
+                for item in extra_required:
+                    name = str(item).strip()
+                    if name:
+                        required_checks.append(name)
+
+        ladder_names = sorted(set(required_checks) | observed_pass | observed_failed | observed_pending)
 
         not_run: list[str] = []
-        for check in cls._DEFAULT_CHECKS:
+        failed_checks: list[str] = []
+        pending_checks: list[str] = []
+        ladder: list[dict[str, str]] = []
+        for check in ladder_names:
             if check in observed_failed:
+                state = "FAIL"
+                failed_checks.append(check)
                 not_run.append(f"{check}:FAILED")
             elif check in observed_pending:
+                state = "PENDING"
+                pending_checks.append(check)
                 not_run.append(f"{check}:PENDING")
             elif check not in observed_pass:
+                state = "NOT_RUN"
                 not_run.append(f"{check}:NOT_RUN")
+            else:
+                state = "PASS"
+                verified.append(check)
+            ladder.append({"check": check, "state": state})
 
         if morse.get("has_conflict_markers"):
             not_run.append("merge_conflicts_resolved:NOT_RUN")
@@ -407,7 +645,26 @@ class VerificationPlanner:
         if morse.get("todo_count", 0):
             not_run.append("todo_cleanup_review:NOT_RUN")
 
-        return sorted(set(verified)), sorted(set(not_run))
+        pass_count = sum(1 for item in ladder if item["state"] == "PASS")
+        fail_count = sum(1 for item in ladder if item["state"] == "FAIL")
+        pending_count = sum(1 for item in ladder if item["state"] == "PENDING")
+        not_run_count = sum(1 for item in ladder if item["state"] == "NOT_RUN")
+        total = max(1, len(ladder))
+        completeness = pass_count / float(total)
+
+        return {
+            "verified": sorted(set(verified)),
+            "not_run": sorted(set(not_run)),
+            "failed": sorted(set(failed_checks)),
+            "pending": sorted(set(pending_checks)),
+            "ladder": ladder,
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+            "pending_count": pending_count,
+            "not_run_count": not_run_count,
+            "completeness": round(completeness, 6),
+            "strict_pass": bool(pass_count == len(ladder) and fail_count == 0 and pending_count == 0),
+        }
 
 
 class TopoCoreTCXv5AdvanceCASGit:
@@ -564,8 +821,11 @@ class TopoCoreTCXv5AdvanceCASGit:
             "morse_hash": _h(
                 (
                     f"{morse.get('risk', 'low')}|"
+                    f"{float(morse.get('confidence', 0.0)):.3f}|"
                     f"{int(bool(morse.get('has_conflict_markers', False)))}|"
                     f"{int(bool(morse.get('has_secret_signal', False)))}|"
+                    f"{int(bool(morse.get('workflow_risky', False)))}|"
+                    f"{int(bool(morse.get('test_disable_signal', False)))}|"
                     f"{int(morse.get('todo_count', 0) or 0)}"
                 ),
                 size=12,
@@ -662,7 +922,7 @@ class TopoCoreTCXv5AdvanceCASGit:
 
         max_sources = max(1, _to_int(limits.get("max_sources"), 8))
         selected_ids = [candidate.chunk_id for candidate, _ in ranked[:max_sources]]
-        verified, not_run = self.verifier.plan(task=task, policy=policy, morse=morse)
+        verification = self.verifier.plan(task=task, policy=policy, morse=morse)
         trace = self._build_hash_only_trace(
             question=question,
             selected_ids=selected_ids,
@@ -700,14 +960,27 @@ class TopoCoreTCXv5AdvanceCASGit:
                 "zigzag_trend": str(zigzag["trend"]),
                 "morse_risk": str(morse["risk"]),
                 "morse_verify_required": bool(morse["verify_required"]),
+                "morse_confidence": float(morse.get("confidence", 0.0)),
+                "morse_signals": list(morse.get("signals", [])),
                 "morse_todo_count": int(morse["todo_count"]),
                 "morse_conflict_markers": bool(morse["has_conflict_markers"]),
                 "morse_secret_signal": bool(morse["has_secret_signal"]),
+                "morse_workflow_risky": bool(morse.get("workflow_risky", False)),
+                "morse_test_disable_signal": bool(morse.get("test_disable_signal", False)),
                 "diff_boosted_candidates": int(rank_meta["boosted_changed_candidates"]),
                 "github_is_pr": bool(github_context.is_pr),
                 "github_changed_files": len(github_context.changed_files),
-                "verified": verified,
-                "not_run": not_run,
+                "verified": list(verification["verified"]),
+                "not_run": list(verification["not_run"]),
+                "verification_failed": list(verification["failed"]),
+                "verification_pending": list(verification["pending"]),
+                "verification_ladder": list(verification["ladder"]),
+                "verification_pass_count": int(verification["pass_count"]),
+                "verification_fail_count": int(verification["fail_count"]),
+                "verification_pending_count": int(verification["pending_count"]),
+                "verification_not_run_count": int(verification["not_run_count"]),
+                "verification_completeness": float(verification["completeness"]),
+                "verification_strict_pass": bool(verification["strict_pass"]),
                 "trace": trace,
             },
             security=sec,

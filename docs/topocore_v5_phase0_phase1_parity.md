@@ -1,4 +1,4 @@
-# TopoCore v5 Parity (Phase 0 + Phase 1 + Phase 2 Start)
+# TopoCore v5 Parity (Phase 0 + Phase 1 + Phase 2 + Phase 4)
 
 This document tracks parity targets between:
 
@@ -25,14 +25,15 @@ This document tracks parity targets between:
 | HUK fast gate | Yes | Yes | Phase 1 restored |
 | Action router (`NARROW/VERIFY/...`) | Yes | Yes | Phase 1 restored |
 | Deterministic selection/ranking | Partial | Yes | Improved in v5 |
-| Review verification flags | Yes (ladder in adapter) | Yes (`verified/not_run`) | Partial parity |
+| Review verification flags | Yes (ladder in adapter) | Yes (`PASS/FAIL/PENDING/NOT_RUN`) | Phase 4 expanded |
 | GitHub diff-aware hints | No explicit engine layer | Yes (file/range boosts) | Phase 2 started |
-| ZigZag/MorseFlow | Yes | Yes (deterministic lite gate) | Phase 2 started |
+| ZigZag/MorseFlow | Yes | Yes (confidence + workflow risk signals) | Phase 4 expanded |
 | Blockchain adapter | Yes | No | Pending |
-| Verification adapter full ladder | Yes | Partial (planner metadata) | In progress |
+| Verification adapter full ladder | Yes | Partial (planner + ladder stats) | In progress |
 | Codegen adapter | Yes | No | Pending |
 | Crypto engine | Yes | No | Pending |
-| Trace subsystem | Yes | No dedicated object | Pending |
+| Trace subsystem | Yes | Yes (hash-only trace object) | Phase 4 expanded |
+| DS/BigAnalytics kernels | Partial | Yes (series + vector + graph + path metrics) | Phase 4 expanded |
 
 ## Runtime signals added in v5
 
@@ -51,14 +52,25 @@ This document tracks parity targets between:
 - `zigzag_trend`
 - `morse_risk`
 - `morse_verify_required`
+- `morse_confidence`
+- `morse_signals`
+- `morse_workflow_risky`
+- `morse_test_disable_signal`
 - `diff_boosted_candidates`
 - `trace` (hash-only)
 - `verified`
 - `not_run`
+- `verification_ladder`
+- `verification_pass_count`
+- `verification_fail_count`
+- `verification_pending_count`
+- `verification_not_run_count`
+- `verification_completeness`
+- `verification_strict_pass`
 
 ## Immediate next parity targets
 
-1. Expand MorseFlow signals with richer PR patch heuristics and confidence weights.
-2. Add adapter layer for deeper verification ladder states (PASS/FAIL/NOT_RUN mapping).
-3. Add advanced topology kernels for graph/path workload profiles.
-4. Add compatibility shim for optional v2 specialized modules where needed.
+1. Add optional compatibility shim for selected v2 specialized adapters (without hard dependency).
+2. Extend verification planner with branch-protection profiles and required CI sets by task type.
+3. Add deeper topology modes for temporal graphs and anomaly windows.
+4. Keep hash-only trace stable-token schema versioned for downstream tooling.
