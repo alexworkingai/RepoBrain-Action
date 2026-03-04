@@ -117,6 +117,15 @@ Local TKYA backend options:
   * `RB_TKYA_V2_SHIM_STRICT=1`
 * v5 trace is hash-only and versioned (`trace_schema_version=1.1`, policy `1.x`).
 
+R&D track (R&D-1..R&D-9, local-safe):
+
+* `repobrain/rd_codegen.py`: deterministic template-first codegen.
+* `repobrain/rd_validation.py`: static policy validation gates.
+* `repobrain/rd_crypto.py`: HMAC signing helpers (no secrets in repo).
+* `repobrain/rd_blockchain.py`: in-memory attestation chain adapter.
+* `repobrain/rd_rollout.py`: canary helpers for controlled enablement.
+* `repobrain/rd_orchestration.py`: `generate -> validate -> sign -> attest` pipeline.
+
 Local CLI behavior:
 
 * `scripts/run_ask.py --tky-mode auto|remote` falls back to baseline when remote is down if `tky.remote_fail_open: true`.
