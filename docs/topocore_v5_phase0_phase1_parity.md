@@ -1,4 +1,4 @@
-# TopoCore v5 Parity (Phase 0 + Phase 1)
+# TopoCore v5 Parity (Phase 0 + Phase 1 + Phase 2 Start)
 
 This document tracks parity targets between:
 
@@ -26,10 +26,10 @@ This document tracks parity targets between:
 | Action router (`NARROW/VERIFY/...`) | Yes | Yes | Phase 1 restored |
 | Deterministic selection/ranking | Partial | Yes | Improved in v5 |
 | Review verification flags | Yes (ladder in adapter) | Yes (`verified/not_run`) | Partial parity |
-| GitHub diff-aware hints | No explicit engine layer | Planned in next increment | Pending |
-| ZigZag/MorseFlow | Yes | No | Pending |
+| GitHub diff-aware hints | No explicit engine layer | Yes (file/range boosts) | Phase 2 started |
+| ZigZag/MorseFlow | Yes | Yes (deterministic lite gate) | Phase 2 started |
 | Blockchain adapter | Yes | No | Pending |
-| Verification adapter full ladder | Yes | No (metadata only) | Pending |
+| Verification adapter full ladder | Yes | Partial (planner metadata) | In progress |
 | Codegen adapter | Yes | No | Pending |
 | Crypto engine | Yes | No | Pending |
 | Trace subsystem | Yes | No dedicated object | Pending |
@@ -46,13 +46,19 @@ This document tracks parity targets between:
 - `topology_mode`
 - `topology_complexity`
 - `topology_metric_count`
+- `zigzag_turning_points`
+- `zigzag_volatility`
+- `zigzag_trend`
+- `morse_risk`
+- `morse_verify_required`
+- `diff_boosted_candidates`
+- `trace` (hash-only)
 - `verified`
 - `not_run`
 
 ## Immediate next parity targets
 
-1. Add ZigZag structural analyzer and connect it to `decide`.
-2. Add `MorseFlow` conflict/merge gate hooks.
-3. Add minimal `VerificationAdapter` planner (without external execution).
-4. Add PR diff-aware scoring layer in engine (file + line overlap).
-5. Add hash-only trace object in v5.
+1. Expand MorseFlow signals with richer PR patch heuristics and confidence weights.
+2. Add adapter layer for deeper verification ladder states (PASS/FAIL/NOT_RUN mapping).
+3. Add advanced topology kernels for graph/path workload profiles.
+4. Add compatibility shim for optional v2 specialized modules where needed.

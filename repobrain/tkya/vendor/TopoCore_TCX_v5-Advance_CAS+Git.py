@@ -1,4 +1,11 @@
-"""TopoCore TCX v5 Advance CAS+Git (Phase 0 + Phase 1, standalone)."""
+"""TopoCore TCX v5 Advance CAS+Git.
+
+Phase coverage in this file:
+- Phase 0: contract-compatible deterministic core.
+- Phase 1: codebook/symbolizer/HUK/action routing primitives.
+- Phase 2+: diff-aware ranking, MorseFlow-style gate, verification planner,
+  and hash-only trace packing for GitHub workflows.
+"""
 
 from __future__ import annotations
 
@@ -115,6 +122,20 @@ def _h(value: str, size: int = 10) -> str:
     return hashlib.blake2s(value.encode("utf-8"), digest_size=size).hexdigest()
 
 
+def _path_tokens(path: str) -> list[str]:
+    normalized = str(path or "").replace("\\", "/").lower()
+    return [token for token in re.split(r"[\/._\-]+", normalized) if token]
+
+
+def _to_int_tuple(value: Any) -> tuple[int, int] | None:
+    if isinstance(value, (list, tuple)) and len(value) >= 2:
+        a = _to_int(value[0], -1)
+        b = _to_int(value[1], -1)
+        if a >= 0 and b >= 0:
+            return min(a, b), max(a, b)
+    return None
+
+
 @dataclass(frozen=True)
 class TopoCoreResponse:
     summary: str
@@ -123,6 +144,14 @@ class TopoCoreResponse:
     risks: list[str]
     topo_rationale: str | None = None
     trace_hashes: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class GitHubContext:
+    is_pr: bool
+    changed_files: tuple[str, ...]
+    changed_ranges: dict[str, tuple[tuple[int, int], ...]]
+    diff_hunks_hash: str
 
 
 @dataclass
@@ -249,6 +278,138 @@ class DataScienceTopologyKernel:
         return {"mode": mode, "complexity": complexity, "metric_count": metric_count, "metrics": metrics}
 
 
+class ZigZagAnalyzer:
+    """Signal-shape analyzer used to tune route confidence without randomness."""
+
+    @staticmethod
+    def analyze(values: list[float]) -> dict[str, Any]:
+        if len(values) < 2:
+            return {"turning_points": 0, "volatility": 0.0, "trend": "flat"}
+
+        deltas = [values[i + 1] - values[i] for i in range(len(values) - 1)]
+        signs = [1 if d > 1e-12 else -1 if d < -1e-12 else 0 for d in deltas]
+
+        turning_points = 0
+        last_sign = 0
+        for sign in signs:
+            if sign == 0:
+                continue
+            if last_sign != 0 and sign != last_sign:
+                turning_points += 1
+            last_sign = sign
+
+        slope = values[-1] - values[0]
+        if abs(slope) < 1e-12:
+            trend = "flat"
+        elif slope > 0:
+            trend = "up"
+        else:
+            trend = "down"
+
+        volatility = statistics.fmean(abs(d) for d in deltas)
+        return {
+            "turning_points": int(turning_points),
+            "volatility": round(float(volatility), 6),
+            "trend": trend,
+        }
+
+
+class MorseFlowGate:
+    """Diff-signal gate used to enforce safe verification routing in PR contexts."""
+
+    _SECRET_PATTERNS = (
+        r"-----BEGIN (?:RSA )?PRIVATE KEY-----",
+        r"\bghp_[A-Za-z0-9]{20,}\b",
+        r"\bAKIA[0-9A-Z]{16}\b",
+        r"(?i)\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*['\"]?.{8,}",
+    )
+
+    @classmethod
+    def analyze(cls, github_context: GitHubContext, policy: dict[str, Any]) -> dict[str, Any]:
+        payload = policy.get("github_context", {})
+        hunks: list[str] = []
+        if isinstance(payload, dict):
+            raw_hunks = payload.get("diff_hunks", [])
+            if isinstance(raw_hunks, list):
+                hunks = [str(item) for item in raw_hunks if isinstance(item, str)]
+        patch_blob = "\n".join(hunks)
+        has_conflict_markers = any(token in patch_blob for token in ("<<<<<<<", "=======", ">>>>>>>"))
+        todo_count = len(re.findall(r"(?i)\b(TODO|FIXME)\b", patch_blob))
+        has_secret_signal = any(re.search(pattern, patch_blob) for pattern in cls._SECRET_PATTERNS)
+
+        policy_force_verify = _to_bool(policy.get("force_verify"), False)
+        verify_required = bool(policy_force_verify or has_conflict_markers or has_secret_signal)
+        if has_conflict_markers or has_secret_signal:
+            risk = "high"
+        elif todo_count > 0 and github_context.is_pr:
+            risk = "medium"
+        else:
+            risk = "low"
+        return {
+            "risk": risk,
+            "verify_required": verify_required,
+            "has_conflict_markers": has_conflict_markers,
+            "has_secret_signal": has_secret_signal,
+            "todo_count": int(todo_count),
+        }
+
+
+class VerificationPlanner:
+    """Planner that marks what checks were truly observed vs NOT_RUN."""
+
+    _DEFAULT_CHECKS = ("ruff check .", "pytest -q")
+
+    @classmethod
+    def plan(cls, *, task: str, policy: dict[str, Any], morse: dict[str, Any]) -> tuple[list[str], list[str]]:
+        if task != "review":
+            return [], []
+
+        verified: list[str] = ["deterministic_ranking", "phase1_router_applied"]
+        observed_pass: set[str] = set()
+        observed_failed: set[str] = set()
+        observed_pending: set[str] = set()
+
+        verification_context = policy.get("verification_context", {})
+        if isinstance(verification_context, dict):
+            checks = verification_context.get("checks", [])
+            if isinstance(checks, list):
+                for item in checks:
+                    if not isinstance(item, dict):
+                        continue
+                    name = str(item.get("name", "")).strip()
+                    state = str(item.get("status", "")).strip().lower()
+                    if not name:
+                        continue
+                    if state in {"pass", "passed", "success"}:
+                        observed_pass.add(name)
+                    elif state in {"fail", "failed", "failure"}:
+                        observed_failed.add(name)
+                    elif state in {"pending", "queued", "running", "in_progress"}:
+                        observed_pending.add(name)
+
+        for check in cls._DEFAULT_CHECKS:
+            if check in observed_pass:
+                verified.append(check)
+
+        not_run: list[str] = []
+        for check in cls._DEFAULT_CHECKS:
+            if check in observed_failed:
+                not_run.append(f"{check}:FAILED")
+            elif check in observed_pending:
+                not_run.append(f"{check}:PENDING")
+            elif check not in observed_pass:
+                not_run.append(f"{check}:NOT_RUN")
+
+        if morse.get("has_conflict_markers"):
+            not_run.append("merge_conflicts_resolved:NOT_RUN")
+        if morse.get("has_secret_signal"):
+            not_run.append("manual_security_review:NOT_RUN")
+        if morse.get("todo_count", 0):
+            not_run.append("todo_cleanup_review:NOT_RUN")
+
+        return sorted(set(verified)), sorted(set(not_run))
+
+
 class TopoCoreTCXv5AdvanceCASGit:
     def __init__(self) -> None:
         self.book_id = "v5-default"
@@ -258,6 +419,158 @@ class TopoCoreTCXv5AdvanceCASGit:
         self.huk = HUKCore(self.symbolizer)
         self.router = TopoRoute()
         self.kernel = DataScienceTopologyKernel()
+        self.zigzag = ZigZagAnalyzer()
+        self.morse = MorseFlowGate()
+        self.verifier = VerificationPlanner()
+
+    @staticmethod
+    def _normalize_github_context(policy: dict[str, Any], limits: dict[str, Any]) -> GitHubContext:
+        raw = policy.get("github_context") or limits.get("github_context") or {}
+        if not isinstance(raw, dict):
+            raw = {}
+
+        is_pr = _to_bool(raw.get("is_pr"), False)
+
+        changed_files_raw = raw.get("changed_files", [])
+        changed_files: list[str] = []
+        if isinstance(changed_files_raw, list):
+            for item in changed_files_raw:
+                path = str(item or "").replace("\\", "/").strip()
+                if path:
+                    changed_files.append(path)
+
+        ranges_map: dict[str, list[tuple[int, int]]] = {}
+        changed_ranges_raw = raw.get("changed_ranges", {})
+        if isinstance(changed_ranges_raw, dict):
+            for path_value, segments in changed_ranges_raw.items():
+                path = str(path_value or "").replace("\\", "/").strip()
+                if not path:
+                    continue
+                if not isinstance(segments, list):
+                    continue
+                for segment in segments:
+                    pair = _to_int_tuple(segment)
+                    if pair is None:
+                        continue
+                    ranges_map.setdefault(path, []).append(pair)
+
+        changed_lines_raw = raw.get("changed_lines", [])
+        if isinstance(changed_lines_raw, list):
+            for item in changed_lines_raw:
+                if not isinstance(item, dict):
+                    continue
+                path = str(item.get("file_path", "") or "").replace("\\", "/").strip()
+                if not path:
+                    continue
+                start = _to_int(item.get("line_start"), -1)
+                end = _to_int(item.get("line_end"), -1)
+                if start >= 0 and end >= 0:
+                    ranges_map.setdefault(path, []).append((min(start, end), max(start, end)))
+
+        hunks = raw.get("diff_hunks", [])
+        if not isinstance(hunks, list):
+            hunks = []
+        hunks_norm = [str(item) for item in hunks if isinstance(item, str)]
+        diff_hunks_hash = _h("|".join(_h(item, size=8) for item in hunks_norm), size=12)
+
+        normalized_ranges = {
+            path: tuple(sorted(set(segments)))
+            for path, segments in ranges_map.items()
+        }
+        return GitHubContext(
+            is_pr=is_pr,
+            changed_files=tuple(sorted(set(changed_files))),
+            changed_ranges=normalized_ranges,
+            diff_hunks_hash=diff_hunks_hash,
+        )
+
+    @staticmethod
+    def _line_overlap_score(
+        *,
+        candidate_start: int | None,
+        candidate_end: int | None,
+        ranges: tuple[tuple[int, int], ...],
+    ) -> float:
+        if candidate_start is None or candidate_end is None or not ranges:
+            return 0.0
+        c0 = min(candidate_start, candidate_end)
+        c1 = max(candidate_start, candidate_end)
+        if c1 < c0:
+            return 0.0
+        c_len = max(1, c1 - c0 + 1)
+        best = 0.0
+        for r0, r1 in ranges:
+            inter = max(0, min(c1, r1) - max(c0, r0) + 1)
+            if inter <= 0:
+                continue
+            score = inter / float(c_len)
+            if score > best:
+                best = score
+        return _clip(best)
+
+    def _rank_candidates(
+        self,
+        candidates: list[EngineCandidate],
+        github_context: GitHubContext,
+    ) -> tuple[list[tuple[EngineCandidate, float]], dict[str, Any]]:
+        changed_files = set(github_context.changed_files)
+        ranked: list[tuple[EngineCandidate, float]] = []
+        boosted_changed = 0
+        for candidate in candidates:
+            base = _clip(float(candidate.score_local))
+            path = str(candidate.file_path or "").replace("\\", "/")
+            path_lower = path.lower()
+            file_boost = 0.08 if path in changed_files else 0.0
+            line_boost = 0.0
+            if path in github_context.changed_ranges:
+                line_boost = 0.12 * self._line_overlap_score(
+                    candidate_start=candidate.line_start,
+                    candidate_end=candidate.line_end,
+                    ranges=github_context.changed_ranges[path],
+                )
+            if file_boost > 0 or line_boost > 0:
+                boosted_changed += 1
+            pr_penalty = 0.01 if github_context.is_pr and changed_files and path not in changed_files else 0.0
+            path_prior = 0.01 if path_lower.startswith("repobrain/") or path_lower.startswith("src/") else 0.0
+            adjusted = _clip(base + file_boost + line_boost + path_prior - pr_penalty)
+            ranked.append((candidate, adjusted))
+        ranked.sort(key=lambda item: (-item[1], str(item[0].file_path or ""), item[0].chunk_id))
+        return ranked, {"boosted_changed_candidates": boosted_changed}
+
+    @staticmethod
+    def _build_hash_only_trace(
+        *,
+        question: str,
+        selected_ids: list[str],
+        github_context: GitHubContext,
+        zigzag: dict[str, Any],
+        morse: dict[str, Any],
+        ranked: list[tuple[EngineCandidate, float]],
+    ) -> dict[str, Any]:
+        selected_join = ",".join(selected_ids[:32])
+        ranking_tokens = [f"{item[0].chunk_id}:{item[1]:.4f}" for item in ranked[:20]]
+        return {
+            "query_hash": _h(question, size=12),
+            "selected_hash": _h(selected_join, size=12),
+            "ranking_hash": _h("|".join(ranking_tokens), size=12),
+            "github_scope_hash": _h(
+                ",".join(github_context.changed_files) + "|" + github_context.diff_hunks_hash,
+                size=12,
+            ),
+            "zigzag_hash": _h(
+                f"{zigzag.get('turning_points', 0)}|{zigzag.get('volatility', 0.0)}|{zigzag.get('trend', 'flat')}",
+                size=12,
+            ),
+            "morse_hash": _h(
+                (
+                    f"{morse.get('risk', 'low')}|"
+                    f"{int(bool(morse.get('has_conflict_markers', False)))}|"
+                    f"{int(bool(morse.get('has_secret_signal', False)))}|"
+                    f"{int(morse.get('todo_count', 0) or 0)}"
+                ),
+                size=12,
+            ),
+        }
 
     def _security(self, text: str, policy: dict[str, Any]) -> EngineSecurity:
         blocked = False
@@ -294,12 +607,19 @@ class TopoCoreTCXv5AdvanceCASGit:
         question = str(req.query.text or "")
         limits = dict(req.limits or {})
         policy = dict(req.policy or {})
+        github_context = self._normalize_github_context(policy, limits)
         sec = self._security(question, policy)
         if sec.blocked:
             return EngineDecision(
                 route="REFUSE",
                 selected_chunk_ids=[],
-                compression_stats={"retrieved": len(req.candidates), "selected": 0, "phase1_action": "REFUSE"},
+                compression_stats={
+                    "retrieved": len(req.candidates),
+                    "selected": 0,
+                    "phase1_action": "REFUSE",
+                    "phase1_params": {"reason": "security_block"},
+                    "github_is_pr": github_context.is_pr,
+                },
                 security=sec,
                 rationale="CoreLocked v5: blocked by security policy.",
                 stable_tokens=[],
@@ -307,33 +627,59 @@ class TopoCoreTCXv5AdvanceCASGit:
 
         topology = self.kernel.analyze(question, policy, limits)
         huk = self.huk.fast_gate(question, book_id=self.book_id)
-        risk_high = topology["complexity"] == "high"
+        ranked, rank_meta = self._rank_candidates(list(req.candidates), github_context)
+        ranked_scores = [score for _, score in ranked]
+        top_score = float(ranked_scores[0]) if ranked_scores else 0.0
+        zigzag = self.zigzag.analyze(ranked_scores[:12] if ranked_scores else [top_score])
+        morse = self.morse.analyze(github_context, policy)
+
+        risk_high = topology["complexity"] == "high" or morse.get("risk") == "high"
         phase1 = self.router.decide(score=float(huk["score"]), risk_high=risk_high, task_type=task)
+        if morse.get("verify_required"):
+            phase1 = {
+                "action": Action.VERIFY.value,
+                "params": {
+                    "verification": "morse_gate",
+                    "reason": "conflict_or_secret_signal",
+                },
+            }
         action = str(phase1["action"])
 
-        ranked = sorted(
-            list(req.candidates),
-            key=lambda c: (-float(c.score_local), str(c.file_path or ""), c.chunk_id),
-        )
-        top_score = float(ranked[0].score_local) if ranked else 0.0
         min_fast = _to_float(limits.get("min_score_fast"), 0.05)
 
         if task == "review":
             route = "REVIEW"
-        elif action == Action.VERIFY.value:
+        elif action == Action.VERIFY.value and morse.get("verify_required"):
+            route = "DEEP"
+        elif action == Action.VERIFY.value and risk_high:
             route = "DEEP"
         elif action == Action.NARROW_RETRIEVAL.value and top_score >= min_fast:
             route = "FAST"
-        elif top_score < min_fast or topology["complexity"] == "high":
+        elif top_score < min_fast or topology["complexity"] == "high" or zigzag["turning_points"] >= 3:
             route = "DEEP"
         else:
             route = "FAST"
 
         max_sources = max(1, _to_int(limits.get("max_sources"), 8))
-        selected_ids = [c.chunk_id for c in ranked[:max_sources]]
-        stable = sorted({_h(question), _h(",".join(selected_ids[:16])), str(huk["bars_hash"])})[:12]
-        verified = ["deterministic_ranking", "phase1_router_applied"] if task == "review" else []
-        not_run = ["external_ci_checks", "runtime_integration_tests"] if task == "review" else []
+        selected_ids = [candidate.chunk_id for candidate, _ in ranked[:max_sources]]
+        verified, not_run = self.verifier.plan(task=task, policy=policy, morse=morse)
+        trace = self._build_hash_only_trace(
+            question=question,
+            selected_ids=selected_ids,
+            github_context=github_context,
+            zigzag=zigzag,
+            morse=morse,
+            ranked=ranked,
+        )
+        stable = sorted(
+            {
+                _h(question, size=8),
+                _h(",".join(selected_ids[:16]), size=8),
+                str(huk["bars_hash"]),
+                str(trace["ranking_hash"]),
+                str(trace["github_scope_hash"]),
+            }
+        )[:12]
         return EngineDecision(
             route=route,
             selected_chunk_ids=selected_ids,
@@ -349,8 +695,20 @@ class TopoCoreTCXv5AdvanceCASGit:
                 "topology_mode": topology["mode"],
                 "topology_complexity": topology["complexity"],
                 "topology_metric_count": topology["metric_count"],
+                "zigzag_turning_points": int(zigzag["turning_points"]),
+                "zigzag_volatility": float(zigzag["volatility"]),
+                "zigzag_trend": str(zigzag["trend"]),
+                "morse_risk": str(morse["risk"]),
+                "morse_verify_required": bool(morse["verify_required"]),
+                "morse_todo_count": int(morse["todo_count"]),
+                "morse_conflict_markers": bool(morse["has_conflict_markers"]),
+                "morse_secret_signal": bool(morse["has_secret_signal"]),
+                "diff_boosted_candidates": int(rank_meta["boosted_changed_candidates"]),
+                "github_is_pr": bool(github_context.is_pr),
+                "github_changed_files": len(github_context.changed_files),
                 "verified": verified,
                 "not_run": not_run,
+                "trace": trace,
             },
             security=sec,
             rationale=f"CoreLocked v5: {route} via Phase1 action {action}.",
@@ -360,7 +718,15 @@ class TopoCoreTCXv5AdvanceCASGit:
     def run_topological_calculation(self, payload: dict[str, Any]) -> dict[str, Any]:
         policy = {"analytics_context": payload if isinstance(payload, dict) else {}}
         result = self.kernel.analyze("topology", policy, {})
-        return {"mode": result["mode"], "complexity": result["complexity"], "metrics": result["metrics"]}
+        series = self.kernel._series((payload or {}).get("series", [])) if isinstance(payload, dict) else []
+        zigzag = self.zigzag.analyze(series[:12] if series else [0.0])
+        return {
+            "mode": result["mode"],
+            "complexity": result["complexity"],
+            "metrics": result["metrics"],
+            "zigzag": zigzag,
+            "signature": _h(str(result["metrics"]), size=12),
+        }
 
     def handle_request(self, user_text: str, **_kwargs: Any) -> TopoCoreResponse:
         sec = self._security(user_text, {})
@@ -390,4 +756,3 @@ class TopoCoreTCXv5AdvanceCASGit:
 
 TopoCoreTCXv2CAS = TopoCoreTCXv5AdvanceCASGit
 TopoCoreTCXv5AdvanceCAS = TopoCoreTCXv5AdvanceCASGit
-
