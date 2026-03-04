@@ -37,6 +37,9 @@ This document defines the lightweight R&D path added to RepoBrain without extra 
 * No remote/network calls are required for this track.
 * Diagnostics are hash-only and numeric; no raw patches/chunks are emitted.
 * Validation blocks risky primitives (`eval/exec/os.system/subprocess`) by default.
+* `github_flow` audit contains a normalized `rd` block:
+  `rd_used`, `rd_status`, `rd_template_id`, `rd_intent_hash`, `rd_policy_hash`,
+  signature/attestation flags, and counters (no raw generated code).
 
 ## Local Dev Commands
 

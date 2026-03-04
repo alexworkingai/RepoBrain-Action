@@ -129,6 +129,7 @@ R&D track (R&D-1..R&D-9, local-safe):
 * Optional signing/attestation flags:
   * `RB_TKYA_RD_SIGNING_SECRET=<secret>` (not stored in repo)
   * `RB_TKYA_RD_ENABLE_CHAIN=1`
+* Audit now includes hash-only `rd` diagnostics (`rd_status`, signature/attestation flags, counters).
 
 Local CLI behavior:
 

@@ -64,6 +64,22 @@ def _build_remote_skip_hint(audit_summary: dict[str, object]) -> str | None:
     return None
 
 
+def _build_rd_status_line(audit_summary: dict[str, object]) -> str:
+    raw = audit_summary.get("rd", {})
+    if isinstance(raw, dict):
+        rd_status = str(raw.get("rd_status", "n/a") or "n/a").strip().lower()
+        rd_used = bool(raw.get("rd_used", False))
+    else:
+        rd_status = str(audit_summary.get("rd_status", "n/a") or "n/a").strip().lower()
+        rd_used = bool(audit_summary.get("rd_used", False))
+
+    if rd_status in {"ok", "blocked_validation", "disabled", "error", "unavailable"}:
+        return f"RD: {rd_status}"
+    if rd_used:
+        return "RD: active"
+    return "RD: n/a"
+
+
 def _format_evidence_lines(
     evidence: list[EvidenceItem],
     *,
@@ -102,6 +118,7 @@ def format_github_comment(
             "",
             "### 🧾 Audit summary",
             f"- {_build_tky_status_line(audit_summary)}",
+            f"- {_build_rd_status_line(audit_summary)}",
             *([f"- {remote_hint}"] if remote_hint else []),
             *_format_audit_summary(audit_summary),
             "",
@@ -125,6 +142,7 @@ def format_github_comment(
             "",
             "### 🧾 Audit summary",
             f"- {_build_tky_status_line(audit_summary)}",
+            f"- {_build_rd_status_line(audit_summary)}",
             *([f"- {remote_hint}"] if remote_hint else []),
             *_format_audit_summary(audit_summary),
             "",

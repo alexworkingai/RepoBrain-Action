@@ -413,6 +413,56 @@ def _local_engine_name_from_result(result: Any) -> str | None:
     return text or None
 
 
+def _default_rd_summary(*, status: str = "n/a") -> dict[str, Any]:
+    return {
+        "rd_used": False,
+        "rd_status": status,
+        "rd_template_id": "n/a",
+        "rd_intent_hash": "n/a",
+        "rd_policy_hash": "n/a",
+        "rd_has_signature": False,
+        "rd_has_attestation": False,
+        "rd_error_count": 0,
+        "rd_warning_count": 0,
+        "rd_record_hash": "n/a",
+    }
+
+
+def _extract_rd_summary_from_result(result: Any) -> dict[str, Any]:
+    tky = getattr(result, "tky", None)
+    compression_stats = getattr(tky, "compression_stats", {})
+    if not isinstance(compression_stats, dict):
+        return _default_rd_summary(status="n/a")
+    summary = _default_rd_summary(status="n/a")
+    for key in (
+        "rd_used",
+        "rd_status",
+        "rd_template_id",
+        "rd_intent_hash",
+        "rd_policy_hash",
+        "rd_has_signature",
+        "rd_has_attestation",
+        "rd_error_count",
+        "rd_warning_count",
+        "rd_record_hash",
+    ):
+        if key in compression_stats:
+            summary[key] = compression_stats[key]
+    return summary
+
+
+def _extract_rd_summary_from_audit_summary(audit_summary: dict[str, Any]) -> dict[str, Any]:
+    raw = audit_summary.get("rd", {})
+    if isinstance(raw, dict) and raw:
+        return dict(raw)
+
+    summary = _default_rd_summary(status="n/a")
+    for key in summary:
+        if key in audit_summary:
+            summary[key] = audit_summary[key]
+    return summary
+
+
 def decide_remote_usage(
     *,
     cfg: RepoBrainConfig,
@@ -839,6 +889,7 @@ def run_qa_two_pass(
     if pass2_top_score is not None:
         audit_extra["pass2.top_score"] = round(pass2_top_score, 6)
         audit_extra["top_score_pass2"] = round(pass2_top_score, 6)
+    audit_extra["rd"] = _extract_rd_summary_from_result(final_result)
 
     if tky_mode_requested == "remote":
         audit_extra["tky_mode_requested"] = "remote"
@@ -1005,6 +1056,7 @@ def _build_qa_markdown(
     audit_summary["tky_mode_used"] = str(
         audit_summary.get("tky_mode_used", effective_tky_mode or "baseline")
     )
+    audit_summary["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
     if "tky_engine" not in audit_summary:
         audit_summary["tky_engine"] = _provider_engine_name(provider)
     evidence_out = result.evidence
@@ -1037,6 +1089,7 @@ def _build_qa_markdown(
         )
         audit["tky_remote_status"] = audit_summary.get("tky_remote_status", None)
         audit["tky_fallback_reason"] = str(audit_summary.get("tky_fallback_reason", "n/a") or "n/a")
+        audit["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
 
     t0 = time.perf_counter()
     body = format_github_comment(
