@@ -125,6 +125,10 @@ R&D track (R&D-1..R&D-9, local-safe):
 * `repobrain/rd_blockchain.py`: in-memory attestation chain adapter.
 * `repobrain/rd_rollout.py`: canary helpers for controlled enablement.
 * `repobrain/rd_orchestration.py`: `generate -> validate -> sign -> attest` pipeline.
+* TopoCore v5 integration is opt-in: set `RB_TKYA_ENABLE_RD_PIPELINE=1`.
+* Optional signing/attestation flags:
+  * `RB_TKYA_RD_SIGNING_SECRET=<secret>` (not stored in repo)
+  * `RB_TKYA_RD_ENABLE_CHAIN=1`
 
 Local CLI behavior:
 

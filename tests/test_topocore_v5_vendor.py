@@ -523,3 +523,29 @@ def test_v5_perf_budgets_truncate_candidates_and_series() -> None:
     topology_perf = stats.get("topology_perf", {})
     assert isinstance(topology_perf, dict)
     assert topology_perf.get("series_truncated", 0) >= 20
+
+
+def test_v5_rd_pipeline_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RB_TKYA_ENABLE_RD_PIPELINE", raising=False)
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    decision = core.decide(_sample_request("ask"))
+    stats = decision.compression_stats
+    assert stats.get("rd_used") is False
+    assert stats.get("rd_status") == "disabled"
+
+
+def test_v5_rd_pipeline_enabled_produces_hash_only_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RB_TKYA_ENABLE_RD_PIPELINE", "1")
+    monkeypatch.delenv("RB_TKYA_RD_SIGNING_SECRET", raising=False)
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    decision = core.decide(_sample_request("ask"))
+    stats = decision.compression_stats
+    assert stats.get("rd_used") is True
+    assert stats.get("rd_status") == "ok"
+    assert stats.get("rd_template_id") in {"python_function", "python_dataclass", "pytest_test"}
+    assert isinstance(stats.get("rd_intent_hash"), str)
+    assert "def " not in str(stats)
