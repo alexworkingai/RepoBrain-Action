@@ -7,6 +7,7 @@ Phase coverage in this file:
 - Phase 4: expanded MorseFlow confidence signals, verification ladder
   PASS/FAIL/PENDING/NOT_RUN states, and DS graph/vector/path kernels.
 - Phase 5: optional v2 compatibility shim and branch-protection verification profiles.
+- Phase 6: explicit shim adapter registry and versioned trace schema.
 """
 
 from __future__ import annotations
@@ -88,6 +89,7 @@ _SECURITY_MARKERS = (
     "dump",
     "reveal",
 )
+TRACE_SCHEMA_VERSION = "1.1"
 
 
 def _to_bool(v: Any, default: bool = False) -> bool:
@@ -165,11 +167,11 @@ class V2CompatibilityShim:
     It never exposes raw outputs from v2 methods; all diagnostics are hash-only.
     """
 
-    _KNOWN_METHODS = (
-        "run_topological_calculation",
-        "handle_request",
-        "remote_call",
-    )
+    _ADAPTER_REGISTRY = {
+        "topology_calc": "run_topological_calculation",
+        "request_entry": "handle_request",
+        "remote_entry": "remote_call",
+    }
 
     def __init__(self) -> None:
         self.enabled = _to_bool(os.getenv("RB_TKYA_ENABLE_V2_SHIM", "0"))
@@ -183,6 +185,8 @@ class V2CompatibilityShim:
         self._core: Any | None = None
         self._state_reason = "disabled"
         self._caps: list[str] = []
+        self._adapters: list[str] = []
+        self._adapter_methods: dict[str, Any] = {}
         if self.enabled:
             self._load()
 
@@ -203,46 +207,157 @@ class V2CompatibilityShim:
             if core_cls is None:
                 raise RuntimeError("v2 module missing TopoCoreTCXv2CAS.")
             self._core = core_cls()
-            self._caps = sorted(
-                method
-                for method in self._KNOWN_METHODS
-                if callable(getattr(self._core, method, None))
-            )
+            self._adapter_methods = {}
+            self._adapters = []
+            self._caps = []
+            for adapter_name, method_name in self._ADAPTER_REGISTRY.items():
+                method = getattr(self._core, method_name, None)
+                if callable(method):
+                    self._adapter_methods[adapter_name] = method
+                    self._adapters.append(adapter_name)
+                    self._caps.append(method_name)
+            self._adapters.sort()
+            self._caps.sort()
             self._state_reason = "loaded"
         except Exception as exc:
             self._state_reason = "load_error"
             if self.strict:
                 raise RuntimeError("Failed to initialize v2 compatibility shim.") from exc
 
+    @staticmethod
+    def _hash_keys(raw: Any) -> str:
+        if isinstance(raw, dict):
+            payload = "|".join(sorted(map(str, raw.keys())))
+            return _h(payload, size=12)
+        return _h(type(raw).__name__, size=12)
+
+    def _run_topology_calc(
+        self,
+        method: Any,
+        *,
+        policy: dict[str, Any],
+        limits: dict[str, Any],
+    ) -> dict[str, Any]:
+        analytics_context = policy.get("analytics_context") or limits.get("analytics_context")
+        if not isinstance(analytics_context, dict):
+            return {"state": "skipped", "reason": "no_analytics_context"}
+        try:
+            raw = method(analytics_context)
+        except Exception:
+            return {"state": "error", "reason": "call_failed"}
+        return {
+            "state": "ok",
+            "result_hash": self._hash_keys(raw),
+            "result_keys_count": len(raw.keys()) if isinstance(raw, dict) else 0,
+        }
+
+    def _run_request_entry(
+        self,
+        method: Any,
+        *,
+        policy: dict[str, Any],
+        limits: dict[str, Any],
+    ) -> dict[str, Any]:
+        probe_text = str(
+            policy.get("shim_probe_query")
+            or limits.get("shim_probe_query")
+            or "compat_probe"
+        )
+        try:
+            raw = method(probe_text)
+        except Exception:
+            return {"state": "error", "reason": "call_failed"}
+        summary = str(getattr(raw, "summary", "") or "")
+        answer = str(getattr(raw, "answer", "") or "")
+        payload = f"{type(raw).__name__}|{len(summary)}|{len(answer)}"
+        return {"state": "ok", "result_hash": _h(payload, size=12)}
+
+    def _run_remote_entry(
+        self,
+        method: Any,
+        *,
+        policy: dict[str, Any],
+        limits: dict[str, Any],
+    ) -> dict[str, Any]:
+        del limits
+        if not _to_bool(os.getenv("RB_TKYA_ALLOW_REMOTE", "0")):
+            return {"state": "blocked", "reason": "remote_disabled"}
+        if not _to_bool(policy.get("allow_remote_shim"), False):
+            return {"state": "blocked", "reason": "policy_disallow_remote_shim"}
+        try:
+            raw = method({"probe": "compat"})
+        except Exception:
+            return {"state": "error", "reason": "call_failed"}
+        return {"state": "ok", "result_hash": self._hash_keys(raw)}
+
+    def _run_adapter(
+        self,
+        adapter_name: str,
+        method: Any,
+        *,
+        policy: dict[str, Any],
+        limits: dict[str, Any],
+    ) -> dict[str, Any]:
+        if adapter_name == "topology_calc":
+            return self._run_topology_calc(method, policy=policy, limits=limits)
+        if adapter_name == "request_entry":
+            return self._run_request_entry(method, policy=policy, limits=limits)
+        if adapter_name == "remote_entry":
+            return self._run_remote_entry(method, policy=policy, limits=limits)
+        return {"state": "skipped", "reason": "unknown_adapter"}
+
     def enrich(self, *, policy: dict[str, Any], limits: dict[str, Any]) -> dict[str, Any]:
         if not self.enabled:
-            return {"used": False, "reason": "disabled", "caps": []}
+            return {
+                "used": False,
+                "reason": "disabled",
+                "caps": [],
+                "adapters": [],
+                "adapter_results": {},
+            }
         if self._core is None:
-            return {"used": False, "reason": self._state_reason, "caps": []}
+            return {
+                "used": False,
+                "reason": self._state_reason,
+                "caps": [],
+                "adapters": [],
+                "adapter_results": {},
+            }
 
         result: dict[str, Any] = {
             "used": True,
             "reason": self._state_reason,
             "caps": list(self._caps),
+            "adapters": list(self._adapters),
             "path_hash": _h(str(self.path), size=12),
+            "adapter_results": {},
         }
+        adapter_results: dict[str, dict[str, Any]] = {}
+        for adapter_name in self._adapters:
+            method = self._adapter_methods.get(adapter_name)
+            if not callable(method):
+                adapter_results[adapter_name] = {"state": "error", "reason": "missing_method"}
+                continue
+            adapter_results[adapter_name] = self._run_adapter(
+                adapter_name,
+                method,
+                policy=policy,
+                limits=limits,
+            )
+        result["adapter_results"] = adapter_results
+        result["adapter_results_hash"] = _h(
+            "|".join(
+                f"{name}:{adapter_results.get(name, {}).get('state', 'unknown')}:"
+                f"{adapter_results.get(name, {}).get('result_hash', '')}"
+                for name in sorted(adapter_results)
+            ),
+            size=12,
+        )
 
-        method = getattr(self._core, "run_topological_calculation", None)
-        analytics_context = policy.get("analytics_context") or limits.get("analytics_context")
-        if callable(method) and isinstance(analytics_context, dict):
-            try:
-                raw = method(analytics_context)
-            except Exception:
-                result["topology_call"] = "error"
-            else:
-                result["topology_call"] = "ok"
-                if isinstance(raw, dict):
-                    result["topology_keys_count"] = len(raw.keys())
-                    result["topology_hash"] = _h("|".join(sorted(map(str, raw.keys()))), size=12)
-                else:
-                    result["topology_keys_count"] = 0
-                    result["topology_hash"] = _h(type(raw).__name__, size=12)
-
+        topology_result = adapter_results.get("topology_calc", {})
+        result["topology_call"] = str(topology_result.get("state", "n/a"))
+        result["topology_hash"] = topology_result.get("result_hash")
+        result["topology_keys_count"] = int(topology_result.get("result_keys_count", 0) or 0)
         return result
 
 
@@ -966,6 +1081,7 @@ class TopoCoreTCXv5AdvanceCASGit:
         selected_join = ",".join(selected_ids[:32])
         ranking_tokens = [f"{item[0].chunk_id}:{item[1]:.4f}" for item in ranked[:20]]
         return {
+            "schema_version": TRACE_SCHEMA_VERSION,
             "query_hash": _h(question, size=12),
             "selected_hash": _h(selected_join, size=12),
             "ranking_hash": _h("|".join(ranking_tokens), size=12),
@@ -986,6 +1102,16 @@ class TopoCoreTCXv5AdvanceCASGit:
                     f"{int(bool(morse.get('workflow_risky', False)))}|"
                     f"{int(bool(morse.get('test_disable_signal', False)))}|"
                     f"{int(morse.get('todo_count', 0) or 0)}"
+                ),
+                size=12,
+            ),
+            "trace_inputs_hash": _h(
+                "|".join(
+                    [
+                        _h(question, size=8),
+                        _h(selected_join, size=8),
+                        _h(",".join(github_context.changed_files), size=8),
+                    ]
                 ),
                 size=12,
             ),
@@ -1147,10 +1273,14 @@ class TopoCoreTCXv5AdvanceCASGit:
                 "v2_compat_used": bool(compat.get("used", False)),
                 "v2_compat_reason": str(compat.get("reason", "n/a")),
                 "v2_compat_caps": list(compat.get("caps", [])),
+                "v2_compat_adapters": list(compat.get("adapters", [])),
+                "v2_compat_adapter_results": dict(compat.get("adapter_results", {})),
+                "v2_compat_adapter_results_hash": compat.get("adapter_results_hash"),
                 "v2_compat_path_hash": compat.get("path_hash"),
                 "v2_compat_topology_call": str(compat.get("topology_call", "n/a")),
                 "v2_compat_topology_hash": compat.get("topology_hash"),
                 "v2_compat_topology_keys_count": int(compat.get("topology_keys_count", 0) or 0),
+                "trace_schema_version": str(trace.get("schema_version", TRACE_SCHEMA_VERSION)),
                 "trace": trace,
             },
             security=sec,

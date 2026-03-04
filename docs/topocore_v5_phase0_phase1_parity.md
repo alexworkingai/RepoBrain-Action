@@ -1,4 +1,4 @@
-# TopoCore v5 Parity (Phase 0 + 1 + 2 + 4 + 5)
+# TopoCore v5 Parity (Phase 0 + 1 + 2 + 4 + 5 + 6)
 
 This document tracks parity targets between:
 
@@ -34,7 +34,8 @@ This document tracks parity targets between:
 | Crypto engine | Yes | No | Pending |
 | Trace subsystem | Yes | Yes (hash-only trace object) | Phase 4 expanded |
 | DS/BigAnalytics kernels | Partial | Yes (series + vector + graph + path metrics) | Phase 4 expanded |
-| v2 specialized compatibility | Yes | Optional shim (fail-closed, hash-only outputs) | Phase 5 started |
+| v2 specialized compatibility | Yes | Optional shim + explicit adapter registry | Phase 6 expanded |
+| Versioned trace schema | No explicit schema key | Yes (`trace_schema_version=1.1`) | Phase 6 added |
 
 ## Runtime signals added in v5
 
@@ -74,14 +75,18 @@ This document tracks parity targets between:
 - `v2_compat_used`
 - `v2_compat_reason`
 - `v2_compat_caps`
+- `v2_compat_adapters`
+- `v2_compat_adapter_results`
+- `v2_compat_adapter_results_hash`
 - `v2_compat_path_hash`
 - `v2_compat_topology_call`
 - `v2_compat_topology_hash`
 - `v2_compat_topology_keys_count`
+- `trace_schema_version`
 
 ## Immediate next parity targets
 
-1. Expand v2 compatibility shim with explicit adapter registry (not method-name probing).
-2. Add verification profiles for release/hotfix branches with stricter required checks.
-3. Add temporal-graph/anomaly-window metrics for long-horizon DS workloads.
-4. Introduce versioned trace schema key for downstream audit tooling.
+1. Add verification profiles for release/hotfix branches with stricter required checks.
+2. Add temporal-graph/anomaly-window metrics for long-horizon DS workloads.
+3. Add registry-level adapter policy (allow/deny per adapter by task).
+4. Keep trace schema evolution backward-compatible (`1.x` policy).

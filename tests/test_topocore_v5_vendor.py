@@ -199,6 +199,8 @@ def test_v5_trace_is_hash_only() -> None:
     decision = core.decide(req)
     trace = decision.compression_stats.get("trace", {})
     assert isinstance(trace, dict)
+    assert trace.get("schema_version") == "1.1"
+    assert decision.compression_stats.get("trace_schema_version") == "1.1"
     assert "query_hash" in trace
     assert question not in str(trace)
 
@@ -342,6 +344,12 @@ def test_v5_v2_compat_loads_stub_when_enabled(
                 "class TopoCoreTCXv2CAS:",
                 "    def run_topological_calculation(self, payload):",
                 "        return {'alpha': 1, 'beta': 2}",
+                "",
+                "    def handle_request(self, user_text, **kwargs):",
+                "        class Resp:",
+                "            summary = 'ok'",
+                "            answer = 'ok'",
+                "        return Resp()",
             ]
         ),
         encoding="utf-8",
@@ -357,5 +365,47 @@ def test_v5_v2_compat_loads_stub_when_enabled(
     assert stats.get("v2_compat_used") is True
     assert stats.get("v2_compat_reason") == "loaded"
     assert "run_topological_calculation" in (stats.get("v2_compat_caps") or [])
+    adapters = stats.get("v2_compat_adapters", [])
+    assert isinstance(adapters, list)
+    assert "topology_calc" in adapters
+    assert "request_entry" in adapters
+    adapter_results = stats.get("v2_compat_adapter_results", {})
+    assert isinstance(adapter_results, dict)
+    assert adapter_results.get("topology_calc", {}).get("state") == "ok"
+    assert adapter_results.get("request_entry", {}).get("state") == "ok"
     assert stats.get("v2_compat_topology_call") == "ok"
+    assert stats.get("v2_compat_adapter_results_hash")
     assert stats.get("v2_compat_topology_hash")
+
+
+def test_v5_v2_compat_remote_adapter_stays_blocked_without_remote_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    v2_path = tmp_path / "TopoCore_TCX_v2-CAS.py"
+    v2_path.write_text(
+        "\n".join(
+            [
+                "class TopoCoreTCXv2CAS:",
+                "    def run_topological_calculation(self, payload):",
+                "        return {'alpha': 1}",
+                "",
+                "    def remote_call(self, payload=None):",
+                "        return {'status': 'remote-ok'}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("RB_TKYA_ENABLE_V2_SHIM", "1")
+    monkeypatch.setenv("RB_TKYA_V2_SHIM_PATH", str(v2_path))
+    monkeypatch.setenv("RB_TKYA_V2_SHIM_STRICT", "1")
+    monkeypatch.delenv("RB_TKYA_ALLOW_REMOTE", raising=False)
+
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    decision = core.decide(_sample_request("ask"))
+    adapter_results = decision.compression_stats.get("v2_compat_adapter_results", {})
+    assert isinstance(adapter_results, dict)
+    remote_state = adapter_results.get("remote_entry", {})
+    assert remote_state.get("state") == "blocked"
+    assert remote_state.get("reason") == "remote_disabled"
