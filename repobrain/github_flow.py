@@ -397,8 +397,20 @@ def _provider_engine_name(provider: Any) -> str:
     if isinstance(provider, RemoteTKYProvider):
         return "remote"
     if isinstance(provider, LocalTKYProvider):
-        return "topocore_lite"
+        return "topocore_local"
     return "baseline"
+
+
+def _local_engine_name_from_result(result: Any) -> str | None:
+    tky = getattr(result, "tky", None)
+    compression_stats = getattr(tky, "compression_stats", {})
+    if not isinstance(compression_stats, dict):
+        return None
+    value = compression_stats.get("tky_engine_local")
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def decide_remote_usage(
@@ -687,7 +699,7 @@ def _answer_with_remote_fallback(
             meta["remote_used"] = True
             meta["tky_engine"] = "remote"
         elif isinstance(active_provider, LocalTKYProvider):
-            meta["tky_engine"] = "topocore_lite"
+            meta["tky_engine"] = _local_engine_name_from_result(result) or "topocore_lite"
             meta["remote_used"] = False
         else:
             meta["tky_engine"] = "baseline"
@@ -851,7 +863,9 @@ def run_qa_two_pass(
     else:
         audit_extra["tky_mode_requested"] = tky_mode_requested
         audit_extra["tky_mode_used"] = tky_mode_requested
-        audit_extra["tky_engine"] = _provider_engine_name(active_provider)
+        audit_extra["tky_engine"] = str(
+            final_meta.get("tky_engine", _provider_engine_name(active_provider))
+        )
         audit_extra["remote_used"] = False
         audit_extra["fallback_reason_code"] = "n/a"
         audit_extra["remote_error_class"] = "n/a"

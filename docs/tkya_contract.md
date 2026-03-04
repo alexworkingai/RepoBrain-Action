@@ -8,7 +8,9 @@ This document captures the **actual runtime contract** between RepoBrain and the
   - `repobrain/ask.py` (`make_provider`) returns `LocalTKYProvider` for `mode=local`.
 - Local provider execution:
   - `repobrain/tky_local.py` calls `get_engine()` from `repobrain/tkya/engine.py`.
-  - Default backend is `lite` (`TopoCoreLite`) unless `RB_TKYA_BACKEND=original`.
+  - Default backend is `lite` (`TopoCoreLite`).
+  - Advanced backend is `v5` (`RB_TKYA_BACKEND=v5`), loaded from vendor file.
+  - Legacy vendor backend remains available via `RB_TKYA_BACKEND=original`.
 - Engine direct usage points:
   - `repobrain/tky_local.py` -> `engine.decide(req)`.
   - `repobrain/tky_stub_server.py` -> `get_engine().decide(req)` for stub response generation.
@@ -114,10 +116,12 @@ Defined in `repobrain/tky_engine.py` and used by `repobrain/tky_local.py`:
 ### Original TKYA backend loading
 - `repobrain/tkya/engine.py::get_engine`
   - default: `lite`
-  - `RB_TKYA_BACKEND=original` loads vendor module with `importlib`
+  - `RB_TKYA_BACKEND=v5` loads `TopoCore_TCX_v5-Advance_CAS+Git.py` with `importlib`
+  - `RB_TKYA_BACKEND=original` loads legacy `TopoCore_TCX_v2-CAS.py` with `importlib`
   - missing/broken vendor file:
     - fallback to lite by default
-    - strict fail when `RB_TKYA_STRICT_ORIGINAL=1` (`RuntimeError`)
+    - strict fail when `RB_TKYA_STRICT_V5=1` for v5
+    - strict fail when `RB_TKYA_STRICT_ORIGINAL=1` for original
 
 ## Files/Artifacts Expected by Index and Ask
 
@@ -144,8 +148,10 @@ Defined in `repobrain/tky_engine.py` and used by `repobrain/tky_local.py`:
 - `RB_INDEX_CACHE_RESTORED`
 
 ### TKYA backend env
-- `RB_TKYA_BACKEND=lite|original` (default `lite`)
+- `RB_TKYA_BACKEND=lite|v5|original` (default `lite`)
 - `RB_TKYA_ALLOW_REMOTE=0|1` (default guarded as disabled)
+- `RB_TKYA_STRICT_V5=0|1`
+- `RB_TKYA_V5_PATH` (optional override path)
 - `RB_TKYA_STRICT_ORIGINAL=0|1`
 - `RB_TKYA_ORIGINAL_PATH` (optional override path)
 

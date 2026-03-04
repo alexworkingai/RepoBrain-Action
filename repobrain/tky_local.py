@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .signatures import build_query_signature
-from .tkya.engine import get_engine
+from .tkya.engine import describe_engine_instance, get_engine
 from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
 from .tky_provider import CandidateChunk, TKYProvider, TKYResult
 
@@ -13,9 +13,9 @@ from .tky_provider import CandidateChunk, TKYProvider, TKYResult
 class LocalTKYProvider(TKYProvider):
     """Local TKY provider stub.
 
-    This skeleton intentionally does NOT include proprietary TKY code.
-    In private deployments, place your original TopoCore file in `repobrain/tkya/vendor/`
-    and switch backend via RB_TKYA_BACKEND=original.
+    Local provider backed by selectable TKYA engines.
+    Safe default is `RB_TKYA_BACKEND=lite`. Advanced local mode can use
+    `RB_TKYA_BACKEND=v5` with vendor file `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`.
     """
 
     def compress_context(
@@ -48,9 +48,11 @@ class LocalTKYProvider(TKYProvider):
             policy={"corelocked": True},
         )
         decision = engine.decide(req)
+        compression_stats = dict(decision.compression_stats)
+        compression_stats.setdefault("tky_engine_local", describe_engine_instance(engine))
         return TKYResult(
             selected_chunk_ids=decision.selected_chunk_ids,
             route=decision.route,
-            compression_stats=dict(decision.compression_stats),
+            compression_stats=compression_stats,
             rationale=decision.rationale,
         )

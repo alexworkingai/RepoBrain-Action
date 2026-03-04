@@ -10,9 +10,11 @@ from repobrain.topocore_lite import TopoCoreLite
 from repobrain.tky_engine import EngineDecision, EngineRequest, EngineSecurity, TKYEngine
 
 BACKEND_LITE = "lite"
+BACKEND_V5 = "v5"
 BACKEND_ORIGINAL = "original"
-TKYABackend = Literal["lite", "original"]
+TKYABackend = Literal["lite", "v5", "original"]
 
+_V5_FILENAME = "TopoCore_TCX_v5-Advance_CAS+Git.py"
 _ORIGINAL_FILENAME = "TopoCore_TCX_v2-CAS.py"
 _REMOTE_METHOD_GUARDS = (
     "remote_call",
@@ -36,12 +38,22 @@ def _to_bool(value: Any) -> bool:
 
 
 def _get_backend(value: str | None) -> TKYABackend:
-    if (value or "").strip().lower() == BACKEND_ORIGINAL:
+    normalized = (value or "").strip().lower()
+    if normalized in {BACKEND_V5, "advance", "final"}:
+        return BACKEND_V5
+    if normalized in {BACKEND_ORIGINAL, "v2"}:
         return BACKEND_ORIGINAL
     return BACKEND_LITE
 
 
-def _vendor_path() -> Path:
+def _vendor_path_v5() -> Path:
+    override = os.getenv("RB_TKYA_V5_PATH", "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
+    return (Path(__file__).resolve().parent / "vendor" / _V5_FILENAME).resolve()
+
+
+def _vendor_path_original() -> Path:
     override = os.getenv("RB_TKYA_ORIGINAL_PATH", "").strip()
     if override:
         return Path(override).expanduser().resolve()
@@ -72,20 +84,11 @@ class OriginalEngineAdapter(TKYEngine):
         self._allow_remote = allow_remote
         self._lite = TopoCoreLite()
         if not allow_remote:
-            self._install_remote_guards()
+            install_remote_guards(self._core)
 
     @staticmethod
     def _blocked_remote_call(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("Remote operations are disabled (RB_TKYA_ALLOW_REMOTE=0).")
-
-    def _install_remote_guards(self) -> None:
-        for method_name in _REMOTE_METHOD_GUARDS:
-            if not hasattr(self._core, method_name):
-                continue
-            try:
-                setattr(self._core, method_name, self._blocked_remote_call)
-            except Exception:
-                continue
 
     @staticmethod
     def _response_text(response: Any) -> str:
@@ -154,6 +157,48 @@ class OriginalEngineAdapter(TKYEngine):
         )
 
 
+def install_remote_guards(core: Any) -> None:
+    """Fail-closed remote hooks for vendor backends unless explicitly enabled."""
+    for method_name in _REMOTE_METHOD_GUARDS:
+        if not hasattr(core, method_name):
+            continue
+        try:
+            setattr(core, method_name, OriginalEngineAdapter._blocked_remote_call)
+        except Exception:
+            continue
+
+
+def describe_engine_instance(engine: Any) -> str:
+    """Return stable local engine label for audit/formatting."""
+    name = type(engine).__name__.lower()
+    if "v5" in name or "advance" in name:
+        return "topocore_v5"
+    if "lite" in name:
+        return "topocore_lite"
+    if "originalengineadapter" in name or "v2" in name:
+        return "topocore_original"
+    return "topocore_local"
+
+
+def _build_v5_engine(path: Path, *, allow_remote: bool) -> TKYEngine:
+    module = _load_module_from_path(path)
+    core_cls = (
+        getattr(module, "TopoCoreTCXv5AdvanceCASGit", None)
+        or getattr(module, "TopoCoreTCXv5AdvanceCAS", None)
+        or getattr(module, "TopoCoreTCXv2CAS", None)
+    )
+    if core_cls is None:
+        raise RuntimeError(
+            "TopoCore v5 module is missing TopoCoreTCXv5AdvanceCASGit/TopoCoreTCXv5AdvanceCAS."
+        )
+    core = core_cls()
+    if not callable(getattr(core, "decide", None)):
+        raise RuntimeError("TopoCore v5 backend must expose decide(req).")
+    if not allow_remote:
+        install_remote_guards(core)
+    return core
+
+
 def _build_original_engine(path: Path, *, allow_remote: bool) -> TKYEngine:
     module = _load_module_from_path(path)
     core_cls = getattr(module, "TopoCoreTCXv2CAS", None)
@@ -168,11 +213,32 @@ def get_engine() -> TKYEngine:
     backend = _get_backend(os.getenv("RB_TKYA_BACKEND", BACKEND_LITE))
     allow_remote = _to_bool(os.getenv("RB_TKYA_ALLOW_REMOTE", "0"))
     strict_original = _to_bool(os.getenv("RB_TKYA_STRICT_ORIGINAL", "0"))
+    strict_v5 = _to_bool(os.getenv("RB_TKYA_STRICT_V5", "0"))
 
     if backend == BACKEND_LITE:
         return TopoCoreLite()
 
-    original_path = _vendor_path()
+    if backend == BACKEND_V5:
+        v5_path = _vendor_path_v5()
+        if not v5_path.exists():
+            message = (
+                f"TopoCore v5 backend requested but vendor file is missing: {v5_path}. "
+                "Place TopoCore_TCX_v5-Advance_CAS+Git.py under repobrain/tkya/vendor/."
+            )
+            if strict_v5:
+                raise RuntimeError(message)
+            _warn_once("WARN: TopoCore v5 file not found, fallback to lite backend.")
+            return TopoCoreLite()
+
+        try:
+            return _build_v5_engine(v5_path, allow_remote=allow_remote)
+        except Exception as exc:
+            if strict_v5:
+                raise RuntimeError("Failed to initialize TopoCore v5 backend.") from exc
+            _warn_once("WARN: TopoCore v5 initialization failed, fallback to lite backend.")
+            return TopoCoreLite()
+
+    original_path = _vendor_path_original()
     if not original_path.exists():
         message = (
             f"Original TKYA backend requested but vendor file is missing: {original_path}. "
