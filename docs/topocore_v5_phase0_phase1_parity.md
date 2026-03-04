@@ -1,4 +1,4 @@
-# TopoCore v5 Parity (Phase 0 + 1 + 2 + 4 + 5 + 6)
+# TopoCore v5 Parity (Phase 0 + 1 + 2 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11)
 
 This document tracks parity targets between:
 
@@ -29,13 +29,15 @@ This document tracks parity targets between:
 | GitHub diff-aware hints | No explicit engine layer | Yes (file/range boosts) | Phase 2 started |
 | ZigZag/MorseFlow | Yes | Yes (confidence + workflow risk signals) | Phase 4 expanded |
 | Blockchain adapter | Yes | No | Pending |
-| Verification adapter full ladder | Yes | Partial (planner + branch profiles + ladder stats) | Phase 5 expanded |
+| Verification adapter full ladder | Yes | Yes (planner + branch profiles + ladder gate) | Phase 8 expanded |
 | Codegen adapter | Yes | No | Pending |
 | Crypto engine | Yes | No | Pending |
-| Trace subsystem | Yes | Yes (hash-only trace object) | Phase 4 expanded |
-| DS/BigAnalytics kernels | Partial | Yes (series + vector + graph + path metrics) | Phase 4 expanded |
-| v2 specialized compatibility | Yes | Optional shim + explicit adapter registry | Phase 6 expanded |
+| Trace subsystem | Yes | Yes (hash-only trace object + schema policy) | Phase 11 expanded |
+| DS/BigAnalytics kernels | Partial | Yes (series + vector + graph + path + temporal/anomaly) | Phase 9 expanded |
+| v2 specialized compatibility | Yes | Optional shim + explicit adapter registry + policy control | Phase 7 expanded |
 | Versioned trace schema | No explicit schema key | Yes (`trace_schema_version=1.1`) | Phase 6 added |
+| Perf/capacity safeguards | Limited | Yes (candidate/data truncation budgets) | Phase 10 added |
+| Rollout controls | N/A | Canary-ready runtime policy | Phase 11 added |
 
 ## Runtime signals added in v5
 
@@ -78,15 +80,26 @@ This document tracks parity targets between:
 - `v2_compat_adapters`
 - `v2_compat_adapter_results`
 - `v2_compat_adapter_results_hash`
+- `v2_compat_policy`
+- `v2_compat_policy_hash`
 - `v2_compat_path_hash`
 - `v2_compat_topology_call`
 - `v2_compat_topology_hash`
 - `v2_compat_topology_keys_count`
 - `trace_schema_version`
+- `trace_schema_policy`
+- `trace_schema_compatible`
+- `verification_gate_decision`
+- `verification_gate_reason`
+- `topology_perf`
+- `perf_candidates_truncated`
+- `calibration_min_fast_score`
+- `calibration_verify_threshold`
+- `calibration_zigzag_turning_threshold`
 
 ## Immediate next parity targets
 
-1. Add verification profiles for release/hotfix branches with stricter required checks.
-2. Add temporal-graph/anomaly-window metrics for long-horizon DS workloads.
-3. Add registry-level adapter policy (allow/deny per adapter by task).
-4. Keep trace schema evolution backward-compatible (`1.x` policy).
+1. Add richer branch policy presets with severity mapping by repository tier.
+2. Add execution budgets/timeouts per shim adapter.
+3. Extend temporal analytics to multi-entity drift windows.
+4. Keep trace schema migration backward-compatible for upcoming `2.x`.

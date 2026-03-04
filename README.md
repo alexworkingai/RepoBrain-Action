@@ -108,6 +108,14 @@ Local TKYA backend options:
   * `RB_TKYA_STRICT_V5=1` for v5
   * `RB_TKYA_STRICT_ORIGINAL=1` for legacy original
 * `RB_TKYA_V5_PATH` and `RB_TKYA_ORIGINAL_PATH` can override vendor file paths when needed.
+* Optional canary rollout for v5 backend:
+  * `RB_TKYA_V5_CANARY_PERCENT=0..100`
+  * `RB_TKYA_CANARY_KEY=<stable-bucket-key>`
+* Optional v2 compatibility shim for targeted adapters:
+  * `RB_TKYA_ENABLE_V2_SHIM=1`
+  * `RB_TKYA_V2_SHIM_PATH=/path/to/TopoCore_TCX_v2-CAS.py`
+  * `RB_TKYA_V2_SHIM_STRICT=1`
+* v5 trace is hash-only and versioned (`trace_schema_version=1.1`, policy `1.x`).
 
 Local CLI behavior:
 

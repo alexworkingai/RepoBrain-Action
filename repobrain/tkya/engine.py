@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -74,6 +75,34 @@ def _warn_once(message: str) -> None:
         return
     _WARNED_MESSAGES.add(message)
     print(message)
+
+
+def _stable_percent_bucket(value: str) -> int:
+    digest = hashlib.blake2s(value.encode("utf-8"), digest_size=8).digest()
+    number = int.from_bytes(digest, "little", signed=False)
+    return number % 100
+
+
+def _canary_allows_v5() -> bool:
+    raw_percent = os.getenv("RB_TKYA_V5_CANARY_PERCENT", "").strip()
+    if not raw_percent:
+        return True
+    try:
+        percent = int(raw_percent)
+    except ValueError:
+        return True
+    percent = max(0, min(100, percent))
+    if percent >= 100:
+        return True
+    if percent <= 0:
+        return False
+    key = (
+        os.getenv("RB_TKYA_CANARY_KEY", "").strip()
+        or os.getenv("GITHUB_REPOSITORY", "").strip()
+        or os.getenv("GITHUB_RUN_ID", "").strip()
+        or "local"
+    )
+    return _stable_percent_bucket(key) < percent
 
 
 class OriginalEngineAdapter(TKYEngine):
@@ -219,6 +248,9 @@ def get_engine() -> TKYEngine:
         return TopoCoreLite()
 
     if backend == BACKEND_V5:
+        if not _canary_allows_v5():
+            _warn_once("WARN: TopoCore v5 skipped by canary rollout policy, fallback to lite backend.")
+            return TopoCoreLite()
         v5_path = _vendor_path_v5()
         if not v5_path.exists():
             message = (

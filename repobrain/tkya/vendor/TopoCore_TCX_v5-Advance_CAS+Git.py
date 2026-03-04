@@ -8,12 +8,18 @@ Phase coverage in this file:
   PASS/FAIL/PENDING/NOT_RUN states, and DS graph/vector/path kernels.
 - Phase 5: optional v2 compatibility shim and branch-protection verification profiles.
 - Phase 6: explicit shim adapter registry and versioned trace schema.
+- Phase 7: policy-controlled adapter allow/deny by task/branch/profile.
+- Phase 8: production gate decision for verification ladder.
+- Phase 9: temporal/anomaly metrics for DS topology analytics.
+- Phase 10: calibration + performance budgets/truncation safeguards.
+- Phase 11: rollout compatibility via schema policy and canary-ready runtime signals.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import enum
+import fnmatch
 import hashlib
 import importlib.util
 import math
@@ -306,6 +312,136 @@ class V2CompatibilityShim:
             return self._run_remote_entry(method, policy=policy, limits=limits)
         return {"state": "skipped", "reason": "unknown_adapter"}
 
+    @staticmethod
+    def _extract_task(policy: dict[str, Any], limits: dict[str, Any]) -> str:
+        value = str(
+            policy.get("task_type")
+            or limits.get("task_type")
+            or "ask"
+        ).strip().lower()
+        return value or "ask"
+
+    @staticmethod
+    def _extract_branch_and_profile(
+        policy: dict[str, Any],
+        limits: dict[str, Any],
+    ) -> tuple[str, str]:
+        branch = "unknown"
+        profile = "default"
+        github_context = policy.get("github_context", {})
+        if isinstance(github_context, dict):
+            branch = str(
+                github_context.get("base_ref")
+                or github_context.get("target_branch")
+                or github_context.get("branch")
+                or branch
+            ).strip() or "unknown"
+        if "branch_name" in limits:
+            branch = str(limits.get("branch_name") or branch).strip() or branch
+
+        branch_protection = policy.get("branch_protection", {})
+        if isinstance(branch_protection, dict):
+            profile = str(branch_protection.get("name", profile) or profile).strip() or profile
+        if "verification_profile" in limits:
+            profile = str(limits.get("verification_profile") or profile).strip() or profile
+        return branch, profile
+
+    @staticmethod
+    def _match_pattern(pattern: str, value: str) -> bool:
+        if not pattern:
+            return False
+        if not value:
+            return False
+        return fnmatch.fnmatch(value, pattern)
+
+    def _resolve_adapter_policy(
+        self,
+        *,
+        policy: dict[str, Any],
+        limits: dict[str, Any],
+    ) -> dict[str, Any]:
+        raw = policy.get("v2_shim_policy", {})
+        if not isinstance(raw, dict):
+            raw = {}
+        task = self._extract_task(policy, limits)
+        branch, profile = self._extract_branch_and_profile(policy, limits)
+
+        allowed = set(self._adapters)
+        mode = str(raw.get("mode", "allowlist") or "allowlist").strip().lower()
+        if mode == "denylist":
+            allowed = set(self._adapters)
+
+        allow_global = raw.get("allow_adapters", None)
+        if isinstance(allow_global, list) and mode == "allowlist":
+            allowed = {name for name in self._adapters if name in {str(item).strip() for item in allow_global}}
+
+        deny_global = raw.get("deny_adapters", None)
+        if isinstance(deny_global, list):
+            deny_set = {str(item).strip() for item in deny_global if str(item).strip()}
+            allowed -= deny_set
+
+        by_task = raw.get("by_task", {})
+        if isinstance(by_task, dict):
+            task_rules = by_task.get(task, {})
+            if isinstance(task_rules, list):
+                parsed = {str(item).strip() for item in task_rules if str(item).strip()}
+                if parsed:
+                    allowed &= parsed
+            elif isinstance(task_rules, dict):
+                allow_task = task_rules.get("allow", [])
+                deny_task = task_rules.get("deny", [])
+                if isinstance(allow_task, list):
+                    parsed_allow = {str(item).strip() for item in allow_task if str(item).strip()}
+                    if parsed_allow:
+                        allowed &= parsed_allow
+                if isinstance(deny_task, list):
+                    allowed -= {str(item).strip() for item in deny_task if str(item).strip()}
+
+        by_branch = raw.get("by_branch", {})
+        if isinstance(by_branch, dict):
+            for pattern, branch_rules in by_branch.items():
+                if not self._match_pattern(str(pattern).strip(), branch):
+                    continue
+                if isinstance(branch_rules, list):
+                    parsed = {str(item).strip() for item in branch_rules if str(item).strip()}
+                    if parsed:
+                        allowed &= parsed
+                elif isinstance(branch_rules, dict):
+                    allow_branch = branch_rules.get("allow", [])
+                    deny_branch = branch_rules.get("deny", [])
+                    if isinstance(allow_branch, list):
+                        parsed_allow = {str(item).strip() for item in allow_branch if str(item).strip()}
+                        if parsed_allow:
+                            allowed &= parsed_allow
+                    if isinstance(deny_branch, list):
+                        allowed -= {str(item).strip() for item in deny_branch if str(item).strip()}
+
+        by_profile = raw.get("by_profile", {})
+        if isinstance(by_profile, dict):
+            profile_rules = by_profile.get(profile, {})
+            if isinstance(profile_rules, list):
+                parsed = {str(item).strip() for item in profile_rules if str(item).strip()}
+                if parsed:
+                    allowed &= parsed
+            elif isinstance(profile_rules, dict):
+                allow_profile = profile_rules.get("allow", [])
+                deny_profile = profile_rules.get("deny", [])
+                if isinstance(allow_profile, list):
+                    parsed_allow = {str(item).strip() for item in allow_profile if str(item).strip()}
+                    if parsed_allow:
+                        allowed &= parsed_allow
+                if isinstance(deny_profile, list):
+                    allowed -= {str(item).strip() for item in deny_profile if str(item).strip()}
+
+        allowed &= set(self._adapters)
+        return {
+            "task": task,
+            "branch": branch,
+            "profile": profile,
+            "allowed_adapters": sorted(allowed),
+            "mode": mode,
+        }
+
     def enrich(self, *, policy: dict[str, Any], limits: dict[str, Any]) -> dict[str, Any]:
         if not self.enabled:
             return {
@@ -332,8 +468,20 @@ class V2CompatibilityShim:
             "path_hash": _h(str(self.path), size=12),
             "adapter_results": {},
         }
+        policy_ctx = self._resolve_adapter_policy(policy=policy, limits=limits)
+        allowed_adapters = set(policy_ctx["allowed_adapters"])
+        result["policy"] = {
+            "task": policy_ctx["task"],
+            "branch": policy_ctx["branch"],
+            "profile": policy_ctx["profile"],
+            "mode": policy_ctx["mode"],
+            "allowed_adapters": list(policy_ctx["allowed_adapters"]),
+        }
         adapter_results: dict[str, dict[str, Any]] = {}
         for adapter_name in self._adapters:
+            if adapter_name not in allowed_adapters:
+                adapter_results[adapter_name] = {"state": "skipped", "reason": "policy_blocked"}
+                continue
             method = self._adapter_methods.get(adapter_name)
             if not callable(method):
                 adapter_results[adapter_name] = {"state": "error", "reason": "missing_method"}
@@ -350,6 +498,18 @@ class V2CompatibilityShim:
                 f"{name}:{adapter_results.get(name, {}).get('state', 'unknown')}:"
                 f"{adapter_results.get(name, {}).get('result_hash', '')}"
                 for name in sorted(adapter_results)
+            ),
+            size=12,
+        )
+        policy_data = result.get("policy", {})
+        result["policy_hash"] = _h(
+            "|".join(
+                [
+                    str(policy_data.get("task", "ask")),
+                    str(policy_data.get("branch", "unknown")),
+                    str(policy_data.get("profile", "default")),
+                    ",".join(sorted(map(str, policy_data.get("allowed_adapters", [])))),
+                ]
             ),
             size=12,
         )
@@ -593,14 +753,60 @@ class DataScienceTopologyKernel:
             "path_cv": float(stdev / mean if mean > 1e-12 else 0.0),
         }
 
+    @staticmethod
+    def _temporal_metrics(series: list[float], context: dict[str, Any]) -> dict[str, float]:
+        if not series:
+            return {}
+        window = _to_int(
+            context.get("anomaly_window", context.get("temporal_window", 8)),
+            8,
+        )
+        window = max(3, window)
+        n = len(series)
+        recent = series[-window:] if n >= window else series
+        previous = series[-2 * window : -window] if n >= (2 * window) else series[: max(1, n - len(recent))]
+
+        recent_mean = statistics.fmean(recent) if recent else 0.0
+        prev_mean = statistics.fmean(previous) if previous else recent_mean
+        drift = abs(recent_mean - prev_mean) / max(abs(prev_mean), 1e-9)
+
+        overall_mean = statistics.fmean(series)
+        overall_std = statistics.pstdev(series) if len(series) > 1 else 0.0
+        anomaly_ratio = 0.0
+        if overall_std > 1e-12 and recent:
+            anomaly_ratio = sum(
+                1 for value in recent if abs((value - overall_mean) / overall_std) >= 2.5
+            ) / float(len(recent))
+
+        slope = (series[-1] - series[0]) / float(max(1, n - 1))
+        return {
+            "temporal_window_size": float(window),
+            "temporal_drift_ratio": float(drift),
+            "temporal_anomaly_ratio": float(anomaly_ratio),
+            "temporal_slope": float(slope),
+        }
+
     def analyze(self, query: str, policy: dict[str, Any], limits: dict[str, Any]) -> dict[str, Any]:
         ctx = policy.get("analytics_context") or limits.get("analytics_context") or {}
         if not isinstance(ctx, dict):
             ctx = {}
-        series = self._series(ctx.get("series", []))
-        vectors = self._vectors(ctx.get("vectors", []))
-        edges = self._extract_edges(ctx.get("graph_edges", ctx.get("edges", [])))
-        paths = ctx.get("path_lengths", [])
+        max_series = max(10, _to_int(limits.get("tky_perf_max_series"), 4096))
+        max_vectors = max(10, _to_int(limits.get("tky_perf_max_vectors"), 2048))
+        max_edges = max(10, _to_int(limits.get("tky_perf_max_edges"), 4096))
+        max_paths = max(10, _to_int(limits.get("tky_perf_max_paths"), 4096))
+
+        series_full = self._series(ctx.get("series", []))
+        vectors_full = self._vectors(ctx.get("vectors", []))
+        edges_full = self._extract_edges(ctx.get("graph_edges", ctx.get("edges", [])))
+        paths_full = ctx.get("path_lengths", [])
+        if not isinstance(paths_full, list):
+            paths_full = []
+
+        series = series_full[:max_series]
+        vectors = vectors_full[:max_vectors]
+        edges = edges_full[:max_edges]
+        paths = paths_full[:max_paths]
+
         outliers = 0.0
         if len(series) > 1:
             mean = statistics.fmean(series)
@@ -624,6 +830,7 @@ class DataScienceTopologyKernel:
             metrics["series_count"] = float(len(series))
             metrics["series_mean"] = float(statistics.fmean(series))
             metrics["outlier_ratio"] = float(outliers)
+        metrics.update(self._temporal_metrics(series, ctx))
         metrics.update(self._vector_metrics(vectors))
         metrics.update(self._graph_metrics(edges))
         metrics.update(self._path_metrics(paths))
@@ -631,13 +838,20 @@ class DataScienceTopologyKernel:
         has_graph = "graph_nodes" in metrics
         has_vectors = "vector_count" in metrics
         has_paths = "path_count" in metrics
+        has_temporal = "temporal_window_size" in metrics
         if metric_count >= 10 or metrics.get("graph_nodes", 0.0) >= 500:
             complexity = "high"
         elif metric_count >= 4 or hinted:
             complexity = "medium"
         else:
             complexity = "low"
-        if has_graph and has_vectors:
+        if has_temporal and has_graph and has_vectors:
+            mode = "analytics_graph_vector_temporal"
+        elif has_temporal and has_graph:
+            mode = "analytics_graph_temporal"
+        elif has_temporal:
+            mode = "analytics_temporal"
+        elif has_graph and has_vectors:
             mode = "analytics_graph_vector"
         elif has_graph:
             mode = "analytics_graph"
@@ -645,7 +859,18 @@ class DataScienceTopologyKernel:
             mode = "analytics"
         else:
             mode = "generic"
-        return {"mode": mode, "complexity": complexity, "metric_count": metric_count, "metrics": metrics}
+        return {
+            "mode": mode,
+            "complexity": complexity,
+            "metric_count": metric_count,
+            "metrics": metrics,
+            "perf": {
+                "series_truncated": max(0, len(series_full) - len(series)),
+                "vectors_truncated": max(0, len(vectors_full) - len(vectors)),
+                "edges_truncated": max(0, len(edges_full) - len(edges)),
+                "paths_truncated": max(0, len(paths_full) - len(paths)),
+            },
+        }
 
 
 class ZigZagAnalyzer:
@@ -702,7 +927,13 @@ class MorseFlowGate:
     )
 
     @classmethod
-    def analyze(cls, github_context: GitHubContext, policy: dict[str, Any]) -> dict[str, Any]:
+    def analyze(
+        cls,
+        github_context: GitHubContext,
+        policy: dict[str, Any],
+        *,
+        verify_threshold: float = 0.35,
+    ) -> dict[str, Any]:
         payload = policy.get("github_context", {})
         hunks: list[str] = []
         if isinstance(payload, dict):
@@ -744,7 +975,7 @@ class MorseFlowGate:
             confidence += min(0.15, 0.03 * todo_count)
             signals.append("todo_fixme_present")
         confidence = _clip(confidence)
-        verify_required = bool(policy_force_verify or confidence >= 0.35)
+        verify_required = bool(policy_force_verify or confidence >= verify_threshold)
         if policy_force_verify:
             signals.append("policy_force_verify")
 
@@ -757,6 +988,7 @@ class MorseFlowGate:
         return {
             "risk": risk,
             "verify_required": verify_required,
+            "verify_threshold": float(verify_threshold),
             "confidence": round(confidence, 6),
             "signals": sorted(set(signals)),
             "has_conflict_markers": has_conflict_markers,
@@ -777,6 +1009,32 @@ class VerificationPlanner:
         "explain": ("ruff check .",),
         "review": ("ruff check .", "pytest -q"),
     }
+    _DEFAULT_BRANCH_PROFILES = {
+        "main": {
+            "required_checks": {
+                "review": ["security scan"],
+            }
+        },
+        "release/*": {
+            "required_checks": {
+                "review": ["security scan", "integration-tests"],
+            }
+        },
+        "hotfix/*": {
+            "required_checks": {
+                "review": ["security scan", "smoke-tests"],
+            }
+        },
+    }
+
+    @staticmethod
+    def _is_strict_branch(branch: str) -> bool:
+        normalized = (branch or "").strip().lower()
+        return (
+            normalized == "main"
+            or normalized.startswith("release/")
+            or normalized.startswith("hotfix/")
+        )
 
     @classmethod
     def _resolve_profile(
@@ -800,10 +1058,17 @@ class VerificationPlanner:
         profiles = policy.get("branch_protection_profiles", {})
         profile_data: dict[str, Any] = {}
         if isinstance(profiles, dict):
-            if branch in profiles and isinstance(profiles[branch], dict):
-                profile_name = branch
-                profile_data = profiles[branch]
-            elif "default" in profiles and isinstance(profiles["default"], dict):
+            matched = False
+            for name, value in profiles.items():
+                if not isinstance(value, dict):
+                    continue
+                pattern = str(name).strip()
+                if pattern and fnmatch.fnmatch(branch, pattern):
+                    profile_name = pattern
+                    profile_data = value
+                    matched = True
+                    break
+            if not matched and "default" in profiles and isinstance(profiles["default"], dict):
                 profile_name = "default"
                 profile_data = profiles["default"]
 
@@ -812,6 +1077,13 @@ class VerificationPlanner:
             if isinstance(branch_protection, dict):
                 profile_name = str(branch_protection.get("name", "policy") or "policy")
                 profile_data = branch_protection
+
+        if not profile_data:
+            for pattern, value in cls._DEFAULT_BRANCH_PROFILES.items():
+                if fnmatch.fnmatch(branch, pattern):
+                    profile_name = f"default:{pattern}"
+                    profile_data = value
+                    break
 
         required_checks = profile_data.get("required_checks", {})
         if isinstance(required_checks, dict):
@@ -833,6 +1105,31 @@ class VerificationPlanner:
         return profile_name, branch or "unknown", required
 
     @classmethod
+    def _gate_from_ladder(
+        cls,
+        *,
+        branch: str,
+        pass_count: int,
+        fail_count: int,
+        pending_count: int,
+        not_run_count: int,
+        total: int,
+    ) -> tuple[str, str]:
+        if total <= 0:
+            return "UNKNOWN", "no_checks"
+        if fail_count > 0:
+            return "BLOCK", "failed_checks"
+        if pending_count > 0:
+            return "WAIT", "checks_pending"
+        if cls._is_strict_branch(branch) and not_run_count > 0:
+            return "BLOCK", "required_checks_not_run"
+        if pass_count == total:
+            return "PASS", "all_checks_passed"
+        if not_run_count > 0:
+            return "WARN", "partial_coverage"
+        return "WARN", "incomplete_state"
+
+    @classmethod
     def plan(cls, *, task: str, policy: dict[str, Any], morse: dict[str, Any]) -> dict[str, Any]:
         if task != "review":
             return {
@@ -850,6 +1147,8 @@ class VerificationPlanner:
                 "profile_name": "n/a",
                 "branch": "n/a",
                 "required_checks": [],
+                "gate_decision": "N/A",
+                "gate_reason": "not_review_task",
             }
 
         verified: list[str] = ["deterministic_ranking", "phase1_router_applied"]
@@ -921,6 +1220,14 @@ class VerificationPlanner:
         not_run_count = sum(1 for item in ladder if item["state"] == "NOT_RUN")
         total = max(1, len(ladder))
         completeness = pass_count / float(total)
+        gate_decision, gate_reason = cls._gate_from_ladder(
+            branch=branch,
+            pass_count=pass_count,
+            fail_count=fail_count,
+            pending_count=pending_count,
+            not_run_count=not_run_count,
+            total=total,
+        )
 
         return {
             "verified": sorted(set(verified)),
@@ -937,6 +1244,8 @@ class VerificationPlanner:
             "profile_name": profile_name,
             "branch": branch,
             "required_checks": required_checks,
+            "gate_decision": gate_decision,
+            "gate_reason": gate_reason,
         }
 
 
@@ -1152,6 +1461,9 @@ class TopoCoreTCXv5AdvanceCASGit:
         question = str(req.query.text or "")
         limits = dict(req.limits or {})
         policy = dict(req.policy or {})
+        calibration = policy.get("calibration", {})
+        if not isinstance(calibration, dict):
+            calibration = {}
         github_context = self._normalize_github_context(policy, limits)
         sec = self._security(question, policy)
         if sec.blocked:
@@ -1170,13 +1482,43 @@ class TopoCoreTCXv5AdvanceCASGit:
                 stable_tokens=[],
             )
 
+        max_candidates = max(
+            10,
+            _to_int(
+                limits.get(
+                    "tky_perf_max_candidates",
+                    calibration.get("max_candidates", 800),
+                ),
+                800,
+            ),
+        )
+        candidates_input = list(req.candidates)
+        perf_candidates_truncated = max(0, len(candidates_input) - max_candidates)
+        if perf_candidates_truncated > 0:
+            candidates_input = sorted(
+                candidates_input,
+                key=lambda item: (-float(item.score_local), str(item.file_path or ""), item.chunk_id),
+            )[:max_candidates]
+
         topology = self.kernel.analyze(question, policy, limits)
         huk = self.huk.fast_gate(question, book_id=self.book_id)
-        ranked, rank_meta = self._rank_candidates(list(req.candidates), github_context)
+        ranked, rank_meta = self._rank_candidates(candidates_input, github_context)
         ranked_scores = [score for _, score in ranked]
         top_score = float(ranked_scores[0]) if ranked_scores else 0.0
         zigzag = self.zigzag.analyze(ranked_scores[:12] if ranked_scores else [top_score])
-        morse = self.morse.analyze(github_context, policy)
+        verify_threshold = _to_float(
+            limits.get(
+                "tky_verify_threshold",
+                calibration.get("verify_threshold", 0.35),
+            ),
+            0.35,
+        )
+        verify_threshold = _clip(verify_threshold)
+        morse = self.morse.analyze(
+            github_context,
+            policy,
+            verify_threshold=verify_threshold,
+        )
 
         risk_high = topology["complexity"] == "high" or morse.get("risk") == "high"
         phase1 = self.router.decide(score=float(huk["score"]), risk_high=risk_high, task_type=task)
@@ -1190,7 +1532,21 @@ class TopoCoreTCXv5AdvanceCASGit:
             }
         action = str(phase1["action"])
 
-        min_fast = _to_float(limits.get("min_score_fast"), 0.05)
+        min_fast = _to_float(
+            limits.get("min_score_fast", calibration.get("min_fast_score")),
+            0.05,
+        )
+        min_fast = _clip(min_fast)
+        zigzag_turning_threshold = max(
+            1,
+            _to_int(
+                limits.get(
+                    "tky_zigzag_turning_threshold",
+                    calibration.get("zigzag_turning_threshold", 3),
+                ),
+                3,
+            ),
+        )
 
         if task == "review":
             route = "REVIEW"
@@ -1200,7 +1556,11 @@ class TopoCoreTCXv5AdvanceCASGit:
             route = "DEEP"
         elif action == Action.NARROW_RETRIEVAL.value and top_score >= min_fast:
             route = "FAST"
-        elif top_score < min_fast or topology["complexity"] == "high" or zigzag["turning_points"] >= 3:
+        elif (
+            top_score < min_fast
+            or topology["complexity"] == "high"
+            or zigzag["turning_points"] >= zigzag_turning_threshold
+        ):
             route = "DEEP"
         else:
             route = "FAST"
@@ -1241,6 +1601,7 @@ class TopoCoreTCXv5AdvanceCASGit:
                 "topology_mode": topology["mode"],
                 "topology_complexity": topology["complexity"],
                 "topology_metric_count": topology["metric_count"],
+                "topology_perf": dict(topology.get("perf", {})),
                 "zigzag_turning_points": int(zigzag["turning_points"]),
                 "zigzag_volatility": float(zigzag["volatility"]),
                 "zigzag_trend": str(zigzag["trend"]),
@@ -1254,6 +1615,10 @@ class TopoCoreTCXv5AdvanceCASGit:
                 "morse_workflow_risky": bool(morse.get("workflow_risky", False)),
                 "morse_test_disable_signal": bool(morse.get("test_disable_signal", False)),
                 "diff_boosted_candidates": int(rank_meta["boosted_changed_candidates"]),
+                "perf_candidates_truncated": int(perf_candidates_truncated),
+                "calibration_min_fast_score": float(min_fast),
+                "calibration_verify_threshold": float(verify_threshold),
+                "calibration_zigzag_turning_threshold": int(zigzag_turning_threshold),
                 "github_is_pr": bool(github_context.is_pr),
                 "github_changed_files": len(github_context.changed_files),
                 "verified": list(verification["verified"]),
@@ -1270,17 +1635,23 @@ class TopoCoreTCXv5AdvanceCASGit:
                 "verification_profile": str(verification.get("profile_name", "n/a")),
                 "verification_branch": str(verification.get("branch", "n/a")),
                 "verification_required_checks": list(verification.get("required_checks", [])),
+                "verification_gate_decision": str(verification.get("gate_decision", "N/A")),
+                "verification_gate_reason": str(verification.get("gate_reason", "n/a")),
                 "v2_compat_used": bool(compat.get("used", False)),
                 "v2_compat_reason": str(compat.get("reason", "n/a")),
                 "v2_compat_caps": list(compat.get("caps", [])),
                 "v2_compat_adapters": list(compat.get("adapters", [])),
                 "v2_compat_adapter_results": dict(compat.get("adapter_results", {})),
                 "v2_compat_adapter_results_hash": compat.get("adapter_results_hash"),
+                "v2_compat_policy": dict(compat.get("policy", {})),
+                "v2_compat_policy_hash": compat.get("policy_hash"),
                 "v2_compat_path_hash": compat.get("path_hash"),
                 "v2_compat_topology_call": str(compat.get("topology_call", "n/a")),
                 "v2_compat_topology_hash": compat.get("topology_hash"),
                 "v2_compat_topology_keys_count": int(compat.get("topology_keys_count", 0) or 0),
                 "trace_schema_version": str(trace.get("schema_version", TRACE_SCHEMA_VERSION)),
+                "trace_schema_policy": "1.x",
+                "trace_schema_compatible": str(trace.get("schema_version", "")).startswith("1."),
                 "trace": trace,
             },
             security=sec,
@@ -1297,6 +1668,7 @@ class TopoCoreTCXv5AdvanceCASGit:
             "mode": result["mode"],
             "complexity": result["complexity"],
             "metrics": result["metrics"],
+            "perf": result.get("perf", {}),
             "zigzag": zigzag,
             "signature": _h(str(result["metrics"]), size=12),
         }

@@ -152,6 +152,11 @@ Defined in `repobrain/tky_engine.py` and used by `repobrain/tky_local.py`:
 - `RB_TKYA_ALLOW_REMOTE=0|1` (default guarded as disabled)
 - `RB_TKYA_STRICT_V5=0|1`
 - `RB_TKYA_V5_PATH` (optional override path)
+- `RB_TKYA_V5_CANARY_PERCENT=0..100` (optional canary rollout gate for `v5`)
+- `RB_TKYA_CANARY_KEY` (optional stable canary bucket key)
+- `RB_TKYA_ENABLE_V2_SHIM=0|1` (optional compatibility shim for selected v2 adapters)
+- `RB_TKYA_V2_SHIM_PATH` (optional override path for v2 shim source)
+- `RB_TKYA_V2_SHIM_STRICT=0|1` (optional strict init for v2 shim)
 - `RB_TKYA_STRICT_ORIGINAL=0|1`
 - `RB_TKYA_ORIGINAL_PATH` (optional override path)
 

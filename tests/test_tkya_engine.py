@@ -112,6 +112,8 @@ def test_default_backend_is_lite(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("RB_TKYA_BACKEND", raising=False)
     monkeypatch.delenv("RB_TKYA_V5_PATH", raising=False)
     monkeypatch.delenv("RB_TKYA_STRICT_V5", raising=False)
+    monkeypatch.delenv("RB_TKYA_V5_CANARY_PERCENT", raising=False)
+    monkeypatch.delenv("RB_TKYA_CANARY_KEY", raising=False)
     monkeypatch.delenv("RB_TKYA_ORIGINAL_PATH", raising=False)
     monkeypatch.delenv("RB_TKYA_STRICT_ORIGINAL", raising=False)
     monkeypatch.delenv("RB_TKYA_ALLOW_REMOTE", raising=False)
@@ -286,3 +288,38 @@ def test_remote_disabled_by_default_for_v5(
 
     assert decision.route == "FAST"
     assert not marker_path.exists()
+
+
+def test_v5_canary_percent_zero_falls_back_to_lite(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module_path = tmp_path / "TopoCore_TCX_v5-Advance_CAS+Git.py"
+    _write_v5_stub_module(module_path, call_remote=False)
+
+    monkeypatch.setenv("RB_TKYA_BACKEND", "v5")
+    monkeypatch.setenv("RB_TKYA_STRICT_V5", "1")
+    monkeypatch.setenv("RB_TKYA_V5_PATH", str(module_path))
+    monkeypatch.setenv("RB_TKYA_V5_CANARY_PERCENT", "0")
+    monkeypatch.setenv("RB_TKYA_CANARY_KEY", "stable-key")
+
+    engine = get_engine()
+    assert isinstance(engine, TopoCoreLite)
+
+
+def test_v5_canary_percent_hundred_uses_v5(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module_path = tmp_path / "TopoCore_TCX_v5-Advance_CAS+Git.py"
+    _write_v5_stub_module(module_path, call_remote=False)
+
+    monkeypatch.setenv("RB_TKYA_BACKEND", "v5")
+    monkeypatch.setenv("RB_TKYA_STRICT_V5", "1")
+    monkeypatch.setenv("RB_TKYA_V5_PATH", str(module_path))
+    monkeypatch.setenv("RB_TKYA_V5_CANARY_PERCENT", "100")
+    monkeypatch.setenv("RB_TKYA_CANARY_KEY", "stable-key")
+
+    engine = get_engine()
+    decision = engine.decide(_sample_request())
+    assert decision.route == "FAST"

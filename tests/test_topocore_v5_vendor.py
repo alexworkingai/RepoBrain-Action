@@ -201,6 +201,8 @@ def test_v5_trace_is_hash_only() -> None:
     assert isinstance(trace, dict)
     assert trace.get("schema_version") == "1.1"
     assert decision.compression_stats.get("trace_schema_version") == "1.1"
+    assert decision.compression_stats.get("trace_schema_policy") == "1.x"
+    assert decision.compression_stats.get("trace_schema_compatible") is True
     assert "query_hash" in trace
     assert question not in str(trace)
 
@@ -283,7 +285,14 @@ def test_v5_topology_kernel_handles_graph_vector_and_paths() -> None:
     assert "graph_density" in metrics
     assert "vector_count" in metrics
     assert "path_mean" in metrics
-    assert result.get("mode") in {"analytics", "analytics_graph", "analytics_graph_vector"}
+    assert result.get("mode") in {
+        "analytics",
+        "analytics_graph",
+        "analytics_graph_vector",
+        "analytics_temporal",
+        "analytics_graph_temporal",
+        "analytics_graph_vector_temporal",
+    }
 
 
 def test_v5_verification_profile_includes_branch_required_checks() -> None:
@@ -409,3 +418,108 @@ def test_v5_v2_compat_remote_adapter_stays_blocked_without_remote_env(
     remote_state = adapter_results.get("remote_entry", {})
     assert remote_state.get("state") == "blocked"
     assert remote_state.get("reason") == "remote_disabled"
+
+
+def test_v5_v2_compat_policy_blocks_adapter_by_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    v2_path = tmp_path / "TopoCore_TCX_v2-CAS.py"
+    v2_path.write_text(
+        "\n".join(
+            [
+                "class TopoCoreTCXv2CAS:",
+                "    def run_topological_calculation(self, payload):",
+                "        return {'alpha': 1}",
+                "",
+                "    def handle_request(self, user_text, **kwargs):",
+                "        class Resp:",
+                "            summary = 'ok'",
+                "            answer = 'ok'",
+                "        return Resp()",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("RB_TKYA_ENABLE_V2_SHIM", "1")
+    monkeypatch.setenv("RB_TKYA_V2_SHIM_PATH", str(v2_path))
+    monkeypatch.setenv("RB_TKYA_V2_SHIM_STRICT", "1")
+
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    req = _sample_request("ask")
+    req = EngineRequest(
+        task_type=req.task_type,
+        query=req.query,
+        candidates=req.candidates,
+        limits=req.limits,
+        policy={
+            **req.policy,
+            "task_type": "ask",
+            "v2_shim_policy": {
+                "by_task": {
+                    "ask": {"allow": ["topology_calc"]},
+                }
+            },
+        },
+    )
+    decision = core.decide(req)
+    stats = decision.compression_stats
+    adapter_results = stats.get("v2_compat_adapter_results", {})
+    assert isinstance(adapter_results, dict)
+    assert adapter_results.get("topology_calc", {}).get("state") == "ok"
+    assert adapter_results.get("request_entry", {}).get("state") == "skipped"
+    assert adapter_results.get("request_entry", {}).get("reason") == "policy_blocked"
+
+
+def test_v5_verification_gate_blocks_on_strict_branch_missing_required_checks() -> None:
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    req = EngineRequest(
+        task_type="review",
+        query=EngineQuery(text="review strict branch", signature=[1]),
+        candidates=[EngineCandidate(chunk_id="c1", score_local=0.9, file_path="repobrain/review.py")],
+        limits={"max_sources": 1},
+        policy={
+            "github_context": {"is_pr": True, "base_ref": "main"},
+            "verification_context": {
+                "checks": [
+                    {"name": "pytest -q", "status": "success"},
+                    {"name": "ruff check .", "status": "success"},
+                ]
+            },
+            "branch_protection_profiles": {
+                "main": {"required_checks": {"review": ["security scan"]}}
+            },
+        },
+    )
+    decision = core.decide(req)
+    stats = decision.compression_stats
+    assert stats.get("verification_gate_decision") == "BLOCK"
+    assert stats.get("verification_gate_reason") == "required_checks_not_run"
+
+
+def test_v5_perf_budgets_truncate_candidates_and_series() -> None:
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    candidates = [
+        EngineCandidate(
+            chunk_id=f"c{i}",
+            score_local=1.0 - (i * 0.001),
+            file_path="repobrain/retrieve.py",
+        )
+        for i in range(40)
+    ]
+    req = EngineRequest(
+        task_type="ask",
+        query=EngineQuery(text="analyze long series", signature=[1]),
+        candidates=candidates,
+        limits={"max_sources": 3, "tky_perf_max_candidates": 10, "tky_perf_max_series": 8},
+        policy={"analytics_context": {"series": list(range(30))}},
+    )
+    decision = core.decide(req)
+    stats = decision.compression_stats
+    assert stats.get("perf_candidates_truncated") == 30
+    topology_perf = stats.get("topology_perf", {})
+    assert isinstance(topology_perf, dict)
+    assert topology_perf.get("series_truncated", 0) >= 20
