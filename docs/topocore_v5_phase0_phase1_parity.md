@@ -1,4 +1,4 @@
-# TopoCore v5 Parity (Phase 0 + Phase 1 + Phase 2 + Phase 4)
+# TopoCore v5 Parity (Phase 0 + 1 + 2 + 4 + 5)
 
 This document tracks parity targets between:
 
@@ -29,11 +29,12 @@ This document tracks parity targets between:
 | GitHub diff-aware hints | No explicit engine layer | Yes (file/range boosts) | Phase 2 started |
 | ZigZag/MorseFlow | Yes | Yes (confidence + workflow risk signals) | Phase 4 expanded |
 | Blockchain adapter | Yes | No | Pending |
-| Verification adapter full ladder | Yes | Partial (planner + ladder stats) | In progress |
+| Verification adapter full ladder | Yes | Partial (planner + branch profiles + ladder stats) | Phase 5 expanded |
 | Codegen adapter | Yes | No | Pending |
 | Crypto engine | Yes | No | Pending |
 | Trace subsystem | Yes | Yes (hash-only trace object) | Phase 4 expanded |
 | DS/BigAnalytics kernels | Partial | Yes (series + vector + graph + path metrics) | Phase 4 expanded |
+| v2 specialized compatibility | Yes | Optional shim (fail-closed, hash-only outputs) | Phase 5 started |
 
 ## Runtime signals added in v5
 
@@ -67,10 +68,20 @@ This document tracks parity targets between:
 - `verification_not_run_count`
 - `verification_completeness`
 - `verification_strict_pass`
+- `verification_profile`
+- `verification_branch`
+- `verification_required_checks`
+- `v2_compat_used`
+- `v2_compat_reason`
+- `v2_compat_caps`
+- `v2_compat_path_hash`
+- `v2_compat_topology_call`
+- `v2_compat_topology_hash`
+- `v2_compat_topology_keys_count`
 
 ## Immediate next parity targets
 
-1. Add optional compatibility shim for selected v2 specialized adapters (without hard dependency).
-2. Extend verification planner with branch-protection profiles and required CI sets by task type.
-3. Add deeper topology modes for temporal graphs and anomaly windows.
-4. Keep hash-only trace stable-token schema versioned for downstream tooling.
+1. Expand v2 compatibility shim with explicit adapter registry (not method-name probing).
+2. Add verification profiles for release/hotfix branches with stricter required checks.
+3. Add temporal-graph/anomaly-window metrics for long-horizon DS workloads.
+4. Introduce versioned trace schema key for downstream audit tooling.

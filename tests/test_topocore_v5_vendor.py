@@ -282,3 +282,80 @@ def test_v5_topology_kernel_handles_graph_vector_and_paths() -> None:
     assert "vector_count" in metrics
     assert "path_mean" in metrics
     assert result.get("mode") in {"analytics", "analytics_graph", "analytics_graph_vector"}
+
+
+def test_v5_verification_profile_includes_branch_required_checks() -> None:
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    req = EngineRequest(
+        task_type="review",
+        query=EngineQuery(text="review branch policy", signature=[1]),
+        candidates=[EngineCandidate(chunk_id="c1", score_local=0.7, file_path="repobrain/review.py")],
+        limits={"max_sources": 1},
+        policy={
+            "github_context": {"is_pr": True, "base_ref": "main"},
+            "branch_protection_profiles": {
+                "main": {
+                    "required_checks": {
+                        "review": ["security scan", "integration-tests"],
+                    }
+                }
+            },
+            "verification_context": {
+                "checks": [
+                    {"name": "pytest -q", "status": "success"},
+                    {"name": "ruff check .", "status": "success"},
+                ]
+            },
+        },
+    )
+    decision = core.decide(req)
+    stats = decision.compression_stats
+    required = stats.get("verification_required_checks", [])
+    not_run = stats.get("not_run", [])
+    assert stats.get("verification_profile") == "main"
+    assert stats.get("verification_branch") == "main"
+    assert isinstance(required, list)
+    assert "security scan" in required
+    assert "integration-tests" in required
+    assert any("security scan:NOT_RUN" == item for item in not_run)
+    assert any("integration-tests:NOT_RUN" == item for item in not_run)
+
+
+def test_v5_v2_compat_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RB_TKYA_ENABLE_V2_SHIM", raising=False)
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    decision = core.decide(_sample_request("ask"))
+    assert decision.compression_stats.get("v2_compat_used") is False
+    assert decision.compression_stats.get("v2_compat_reason") == "disabled"
+
+
+def test_v5_v2_compat_loads_stub_when_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    v2_path = tmp_path / "TopoCore_TCX_v2-CAS.py"
+    v2_path.write_text(
+        "\n".join(
+            [
+                "class TopoCoreTCXv2CAS:",
+                "    def run_topological_calculation(self, payload):",
+                "        return {'alpha': 1, 'beta': 2}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("RB_TKYA_ENABLE_V2_SHIM", "1")
+    monkeypatch.setenv("RB_TKYA_V2_SHIM_PATH", str(v2_path))
+    monkeypatch.setenv("RB_TKYA_V2_SHIM_STRICT", "1")
+
+    module = _load_v5_module()
+    core = module.TopoCoreTCXv5AdvanceCASGit()
+    decision = core.decide(_sample_request("ask"))
+    stats = decision.compression_stats
+    assert stats.get("v2_compat_used") is True
+    assert stats.get("v2_compat_reason") == "loaded"
+    assert "run_topological_calculation" in (stats.get("v2_compat_caps") or [])
+    assert stats.get("v2_compat_topology_call") == "ok"
+    assert stats.get("v2_compat_topology_hash")

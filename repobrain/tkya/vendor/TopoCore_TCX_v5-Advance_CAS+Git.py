@@ -6,6 +6,7 @@ Phase coverage in this file:
 - Phase 2: diff-aware ranking and hash-only trace packing.
 - Phase 4: expanded MorseFlow confidence signals, verification ladder
   PASS/FAIL/PENDING/NOT_RUN states, and DS graph/vector/path kernels.
+- Phase 5: optional v2 compatibility shim and branch-protection verification profiles.
 """
 
 from __future__ import annotations
@@ -13,8 +14,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import enum
 import hashlib
+import importlib.util
 import math
 import os
+from pathlib import Path
 import re
 import statistics
 from typing import Any, Iterable
@@ -153,6 +156,94 @@ class GitHubContext:
     changed_files: tuple[str, ...]
     changed_ranges: dict[str, tuple[tuple[int, int], ...]]
     diff_hunks_hash: str
+
+
+class V2CompatibilityShim:
+    """Optional compatibility shim for selected v2 adapters.
+
+    The shim is disabled by default and only enabled with `RB_TKYA_ENABLE_V2_SHIM=1`.
+    It never exposes raw outputs from v2 methods; all diagnostics are hash-only.
+    """
+
+    _KNOWN_METHODS = (
+        "run_topological_calculation",
+        "handle_request",
+        "remote_call",
+    )
+
+    def __init__(self) -> None:
+        self.enabled = _to_bool(os.getenv("RB_TKYA_ENABLE_V2_SHIM", "0"))
+        self.strict = _to_bool(os.getenv("RB_TKYA_V2_SHIM_STRICT", "0"))
+        override = os.getenv("RB_TKYA_V2_SHIM_PATH", "").strip()
+        if override:
+            self.path = Path(override).expanduser().resolve()
+        else:
+            self.path = (Path(__file__).resolve().parent / "TopoCore_TCX_v2-CAS.py").resolve()
+
+        self._core: Any | None = None
+        self._state_reason = "disabled"
+        self._caps: list[str] = []
+        if self.enabled:
+            self._load()
+
+    def _load(self) -> None:
+        if not self.path.exists():
+            self._state_reason = "missing"
+            if self.strict:
+                raise RuntimeError(f"v2 compatibility shim enabled, but file is missing: {self.path}")
+            return
+
+        try:
+            spec = importlib.util.spec_from_file_location("repobrain_tkya_v2_compat", self.path)
+            if spec is None or spec.loader is None:
+                raise RuntimeError(f"Failed to build import spec for: {self.path}")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            core_cls = getattr(module, "TopoCoreTCXv2CAS", None)
+            if core_cls is None:
+                raise RuntimeError("v2 module missing TopoCoreTCXv2CAS.")
+            self._core = core_cls()
+            self._caps = sorted(
+                method
+                for method in self._KNOWN_METHODS
+                if callable(getattr(self._core, method, None))
+            )
+            self._state_reason = "loaded"
+        except Exception as exc:
+            self._state_reason = "load_error"
+            if self.strict:
+                raise RuntimeError("Failed to initialize v2 compatibility shim.") from exc
+
+    def enrich(self, *, policy: dict[str, Any], limits: dict[str, Any]) -> dict[str, Any]:
+        if not self.enabled:
+            return {"used": False, "reason": "disabled", "caps": []}
+        if self._core is None:
+            return {"used": False, "reason": self._state_reason, "caps": []}
+
+        result: dict[str, Any] = {
+            "used": True,
+            "reason": self._state_reason,
+            "caps": list(self._caps),
+            "path_hash": _h(str(self.path), size=12),
+        }
+
+        method = getattr(self._core, "run_topological_calculation", None)
+        analytics_context = policy.get("analytics_context") or limits.get("analytics_context")
+        if callable(method) and isinstance(analytics_context, dict):
+            try:
+                raw = method(analytics_context)
+            except Exception:
+                result["topology_call"] = "error"
+            else:
+                result["topology_call"] = "ok"
+                if isinstance(raw, dict):
+                    result["topology_keys_count"] = len(raw.keys())
+                    result["topology_hash"] = _h("|".join(sorted(map(str, raw.keys()))), size=12)
+                else:
+                    result["topology_keys_count"] = 0
+                    result["topology_hash"] = _h(type(raw).__name__, size=12)
+
+        return result
 
 
 @dataclass
@@ -565,6 +656,66 @@ class VerificationPlanner:
     """Planner that marks what checks were truly observed vs NOT_RUN."""
 
     _DEFAULT_CHECKS = ("ruff check .", "pytest -q")
+    _DEFAULT_BY_TASK = {
+        "ask": ("ruff check .",),
+        "locate": (),
+        "explain": ("ruff check .",),
+        "review": ("ruff check .", "pytest -q"),
+    }
+
+    @classmethod
+    def _resolve_profile(
+        cls,
+        *,
+        task: str,
+        policy: dict[str, Any],
+    ) -> tuple[str, str, list[str]]:
+        github_context = policy.get("github_context", {})
+        branch = "unknown"
+        if isinstance(github_context, dict):
+            branch = str(
+                github_context.get("base_ref")
+                or github_context.get("target_branch")
+                or github_context.get("branch")
+                or "unknown"
+            ).strip()
+        profile_name = "default"
+        required_from_profile: list[str] = []
+
+        profiles = policy.get("branch_protection_profiles", {})
+        profile_data: dict[str, Any] = {}
+        if isinstance(profiles, dict):
+            if branch in profiles and isinstance(profiles[branch], dict):
+                profile_name = branch
+                profile_data = profiles[branch]
+            elif "default" in profiles and isinstance(profiles["default"], dict):
+                profile_name = "default"
+                profile_data = profiles["default"]
+
+        if not profile_data:
+            branch_protection = policy.get("branch_protection", {})
+            if isinstance(branch_protection, dict):
+                profile_name = str(branch_protection.get("name", "policy") or "policy")
+                profile_data = branch_protection
+
+        required_checks = profile_data.get("required_checks", {})
+        if isinstance(required_checks, dict):
+            by_task = required_checks.get(task, [])
+            if isinstance(by_task, list):
+                required_from_profile.extend(str(item).strip() for item in by_task if str(item).strip())
+            global_items = required_checks.get("all", [])
+            if isinstance(global_items, list):
+                required_from_profile.extend(
+                    str(item).strip()
+                    for item in global_items
+                    if str(item).strip()
+                )
+        elif isinstance(required_checks, list):
+            required_from_profile.extend(str(item).strip() for item in required_checks if str(item).strip())
+
+        defaults = list(cls._DEFAULT_BY_TASK.get(task, cls._DEFAULT_CHECKS))
+        required = sorted(set(defaults + required_from_profile))
+        return profile_name, branch or "unknown", required
 
     @classmethod
     def plan(cls, *, task: str, policy: dict[str, Any], morse: dict[str, Any]) -> dict[str, Any]:
@@ -581,12 +732,16 @@ class VerificationPlanner:
                 "not_run_count": 0,
                 "completeness": 0.0,
                 "strict_pass": False,
+                "profile_name": "n/a",
+                "branch": "n/a",
+                "required_checks": [],
             }
 
         verified: list[str] = ["deterministic_ranking", "phase1_router_applied"]
         observed_pass: set[str] = set()
         observed_failed: set[str] = set()
         observed_pending: set[str] = set()
+        profile_name, branch, required_checks = cls._resolve_profile(task=task, policy=policy)
 
         verification_context = policy.get("verification_context", {})
         if isinstance(verification_context, dict):
@@ -606,7 +761,6 @@ class VerificationPlanner:
                     elif state in {"pending", "queued", "running", "in_progress"}:
                         observed_pending.add(name)
 
-        required_checks = list(cls._DEFAULT_CHECKS)
         if isinstance(verification_context, dict):
             extra_required = verification_context.get("required_checks", [])
             if isinstance(extra_required, list):
@@ -614,6 +768,7 @@ class VerificationPlanner:
                     name = str(item).strip()
                     if name:
                         required_checks.append(name)
+        required_checks = sorted(set(required_checks))
 
         ladder_names = sorted(set(required_checks) | observed_pass | observed_failed | observed_pending)
 
@@ -664,6 +819,9 @@ class VerificationPlanner:
             "not_run_count": not_run_count,
             "completeness": round(completeness, 6),
             "strict_pass": bool(pass_count == len(ladder) and fail_count == 0 and pending_count == 0),
+            "profile_name": profile_name,
+            "branch": branch,
+            "required_checks": required_checks,
         }
 
 
@@ -679,6 +837,7 @@ class TopoCoreTCXv5AdvanceCASGit:
         self.zigzag = ZigZagAnalyzer()
         self.morse = MorseFlowGate()
         self.verifier = VerificationPlanner()
+        self.v2_compat = V2CompatibilityShim()
 
     @staticmethod
     def _normalize_github_context(policy: dict[str, Any], limits: dict[str, Any]) -> GitHubContext:
@@ -923,6 +1082,7 @@ class TopoCoreTCXv5AdvanceCASGit:
         max_sources = max(1, _to_int(limits.get("max_sources"), 8))
         selected_ids = [candidate.chunk_id for candidate, _ in ranked[:max_sources]]
         verification = self.verifier.plan(task=task, policy=policy, morse=morse)
+        compat = self.v2_compat.enrich(policy=policy, limits=limits)
         trace = self._build_hash_only_trace(
             question=question,
             selected_ids=selected_ids,
@@ -981,6 +1141,16 @@ class TopoCoreTCXv5AdvanceCASGit:
                 "verification_not_run_count": int(verification["not_run_count"]),
                 "verification_completeness": float(verification["completeness"]),
                 "verification_strict_pass": bool(verification["strict_pass"]),
+                "verification_profile": str(verification.get("profile_name", "n/a")),
+                "verification_branch": str(verification.get("branch", "n/a")),
+                "verification_required_checks": list(verification.get("required_checks", [])),
+                "v2_compat_used": bool(compat.get("used", False)),
+                "v2_compat_reason": str(compat.get("reason", "n/a")),
+                "v2_compat_caps": list(compat.get("caps", [])),
+                "v2_compat_path_hash": compat.get("path_hash"),
+                "v2_compat_topology_call": str(compat.get("topology_call", "n/a")),
+                "v2_compat_topology_hash": compat.get("topology_hash"),
+                "v2_compat_topology_keys_count": int(compat.get("topology_keys_count", 0) or 0),
                 "trace": trace,
             },
             security=sec,
