@@ -48,6 +48,13 @@ def _get_backend(value: str | None) -> TKYABackend:
     return BACKEND_LITE
 
 
+def _default_backend() -> TKYABackend:
+    explicit = os.getenv("RB_TKYA_BACKEND", "")
+    if explicit.strip():
+        return _get_backend(explicit)
+    return BACKEND_V5 if _vendor_path_v5().exists() else BACKEND_LITE
+
+
 def _vendor_path_v5() -> Path:
     override = os.getenv("RB_TKYA_V5_PATH", "").strip()
     if override:
@@ -241,10 +248,11 @@ def _build_original_engine(path: Path, *, allow_remote: bool) -> TKYEngine:
 
 def get_engine() -> TKYEngine:
     """Return the selected TKYA engine with safe defaults."""
-    backend = _get_backend(os.getenv("RB_TKYA_BACKEND", BACKEND_LITE))
+    backend = _default_backend()
     allow_remote = _to_bool(os.getenv("RB_TKYA_ALLOW_REMOTE", "0"))
-    strict_original = _to_bool(os.getenv("RB_TKYA_STRICT_ORIGINAL", "0"))
-    strict_v5 = _to_bool(os.getenv("RB_TKYA_STRICT_V5", "0"))
+    strict_common = _to_bool(os.getenv("RB_TKYA_STRICT", "0"))
+    strict_original = _to_bool(os.getenv("RB_TKYA_STRICT_ORIGINAL", "0")) or strict_common
+    strict_v5 = _to_bool(os.getenv("RB_TKYA_STRICT_V5", "0")) or strict_common
 
     if backend == BACKEND_LITE:
         return TopoCoreLite()

@@ -559,6 +559,40 @@ def _build_refuse_answer_result(question: str, reason: str) -> AnswerResult:
     )
 
 
+def _build_wait_answer_result(question: str, reason: str) -> AnswerResult:
+    tky = TKYResult(
+        selected_chunk_ids=[],
+        route="WAIT",
+        compression_stats={"retrieved": 0, "selected": 0},
+        rationale=reason,
+    )
+    answer = (
+        f"Question: {question}\n"
+        "Route: WAIT\n"
+        "Status: Verification is pending\n"
+        "Selected sources: 0\n"
+        f"Rationale: {reason}"
+    )
+    return AnswerResult(
+        answer_text=answer,
+        evidence=[],
+        tky=tky,
+        audit_summary={"retrieved": 0, "selected": 0, "route": "WAIT"},
+        next_steps="Verification is pending. Re-run after checks complete.",
+    )
+
+
+def _canonical_route(route: str) -> str:
+    normalized = str(route or "").strip().upper()
+    if normalized in {"FAST", "DEEP", "REVIEW", "REFUSE", "WAIT"}:
+        return normalized
+    if normalized in {"BLOCK", "DENY", "REJECT"}:
+        return "BLOCK"
+    if normalized in {"PENDING", "VERIFY_PENDING"}:
+        return "WAIT"
+    return "FAST"
+
+
 def question_from_command(cmd: str, query: str) -> str:
     """Convert parsed command into a retrieval/answering question string."""
     if cmd == "review":
@@ -686,6 +720,15 @@ def _qa_limits(
     max_per_file: int,
     max_files: int,
     route_hint: str,
+    topk_current: int,
+    topk_fast: int,
+    topk_deep: int,
+    time_budget_s: int,
+    perf_max_candidates: int,
+    perf_max_series: int,
+    perf_max_vectors: int,
+    perf_max_edges: int,
+    perf_max_paths: int,
 ) -> dict[str, Any]:
     return {
         "max_sources": max_sources,
@@ -693,6 +736,15 @@ def _qa_limits(
         "keep_ratio": keep_ratio,
         "max_per_file": max_per_file,
         "max_files": max_files,
+        "top_k": topk_current,
+        "topk_fast": topk_fast,
+        "topk_deep": topk_deep,
+        "time_budget_s": time_budget_s,
+        "tky_perf_max_candidates": perf_max_candidates,
+        "tky_perf_max_series": perf_max_series,
+        "tky_perf_max_vectors": perf_max_vectors,
+        "tky_perf_max_edges": perf_max_edges,
+        "tky_perf_max_paths": perf_max_paths,
         "route_hint": route_hint,
         "task_type": cmd,
         "privacy_mode": "signatures_only",
@@ -806,6 +858,12 @@ def run_qa_two_pass(
     topk_fast = int(getattr(cfg, "topk_fast", getattr(cfg, "topk", 30)))
     topk_deep = int(getattr(cfg, "topk_deep", 80))
     min_score_fast = float(getattr(cfg, "min_score_fast", 0.05))
+    time_budget_s = int(getattr(cfg, "time_budget_s", 30))
+    perf_max_candidates = int(getattr(cfg, "tky_perf_max_candidates", 800))
+    perf_max_series = int(getattr(cfg, "tky_perf_max_series", 4096))
+    perf_max_vectors = int(getattr(cfg, "tky_perf_max_vectors", 2048))
+    perf_max_edges = int(getattr(cfg, "tky_perf_max_edges", 4096))
+    perf_max_paths = int(getattr(cfg, "tky_perf_max_paths", 4096))
     active_provider = provider
     t0 = time.perf_counter()
     pass1_candidates = _retrieve_candidates(question, chunks, topk=topk_fast, cmd=cmd)
@@ -826,6 +884,15 @@ def run_qa_two_pass(
         max_per_file=int(pass1_policy["max_per_file"]),
         max_files=int(pass1_policy["max_files"]),
         route_hint=_route_hint_for_candidates(pass1_candidates, min_score_fast),
+        topk_current=topk_fast,
+        topk_fast=topk_fast,
+        topk_deep=topk_deep,
+        time_budget_s=time_budget_s,
+        perf_max_candidates=perf_max_candidates,
+        perf_max_series=perf_max_series,
+        perf_max_vectors=perf_max_vectors,
+        perf_max_edges=perf_max_edges,
+        perf_max_paths=perf_max_paths,
     )
     t0 = time.perf_counter()
     result1, active_provider, pass1_meta = _answer_with_remote_fallback(
@@ -844,7 +911,23 @@ def run_qa_two_pass(
     pass_count = 1
     pass2_top_score: float | None = None
 
-    should_second_pass = cmd in {"ask", "explain"} and result1.tky.route == "DEEP"
+    route1 = _canonical_route(result1.tky.route)
+    if route1 in {"REFUSE", "BLOCK"}:
+        final_result = _build_refuse_answer_result(
+            question,
+            result1.tky.rationale or "Request blocked by TKY route.",
+        )
+    elif route1 == "WAIT":
+        final_result = _build_wait_answer_result(
+            question,
+            result1.tky.rationale or "Verification is pending.",
+        )
+
+    should_second_pass = (
+        cmd in {"ask", "explain"}
+        and route1 == "DEEP"
+        and final_result.tky.route not in {"REFUSE", "WAIT"}
+    )
     if should_second_pass:
         t0 = time.perf_counter()
         pass2_candidates = _retrieve_candidates(question, chunks, topk=topk_deep, cmd=cmd)
@@ -865,6 +948,15 @@ def run_qa_two_pass(
             max_per_file=int(pass2_policy["max_per_file"]),
             max_files=int(pass2_policy["max_files"]),
             route_hint="DEEP",
+            topk_current=topk_deep,
+            topk_fast=topk_fast,
+            topk_deep=topk_deep,
+            time_budget_s=time_budget_s,
+            perf_max_candidates=perf_max_candidates,
+            perf_max_series=perf_max_series,
+            perf_max_vectors=perf_max_vectors,
+            perf_max_edges=perf_max_edges,
+            perf_max_paths=perf_max_paths,
         )
         t0 = time.perf_counter()
         final_result, active_provider, pass2_meta = _answer_with_remote_fallback(
@@ -880,10 +972,24 @@ def run_qa_two_pass(
         final_meta.update(pass2_meta)
         pass_count = 2
 
+    final_route = _canonical_route(final_result.tky.route)
+    if final_route in {"REFUSE", "BLOCK"} and final_result.tky.route != "REFUSE":
+        final_result = _build_refuse_answer_result(
+            question,
+            final_result.tky.rationale or "Request blocked by TKY route.",
+        )
+        final_route = "REFUSE"
+    elif final_route == "WAIT" and final_result.tky.route != "WAIT":
+        final_result = _build_wait_answer_result(
+            question,
+            final_result.tky.rationale or "Verification is pending.",
+        )
+        final_route = "WAIT"
+
     audit_extra: dict[str, Any] = {
         "pass_count": pass_count,
         "pass1.top_score": round(pass1_top_score, 6),
-        "route_final": final_result.tky.route,
+        "route_final": final_route,
         "top_score": round(pass2_top_score if pass2_top_score is not None else pass1_top_score, 6),
     }
     if pass2_top_score is not None:

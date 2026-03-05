@@ -108,15 +108,47 @@ def _write_v5_stub_module(path: Path, *, call_remote: bool = False) -> None:
     )
 
 
-def test_default_backend_is_lite(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("RB_TKYA_BACKEND", raising=False)
+def test_explicit_lite_backend_is_lite(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_TKYA_BACKEND", "lite")
     monkeypatch.delenv("RB_TKYA_V5_PATH", raising=False)
     monkeypatch.delenv("RB_TKYA_STRICT_V5", raising=False)
+    monkeypatch.delenv("RB_TKYA_STRICT", raising=False)
     monkeypatch.delenv("RB_TKYA_V5_CANARY_PERCENT", raising=False)
     monkeypatch.delenv("RB_TKYA_CANARY_KEY", raising=False)
     monkeypatch.delenv("RB_TKYA_ORIGINAL_PATH", raising=False)
     monkeypatch.delenv("RB_TKYA_STRICT_ORIGINAL", raising=False)
     monkeypatch.delenv("RB_TKYA_ALLOW_REMOTE", raising=False)
+
+    engine = get_engine()
+    assert isinstance(engine, TopoCoreLite)
+
+
+def test_default_backend_prefers_v5_when_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_path = tmp_path / "TopoCore_TCX_v5-Advance_CAS+Git.py"
+    _write_v5_stub_module(module_path, call_remote=False)
+    monkeypatch.delenv("RB_TKYA_BACKEND", raising=False)
+    monkeypatch.setenv("RB_TKYA_V5_PATH", str(module_path))
+    monkeypatch.delenv("RB_TKYA_STRICT", raising=False)
+    monkeypatch.delenv("RB_TKYA_STRICT_V5", raising=False)
+    monkeypatch.delenv("RB_TKYA_ALLOW_REMOTE", raising=False)
+
+    engine = get_engine()
+    decision = engine.decide(_sample_request())
+    assert decision.route == "FAST"
+
+
+def test_default_backend_falls_back_to_lite_when_v5_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_path = tmp_path / "missing" / "TopoCore_TCX_v5-Advance_CAS+Git.py"
+    monkeypatch.delenv("RB_TKYA_BACKEND", raising=False)
+    monkeypatch.setenv("RB_TKYA_V5_PATH", str(missing_path))
+    monkeypatch.delenv("RB_TKYA_STRICT", raising=False)
+    monkeypatch.delenv("RB_TKYA_STRICT_V5", raising=False)
 
     engine = get_engine()
     assert isinstance(engine, TopoCoreLite)
@@ -160,6 +192,20 @@ def test_v5_backend_missing_file_strict_fails(
     missing_path = tmp_path / "missing" / "TopoCore_TCX_v5-Advance_CAS+Git.py"
     monkeypatch.setenv("RB_TKYA_BACKEND", "v5")
     monkeypatch.setenv("RB_TKYA_STRICT_V5", "1")
+    monkeypatch.setenv("RB_TKYA_V5_PATH", str(missing_path))
+
+    with pytest.raises(RuntimeError):
+        get_engine()
+
+
+def test_v5_backend_missing_file_common_strict_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_path = tmp_path / "missing" / "TopoCore_TCX_v5-Advance_CAS+Git.py"
+    monkeypatch.setenv("RB_TKYA_BACKEND", "v5")
+    monkeypatch.setenv("RB_TKYA_STRICT", "1")
+    monkeypatch.delenv("RB_TKYA_STRICT_V5", raising=False)
     monkeypatch.setenv("RB_TKYA_V5_PATH", str(missing_path))
 
     with pytest.raises(RuntimeError):

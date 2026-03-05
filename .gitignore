@@ -26,5 +26,6 @@ artifacts/
 *.json
 *.egg-info/
 
-# Proprietary TKYA vendor file (local-only, never commit)
+# Proprietary TKYA vendor cores (do not commit by default)
 repobrain/tkya/vendor/TopoCore_TCX_v2-CAS.py
+repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py

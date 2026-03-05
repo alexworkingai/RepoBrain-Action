@@ -87,6 +87,12 @@ Defined in `repobrain/tky_engine.py` and used by `repobrain/tky_local.py`:
 - `limits: dict[str, Any]`
 - `policy: dict[str, Any]`
 
+Policy keys used by TopoCore v5 wiring:
+- `corelocked: bool`
+- `github_context: dict` (event/repo/sha/ref/issue/pr/base/head/changed_files/diff_hunks when available)
+- `verification_context: dict` (capability summary: pytest/ruff/time budget/mode/patch/network)
+- `runtime: dict` (safe runtime metadata, no secrets)
+
 #### Engine output model: `EngineDecision`
 - `route: str`
 - `selected_chunk_ids: list[str]`
@@ -148,8 +154,11 @@ Defined in `repobrain/tky_engine.py` and used by `repobrain/tky_local.py`:
 - `RB_INDEX_CACHE_RESTORED`
 
 ### TKYA backend env
-- `RB_TKYA_BACKEND=lite|v5|original` (default `lite`)
+- `RB_TKYA_BACKEND=lite|v2|v5|original`
+  - `v2` is alias for `original`
+  - default behavior: if backend is not explicitly set and v5 vendor file exists, loader prefers `v5`; otherwise `lite`
 - `RB_TKYA_ALLOW_REMOTE=0|1` (default guarded as disabled)
+- `RB_TKYA_STRICT=0|1` (common strict mode for vendor initialization)
 - `RB_TKYA_STRICT_V5=0|1`
 - `RB_TKYA_V5_PATH` (optional override path)
 - `RB_TKYA_V5_CANARY_PERCENT=0..100` (optional canary rollout gate for `v5`)
