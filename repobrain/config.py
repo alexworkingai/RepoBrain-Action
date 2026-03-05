@@ -1,15 +1,260 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, replace
+import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import yaml
+
+SECRET_NAME_MARKERS = ("TOKEN", "KEY", "SECRET", "PASSWORD")
+
+
+@dataclass(frozen=True)
+class EnvVarSpec:
+    name: str
+    value_type: str
+    default: str
+    description: str
+    allowed: tuple[str, ...] = ()
+    min_value: float | None = None
+    max_value: float | None = None
+
+
+def env_str(
+    name: str,
+    default: str,
+    *,
+    source: Mapping[str, str] | None = None,
+) -> str:
+    env_source = source or os.environ
+    value = str(env_source.get(name, "") or "").strip()
+    return value if value else str(default)
+
+
+def env_bool(
+    name: str,
+    default: bool,
+    *,
+    source: Mapping[str, str] | None = None,
+    warnings: list[str] | None = None,
+) -> bool:
+    env_source = source or os.environ
+    raw = str(env_source.get(name, "") or "").strip()
+    if not raw:
+        return bool(default)
+    normalized = raw.lower()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+    if warnings is not None:
+        warnings.append(f"{name}: invalid boolean '{raw}', using default {default}")
+    return bool(default)
+
+
+def env_int(
+    name: str,
+    default: int,
+    *,
+    source: Mapping[str, str] | None = None,
+    min_value: int | None = None,
+    max_value: int | None = None,
+    warnings: list[str] | None = None,
+) -> int:
+    env_source = source or os.environ
+    raw = str(env_source.get(name, "") or "").strip()
+    if not raw:
+        value = int(default)
+    else:
+        try:
+            value = int(raw)
+        except ValueError:
+            value = int(default)
+            if warnings is not None:
+                warnings.append(f"{name}: invalid int '{raw}', using default {default}")
+
+    if min_value is not None and value < int(min_value):
+        if warnings is not None:
+            warnings.append(f"{name}: clamped to min {min_value} from {value}")
+        value = int(min_value)
+    if max_value is not None and value > int(max_value):
+        if warnings is not None:
+            warnings.append(f"{name}: clamped to max {max_value} from {value}")
+        value = int(max_value)
+    return int(value)
+
+
+def env_float(
+    name: str,
+    default: float,
+    *,
+    source: Mapping[str, str] | None = None,
+    min_value: float | None = None,
+    max_value: float | None = None,
+    warnings: list[str] | None = None,
+) -> float:
+    env_source = source or os.environ
+    raw = str(env_source.get(name, "") or "").strip()
+    if not raw:
+        value = float(default)
+    else:
+        try:
+            value = float(raw)
+        except ValueError:
+            value = float(default)
+            if warnings is not None:
+                warnings.append(f"{name}: invalid float '{raw}', using default {default}")
+
+    if min_value is not None and value < float(min_value):
+        if warnings is not None:
+            warnings.append(f"{name}: clamped to min {min_value} from {value}")
+        value = float(min_value)
+    if max_value is not None and value > float(max_value):
+        if warnings is not None:
+            warnings.append(f"{name}: clamped to max {max_value} from {value}")
+        value = float(max_value)
+    return float(value)
+
+
+def env_enum(
+    name: str,
+    default: str,
+    allowed: tuple[str, ...],
+    *,
+    source: Mapping[str, str] | None = None,
+    warnings: list[str] | None = None,
+) -> str:
+    env_source = source or os.environ
+    raw = str(env_source.get(name, "") or "").strip()
+    if not raw:
+        return str(default)
+    normalized = raw.lower()
+    allowed_set = {item.lower() for item in allowed}
+    if normalized in allowed_set:
+        return normalized
+    if warnings is not None:
+        warnings.append(f"{name}: invalid value '{raw}', using default {default}")
+    return str(default)
+
+
+def _to_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "off"}:
+            return False
+    return default
+
+
+def _as_str_list(value: Any, default: list[str]) -> list[str]:
+    if value is None:
+        return list(default)
+    if isinstance(value, str):
+        item = value.strip()
+        return [item] if item else list(default)
+    if isinstance(value, (list, tuple)):
+        out = [str(item).strip() for item in value if str(item).strip()]
+        return out if out else []
+    return list(default)
+
+
+def _mask_value(name: str, value: Any) -> Any:
+    upper = str(name or "").upper()
+    if any(marker in upper for marker in SECRET_NAME_MARKERS):
+        return "***"
+    if isinstance(value, str) and len(value) > 256:
+        return f"{value[:256]}...(+{len(value) - 256} chars)"
+    return value
+
+
+@dataclass(frozen=True)
+class TKYAConfig:
+    backend: str = "lite"
+    allow_remote: bool = False
+    strict: bool = False
+    strict_v5: bool = False
+    strict_original: bool = False
+    v5_path: str = ""
+    original_path: str = ""
+    remote_enabled: bool = False
+    remote_url: str = ""
+    remote_allow_commands: list[str] = field(default_factory=lambda: ["ask", "explain"])
+    remote_allow_branches: list[str] = field(default_factory=lambda: ["main"])
+    remote_allow_repos: list[str] = field(default_factory=list)
+    remote_fail_open: bool = True
+
+
+@dataclass(frozen=True)
+class LLMConfig:
+    enabled: bool = False
+    provider: str = ""
+    model_high: str = "openai/gpt-4.1"
+    model_low: str = "openai/gpt-4.1-mini"
+    max_input_tokens: int = 7600
+    max_output_tokens_global: int = 2000
+    max_output_tokens_ask: int = 1000
+    max_output_tokens_review: int = 1400
+    max_output_tokens_fix: int = 2000
+    allow_locate: bool = False
+
+
+@dataclass(frozen=True)
+class EmbeddingsConfig:
+    enabled: bool = False
+    model: str = "openai/text-embedding-3-small"
+    batch_size: int = 64
+    vector_topk: int = 30
+    weight_lexical: float = 0.55
+    weight_vector: float = 0.45
+
+
+@dataclass(frozen=True)
+class BatchConfig:
+    enabled: bool = False
+    max_calls_per_run: int = 6
+    reduce_enable: bool = True
+    reduce_model: str = ""
+
+
+@dataclass(frozen=True)
+class GovernorConfig:
+    stop_at_remaining: bool = True
+    min_remaining_buffer: int = 2
+    max_llm_calls_per_run: int = 6
+    max_embed_calls_per_run: int = 10
+    disable_reduce_when_remaining_lt: int = 3
+    switch_to_mini_when_remaining_lt: int = 5
+    disable_embed_when_remaining_lt: int = 3
+    estimate_mode_conservative: bool = True
+    max_tokens_per_run_llm: int = 12_000
+    max_tokens_per_run_embed: int = 200_000
+    time_budget_s: int = 240
+
+
+@dataclass(frozen=True)
+class WorkflowConfig:
+    trusted_context: bool = False
+    allow_dynamic_verify: bool = False
+    verify_time_budget_s: int = 120
+    apply_patch: bool = False
+    create_pr: bool = False
+    require_verify_for_patch: bool = False
+    fail_on_not_run: bool = False
+    disable_internal_reactions: bool = False
+    index_cache_restored: bool = False
+    github_actions: bool = False
+    github_token: str = ""
 
 
 @dataclass(frozen=True)
 class RepoBrainConfig:
-    """Minimal config with safe defaults."""
+    """Unified RepoBrain config with safe defaults and YAML compatibility."""
 
     max_sources: int = 8
     topk: int = 30
@@ -19,6 +264,11 @@ class RepoBrainConfig:
     max_sources_deep: int = 12
     topk_fast: int = 30
     topk_deep: int = 80
+    tky_perf_max_candidates: int = 800
+    tky_perf_max_series: int = 4096
+    tky_perf_max_vectors: int = 2048
+    tky_perf_max_edges: int = 4096
+    tky_perf_max_paths: int = 4096
     config_loaded: bool = False
     config_path: str = "<missing>"
     tky_remote_enabled: bool = False
@@ -27,38 +277,376 @@ class RepoBrainConfig:
     tky_remote_allow_branches: list[str] = field(default_factory=lambda: ["main"])
     tky_remote_allow_repos: list[str] = field(default_factory=list)
     tky_remote_fail_open: bool = True
+    tkya: TKYAConfig = field(default_factory=TKYAConfig)
+    llm: LLMConfig = field(default_factory=LLMConfig)
+    embeddings: EmbeddingsConfig = field(default_factory=EmbeddingsConfig)
+    batch: BatchConfig = field(default_factory=BatchConfig)
+    governor: GovernorConfig = field(default_factory=GovernorConfig)
+    workflow: WorkflowConfig = field(default_factory=WorkflowConfig)
+    warnings: list[str] = field(default_factory=list)
+    raw_env: dict[str, str] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_env(cls, source: Mapping[str, str] | None = None) -> RepoBrainConfig:
+        env_source = source or os.environ
+        warnings: list[str] = []
+
+        tkya = TKYAConfig(
+            backend=env_enum(
+                "RB_TKYA_BACKEND",
+                "lite",
+                ("lite", "v2", "v5", "original"),
+                source=env_source,
+                warnings=warnings,
+            ),
+            allow_remote=env_bool("RB_TKYA_ALLOW_REMOTE", False, source=env_source, warnings=warnings),
+            strict=env_bool("RB_TKYA_STRICT", False, source=env_source, warnings=warnings),
+            strict_v5=env_bool("RB_TKYA_STRICT_V5", False, source=env_source, warnings=warnings),
+            strict_original=env_bool(
+                "RB_TKYA_STRICT_ORIGINAL",
+                False,
+                source=env_source,
+                warnings=warnings,
+            ),
+            v5_path=env_str("RB_TKYA_V5_PATH", "", source=env_source),
+            original_path=env_str("RB_TKYA_ORIGINAL_PATH", "", source=env_source),
+        )
+        llm = LLMConfig(
+            enabled=env_bool("RB_LLM_ENABLED", False, source=env_source, warnings=warnings),
+            provider=env_str("RB_LLM_PROVIDER", "", source=env_source).lower(),
+            model_high=env_str("RB_LLM_MODEL_HIGH", "openai/gpt-4.1", source=env_source),
+            model_low=env_str("RB_LLM_MODEL_LOW", "openai/gpt-4.1-mini", source=env_source),
+            max_input_tokens=env_int(
+                "RB_LLM_MAX_INPUT_TOKENS",
+                7600,
+                source=env_source,
+                min_value=256,
+                max_value=64_000,
+                warnings=warnings,
+            ),
+            max_output_tokens_global=env_int(
+                "RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL",
+                2000,
+                source=env_source,
+                min_value=200,
+                max_value=16_000,
+                warnings=warnings,
+            ),
+            max_output_tokens_ask=env_int(
+                "RB_LLM_MAX_OUTPUT_TOKENS_ASK",
+                1000,
+                source=env_source,
+                min_value=200,
+                max_value=16_000,
+                warnings=warnings,
+            ),
+            max_output_tokens_review=env_int(
+                "RB_LLM_MAX_OUTPUT_TOKENS_REVIEW",
+                1400,
+                source=env_source,
+                min_value=200,
+                max_value=16_000,
+                warnings=warnings,
+            ),
+            max_output_tokens_fix=env_int(
+                "RB_LLM_MAX_OUTPUT_TOKENS_FIX",
+                2000,
+                source=env_source,
+                min_value=200,
+                max_value=16_000,
+                warnings=warnings,
+            ),
+            allow_locate=env_bool("RB_LLM_ALLOW_LOCATE", False, source=env_source, warnings=warnings),
+        )
+        embeddings = EmbeddingsConfig(
+            enabled=env_bool("RB_EMBED_ENABLED", False, source=env_source, warnings=warnings),
+            model=env_str(
+                "RB_EMBED_MODEL",
+                "openai/text-embedding-3-small",
+                source=env_source,
+            ),
+            batch_size=env_int(
+                "RB_EMBED_BATCH_SIZE",
+                64,
+                source=env_source,
+                min_value=1,
+                max_value=1024,
+                warnings=warnings,
+            ),
+            vector_topk=env_int(
+                "RB_RETRIEVAL_VECTOR_TOPK",
+                30,
+                source=env_source,
+                min_value=1,
+                max_value=500,
+                warnings=warnings,
+            ),
+            weight_lexical=env_float(
+                "RB_RETRIEVAL_W_LEX",
+                0.55,
+                source=env_source,
+                min_value=0.0,
+                max_value=1.0,
+                warnings=warnings,
+            ),
+            weight_vector=env_float(
+                "RB_RETRIEVAL_W_VEC",
+                0.45,
+                source=env_source,
+                min_value=0.0,
+                max_value=1.0,
+                warnings=warnings,
+            ),
+        )
+        batch = BatchConfig(
+            enabled=env_bool("RB_LLM_BATCH_ENABLE", False, source=env_source, warnings=warnings),
+            max_calls_per_run=env_int(
+                "RB_LLM_BATCH_MAX_CALLS_PER_RUN",
+                6,
+                source=env_source,
+                min_value=1,
+                max_value=100,
+                warnings=warnings,
+            ),
+            reduce_enable=env_bool(
+                "RB_LLM_BATCH_REDUCE_ENABLE",
+                True,
+                source=env_source,
+                warnings=warnings,
+            ),
+            reduce_model=env_str("RB_LLM_BATCH_REDUCE_MODEL", "", source=env_source),
+        )
+        governor = GovernorConfig(
+            stop_at_remaining=env_bool(
+                "RB_AI_STOP_AT_REMAINING",
+                True,
+                source=env_source,
+                warnings=warnings,
+            ),
+            min_remaining_buffer=env_int(
+                "RB_AI_MIN_REMAINING_BUFFER",
+                2,
+                source=env_source,
+                min_value=0,
+                max_value=100,
+                warnings=warnings,
+            ),
+            max_llm_calls_per_run=env_int(
+                "RB_AI_MAX_LLM_CALLS_PER_RUN",
+                6,
+                source=env_source,
+                min_value=1,
+                max_value=100,
+                warnings=warnings,
+            ),
+            max_embed_calls_per_run=env_int(
+                "RB_AI_MAX_EMBED_CALLS_PER_RUN",
+                10,
+                source=env_source,
+                min_value=1,
+                max_value=1000,
+                warnings=warnings,
+            ),
+            disable_reduce_when_remaining_lt=env_int(
+                "RB_AI_DISABLE_REDUCE_WHEN_REMAINING_LT",
+                3,
+                source=env_source,
+                min_value=0,
+                max_value=1000,
+                warnings=warnings,
+            ),
+            switch_to_mini_when_remaining_lt=env_int(
+                "RB_AI_SWITCH_TO_MINI_WHEN_REMAINING_LT",
+                5,
+                source=env_source,
+                min_value=0,
+                max_value=1000,
+                warnings=warnings,
+            ),
+            disable_embed_when_remaining_lt=env_int(
+                "RB_AI_DISABLE_EMBED_WHEN_REMAINING_LT",
+                3,
+                source=env_source,
+                min_value=0,
+                max_value=1000,
+                warnings=warnings,
+            ),
+            estimate_mode_conservative=env_bool(
+                "RB_AI_ESTIMATE_MODE_CONSERVATIVE",
+                True,
+                source=env_source,
+                warnings=warnings,
+            ),
+            max_tokens_per_run_llm=env_int(
+                "RB_AI_MAX_TOKENS_PER_RUN_LLM",
+                12_000,
+                source=env_source,
+                min_value=1,
+                max_value=2_000_000,
+                warnings=warnings,
+            ),
+            max_tokens_per_run_embed=env_int(
+                "RB_AI_MAX_TOKENS_PER_RUN_EMBED",
+                200_000,
+                source=env_source,
+                min_value=1,
+                max_value=10_000_000,
+                warnings=warnings,
+            ),
+            time_budget_s=env_int(
+                "RB_AI_TIME_BUDGET_S",
+                240,
+                source=env_source,
+                min_value=1,
+                max_value=86_400,
+                warnings=warnings,
+            ),
+        )
+        workflow = WorkflowConfig(
+            trusted_context=env_bool(
+                "RB_TRUSTED_CONTEXT",
+                False,
+                source=env_source,
+                warnings=warnings,
+            ),
+            allow_dynamic_verify=env_bool(
+                "RB_ALLOW_DYNAMIC_VERIFY",
+                False,
+                source=env_source,
+                warnings=warnings,
+            ),
+            verify_time_budget_s=env_int(
+                "RB_VERIFY_TIME_BUDGET_S",
+                120,
+                source=env_source,
+                min_value=1,
+                max_value=7200,
+                warnings=warnings,
+            ),
+            apply_patch=env_bool("RB_APPLY_PATCH", False, source=env_source, warnings=warnings),
+            create_pr=env_bool("RB_CREATE_PR", False, source=env_source, warnings=warnings),
+            require_verify_for_patch=env_bool(
+                "RB_REQUIRE_VERIFY_FOR_PATCH",
+                False,
+                source=env_source,
+                warnings=warnings,
+            ),
+            fail_on_not_run=env_bool(
+                "RB_FAIL_ON_NOT_RUN",
+                False,
+                source=env_source,
+                warnings=warnings,
+            ),
+            disable_internal_reactions=env_bool(
+                "RB_DISABLE_INTERNAL_REACTIONS",
+                False,
+                source=env_source,
+                warnings=warnings,
+            ),
+            index_cache_restored=env_bool(
+                "RB_INDEX_CACHE_RESTORED",
+                False,
+                source=env_source,
+                warnings=warnings,
+            ),
+            github_actions=str(env_source.get("GITHUB_ACTIONS", "") or "").strip().lower() == "true",
+            github_token=str(env_source.get("GITHUB_TOKEN", "") or ""),
+        )
+        raw_env = {
+            key: str(value)
+            for key, value in env_source.items()
+            if str(key).startswith("RB_")
+        }
+        return cls(
+            config_loaded=False,
+            config_path="<missing>",
+            tky_remote_enabled=tkya.remote_enabled,
+            tky_remote_url=tkya.remote_url,
+            tky_remote_allow_commands=list(tkya.remote_allow_commands),
+            tky_remote_allow_branches=list(tkya.remote_allow_branches),
+            tky_remote_allow_repos=list(tkya.remote_allow_repos),
+            tky_remote_fail_open=tkya.remote_fail_open,
+            tkya=tkya,
+            llm=llm,
+            embeddings=embeddings,
+            batch=batch,
+            governor=governor,
+            workflow=workflow,
+            warnings=warnings,
+            raw_env=raw_env,
+        )
+
+    def usersafe_dict(self) -> dict[str, Any]:
+        payload = {
+            "core": {
+                "max_sources": self.max_sources,
+                "topk": self.topk,
+                "min_score_fast": self.min_score_fast,
+                "min_score_keep": self.min_score_keep,
+                "max_sources_fast": self.max_sources_fast,
+                "max_sources_deep": self.max_sources_deep,
+                "topk_fast": self.topk_fast,
+                "topk_deep": self.topk_deep,
+            },
+            "tkya": asdict(self.tkya),
+            "llm": asdict(self.llm),
+            "embeddings": asdict(self.embeddings),
+            "batch": asdict(self.batch),
+            "governor": asdict(self.governor),
+            "workflow": {
+                "trusted_context": self.workflow.trusted_context,
+                "allow_dynamic_verify": self.workflow.allow_dynamic_verify,
+                "verify_time_budget_s": self.workflow.verify_time_budget_s,
+                "apply_patch": self.workflow.apply_patch,
+                "create_pr": self.workflow.create_pr,
+                "require_verify_for_patch": self.workflow.require_verify_for_patch,
+                "fail_on_not_run": self.workflow.fail_on_not_run,
+                "disable_internal_reactions": self.workflow.disable_internal_reactions,
+                "index_cache_restored": self.workflow.index_cache_restored,
+                "github_actions": self.workflow.github_actions,
+                "github_token": "***" if self.workflow.github_token else "",
+            },
+            "config_loaded": self.config_loaded,
+            "config_path": self.config_path,
+            "warnings": list(self.warnings),
+            "raw_env_masked": {
+                key: _mask_value(key, value)
+                for key, value in sorted(self.raw_env.items(), key=lambda item: item[0])
+            },
+        }
+        return payload
 
 
-def _to_bool(value: Any, default: bool = False) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
-    return default
+def _parse_tky_perf_values(data: dict[str, Any]) -> dict[str, int]:
+    tky = data.get("tky", {})
+    tky_dict = tky if isinstance(tky, dict) else {}
+    perf = tky_dict.get("perf", {})
+    perf_dict = perf if isinstance(perf, dict) else {}
+    return {
+        "tky_perf_max_candidates": int(
+            perf_dict.get("max_candidates", data.get("tky_perf_max_candidates", 800)) or 800
+        ),
+        "tky_perf_max_series": int(
+            perf_dict.get("max_series", data.get("tky_perf_max_series", 4096)) or 4096
+        ),
+        "tky_perf_max_vectors": int(
+            perf_dict.get("max_vectors", data.get("tky_perf_max_vectors", 2048)) or 2048
+        ),
+        "tky_perf_max_edges": int(
+            perf_dict.get("max_edges", data.get("tky_perf_max_edges", 4096)) or 4096
+        ),
+        "tky_perf_max_paths": int(
+            perf_dict.get("max_paths", data.get("tky_perf_max_paths", 4096)) or 4096
+        ),
+    }
 
 
-def _as_str_list(value: Any, default: list[str]) -> list[str]:
-    if value is None:
-        return default
-    if isinstance(value, str):
-        item = value.strip()
-        return [item] if item else default
-    if isinstance(value, list):
-        out = [str(item).strip() for item in value if str(item).strip()]
-        return out if out else []
-    if isinstance(value, tuple):
-        out = [str(item).strip() for item in value if str(item).strip()]
-        return out if out else []
-    return default
-
-
-def load_config(root: Path) -> RepoBrainConfig:
-    """Load .repobrain.yml if present, otherwise return defaults."""
+def load_config(root: Path, source: Mapping[str, str] | None = None) -> RepoBrainConfig:
+    """Load .repobrain.yml (if present) and merge with RB_* env defaults."""
+    base = RepoBrainConfig.from_env(source=source)
     cfg_path = root / ".repobrain.yml"
     if not cfg_path.exists():
-        return RepoBrainConfig(config_loaded=False, config_path="<missing>")
+        return replace(base, config_loaded=False, config_path="<missing>")
 
     data_raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
     data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
@@ -100,8 +688,18 @@ def load_config(root: Path) -> RepoBrainConfig:
         tky.get("remote_fail_open", tky.get("remoteFailOpen", True)),
         True,
     )
-
-    return RepoBrainConfig(
+    perf_values = _parse_tky_perf_values(data)
+    tkya = replace(
+        base.tkya,
+        remote_enabled=tky_remote_enabled,
+        remote_url=tky_remote_url,
+        remote_allow_commands=list(tky_remote_allow_commands),
+        remote_allow_branches=list(tky_remote_allow_branches),
+        remote_allow_repos=list(tky_remote_allow_repos),
+        remote_fail_open=tky_remote_fail_open,
+    )
+    return replace(
+        base,
         max_sources=max_sources,
         topk=topk,
         min_score_fast=min_score_fast,
@@ -110,12 +708,86 @@ def load_config(root: Path) -> RepoBrainConfig:
         max_sources_deep=max_sources_deep,
         topk_fast=topk_fast,
         topk_deep=topk_deep,
+        tky_perf_max_candidates=perf_values["tky_perf_max_candidates"],
+        tky_perf_max_series=perf_values["tky_perf_max_series"],
+        tky_perf_max_vectors=perf_values["tky_perf_max_vectors"],
+        tky_perf_max_edges=perf_values["tky_perf_max_edges"],
+        tky_perf_max_paths=perf_values["tky_perf_max_paths"],
         config_loaded=True,
         config_path=str(cfg_path),
         tky_remote_enabled=tky_remote_enabled,
         tky_remote_url=tky_remote_url,
-        tky_remote_allow_commands=tky_remote_allow_commands,
-        tky_remote_allow_branches=tky_remote_allow_branches,
-        tky_remote_allow_repos=tky_remote_allow_repos,
+        tky_remote_allow_commands=list(tky_remote_allow_commands),
+        tky_remote_allow_branches=list(tky_remote_allow_branches),
+        tky_remote_allow_repos=list(tky_remote_allow_repos),
         tky_remote_fail_open=tky_remote_fail_open,
+        tkya=tkya,
     )
+
+
+RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
+    EnvVarSpec("RB_TKYA_BACKEND", "enum", "lite", "TKYA backend selection.", ("lite", "v2", "v5", "original")),
+    EnvVarSpec("RB_TKYA_ALLOW_REMOTE", "bool", "0", "Allow remote/network operations in TKYA."),
+    EnvVarSpec("RB_TKYA_STRICT", "bool", "0", "Strict TKYA load mode."),
+    EnvVarSpec("RB_TKYA_STRICT_V5", "bool", "0", "Strict v5 vendor load mode."),
+    EnvVarSpec("RB_TKYA_STRICT_ORIGINAL", "bool", "0", "Strict original vendor load mode."),
+    EnvVarSpec("RB_TKYA_V5_PATH", "str", "", "Optional override path for v5 vendor file."),
+    EnvVarSpec("RB_TKYA_ORIGINAL_PATH", "str", "", "Optional override path for original vendor file."),
+    EnvVarSpec("RB_LLM_ENABLED", "bool", "0", "Enable LLM layer."),
+    EnvVarSpec("RB_LLM_PROVIDER", "str", "", "LLM provider name (github_models)."),
+    EnvVarSpec("RB_LLM_MODEL_HIGH", "str", "openai/gpt-4.1", "High-tier model id."),
+    EnvVarSpec("RB_LLM_MODEL_LOW", "str", "openai/gpt-4.1-mini", "Low-tier model id."),
+    EnvVarSpec("RB_LLM_MAX_INPUT_TOKENS", "int", "7600", "Prompt input token budget.", min_value=256, max_value=64000),
+    EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL", "int", "2000", "Global max output tokens.", min_value=200, max_value=16000),
+    EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_ASK", "int", "1000", "Ask max output tokens.", min_value=200, max_value=16000),
+    EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_REVIEW", "int", "1400", "Review max output tokens.", min_value=200, max_value=16000),
+    EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_FIX", "int", "2000", "Fix max output tokens.", min_value=200, max_value=16000),
+    EnvVarSpec("RB_LLM_ALLOW_LOCATE", "bool", "0", "Allow LLM for locate command."),
+    EnvVarSpec("RB_LLM_BATCH_ENABLE", "bool", "0", "Enable batch map-reduce LLM mode."),
+    EnvVarSpec("RB_LLM_BATCH_MAX_CALLS_PER_RUN", "int", "6", "Batch LLM call cap per run.", min_value=1, max_value=100),
+    EnvVarSpec("RB_LLM_BATCH_REDUCE_ENABLE", "bool", "1", "Enable reduce step in batch mode."),
+    EnvVarSpec("RB_LLM_BATCH_REDUCE_MODEL", "str", "", "Optional override model for reduce step."),
+    EnvVarSpec("RB_EMBED_ENABLED", "bool", "0", "Enable embeddings pipeline."),
+    EnvVarSpec("RB_EMBED_MODEL", "str", "openai/text-embedding-3-small", "Embeddings model id."),
+    EnvVarSpec("RB_EMBED_BATCH_SIZE", "int", "64", "Embeddings batch size.", min_value=1, max_value=1024),
+    EnvVarSpec("RB_RETRIEVAL_VECTOR_TOPK", "int", "30", "Vector candidate top-k.", min_value=1, max_value=500),
+    EnvVarSpec("RB_RETRIEVAL_W_LEX", "float", "0.55", "Hybrid lexical weight.", min_value=0.0, max_value=1.0),
+    EnvVarSpec("RB_RETRIEVAL_W_VEC", "float", "0.45", "Hybrid vector weight.", min_value=0.0, max_value=1.0),
+    EnvVarSpec("RB_AI_STOP_AT_REMAINING", "bool", "1", "Governor: stop when remaining exhausted."),
+    EnvVarSpec("RB_AI_MIN_REMAINING_BUFFER", "int", "2", "Governor request buffer.", min_value=0, max_value=100),
+    EnvVarSpec("RB_AI_MAX_LLM_CALLS_PER_RUN", "int", "6", "Governor max LLM calls.", min_value=1, max_value=100),
+    EnvVarSpec("RB_AI_MAX_EMBED_CALLS_PER_RUN", "int", "10", "Governor max embedding calls.", min_value=1, max_value=1000),
+    EnvVarSpec("RB_AI_DISABLE_REDUCE_WHEN_REMAINING_LT", "int", "3", "Disable reduce threshold.", min_value=0, max_value=1000),
+    EnvVarSpec("RB_AI_SWITCH_TO_MINI_WHEN_REMAINING_LT", "int", "5", "Model downgrade threshold.", min_value=0, max_value=1000),
+    EnvVarSpec("RB_AI_DISABLE_EMBED_WHEN_REMAINING_LT", "int", "3", "Disable embedding threshold.", min_value=0, max_value=1000),
+    EnvVarSpec("RB_AI_ESTIMATE_MODE_CONSERVATIVE", "bool", "1", "Conservative mode when headers absent."),
+    EnvVarSpec("RB_AI_MAX_TOKENS_PER_RUN_LLM", "int", "12000", "Governor LLM token cap.", min_value=1, max_value=2000000),
+    EnvVarSpec("RB_AI_MAX_TOKENS_PER_RUN_EMBED", "int", "200000", "Governor embedding token cap.", min_value=1, max_value=10000000),
+    EnvVarSpec("RB_AI_TIME_BUDGET_S", "int", "240", "Governor wall-clock budget.", min_value=1, max_value=86400),
+    EnvVarSpec("RB_TRUSTED_CONTEXT", "bool", "0", "Trusted execution context."),
+    EnvVarSpec("RB_ALLOW_DYNAMIC_VERIFY", "bool", "0", "Allow dynamic verification (pytest)."),
+    EnvVarSpec("RB_VERIFY_TIME_BUDGET_S", "int", "120", "Verification time budget.", min_value=1, max_value=7200),
+    EnvVarSpec("RB_APPLY_PATCH", "bool", "0", "Allow patch auto-apply."),
+    EnvVarSpec("RB_CREATE_PR", "bool", "0", "Allow PR creation after patch push."),
+    EnvVarSpec("RB_REQUIRE_VERIFY_FOR_PATCH", "bool", "0", "Require verification pass for patch success."),
+    EnvVarSpec("RB_FAIL_ON_NOT_RUN", "bool", "0", "Treat NOT_RUN verification as failure."),
+    EnvVarSpec("RB_DISABLE_INTERNAL_REACTIONS", "bool", "0", "Disable Python-side reactions."),
+    EnvVarSpec("RB_INDEX_CACHE_RESTORED", "bool", "0", "Mark index cache hit from workflow."),
+)
+
+
+def env_reference_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in sorted(RB_ENV_SPECS, key=lambda spec: spec.name):
+        rows.append(
+            {
+                "name": item.name,
+                "type": item.value_type,
+                "default": item.default,
+                "allowed": list(item.allowed),
+                "min": item.min_value,
+                "max": item.max_value,
+                "description": item.description,
+            }
+        )
+    return rows

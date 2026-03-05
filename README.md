@@ -18,6 +18,10 @@ Quick start (PowerShell):
 4. Lint:
    ruff check .
 
+Environment reference:
+
+* See `docs/env_reference.md` (generated from `repobrain/config.py`).
+
 GitHub Actions note:
 
 * `issue_number`: use digits only; `#` prefix is also accepted (for example `1` or `#1`).
@@ -235,6 +239,7 @@ AI Budget Governor:
   * `RB_AI_MAX_TOKENS_PER_RUN_EMBED` (default `200000`)
   * `RB_AI_ESTIMATE_MODE_CONSERVATIVE` (default `1`)
   * `RB_AI_TIME_BUDGET_S` (default `240`)
+* Each run writes `artifacts/config_snapshot.json` (usersafe effective config + validation warnings).
 
 Example `.repobrain.yml`:
 

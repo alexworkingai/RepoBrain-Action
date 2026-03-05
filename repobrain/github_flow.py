@@ -20,7 +20,7 @@ from repobrain.ai_budget_governor import (
 from repobrain.audit import add_timing, build_audit_base, finalize_audit
 from repobrain.ask import AnswerResult, answer_question, make_provider
 from repobrain.commands import parse_command
-from repobrain.config import RepoBrainConfig, load_config
+from repobrain.config import RepoBrainConfig, env_bool, env_int, load_config
 from repobrain.evidence import EvidenceItem
 from repobrain.formatting import format_refusal_comment, format_verify_comment
 from repobrain.github_publisher import (
@@ -84,6 +84,7 @@ HELP_TEXT = """RepoBrain command examples:
 
 BOT_MARKER = "[bot]"
 _LAST_AUDIT: dict[str, Any] | None = None
+_RUNTIME_ENV_CFG: RepoBrainConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,17 @@ def get_last_audit() -> dict[str, Any]:
 def _set_last_audit(audit: dict[str, Any]) -> None:
     global _LAST_AUDIT
     _LAST_AUDIT = finalize_audit(audit)
+
+
+def _set_runtime_env_cfg(cfg: RepoBrainConfig | None) -> None:
+    global _RUNTIME_ENV_CFG
+    _RUNTIME_ENV_CFG = cfg
+
+
+def _runtime_env_cfg() -> RepoBrainConfig:
+    if _RUNTIME_ENV_CFG is not None:
+        return _RUNTIME_ENV_CFG
+    return RepoBrainConfig.from_env()
 
 
 def _load_event_payload(event_path: Path | None) -> dict[str, Any]:
@@ -503,17 +515,22 @@ def _build_github_context_seed(
     }
 
 
-def _build_verification_context_seed(*, time_budget_s: int = 30) -> dict[str, Any]:
+def _build_verification_context_seed(
+    *,
+    time_budget_s: int = 30,
+    env_cfg: RepoBrainConfig | None = None,
+) -> dict[str, Any]:
     repo_root = resolve_repo_root()
     can_run_pytest = (repo_root / "tests").exists()
     can_run_ruff = (repo_root / "pyproject.toml").exists()
+    cfg = env_cfg or _runtime_env_cfg()
     return {
         "can_run_pytest": can_run_pytest,
         "can_run_ruff": can_run_ruff,
         "time_budget_s": int(time_budget_s),
-        "mode": "ci" if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true" else "local",
-        "allow_patch_apply": os.getenv("RB_APPLY_PATCH", "").strip() == "1",
-        "network_allowed": os.getenv("RB_TKYA_ALLOW_REMOTE", "").strip() == "1",
+        "mode": "ci" if cfg.workflow.github_actions else "local",
+        "allow_patch_apply": bool(cfg.workflow.apply_patch),
+        "network_allowed": bool(cfg.tkya.allow_remote),
         "checks": [],
         "required_checks": ["ruff", "pytest"],
     }
@@ -548,26 +565,46 @@ def _write_ask_result_markdown(repo_root: Path, markdown: str) -> Path:
 
 
 def _env_true(name: str, default: bool = False) -> bool:
-    raw = os.getenv(name, "").strip().lower()
-    if not raw:
-        return default
-    return raw in {"1", "true", "yes", "y", "on"}
+    cfg = _runtime_env_cfg()
+    mapping: dict[str, bool] = {
+        "RB_LLM_ENABLED": cfg.llm.enabled,
+        "RB_LLM_ALLOW_LOCATE": cfg.llm.allow_locate,
+        "RB_EMBED_ENABLED": cfg.embeddings.enabled,
+        "RB_LLM_BATCH_ENABLE": cfg.batch.enabled,
+        "RB_LLM_BATCH_REDUCE_ENABLE": cfg.batch.reduce_enable,
+        "RB_TRUSTED_CONTEXT": cfg.workflow.trusted_context,
+        "RB_ALLOW_DYNAMIC_VERIFY": cfg.workflow.allow_dynamic_verify,
+        "RB_APPLY_PATCH": cfg.workflow.apply_patch,
+        "RB_CREATE_PR": cfg.workflow.create_pr,
+        "RB_REQUIRE_VERIFY_FOR_PATCH": cfg.workflow.require_verify_for_patch,
+        "RB_FAIL_ON_NOT_RUN": cfg.workflow.fail_on_not_run,
+        "RB_DISABLE_INTERNAL_REACTIONS": cfg.workflow.disable_internal_reactions,
+        "RB_INDEX_CACHE_RESTORED": cfg.workflow.index_cache_restored,
+        "RB_TKYA_ALLOW_REMOTE": cfg.tkya.allow_remote,
+    }
+    if name in mapping:
+        return bool(mapping[name])
+    return env_bool(name, default)
 
 
 def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return int(default)
-    try:
-        return int(raw)
-    except ValueError:
-        return int(default)
+    cfg = _runtime_env_cfg()
+    mapping: dict[str, int] = {
+        "RB_VERIFY_TIME_BUDGET_S": cfg.workflow.verify_time_budget_s,
+        "RB_LLM_MAX_INPUT_TOKENS": cfg.llm.max_input_tokens,
+        "RB_LLM_BATCH_MAX_CALLS_PER_RUN": cfg.batch.max_calls_per_run,
+        "RB_RETRIEVAL_VECTOR_TOPK": cfg.embeddings.vector_topk,
+    }
+    if name in mapping:
+        return int(mapping[name])
+    return env_int(name, default)
 
 
 def _llm_enabled() -> bool:
-    if not _env_true("RB_LLM_ENABLED", default=False):
+    cfg = _runtime_env_cfg()
+    if not bool(cfg.llm.enabled):
         return False
-    provider = os.getenv("RB_LLM_PROVIDER", "").strip().lower()
+    provider = str(cfg.llm.provider or "").strip().lower()
     return provider == "github_models"
 
 
@@ -791,11 +828,11 @@ def _write_llm_usage(repo_root: Path, payload: dict[str, Any]) -> Path:
 
 
 def _embeddings_enabled() -> bool:
-    return _env_true("RB_EMBED_ENABLED", default=False)
+    return bool(_runtime_env_cfg().embeddings.enabled)
 
 
 def _embeddings_model() -> str:
-    value = os.getenv("RB_EMBED_MODEL", "").strip()
+    value = str(_runtime_env_cfg().embeddings.model or "").strip()
     return value or "openai/text-embedding-3-small"
 
 
@@ -919,6 +956,30 @@ def _write_ai_quota_snapshot(repo_root: Path, payload: dict[str, Any]) -> Path:
     return path
 
 
+def _build_config_snapshot_payload(cfg: RepoBrainConfig) -> dict[str, Any]:
+    return {
+        "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "config": cfg.usersafe_dict(),
+        "warnings": list(cfg.warnings),
+        "feature_summary": {
+            "tkya_backend": str(cfg.tkya.backend or "lite"),
+            "llm_enabled": bool(cfg.llm.enabled),
+            "embeddings_enabled": bool(cfg.embeddings.enabled),
+            "batch_enabled": bool(cfg.batch.enabled),
+            "checks_enabled": True,
+            "apply_patch": bool(cfg.workflow.apply_patch),
+            "create_pr": bool(cfg.workflow.create_pr),
+        },
+    }
+
+
+def _write_config_snapshot(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "config_snapshot.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
 def _finalize_run(
     *,
     repo_root: Path,
@@ -939,7 +1000,12 @@ def _finalize_run(
     snapshot_path = _write_ai_quota_snapshot(repo_root, snapshot)
     audit["ai_quota_snapshot_artifact"] = snapshot_path.as_posix()
     audit["ai_governor"] = snapshot.get("governor", {})
+    env_cfg = _runtime_env_cfg()
+    config_snapshot = _build_config_snapshot_payload(env_cfg)
+    config_snapshot_path = _write_config_snapshot(repo_root, config_snapshot)
+    audit["config_snapshot_artifact"] = config_snapshot_path.as_posix()
     _set_last_audit(audit)
+    _set_runtime_env_cfg(None)
 
 
 def _maybe_embed_query(
@@ -952,7 +1018,9 @@ def _maybe_embed_query(
         meta = _default_embeddings_meta("disabled")
         meta["embed_chunks_embedded"] = chunks_embedded_count
         return None, meta
-    token = os.getenv("GITHUB_TOKEN", "").strip()
+    token = str(_runtime_env_cfg().workflow.github_token or "").strip()
+    if not token:
+        token = os.getenv("GITHUB_TOKEN", "").strip()
     if not token:
         meta = _default_embeddings_meta("missing_github_token")
         meta["embed_chunks_embedded"] = chunks_embedded_count
@@ -1141,9 +1209,10 @@ def _run_review_verification(
     repo_root: Path,
     cmd: str,
 ) -> dict[str, Any]:
-    trusted = _env_true("RB_TRUSTED_CONTEXT", default=False)
-    allow_dynamic = _env_true("RB_ALLOW_DYNAMIC_VERIFY", default=False)
-    time_budget_s = int(os.getenv("RB_VERIFY_TIME_BUDGET_S", "120") or 120)
+    cfg = _runtime_env_cfg()
+    trusted = bool(cfg.workflow.trusted_context)
+    allow_dynamic = bool(cfg.workflow.allow_dynamic_verify)
+    time_budget_s = int(cfg.workflow.verify_time_budget_s)
     caps = detect_capabilities(repo_root)
     plan: list[str] = ["ruff"]
     if cmd == "fix":
@@ -1196,16 +1265,19 @@ def _maybe_generate_llm_text(
         llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
-    token = os.getenv("GITHUB_TOKEN", "").strip()
+    token = str(_runtime_env_cfg().workflow.github_token or "").strip()
+    if not token:
+        token = os.getenv("GITHUB_TOKEN", "").strip()
     if not token:
         llm_meta = _llm_default_meta("missing_github_token")
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
-    max_input_tokens = _env_int("RB_LLM_MAX_INPUT_TOKENS", 7600)
-    model_high = os.getenv("RB_LLM_MODEL_HIGH", "openai/gpt-4.1").strip() or "openai/gpt-4.1"
-    model_low = os.getenv("RB_LLM_MODEL_LOW", "openai/gpt-4.1-mini").strip() or "openai/gpt-4.1-mini"
+    cfg = _runtime_env_cfg()
+    max_input_tokens = int(cfg.llm.max_input_tokens)
+    model_high = str(cfg.llm.model_high or "openai/gpt-4.1")
+    model_low = str(cfg.llm.model_low or "openai/gpt-4.1-mini")
 
     complexity_limits = {"query_length": len(query or "")}
     complexity_score = score_complexity(
@@ -1227,6 +1299,7 @@ def _maybe_generate_llm_text(
         task_type=cmd,
         intent=intent,
         complexity_score=complexity_score,
+        cfg=cfg,
     )
     explanation = complexity_explanation(
         task_type=cmd,
@@ -1617,7 +1690,8 @@ def _run_batch_llm_review_fix(
             "disabled"
         )
 
-    max_input_tokens = _env_int("RB_LLM_MAX_INPUT_TOKENS", 7600)
+    cfg = _runtime_env_cfg()
+    max_input_tokens = int(cfg.llm.max_input_tokens)
     planned = plan_batches(
         task_type=cmd,
         intent=intent,
@@ -1626,9 +1700,9 @@ def _run_batch_llm_review_fix(
         limits={"max_input_tokens": max_input_tokens},
         budgets={"max_input_tokens": max_input_tokens, "reserve_tokens": 800},
     )
-    max_calls = max(1, _env_int("RB_LLM_BATCH_MAX_CALLS_PER_RUN", 6))
-    model_high = os.getenv("RB_LLM_MODEL_HIGH", "openai/gpt-4.1").strip() or "openai/gpt-4.1"
-    model_low = os.getenv("RB_LLM_MODEL_LOW", "openai/gpt-4.1-mini").strip() or "openai/gpt-4.1-mini"
+    max_calls = max(1, int(cfg.batch.max_calls_per_run))
+    model_high = str(cfg.llm.model_high or "openai/gpt-4.1")
+    model_low = str(cfg.llm.model_low or "openai/gpt-4.1-mini")
     route_norm = str(route or "").strip().upper()
     overall_score = score_complexity(
         task_type=cmd,
@@ -1639,8 +1713,8 @@ def _run_batch_llm_review_fix(
         limits={"query_length": len(query or "")},
     )
     overall_model, overall_tier = choose_model(overall_score, model_high=model_high, model_low=model_low)
-    reduce_model_override = os.getenv("RB_LLM_BATCH_REDUCE_MODEL", "").strip()
-    reduce_enable = _env_true("RB_LLM_BATCH_REDUCE_ENABLE", default=True)
+    reduce_model_override = str(cfg.batch.reduce_model or "").strip()
+    reduce_enable = bool(cfg.batch.reduce_enable)
     pre_batch_action = "n/a"
     pre_batch_reason = "n/a"
     if governor is not None:
@@ -2055,7 +2129,9 @@ def _is_bot_login(login: str) -> bool:
 
 def _build_post_client() -> GitHubClient:
     repo = extract_repo_from_env()
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    token = str(_runtime_env_cfg().workflow.github_token or "").strip()
+    if not token:
+        token = os.environ.get("GITHUB_TOKEN", "").strip()
     if not repo:
         raise ValueError("GITHUB_REPOSITORY is required when dry_run=False")
     if not token:
@@ -2064,7 +2140,7 @@ def _build_post_client() -> GitHubClient:
 
 
 def _internal_reactions_enabled() -> bool:
-    return os.environ.get("RB_DISABLE_INTERNAL_REACTIONS", "").strip() != "1"
+    return not bool(_runtime_env_cfg().workflow.disable_internal_reactions)
 
 
 def _provider_engine_name(provider: Any) -> str:
@@ -2294,7 +2370,7 @@ def load_or_build_chunks_with_meta(
     """Load/build index and return chunks, source, elapsed_ms, vectors, vectors_meta."""
     started = time.perf_counter()
     existed_before = index_path.exists()
-    cache_restored = os.environ.get("RB_INDEX_CACHE_RESTORED", "").strip() == "1"
+    cache_restored = bool(_runtime_env_cfg().workflow.index_cache_restored)
 
     if existed_before:
         chunks = load_index(index_path)
@@ -2303,10 +2379,28 @@ def load_or_build_chunks_with_meta(
         return chunks, source, (time.perf_counter() - started) * 1000.0, vectors, vectors_meta
 
     index_path.parent.mkdir(parents=True, exist_ok=True)
+    env_cfg = _runtime_env_cfg()
     if governor is None:
-        build_index(root=repo_root, out_zip=index_path, store_text=False)
+        try:
+            build_index(root=repo_root, out_zip=index_path, store_text=False, cfg=env_cfg)
+        except TypeError:
+            build_index(root=repo_root, out_zip=index_path, store_text=False)
     else:
-        build_index(root=repo_root, out_zip=index_path, store_text=False, governor=governor)
+        try:
+            build_index(
+                root=repo_root,
+                out_zip=index_path,
+                store_text=False,
+                governor=governor,
+                cfg=env_cfg,
+            )
+        except TypeError:
+            build_index(
+                root=repo_root,
+                out_zip=index_path,
+                store_text=False,
+                governor=governor,
+            )
     chunks = load_index(index_path)
     vectors, vectors_meta = load_index_embeddings(index_path)
     return chunks, "rebuilt", (time.perf_counter() - started) * 1000.0, vectors, vectors_meta
@@ -2414,15 +2508,10 @@ def _retrieve_candidates(
 ) -> list[CandidateChunk]:
     vectors = chunk_vectors_by_id or {}
     if vectors and query_vector:
-        vector_topk = _env_int("RB_RETRIEVAL_VECTOR_TOPK", 30)
-        try:
-            w_lex = float(os.getenv("RB_RETRIEVAL_W_LEX", "0.55") or 0.55)
-        except ValueError:
-            w_lex = 0.55
-        try:
-            w_vec = float(os.getenv("RB_RETRIEVAL_W_VEC", "0.45") or 0.45)
-        except ValueError:
-            w_vec = 0.45
+        env_cfg = _runtime_env_cfg()
+        vector_topk = int(env_cfg.embeddings.vector_topk)
+        w_lex = float(env_cfg.embeddings.weight_lexical)
+        w_vec = float(env_cfg.embeddings.weight_vector)
         total = w_lex + w_vec
         if total <= 0.0:
             w_lex, w_vec = 0.55, 0.45
@@ -2477,14 +2566,15 @@ def _qa_limits(
     github_context: dict[str, Any] | None = None,
     verification_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    env_cfg = _runtime_env_cfg()
     policy: dict[str, Any] = {
         "no_raw_text": True,
         "privacy_mode": "signatures_only",
         "github_context": dict(github_context or {}),
         "verification_context": dict(verification_context or {}),
         "runtime": {
-            "mode": "ci" if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true" else "local",
-            "network_allowed": os.getenv("RB_TKYA_ALLOW_REMOTE", "").strip() == "1",
+            "mode": "ci" if env_cfg.workflow.github_actions else "local",
+            "network_allowed": bool(env_cfg.tkya.allow_remote),
         },
     }
     return {
@@ -3211,9 +3301,9 @@ def _build_review_markdown(
         "github_context": dict(github_context_seed or {}),
         "verification_context": verification_context,
         "runtime": {
-            "mode": "ci" if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true" else "local",
-            "network_allowed": os.getenv("RB_TKYA_ALLOW_REMOTE", "").strip() == "1",
-            "trusted_context": _env_true("RB_TRUSTED_CONTEXT", default=False),
+            "mode": "ci" if _runtime_env_cfg().workflow.github_actions else "local",
+            "network_allowed": bool(_runtime_env_cfg().tkya.allow_remote),
+            "trusted_context": bool(_runtime_env_cfg().workflow.trusted_context),
         },
     }
     limits = _qa_limits(
@@ -3227,7 +3317,7 @@ def _build_review_markdown(
         topk_current=min(80, max(10, len(review_candidates))),
         topk_fast=30,
         topk_deep=80,
-        time_budget_s=int(os.getenv("RB_VERIFY_TIME_BUDGET_S", "120") or 120),
+        time_budget_s=int(_runtime_env_cfg().workflow.verify_time_budget_s),
         perf_max_candidates=int(getattr(cfg, "tky_perf_max_candidates", 800)),
         perf_max_series=int(getattr(cfg, "tky_perf_max_series", 4096)),
         perf_max_vectors=int(getattr(cfg, "tky_perf_max_vectors", 2048)),
@@ -3703,6 +3793,8 @@ def run_github_flow(
     event_path: Path | None = None,
 ) -> str:
     """Run RepoBrain GitHub flow in dry-run or post mode."""
+    env_cfg = RepoBrainConfig.from_env()
+    _set_runtime_env_cfg(env_cfg)
     event_ctx = extract_event_context_from_event(event_path)
     event_payload = _load_event_payload(event_path)
     source_text = (comment_text or "").strip() or event_ctx.comment_text.strip()
@@ -3712,7 +3804,7 @@ def run_github_flow(
         event_ctx=event_ctx,
         resolved_issue_number=resolved_issue_number,
     )
-    verification_context_seed = _build_verification_context_seed(time_budget_s=30)
+    verification_context_seed = _build_verification_context_seed(time_budget_s=30, env_cfg=env_cfg)
     mode_label = "DRY_RUN" if dry_run else "POST_MODE"
     repo_name = extract_repo_from_env()
     sha_value = extract_sha_from_env()
@@ -3731,7 +3823,7 @@ def run_github_flow(
             "tky_mode_requested": tky_mode,
         }
     )
-    governor = build_governor_from_env()
+    governor = build_governor_from_env(cfg=env_cfg)
     audit["ai_governor_policy"] = governor.summary().get("policy", {})
 
     if not source_text:

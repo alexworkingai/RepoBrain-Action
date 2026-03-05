@@ -195,3 +195,10 @@ jobs:
           name: repobrain-ai-quota-snapshot
           path: artifacts/ai_quota_snapshot.json
           if-no-files-found: ignore
+      - name: Upload RepoBrain config snapshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-config-snapshot
+          path: artifacts/config_snapshot.json
+          if-no-files-found: ignore

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-import os
 from typing import Any
+
+from repobrain.config import RepoBrainConfig
 
 
 def _env_true(name: str, default: bool = False) -> bool:
-    raw = os.getenv(name, "").strip().lower()
-    if not raw:
-        return default
-    return raw in {"1", "true", "yes", "y", "on"}
+    cfg = RepoBrainConfig.from_env()
+    if name == "RB_REQUIRE_VERIFY_FOR_PATCH":
+        return bool(cfg.workflow.require_verify_for_patch)
+    if name == "RB_FAIL_ON_NOT_RUN":
+        return bool(cfg.workflow.fail_on_not_run)
+    return bool(default)
 
 
 def _verification_flags(verification_report: dict[str, Any]) -> tuple[bool, bool, bool]:

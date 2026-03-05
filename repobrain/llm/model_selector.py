@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
+from repobrain.config import RepoBrainConfig
 
 def score_complexity(
     task_type: str,
@@ -61,16 +61,6 @@ def choose_model(
     return model_low, "low"
 
 
-def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return int(default)
-    try:
-        return int(raw)
-    except ValueError:
-        return int(default)
-
-
 def _scaled_budget(score: int, low: int, high: int) -> int:
     bounded_score = max(0, min(100, int(score)))
     span = max(0, high - low)
@@ -81,12 +71,14 @@ def compute_output_token_budget(
     task_type: str,
     intent: str,
     complexity_score: int,
+    cfg: RepoBrainConfig | None = None,
 ) -> int:
     """Compute adaptive max_output_tokens with env overrides and global cap."""
-    global_cap = max(200, _env_int("RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL", 2000))
-    ask_cap = max(200, _env_int("RB_LLM_MAX_OUTPUT_TOKENS_ASK", 1000))
-    review_cap = max(200, _env_int("RB_LLM_MAX_OUTPUT_TOKENS_REVIEW", 1400))
-    fix_cap = max(200, _env_int("RB_LLM_MAX_OUTPUT_TOKENS_FIX", 2000))
+    llm_cfg = (cfg or RepoBrainConfig.from_env()).llm
+    global_cap = max(200, int(llm_cfg.max_output_tokens_global))
+    ask_cap = max(200, int(llm_cfg.max_output_tokens_ask))
+    review_cap = max(200, int(llm_cfg.max_output_tokens_review))
+    fix_cap = max(200, int(llm_cfg.max_output_tokens_fix))
 
     normalized_task = str(task_type or "").strip().lower()
     normalized_intent = str(intent or "").strip().lower()

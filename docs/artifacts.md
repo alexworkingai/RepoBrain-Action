@@ -90,6 +90,7 @@ When review/fix verification runs:
 - `artifacts/embeddings_usage.json` is written when embeddings are enabled
 - `artifacts/batch_summaries.json` stores usersafe map-stage summaries for batch runs
 - `artifacts/ai_quota_snapshot.json` is always written at flow end (usersafe governor summary)
+- `artifacts/config_snapshot.json` is always written at flow end (usersafe effective RB config)
 
 `artifacts/llm_usage.json` (usersafe) includes:
 
@@ -136,6 +137,13 @@ When review/fix verification runs:
   - `policy`
   - `decisions_log_summary`
   - `final_state`
+
+`artifacts/config_snapshot.json` (usersafe) includes:
+
+- `date_utc`
+- `config` (sanitized `RepoBrainConfig.usersafe_dict()`)
+- `warnings` (validation/clamp notes)
+- `feature_summary` (enabled flags and key modes)
 
 Safe defaults:
 

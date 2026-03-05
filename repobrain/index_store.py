@@ -13,6 +13,7 @@ import orjson
 
 from .ai_budget_governor import QuotaSignal, build_governor_from_env
 from .chunk import chunk_text
+from .config import RepoBrainConfig
 from .embeddings_cache import EmbeddingsCache
 from .llm.github_models_embeddings import (
     GitHubModelsEmbeddingsClient,
@@ -111,23 +112,16 @@ def _tool_versions() -> dict[str, str]:
     }
 
 
-def _embed_enabled() -> bool:
-    return os.getenv("RB_EMBED_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+def _embed_enabled(cfg: RepoBrainConfig) -> bool:
+    return bool(cfg.embeddings.enabled)
 
 
-def _embed_model() -> str:
-    value = os.getenv("RB_EMBED_MODEL", "").strip()
-    return value or "openai/text-embedding-3-small"
+def _embed_model(cfg: RepoBrainConfig) -> str:
+    return str(cfg.embeddings.model or "openai/text-embedding-3-small")
 
 
-def _embed_batch_size() -> int:
-    value = os.getenv("RB_EMBED_BATCH_SIZE", "").strip()
-    if not value:
-        return 64
-    try:
-        return max(1, int(value))
-    except ValueError:
-        return 64
+def _embed_batch_size(cfg: RepoBrainConfig) -> int:
+    return max(1, int(cfg.embeddings.batch_size))
 
 
 def _embed_cache_path(root: Path) -> Path:
@@ -211,11 +205,15 @@ def _compute_chunk_embeddings(
     root: Path,
     chunks: list[CandidateChunk],
     governor: AIBudgetGovernor | None = None,
+    cfg: RepoBrainConfig | None = None,
 ) -> tuple[dict[str, list[float]], dict[str, Any]]:
-    enabled = _embed_enabled()
-    model_id = _embed_model()
-    batch_size = _embed_batch_size()
-    token = os.getenv("GITHUB_TOKEN", "").strip()
+    active_cfg = cfg or RepoBrainConfig.from_env()
+    enabled = _embed_enabled(active_cfg)
+    model_id = _embed_model(active_cfg)
+    batch_size = _embed_batch_size(active_cfg)
+    token = str(active_cfg.workflow.github_token or "").strip()
+    if not token:
+        token = os.getenv("GITHUB_TOKEN", "").strip()
 
     base_meta = {
         "enabled": False,
@@ -405,6 +403,7 @@ def build_index(
     out_zip: Path,
     store_text: bool = False,
     governor: AIBudgetGovernor | None = None,
+    cfg: RepoBrainConfig | None = None,
 ) -> None:
     """Build a local zip index package from files under root."""
     root = root.resolve()
@@ -435,11 +434,13 @@ def build_index(
         all_chunks,
         key=lambda chunk: (chunk.file_path, chunk.line_start, chunk.line_end, chunk.chunk_id),
     )
-    active_governor = governor or build_governor_from_env()
+    active_cfg = cfg or RepoBrainConfig.from_env()
+    active_governor = governor or build_governor_from_env(cfg=active_cfg)
     vectors_by_chunk_id, embeddings_meta = _compute_chunk_embeddings(
         root=root,
         chunks=all_chunks,
         governor=active_governor,
+        cfg=active_cfg,
     )
 
     topo_map = _build_topo_map(
@@ -508,13 +509,13 @@ def build_index(
                     vec = vectors_by_chunk_id.get(chunk.chunk_id)
                     if not vec:
                         continue
-                    row = {
-                        "chunk_id": chunk.chunk_id,
-                        "chunk_hash": _chunk_hash(chunk),
-                        "model_id": embeddings_meta.get("model", _embed_model()),
-                        "dim": len(vec),
-                        "vec": vec,
-                    }
+                        row = {
+                            "chunk_id": chunk.chunk_id,
+                            "chunk_hash": _chunk_hash(chunk),
+                            "model_id": embeddings_meta.get("model", _embed_model(active_cfg)),
+                            "dim": len(vec),
+                            "vec": vec,
+                        }
                     raw.write(orjson.dumps(row))
                     raw.write(b"\n")
 

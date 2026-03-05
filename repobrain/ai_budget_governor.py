@@ -4,22 +4,7 @@ from dataclasses import asdict, dataclass, field
 import time
 from typing import Any
 
-
-def _env_true(name: str, default: bool = False) -> bool:
-    value = __import__("os").environ.get(name, "")
-    if not value:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
-
-
-def _env_int(name: str, default: int) -> int:
-    value = __import__("os").environ.get(name, "").strip()
-    if not value:
-        return default
-    try:
-        return int(value)
-    except ValueError:
-        return default
+from repobrain.config import RepoBrainConfig
 
 
 @dataclass(frozen=True)
@@ -46,25 +31,21 @@ class BudgetPolicy:
     time_budget_s: int = 240
 
     @classmethod
-    def from_env(cls) -> BudgetPolicy:
+    def from_env(cls, cfg: RepoBrainConfig | None = None) -> BudgetPolicy:
+        active_cfg = cfg or RepoBrainConfig.from_env()
+        source = active_cfg.governor
         return cls(
-            stop_at_remaining=_env_true("RB_AI_STOP_AT_REMAINING", default=True),
-            min_remaining_buffer=max(0, _env_int("RB_AI_MIN_REMAINING_BUFFER", 2)),
-            max_llm_calls_per_run=max(1, _env_int("RB_AI_MAX_LLM_CALLS_PER_RUN", 6)),
-            max_embed_calls_per_run=max(1, _env_int("RB_AI_MAX_EMBED_CALLS_PER_RUN", 10)),
-            disable_reduce_when_remaining_lt=max(
-                0, _env_int("RB_AI_DISABLE_REDUCE_WHEN_REMAINING_LT", 3)
-            ),
-            switch_to_mini_when_remaining_lt=max(
-                0, _env_int("RB_AI_SWITCH_TO_MINI_WHEN_REMAINING_LT", 5)
-            ),
-            disable_embed_when_remaining_lt=max(
-                0, _env_int("RB_AI_DISABLE_EMBED_WHEN_REMAINING_LT", 3)
-            ),
-            estimate_mode_conservative=_env_true("RB_AI_ESTIMATE_MODE_CONSERVATIVE", default=True),
-            max_tokens_per_run_llm=max(1, _env_int("RB_AI_MAX_TOKENS_PER_RUN_LLM", 12_000)),
-            max_tokens_per_run_embed=max(1, _env_int("RB_AI_MAX_TOKENS_PER_RUN_EMBED", 200_000)),
-            time_budget_s=max(1, _env_int("RB_AI_TIME_BUDGET_S", 240)),
+            stop_at_remaining=bool(source.stop_at_remaining),
+            min_remaining_buffer=max(0, int(source.min_remaining_buffer)),
+            max_llm_calls_per_run=max(1, int(source.max_llm_calls_per_run)),
+            max_embed_calls_per_run=max(1, int(source.max_embed_calls_per_run)),
+            disable_reduce_when_remaining_lt=max(0, int(source.disable_reduce_when_remaining_lt)),
+            switch_to_mini_when_remaining_lt=max(0, int(source.switch_to_mini_when_remaining_lt)),
+            disable_embed_when_remaining_lt=max(0, int(source.disable_embed_when_remaining_lt)),
+            estimate_mode_conservative=bool(source.estimate_mode_conservative),
+            max_tokens_per_run_llm=max(1, int(source.max_tokens_per_run_llm)),
+            max_tokens_per_run_embed=max(1, int(source.max_tokens_per_run_embed)),
+            time_budget_s=max(1, int(source.time_budget_s)),
         )
 
 
@@ -323,5 +304,5 @@ class AIBudgetGovernor:
         }
 
 
-def build_governor_from_env() -> AIBudgetGovernor:
-    return AIBudgetGovernor(BudgetPolicy.from_env())
+def build_governor_from_env(cfg: RepoBrainConfig | None = None) -> AIBudgetGovernor:
+    return AIBudgetGovernor(BudgetPolicy.from_env(cfg=cfg))
