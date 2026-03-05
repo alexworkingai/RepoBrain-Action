@@ -58,6 +58,9 @@ jobs:
       - uses: ./. 
         env:
           RB_INDEX_CACHE_RESTORED: ${{ steps.index_cache.outputs.cache-hit == 'true' && '1' || '' }}
+          RB_TRUSTED_CONTEXT: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          RB_ALLOW_DYNAMIC_VERIFY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          RB_APPLY_PATCH: "0"
         with:
           # remote_url intentionally not set here; use repobrain_remote_stub_test.yml for stub remote tests.
           tky_mode: "auto"
@@ -100,4 +103,18 @@ jobs:
         with:
           name: repobrain-ask-result
           path: artifacts/ask_result.md
+          if-no-files-found: ignore
+      - name: Upload RepoBrain patch artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-patch
+          path: artifacts/patch.diff
+          if-no-files-found: ignore
+      - name: Upload RepoBrain verification artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-verification
+          path: artifacts/verification_report.json
           if-no-files-found: ignore

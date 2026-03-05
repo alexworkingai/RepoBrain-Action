@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import subprocess
 import time
 from typing import Any
 
@@ -14,17 +15,15 @@ from repobrain.ask import AnswerResult, answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.config import RepoBrainConfig, load_config
 from repobrain.evidence import EvidenceItem
-from repobrain.formatting import (
-    format_pr_review_comment,
-    format_refusal_comment,
-    format_verify_comment,
-)
+from repobrain.formatting import format_refusal_comment, format_verify_comment
 from repobrain.index_store import build_index, load_index
 from repobrain.output_md import (
     enforce_comment_limit,
     render_answer_markdown,
     render_error_markdown,
+    render_patch_markdown,
     render_refuse_markdown,
+    render_review_markdown,
     render_wait_markdown,
 )
 from repobrain.retrieve_pro import retrieve_topk_pro
@@ -33,6 +32,11 @@ from repobrain.security import detect_injection_or_exfiltration
 from repobrain.tky_local import LocalTKYProvider
 from repobrain.tky_provider import CandidateChunk, TKYResult
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
+from repobrain.verification_runner import (
+    VerificationBudgets,
+    detect_capabilities,
+    run_verification,
+)
 from repobrain.verify import build_verify_report
 
 HELP_TEXT = """RepoBrain command examples:
@@ -41,6 +45,7 @@ HELP_TEXT = """RepoBrain command examples:
 - /repobrain locate TKYProvider
 - /repobrain explain retrieve_topk
 - /repobrain review
+- /repobrain fix Improve guard conditions in github_flow
 - /repobrain verify (PR checks-based verification ladder v0)
 """
 
@@ -505,6 +510,145 @@ def _write_ask_result_markdown(repo_root: Path, markdown: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(markdown, encoding="utf-8")
     return path
+
+
+def _env_true(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "y", "on"}
+
+
+def _write_verification_report(repo_root: Path, report: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "verification_report.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _verification_context_from_report(report: dict[str, Any]) -> dict[str, Any]:
+    checks_raw = report.get("checks", [])
+    checks: list[dict[str, str]] = []
+    if isinstance(checks_raw, list):
+        for item in checks_raw:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "")).strip()
+            status = str(item.get("status", "NOT_RUN")).strip().upper()
+            if not name:
+                continue
+            if status == "PASS":
+                state = "PASS"
+            elif status == "FAIL":
+                state = "FAIL"
+            else:
+                state = "NOT_RUN"
+            checks.append({"name": name, "state": state})
+    return {
+        "checks": checks,
+        "required_checks": [item["name"] for item in checks],
+        "trusted_context": bool(report.get("trusted_context", False)),
+        "dynamic_allowed": bool(report.get("dynamic_allowed", False)),
+        "summary": str(report.get("summary", "")),
+    }
+
+
+def _run_review_verification(
+    *,
+    repo_root: Path,
+    cmd: str,
+) -> dict[str, Any]:
+    trusted = _env_true("RB_TRUSTED_CONTEXT", default=False)
+    allow_dynamic = _env_true("RB_ALLOW_DYNAMIC_VERIFY", default=False)
+    time_budget_s = int(os.getenv("RB_VERIFY_TIME_BUDGET_S", "120") or 120)
+    caps = detect_capabilities(repo_root)
+    plan: list[str] = ["ruff"]
+    if cmd == "fix":
+        plan.append("pytest")
+    else:
+        plan.append("pytest")
+    report = run_verification(
+        plan=plan,
+        caps=caps,
+        budgets=VerificationBudgets(time_budget_s=time_budget_s, output_tail_lines=30),
+        repo_root=repo_root,
+        trusted=trusted,
+        allow_dynamic=allow_dynamic,
+    )
+    return report.to_dict()
+
+
+def _extract_patch_from_stats(compression_stats: dict[str, Any]) -> str:
+    direct_keys = ("patch_diff", "unified_diff", "suggested_patch")
+    for key in direct_keys:
+        value = compression_stats.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    list_keys = ("suggested_patches", "patches")
+    for key in list_keys:
+        value = compression_stats.get(key, [])
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if isinstance(item, str) and item.strip():
+                return item
+            if isinstance(item, dict):
+                for nested in ("unified_diff", "diff", "patch"):
+                    payload = item.get(nested)
+                    if isinstance(payload, str) and payload.strip():
+                        return payload
+    return ""
+
+
+def _write_patch_artifact(repo_root: Path, patch_text: str) -> Path:
+    path = repo_root / "artifacts" / "patch.diff"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(patch_text, encoding="utf-8")
+    return path
+
+
+def _patch_snippet(patch_text: str, max_lines: int = 250) -> str:
+    lines = patch_text.splitlines()
+    if len(lines) <= max_lines:
+        return patch_text
+    return "\n".join(lines[:max_lines] + ["", "# ... truncated ..."])
+
+
+def _maybe_apply_patch(
+    *,
+    repo_root: Path,
+    patch_path: Path,
+) -> str:
+    if not _env_true("RB_APPLY_PATCH", default=False):
+        return "auto-apply disabled (RB_APPLY_PATCH=0)"
+    if not _env_true("RB_TRUSTED_CONTEXT", default=False):
+        return "auto-apply blocked in untrusted context"
+
+    run_id = os.getenv("GITHUB_RUN_ID", "").strip() or str(int(time.time()))
+    branch = f"repobrain/patch/{run_id}"
+
+    commands = [
+        ["git", "checkout", "-b", branch],
+        ["git", "apply", str(patch_path)],
+        ["git", "add", "-A"],
+        ["git", "commit", "-m", "RepoBrain: apply suggested patch"],
+        ["git", "push", "-u", "origin", branch],
+    ]
+    for cmd in commands:
+        try:
+            completed = subprocess.run(
+                cmd,
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=60,
+            )
+        except OSError:
+            return "cannot apply patch in this context"
+        if completed.returncode != 0:
+            return "cannot push from this context"
+    return f"patch applied and pushed to `{branch}`"
 
 
 def _is_bot_login(login: str) -> bool:
@@ -1395,25 +1539,72 @@ def _build_qa_markdown(
     return body
 
 
+def _review_candidates_from_files(files: list[dict[str, Any]]) -> list[CandidateChunk]:
+    candidates: list[CandidateChunk] = []
+    for idx, item in enumerate(files):
+        path = str(item.get("filename", "") or "").strip()
+        if not path:
+            continue
+        changes = int(item.get("changes", 0) or 0)
+        additions = int(item.get("additions", 0) or 0)
+        deletions = int(item.get("deletions", 0) or 0)
+        score = max(0.01, min(1.0, 0.2 + (changes / 1000.0) + (0.04 / (idx + 1))))
+        line_end = max(1, additions + deletions)
+        candidates.append(
+            CandidateChunk(
+                chunk_id=f"pr:{path}:1-{line_end}",
+                file_path=path,
+                line_start=1,
+                line_end=line_end,
+                score=score,
+                text=None,
+            )
+        )
+    if candidates:
+        return candidates
+    return [
+        CandidateChunk(
+            chunk_id="pr:empty:1-1",
+            file_path="README.md",
+            line_start=1,
+            line_end=1,
+            score=0.01,
+            text=None,
+        )
+    ]
+
+
 def _build_review_markdown(
     *,
+    repo_root: Path,
+    cmd: str,
+    query: str,
     is_pull_request: bool,
     issue_number: int | None,
     dry_run: bool,
     client: GitHubClient | None,
+    tky_mode: str,
+    remote_url: str,
+    api_key: str,
+    hmac_secret: str,
+    enable_hmac: bool,
+    github_context_seed: dict[str, Any] | None = None,
+    verification_context_seed: dict[str, Any] | None = None,
     audit: dict[str, Any] | None = None,
 ) -> str:
     if not is_pull_request:
         if audit is not None:
             audit["route_final"] = "REVIEW"
             audit["pass_count"] = 1
-        return "Review is available in Pull Requests. Run /repobrain review in a PR discussion."
+            audit["index_source"] = "n/a"
+        return "Review/fix is available in Pull Requests. Run `/repobrain review` in a PR discussion."
 
     if issue_number is None:
         if audit is not None:
             audit["route_final"] = "REVIEW"
             audit["pass_count"] = 1
-        return "Review is available in Pull Requests. Pull request number was not detected."
+            audit["index_source"] = "n/a"
+        return "Review/fix is available in Pull Requests. Pull request number was not detected."
 
     files: list[dict[str, Any]]
     head_sha = ""
@@ -1422,7 +1613,7 @@ def _build_review_markdown(
         files = []
     else:
         if client is None:
-            raise ValueError("GitHub client is required for PR review in post mode")
+            raise ValueError("GitHub client is required for PR review/fix in post mode")
         pull = client.get_pull(pull_number=issue_number)
         head = pull.get("head", {})
         if isinstance(head, dict):
@@ -1431,16 +1622,176 @@ def _build_review_markdown(
 
     if not head_sha:
         head_sha = extract_sha_from_env()
+
     review = build_pr_review(files, head_sha=head_sha or None, repo=repo_name or None)
+    verification_report = _run_review_verification(repo_root=repo_root, cmd=cmd)
+    _write_verification_report(repo_root, verification_report)
+
     if audit is not None:
-        audit["route_final"] = "REVIEW"
-        audit["pass_count"] = 1
+        audit["index_source"] = "n/a"
         audit["retrieved"] = len(files)
         audit["selected"] = len(files)
-    t0 = time.perf_counter()
-    body = format_pr_review_comment(review)
+        audit["verification_overall"] = str(verification_report.get("overall", "NOT_RUN"))
+
+    cfg = load_config(repo_root)
+    branch_name = extract_branch_from_env()
+    effective_tky_mode, remote_skip, effective_remote_url = resolve_tky_mode(
+        requested_mode=tky_mode,
+        cfg=cfg,
+        cmd="review",
+        repo_name=repo_name,
+        branch_name=branch_name,
+        remote_url_input=remote_url,
+    )
+    provider = make_provider(
+        effective_tky_mode,
+        remote_url=effective_remote_url or None,
+        api_key=api_key or None,
+        hmac_secret=hmac_secret or None,
+        enable_hmac=enable_hmac,
+    )
+    review_candidates = _review_candidates_from_files(files)
+    verification_context = dict(verification_context_seed or {})
+    verification_context.update(_verification_context_from_report(verification_report))
+    policy = {
+        "corelocked": True,
+        "intent": "patch" if cmd == "fix" else "review",
+        "github_context": dict(github_context_seed or {}),
+        "verification_context": verification_context,
+        "runtime": {
+            "mode": "ci" if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true" else "local",
+            "network_allowed": os.getenv("RB_TKYA_ALLOW_REMOTE", "").strip() == "1",
+            "trusted_context": _env_true("RB_TRUSTED_CONTEXT", default=False),
+        },
+    }
+    limits = _qa_limits(
+        cmd="review",
+        max_sources=min(8, max(1, len(review_candidates))),
+        min_score_keep=0.01,
+        keep_ratio=0.2,
+        max_per_file=2,
+        max_files=12,
+        route_hint="REVIEW",
+        topk_current=min(80, max(10, len(review_candidates))),
+        topk_fast=30,
+        topk_deep=80,
+        time_budget_s=int(os.getenv("RB_VERIFY_TIME_BUDGET_S", "120") or 120),
+        perf_max_candidates=int(getattr(cfg, "tky_perf_max_candidates", 800)),
+        perf_max_series=int(getattr(cfg, "tky_perf_max_series", 4096)),
+        perf_max_vectors=int(getattr(cfg, "tky_perf_max_vectors", 2048)),
+        perf_max_edges=int(getattr(cfg, "tky_perf_max_edges", 4096)),
+        perf_max_paths=int(getattr(cfg, "tky_perf_max_paths", 4096)),
+        github_context=policy["github_context"],
+        verification_context=policy["verification_context"],
+    )
+    limits["policy"] = policy
+    question = (
+        f"Generate safe patch guidance: {query.strip()}"
+        if cmd == "fix" and query.strip()
+        else ("Generate safe patch guidance for PR changes." if cmd == "fix" else "Review PR changes.")
+    )
+    tky_result, _, tky_meta = _answer_with_remote_fallback(
+        question=question,
+        candidates=review_candidates,
+        limits=limits,
+        provider=provider,
+        tky_mode_requested=effective_tky_mode,
+        remote_fail_open=bool(getattr(cfg, "tky_remote_fail_open", True)),
+    )
+    compression_stats = (
+        tky_result.tky.compression_stats
+        if isinstance(tky_result.tky.compression_stats, dict)
+        else {}
+    )
+
+    verification_checks = verification_report.get("checks", [])
+    if not isinstance(verification_checks, list):
+        verification_checks = []
+    pass_count = sum(1 for item in verification_checks if isinstance(item, dict) and item.get("status") == "PASS")
+    fail_count = sum(1 for item in verification_checks if isinstance(item, dict) and item.get("status") == "FAIL")
+    not_run_count = sum(
+        1 for item in verification_checks if isinstance(item, dict) and item.get("status") == "NOT_RUN"
+    )
+    audit_summary: dict[str, Any] = {
+        "route_final": str(tky_result.tky.route or "REVIEW").upper(),
+        "pass_count": 1,
+        "retrieved": len(files),
+        "selected": len(review.get("files_changed", [])),
+        "tky_mode_used": str(tky_meta.get("tky_mode_used", effective_tky_mode)),
+        "tky_engine": str(tky_meta.get("tky_engine", _provider_engine_name(provider))),
+        "remote_skipped_reason": str(remote_skip or "n/a"),
+        "verification_pass_count": pass_count,
+        "verification_fail_count": fail_count,
+        "verification_not_run_count": not_run_count,
+        "verification_pending_count": 0,
+        "verification_overall": str(verification_report.get("overall", "NOT_RUN")),
+    }
+    audit_summary.update(_extract_verification_audit_fields(compression_stats))
+    changed_files = list(dict.fromkeys(str(item.get("filename", "")).strip() for item in files if item.get("filename")))
+    if changed_files:
+        audit_summary["touched_files"] = changed_files
+
+    if cmd != "fix":
+        body = render_review_markdown(
+            review=review,
+            verification_report=verification_report,
+            audit_summary=audit_summary,
+        )
+        body, truncated = enforce_comment_limit(body)
+        if truncated:
+            artifact_path = _write_ask_result_markdown(repo_root, body)
+            if audit is not None:
+                audit["comment_truncated"] = True
+                audit["ask_result_artifact"] = artifact_path.as_posix()
+        if audit is not None:
+            audit["route_final"] = str(audit_summary.get("route_final", "REVIEW"))
+            audit["pass_count"] = 1
+            audit["retrieved"] = len(files)
+            audit["selected"] = len(review.get("files_changed", []))
+            audit["verification_pass_count"] = pass_count
+            audit["verification_fail_count"] = fail_count
+            audit["verification_not_run_count"] = not_run_count
+            audit["tky_mode_used"] = str(audit_summary.get("tky_mode_used", "n/a"))
+            audit["tky_engine"] = str(audit_summary.get("tky_engine", "n/a"))
+        return body
+
+    patch_text = _extract_patch_from_stats(compression_stats)
+    patch_written = False
+    patch_apply_message = "no patch generated by engine"
+    snippet = ""
+    if patch_text:
+        patch_path = _write_patch_artifact(repo_root, patch_text)
+        patch_written = True
+        snippet = _patch_snippet(patch_text, max_lines=300)
+        patch_apply_message = _maybe_apply_patch(repo_root=repo_root, patch_path=patch_path)
+
+    body = render_patch_markdown(
+        review=review,
+        verification_report=verification_report,
+        patch_snippet=snippet,
+        patch_written=patch_written,
+        patch_apply_message=patch_apply_message,
+        audit_summary=audit_summary,
+    )
+    body, truncated = enforce_comment_limit(body)
+    if truncated:
+        artifact_path = _write_ask_result_markdown(repo_root, body)
+        if audit is not None:
+            audit["comment_truncated"] = True
+            audit["ask_result_artifact"] = artifact_path.as_posix()
+
     if audit is not None:
-        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+        audit["route_final"] = str(audit_summary.get("route_final", "REVIEW"))
+        audit["pass_count"] = 1
+        audit["retrieved"] = len(files)
+        audit["selected"] = len(review.get("files_changed", []))
+        audit["verification_pass_count"] = pass_count
+        audit["verification_fail_count"] = fail_count
+        audit["verification_not_run_count"] = not_run_count
+        audit["patch_generated"] = patch_written
+        audit["patch_apply_message"] = patch_apply_message
+        audit["tky_mode_used"] = str(audit_summary.get("tky_mode_used", "n/a"))
+        audit["tky_engine"] = str(audit_summary.get("tky_engine", "n/a"))
     return body
 
 
@@ -1670,12 +2021,22 @@ def run_github_flow(
         audit["route_final"] = "HELP"
         audit["pass_count"] = 1
         audit["index_source"] = "n/a"
-    elif cmd == "review":
+    elif cmd in {"review", "fix"}:
         body_markdown = _build_review_markdown(
+            repo_root=repo_root,
+            cmd=cmd,
+            query=query,
             is_pull_request=event_ctx.is_pull_request,
             issue_number=resolved_issue_number,
             dry_run=dry_run,
             client=client,
+            tky_mode=tky_mode,
+            remote_url=remote_url,
+            api_key=api_key,
+            hmac_secret=hmac_secret,
+            enable_hmac=enable_hmac,
+            github_context_seed=github_context_seed,
+            verification_context_seed=verification_context_seed,
             audit=audit,
         )
         audit["index_source"] = "n/a"

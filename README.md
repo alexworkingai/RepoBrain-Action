@@ -33,6 +33,7 @@ PR Review:
 * Use `/repobrain review` in a Pull Request discussion (issue comments on a PR).
 * RepoBrain fetches changed files, builds a lightweight risk summary, and posts a markdown PR review comment.
 * `/repobrain review` is not available in regular Issues (non-PR threads).
+* `/repobrain fix <instruction>` can generate a patch proposal (`artifacts/patch.diff`) with usersafe diff snippet.
 
 Index cache / prebuild:
 
@@ -149,6 +150,15 @@ Local CLI behavior:
 
 * `scripts/run_ask.py --tky-mode auto|remote` falls back to baseline when remote is down if `tky.remote_fail_open: true`.
 * If `tky.remote_fail_open: false`, local CLI exits with non-zero and prints a short actionable error (no stacktrace dump).
+
+Verification runner safety:
+
+* Real verification checks write `artifacts/verification_report.json`.
+* `ruff` can run as static verification when available.
+* `pytest` is dynamic verification and runs only when both are true:
+  * `RB_TRUSTED_CONTEXT=1`
+  * `RB_ALLOW_DYNAMIC_VERIFY=1`
+* In untrusted context (default for `issue_comment`), dynamic checks are marked `NOT_RUN`.
 
 Example `.repobrain.yml`:
 

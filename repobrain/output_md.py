@@ -61,6 +61,28 @@ def _verification_lines(audit_summary: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _verification_report_lines(verification_report: dict[str, Any]) -> list[str]:
+    checks = verification_report.get("checks", [])
+    if not isinstance(checks, list):
+        checks = []
+    trusted = bool(verification_report.get("trusted_context", False))
+    dynamic = bool(verification_report.get("dynamic_allowed", False))
+    lines = [
+        "### 🔎 Verification",
+        f"- Summary: {verification_report.get('summary', 'Verification not available')}",
+        f"- trusted_context: {int(trusted)}",
+        f"- dynamic_verify: {int(dynamic)}",
+    ]
+    for item in checks[:8]:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "check"))
+        status = str(item.get("status", "NOT_RUN"))
+        reason = str(item.get("reason", "n/a"))
+        lines.append(f"- `{name}`: {status} ({reason})")
+    return lines
+
+
 def _mode_lines(audit_summary: dict[str, Any]) -> list[str]:
     route = _route(audit_summary)
     pass_count = int(audit_summary.get("pass_count", 1) or 1)
@@ -267,3 +289,79 @@ def render_error_markdown(
         ]
     )
     return md
+
+
+def render_review_markdown(
+    *,
+    review: dict[str, Any],
+    verification_report: dict[str, Any],
+    audit_summary: dict[str, Any],
+) -> str:
+    files_block = review.get("files_block", [])
+    if not isinstance(files_block, list):
+        files_block = []
+    risks = review.get("risks", [])
+    if not isinstance(risks, list):
+        risks = []
+    notes = review.get("notes", [])
+    if not isinstance(notes, list):
+        notes = []
+    summary_text = str(review.get("summary_text", "No summary available.")).strip()
+    risk_level = str(review.get("risk_level", "low") or "low").upper()
+    sections = [
+        "### ✅ PR Review",
+        f"TL;DR: {summary_text}",
+        f"Risk level: **{risk_level}**",
+        "",
+        "### 🗂️ Touched files",
+        *(files_block[:10] if files_block else ["- No changed files detected."]),
+        *([f"- +{len(files_block) - 10} more"] if len(files_block) > 10 else []),
+        "",
+        "### ⚠️ Findings",
+        *([f"- {item}" for item in risks] if risks else ["- No high-risk findings detected."]),
+        *([f"- Note: {item}" for item in notes[:5]] if notes else []),
+        "",
+        *_verification_report_lines(verification_report),
+        "",
+        "### 🧭 Route details",
+        *_mode_lines(audit_summary),
+        "",
+        "### 🧾 Audit summary",
+        *_audit_kv_lines(audit_summary),
+        "",
+        _audit_note(),
+    ]
+    return "\n".join(sections)
+
+
+def render_patch_markdown(
+    *,
+    review: dict[str, Any],
+    verification_report: dict[str, Any],
+    patch_snippet: str,
+    patch_written: bool,
+    patch_apply_message: str,
+    audit_summary: dict[str, Any],
+) -> str:
+    summary_text = str(review.get("summary_text", "Patch suggestion flow")).strip()
+    sections = [
+        "### 🛠️ Patch proposal",
+        f"Summary: {summary_text}",
+        "",
+        "### 📦 Patch artifact",
+        "- Full patch is saved to `artifacts/patch.diff`." if patch_written else "- No patch generated.",
+        f"- Apply status: {patch_apply_message}",
+        "",
+        "### 🧩 Patch snippet",
+        "```diff",
+        patch_snippet.strip() or "# no patch generated",
+        "```",
+        "",
+        *_verification_report_lines(verification_report),
+        "",
+        "### 🧾 Audit summary",
+        *_audit_kv_lines(audit_summary),
+        "",
+        _audit_note(),
+    ]
+    return "\n".join(sections)

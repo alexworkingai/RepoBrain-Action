@@ -58,6 +58,18 @@ Comment size protection:
 - full markdown is saved to `artifacts/ask_result.md`
 - workflow should publish artifacts for deeper inspection
 
+## Review/Fix Artifacts
+
+When review/fix verification runs:
+
+- `artifacts/verification_report.json` is written (usersafe summary only)
+- `artifacts/patch.diff` is written when `/repobrain fix` has a generated patch
+
+Safe defaults:
+
+- patch is **not** auto-applied unless both `RB_APPLY_PATCH=1` and `RB_TRUSTED_CONTEXT=1`
+- dynamic verification (pytest) is gated by `RB_TRUSTED_CONTEXT=1` and `RB_ALLOW_DYNAMIC_VERIFY=1`
+
 ## Canary Workflow
 
 Workflow: `.github/workflows/canary_v5.yml`
