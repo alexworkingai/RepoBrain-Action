@@ -84,22 +84,52 @@ def _verification_report_lines(verification_report: dict[str, Any]) -> list[str]
 
 
 def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
+    llm_used = bool(audit_summary.get("llm_used", False))
+    skip_reason = str(audit_summary.get("llm_skip_reason", "n/a") or "n/a")
     model_id = str(audit_summary.get("llm_model_used", "not used") or "not used")
     prompt = int(audit_summary.get("llm_tokens_prompt", 0) or 0)
     completion = int(audit_summary.get("llm_tokens_completion", 0) or 0)
     total = int(audit_summary.get("llm_tokens_total", 0) or 0)
     usage_estimated = bool(audit_summary.get("llm_usage_estimated", False))
-    remaining = audit_summary.get("llm_requests_remaining", "n/a")
-    reset_value = str(audit_summary.get("llm_rate_limit_reset", "n/a") or "n/a")
+    remaining = audit_summary.get(
+        "llm_remaining_requests",
+        audit_summary.get("llm_requests_remaining", "n/a"),
+    )
+    remaining_is_estimate = bool(
+        audit_summary.get("llm_remaining_is_estimate", audit_summary.get("llm_remaining_estimated", False))
+    )
+    reset_raw = audit_summary.get(
+        "llm_reset_time_utc_iso",
+        audit_summary.get("llm_rate_limit_reset", None),
+    )
+    reset_value = str(reset_raw) if reset_raw not in {None, ""} else "n/a"
+    input_budget_used = int(audit_summary.get("llm_input_budget_used_est", 0) or 0)
+    input_budget_limit = int(audit_summary.get("llm_input_budget_limit", 0) or 0)
+    dropped_locators = int(audit_summary.get("llm_dropped_locators_count", 0) or 0)
+    dropped_hunks = int(audit_summary.get("llm_dropped_hunks_count", 0) or 0)
+    dropped_snippets = int(audit_summary.get("llm_dropped_snippets_count", 0) or 0)
     return [
         "### 🤖 LLM",
+        (
+            "- LLM used: yes"
+            if llm_used
+            else f"- LLM used: no ({skip_reason})"
+        ),
         f"- LLM model used: `{model_id}`",
         (
             f"- Tokens used: prompt={prompt} completion={completion} total={total} "
             f"({'estimate' if usage_estimated else 'reported'})"
         ),
-        f"- Requests remaining today: {remaining}",
-        f"- Rate limit reset: {reset_value}",
+        (
+            f"- Requests remaining today: {remaining}"
+            f"{' (estimated)' if remaining_is_estimate else ''}"
+        ),
+        f"- Reset time UTC: {reset_value}",
+        f"- Prompt budget: used~{input_budget_used} / limit={input_budget_limit}",
+        (
+            "- Dropped context items: "
+            f"locators={dropped_locators}, hunks={dropped_hunks}, snippets={dropped_snippets}"
+        ),
     ]
 
 
@@ -399,4 +429,3 @@ def render_patch_markdown(
         _audit_note(),
     ]
     return "\n".join(sections)
-

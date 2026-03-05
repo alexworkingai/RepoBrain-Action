@@ -70,7 +70,11 @@ jobs:
           RB_LLM_MODEL_HIGH: "openai/gpt-4.1"
           RB_LLM_MODEL_LOW: "openai/gpt-4.1-mini"
           RB_LLM_MAX_INPUT_TOKENS: "7600"
-          RB_LLM_MAX_OUTPUT_TOKENS: "1200"
+          RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL: "2000"
+          RB_LLM_MAX_OUTPUT_TOKENS_ASK: "1000"
+          RB_LLM_MAX_OUTPUT_TOKENS_REVIEW: "1400"
+          RB_LLM_MAX_OUTPUT_TOKENS_FIX: "2000"
+          RB_LLM_ALLOW_LOCATE: "0"
         with:
           # remote_url intentionally not set here; use repobrain_remote_stub_test.yml for stub remote tests.
           tky_mode: "auto"

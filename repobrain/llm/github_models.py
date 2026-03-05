@@ -29,7 +29,8 @@ class LLMResponse:
     usage_estimated: bool
     ratelimit_headers: dict[str, str]
     requests_remaining: int | None
-    rate_limit_reset: str | None
+    remaining_is_estimate: bool
+    reset_time_utc_iso: str | None
 
 
 def _estimate_tokens(text: str) -> int:
@@ -74,22 +75,45 @@ def _extract_content(data: dict[str, Any]) -> str:
     return ""
 
 
-def _extract_rate_headers(headers: dict[str, Any]) -> tuple[dict[str, str], int | None, str | None]:
+def _estimate_remaining_from_model(model_id: str, calls_this_run: int = 1) -> int:
+    model = str(model_id or "").strip().lower()
+    daily_limit = 50 if "gpt-4.1" in model and "mini" not in model else 150
+    return max(0, daily_limit - max(0, int(calls_this_run)))
+
+
+def _extract_rate_headers(
+    headers: dict[str, Any],
+    *,
+    model_id: str,
+) -> tuple[dict[str, str], int | None, bool, str | None]:
     pairs: dict[str, str] = {}
-    remaining: int | None = None
+    remaining_direct: int | None = None
+    remaining_variant: int | None = None
+    remaining_generic: int | None = None
     reset_raw: str | None = None
     for key, value in headers.items():
         normalized = str(key).strip().lower()
         if not normalized.startswith("x-ratelimit-"):
             continue
-        pairs[normalized] = str(value)
-        if normalized.endswith("remaining") and remaining is None:
+        value_str = str(value).strip()
+        pairs[normalized] = value_str
+        if normalized == "x-ratelimit-remaining" and remaining_direct is None:
             try:
-                remaining = int(str(value).strip())
+                remaining_direct = int(value_str)
             except ValueError:
-                remaining = None
-        if normalized.endswith("reset") and reset_raw is None:
-            reset_raw = str(value).strip()
+                remaining_direct = None
+        if "remaining-requests" in normalized and remaining_variant is None:
+            try:
+                remaining_variant = int(value_str)
+            except ValueError:
+                remaining_variant = None
+        if "remaining" in normalized and "tokens" not in normalized and remaining_generic is None:
+            try:
+                remaining_generic = int(value_str)
+            except ValueError:
+                remaining_generic = None
+        if normalized.endswith("reset") and reset_raw is None and value_str:
+            reset_raw = value_str
 
     reset_value: str | None = None
     if reset_raw:
@@ -98,7 +122,17 @@ def _extract_rate_headers(headers: dict[str, Any]) -> tuple[dict[str, str], int 
             reset_value = datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
         except ValueError:
             reset_value = reset_raw
-    return pairs, remaining, reset_value
+    remaining = remaining_direct
+    if remaining is None:
+        remaining = remaining_variant
+    if remaining is None:
+        remaining = remaining_generic
+
+    if remaining is not None:
+        return pairs, remaining, False, reset_value
+
+    estimated = _estimate_remaining_from_model(model_id=model_id, calls_this_run=1)
+    return pairs, estimated, True, reset_value
 
 
 class GitHubModelsClient:
@@ -172,7 +206,10 @@ class GitHubModelsClient:
             prompt_fallback=prompt_fallback,
             completion_fallback=text,
         )
-        rate_headers, requests_remaining, rate_reset = _extract_rate_headers(dict(response.headers))
+        rate_headers, requests_remaining, remaining_is_estimate, rate_reset = _extract_rate_headers(
+            dict(response.headers),
+            model_id=model_id,
+        )
         return LLMResponse(
             text=text,
             model_id=model_id,
@@ -182,5 +219,6 @@ class GitHubModelsClient:
             usage_estimated=usage_estimated,
             ratelimit_headers=rate_headers,
             requests_remaining=requests_remaining,
-            rate_limit_reset=rate_reset,
+            remaining_is_estimate=remaining_is_estimate,
+            reset_time_utc_iso=rate_reset,
         )

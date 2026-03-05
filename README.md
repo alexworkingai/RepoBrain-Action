@@ -176,10 +176,19 @@ GitHub Models LLM (optional):
 * Model selection is deterministic:
   * complex tasks -> `openai/gpt-4.1` (high tier)
   * simple tasks -> `openai/gpt-4.1-mini` (low tier)
+* Strict gating (safe default):
+  * LLM is never called for routes `WAIT`/`REFUSE`/`BLOCK`
+  * `locate` skips LLM by default; opt-in via `RB_LLM_ALLOW_LOCATE=1`
 * Reports include LLM diagnostics:
   * model id
   * token usage (`prompt/completion/total`, reported or estimated)
-  * remaining requests / reset time (from rate-limit headers when available)
+  * remaining requests / reset time (from `x-ratelimit-*` headers when available)
+  * if headers are missing, remaining is shown as `(estimated)`
+* Output budget env controls:
+  * `RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL` (default `2000`)
+  * `RB_LLM_MAX_OUTPUT_TOKENS_ASK` (default `1000`)
+  * `RB_LLM_MAX_OUTPUT_TOKENS_REVIEW` (default `1400`)
+  * `RB_LLM_MAX_OUTPUT_TOKENS_FIX` (default `2000`)
 
 Example `.repobrain.yml`:
 

@@ -40,7 +40,12 @@ from repobrain.tky_provider import CandidateChunk, TKYResult
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
 from repobrain.quality_gates import compute_conclusion
 from repobrain.llm.github_models import GitHubModelsClient, GitHubModelsError
-from repobrain.llm.model_selector import choose_model, complexity_explanation, score_complexity
+from repobrain.llm.model_selector import (
+    choose_model,
+    complexity_explanation,
+    compute_output_token_budget,
+    score_complexity,
+)
 from repobrain.llm.prompts import (
     build_messages_for_ask,
     build_messages_for_fix,
@@ -554,19 +559,31 @@ def _llm_enabled() -> bool:
 
 def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
     return {
+        "llm_used": False,
+        "llm_skip_reason": reason,
         "llm_model_used": "not used",
         "llm_tier": "n/a",
         "llm_tokens_prompt": 0,
         "llm_tokens_completion": 0,
         "llm_tokens_total": 0,
         "llm_usage_estimated": True,
-        "llm_requests_remaining": "n/a",
-        "llm_rate_limit_reset": "n/a",
+        "llm_remaining_requests": "n/a",
+        "llm_remaining_is_estimate": True,
+        "llm_reset_time_utc_iso": None,
         "llm_reason": reason,
         "llm_complexity_score": 0,
         "llm_complexity_explanation": "n/a",
         "llm_calls_this_run": 0,
+        "llm_max_output_tokens_used": 0,
+        "llm_input_budget_limit": 0,
+        "llm_input_budget_used_est": 0,
+        "llm_dropped_locators_count": 0,
+        "llm_dropped_hunks_count": 0,
+        "llm_dropped_snippets_count": 0,
         "llm_ratelimit_headers": {},
+        # Backward-compatible aliases used by older formatting/tests.
+        "llm_requests_remaining": "n/a",
+        "llm_rate_limit_reset": "n/a",
     }
 
 
@@ -577,27 +594,40 @@ def _merge_llm_meta(target: dict[str, Any], llm_meta: dict[str, Any]) -> None:
 
 
 def _apply_remaining_fallback(llm_meta: dict[str, Any]) -> None:
-    if llm_meta.get("llm_requests_remaining", None) not in {None, "", "n/a"}:
+    if llm_meta.get("llm_remaining_requests", None) not in {None, "", "n/a"}:
         return
     tier = str(llm_meta.get("llm_tier", "low") or "low").strip().lower()
     daily_limit = 50 if tier == "high" else 150
     calls = int(llm_meta.get("llm_calls_this_run", 0) or 0)
-    llm_meta["llm_requests_remaining"] = max(0, daily_limit - calls)
+    llm_meta["llm_remaining_requests"] = max(0, daily_limit - calls)
+    llm_meta["llm_requests_remaining"] = llm_meta["llm_remaining_requests"]
+    llm_meta["llm_remaining_is_estimate"] = True
     llm_meta["llm_usage_estimated"] = True
 
 
 def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
     return {
         "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "llm_used": bool(llm_meta.get("llm_used", False)),
+        "skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
         "model_id": str(llm_meta.get("llm_model_used", "not used")),
         "tier": str(llm_meta.get("llm_tier", "n/a")),
         "calls_this_run": int(llm_meta.get("llm_calls_this_run", 0) or 0),
         "tokens_prompt": int(llm_meta.get("llm_tokens_prompt", 0) or 0),
         "tokens_completion": int(llm_meta.get("llm_tokens_completion", 0) or 0),
         "tokens_total": int(llm_meta.get("llm_tokens_total", 0) or 0),
+        "max_output_tokens_used": int(llm_meta.get("llm_max_output_tokens_used", 0) or 0),
+        "input_budget_limit": int(llm_meta.get("llm_input_budget_limit", 0) or 0),
+        "input_budget_used_est": int(llm_meta.get("llm_input_budget_used_est", 0) or 0),
+        "dropped_locators_count": int(llm_meta.get("llm_dropped_locators_count", 0) or 0),
+        "dropped_hunks_count": int(llm_meta.get("llm_dropped_hunks_count", 0) or 0),
+        "dropped_snippets_count": int(llm_meta.get("llm_dropped_snippets_count", 0) or 0),
+        "remaining_requests": llm_meta.get("llm_remaining_requests", "n/a"),
+        "remaining_is_estimate": bool(llm_meta.get("llm_remaining_is_estimate", True)),
+        "reset_time_utc_iso": llm_meta.get("llm_reset_time_utc_iso"),
         "estimate_flags": {
             "usage_estimated": bool(llm_meta.get("llm_usage_estimated", True)),
-            "remaining_estimated": bool(llm_meta.get("llm_remaining_estimated", False)),
+            "remaining_estimated": bool(llm_meta.get("llm_remaining_is_estimate", True)),
         },
         "ratelimit_headers_subset": dict(llm_meta.get("llm_ratelimit_headers", {})),
     }
@@ -753,22 +783,35 @@ def _maybe_generate_llm_text(
     github_context: dict[str, Any],
     locators: list[EvidenceItem],
     candidates_count: int,
+    selected_snippets: list[str] | None = None,
 ) -> tuple[str | None, dict[str, Any]]:
+    normalized_route = str(route or "").strip().upper()
+    if normalized_route in {"WAIT", "REFUSE", "BLOCK"}:
+        llm_meta = _llm_default_meta(f"route={normalized_route}")
+        _apply_remaining_fallback(llm_meta)
+        llm_meta["llm_remaining_is_estimate"] = True
+        return None, llm_meta
+
+    if cmd == "locate" and not _env_true("RB_LLM_ALLOW_LOCATE", default=False):
+        llm_meta = _llm_default_meta("locate_disabled")
+        _apply_remaining_fallback(llm_meta)
+        llm_meta["llm_remaining_is_estimate"] = True
+        return None, llm_meta
+
     llm_meta = _llm_default_meta("disabled")
     if not _llm_enabled():
         _apply_remaining_fallback(llm_meta)
-        llm_meta["llm_remaining_estimated"] = True
+        llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
     token = os.getenv("GITHUB_TOKEN", "").strip()
     if not token:
         llm_meta = _llm_default_meta("missing_github_token")
         _apply_remaining_fallback(llm_meta)
-        llm_meta["llm_remaining_estimated"] = True
+        llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
     max_input_tokens = _env_int("RB_LLM_MAX_INPUT_TOKENS", 7600)
-    max_output_tokens = _env_int("RB_LLM_MAX_OUTPUT_TOKENS", 1200)
     model_high = os.getenv("RB_LLM_MODEL_HIGH", "openai/gpt-4.1").strip() or "openai/gpt-4.1"
     model_low = os.getenv("RB_LLM_MODEL_LOW", "openai/gpt-4.1-mini").strip() or "openai/gpt-4.1-mini"
 
@@ -776,16 +819,21 @@ def _maybe_generate_llm_text(
     complexity_score = score_complexity(
         task_type=cmd,
         intent=intent,
-        route=route,
+        route=normalized_route,
         github_context=github_context,
         candidates=[None] * max(0, int(candidates_count)),
         limits=complexity_limits,
     )
     model_id, tier = choose_model(complexity_score, model_high=model_high, model_low=model_low)
+    max_output_tokens = compute_output_token_budget(
+        task_type=cmd,
+        intent=intent,
+        complexity_score=complexity_score,
+    )
     explanation = complexity_explanation(
         task_type=cmd,
         intent=intent,
-        route=route,
+        route=normalized_route,
         changed_files_count=len(github_context.get("changed_files", []))
         if isinstance(github_context.get("changed_files", []), list)
         else 0,
@@ -799,25 +847,29 @@ def _maybe_generate_llm_text(
     diff_hunks_raw = github_context.get("diff_hunks", [])
     diff_hunks = [str(item) for item in diff_hunks_raw if str(item).strip()] if isinstance(diff_hunks_raw, list) else []
 
+    budgeting_stats: dict[str, Any]
     if intent == "patch" or cmd == "fix":
-        messages = build_messages_for_fix(
+        messages, budgeting_stats = build_messages_for_fix(
             query=query,
             changed_files=changed_files,
             diff_hunks=diff_hunks,
             max_input_tokens=max_input_tokens,
+            selected_snippets=selected_snippets,
         )
     elif cmd == "review":
-        messages = build_messages_for_review(
+        messages, budgeting_stats = build_messages_for_review(
             query=query,
             changed_files=changed_files,
             diff_hunks=diff_hunks,
             max_input_tokens=max_input_tokens,
+            selected_snippets=selected_snippets,
         )
     else:
-        messages = build_messages_for_ask(
+        messages, budgeting_stats = build_messages_for_ask(
             query=query,
             locators=locators,
             max_input_tokens=max_input_tokens,
+            selected_snippets=selected_snippets,
         )
 
     client = GitHubModelsClient(token=token)
@@ -836,29 +888,61 @@ def _maybe_generate_llm_text(
         llm_meta["llm_complexity_score"] = complexity_score
         llm_meta["llm_complexity_explanation"] = explanation
         llm_meta["llm_calls_this_run"] = 1
+        llm_meta["llm_max_output_tokens_used"] = max_output_tokens
+        llm_meta["llm_input_budget_limit"] = int(budgeting_stats.get("input_budget_limit", 0) or 0)
+        llm_meta["llm_input_budget_used_est"] = int(
+            budgeting_stats.get("input_budget_used_est", 0) or 0
+        )
+        llm_meta["llm_dropped_locators_count"] = int(
+            budgeting_stats.get("dropped_locators_count", 0) or 0
+        )
+        llm_meta["llm_dropped_hunks_count"] = int(
+            budgeting_stats.get("dropped_hunks_count", 0) or 0
+        )
+        llm_meta["llm_dropped_snippets_count"] = int(
+            budgeting_stats.get("dropped_snippets_count", 0) or 0
+        )
         _apply_remaining_fallback(llm_meta)
-        llm_meta["llm_remaining_estimated"] = True
+        llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
     llm_meta = {
+        "llm_used": True,
+        "llm_skip_reason": "n/a",
         "llm_model_used": response.model_id,
         "llm_tier": tier,
         "llm_tokens_prompt": response.prompt_tokens,
         "llm_tokens_completion": response.completion_tokens,
         "llm_tokens_total": response.total_tokens,
         "llm_usage_estimated": bool(response.usage_estimated),
-        "llm_requests_remaining": response.requests_remaining if response.requests_remaining is not None else "n/a",
-        "llm_rate_limit_reset": response.rate_limit_reset or "n/a",
+        "llm_remaining_requests": (
+            response.requests_remaining if response.requests_remaining is not None else "n/a"
+        ),
+        "llm_remaining_is_estimate": bool(response.remaining_is_estimate),
+        "llm_reset_time_utc_iso": response.reset_time_utc_iso,
+        "llm_requests_remaining": (
+            response.requests_remaining if response.requests_remaining is not None else "n/a"
+        ),
+        "llm_rate_limit_reset": response.reset_time_utc_iso or "n/a",
         "llm_reason": "ok",
         "llm_complexity_score": complexity_score,
         "llm_complexity_explanation": explanation,
         "llm_calls_this_run": 1,
+        "llm_max_output_tokens_used": max_output_tokens,
+        "llm_input_budget_limit": int(budgeting_stats.get("input_budget_limit", 0) or 0),
+        "llm_input_budget_used_est": int(budgeting_stats.get("input_budget_used_est", 0) or 0),
+        "llm_dropped_locators_count": int(budgeting_stats.get("dropped_locators_count", 0) or 0),
+        "llm_dropped_hunks_count": int(budgeting_stats.get("dropped_hunks_count", 0) or 0),
+        "llm_dropped_snippets_count": int(budgeting_stats.get("dropped_snippets_count", 0) or 0),
         "llm_ratelimit_headers": dict(response.ratelimit_headers),
-        "llm_remaining_estimated": False,
     }
     if response.requests_remaining is None:
         _apply_remaining_fallback(llm_meta)
-        llm_meta["llm_remaining_estimated"] = True
+        llm_meta["llm_remaining_is_estimate"] = True
+    if llm_meta.get("llm_remaining_requests", "n/a") in {None, "", "n/a"}:
+        _apply_remaining_fallback(llm_meta)
+    if llm_meta.get("llm_reset_time_utc_iso", None) in {None, ""}:
+        llm_meta["llm_rate_limit_reset"] = "n/a"
     return response.text.strip() or None, llm_meta
 
 

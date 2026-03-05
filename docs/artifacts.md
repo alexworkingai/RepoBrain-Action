@@ -70,9 +70,15 @@ When review/fix verification runs:
 `artifacts/llm_usage.json` (usersafe) includes:
 
 - `date_utc`
+- `llm_used`, `skip_reason`
 - `model_id`, `tier`
 - `calls_this_run`
 - `tokens_prompt`, `tokens_completion`, `tokens_total`
+- `max_output_tokens_used`
+- `input_budget_limit`, `input_budget_used_est`
+- `dropped_locators_count`, `dropped_hunks_count`, `dropped_snippets_count`
+- `remaining_requests`, `remaining_is_estimate`
+- `reset_time_utc_iso`
 - `estimate_flags` (reported vs estimated usage/remaining)
 - `ratelimit_headers_subset` (`x-ratelimit-*` only)
 

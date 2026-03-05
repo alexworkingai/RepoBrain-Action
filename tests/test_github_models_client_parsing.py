@@ -59,5 +59,6 @@ def test_chat_parses_usage_and_rate_headers(monkeypatch) -> None:
     assert res.total_tokens == 165
     assert res.usage_estimated is False
     assert res.requests_remaining == 17
-    assert res.rate_limit_reset is not None
+    assert res.remaining_is_estimate is False
+    assert res.reset_time_utc_iso is not None
     assert "x-ratelimit-remaining" in res.ratelimit_headers
