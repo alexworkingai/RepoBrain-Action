@@ -64,8 +64,10 @@ When review/fix verification runs:
 
 - `artifacts/verification_report.json` is written (usersafe summary only)
 - `artifacts/patch.diff` is written when `/repobrain fix` has a generated patch
+- `artifacts/patch_parts/*.diff` stores per-batch patch parts when batch LLM fix mode is enabled
 - `artifacts/check_run_payload.json` is written when PR check payload is prepared
 - `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
+- `artifacts/batch_summaries.json` stores usersafe map-stage summaries for batch runs
 
 `artifacts/llm_usage.json` (usersafe) includes:
 
@@ -81,6 +83,10 @@ When review/fix verification runs:
 - `reset_time_utc_iso`
 - `estimate_flags` (reported vs estimated usage/remaining)
 - `ratelimit_headers_subset` (`x-ratelimit-*` only)
+- `calls` (per-call entries with `batch_id`, model, tokens, remaining/reset)
+- `totals` (`calls_count`, token totals)
+- `model_counts` (model -> call count)
+- `final_remaining_requests`, `final_reset_time_utc_iso`
 
 Safe defaults:
 

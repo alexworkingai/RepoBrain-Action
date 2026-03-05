@@ -108,6 +108,8 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     dropped_locators = int(audit_summary.get("llm_dropped_locators_count", 0) or 0)
     dropped_hunks = int(audit_summary.get("llm_dropped_hunks_count", 0) or 0)
     dropped_snippets = int(audit_summary.get("llm_dropped_snippets_count", 0) or 0)
+    calls_count = int(audit_summary.get("llm_calls_this_run", 0) or 0)
+    models_used = str(audit_summary.get("llm_models_used", "n/a") or "n/a")
     return [
         "### 🤖 LLM",
         (
@@ -125,6 +127,8 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
             f"{' (estimated)' if remaining_is_estimate else ''}"
         ),
         f"- Reset time UTC: {reset_value}",
+        f"- Calls this run: {calls_count}",
+        f"- Models used: {models_used}",
         f"- Prompt budget: used~{input_budget_used} / limit={input_budget_limit}",
         (
             "- Dropped context items: "

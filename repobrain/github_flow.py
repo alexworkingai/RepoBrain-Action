@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import time
 from typing import Any
@@ -40,6 +42,7 @@ from repobrain.tky_provider import CandidateChunk, TKYResult
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
 from repobrain.quality_gates import compute_conclusion
 from repobrain.llm.github_models import GitHubModelsClient, GitHubModelsError
+from repobrain.llm.batch_planner import plan_batches
 from repobrain.llm.model_selector import (
     choose_model,
     complexity_explanation,
@@ -50,6 +53,7 @@ from repobrain.llm.prompts import (
     build_messages_for_ask,
     build_messages_for_fix,
     build_messages_for_review,
+    estimate_tokens,
 )
 from repobrain.verification_runner import (
     VerificationBudgets,
@@ -558,6 +562,21 @@ def _llm_enabled() -> bool:
 
 
 def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
+    call_entry = {
+        "batch_id": "single",
+        "model_id": "not used",
+        "tier": "n/a",
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "tokens_total": 0,
+        "remaining_requests": "n/a",
+        "remaining_is_estimate": True,
+        "reset_time_utc_iso": None,
+        "estimate_flags": {
+            "usage_estimated": True,
+            "remaining_estimated": True,
+        },
+    }
     return {
         "llm_used": False,
         "llm_skip_reason": reason,
@@ -581,6 +600,8 @@ def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
         "llm_dropped_hunks_count": 0,
         "llm_dropped_snippets_count": 0,
         "llm_ratelimit_headers": {},
+        "llm_calls": [call_entry],
+        "llm_model_counts": {},
         # Backward-compatible aliases used by older formatting/tests.
         "llm_requests_remaining": "n/a",
         "llm_rate_limit_reset": "n/a",
@@ -605,7 +626,92 @@ def _apply_remaining_fallback(llm_meta: dict[str, Any]) -> None:
     llm_meta["llm_usage_estimated"] = True
 
 
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _remaining_after_decrement(value: Any, decrement: int = 1) -> int | str:
+    if isinstance(value, int):
+        return max(0, value - decrement)
+    try:
+        parsed = int(str(value))
+    except (TypeError, ValueError):
+        return "n/a"
+    return max(0, parsed - decrement)
+
+
+def _build_model_counts(calls: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in calls:
+        model_id = str(item.get("model_id", "") or "").strip()
+        if not model_id:
+            continue
+        counts[model_id] = counts.get(model_id, 0) + 1
+    return counts
+
+
+def _compact_usage_call(
+    *,
+    batch_id: str,
+    model_id: str,
+    tier: str,
+    tokens_prompt: int,
+    tokens_completion: int,
+    tokens_total: int,
+    remaining_requests: Any,
+    remaining_is_estimate: bool,
+    reset_time_utc_iso: str | None,
+    usage_estimated: bool,
+) -> dict[str, Any]:
+    return {
+        "batch_id": batch_id,
+        "model_id": model_id,
+        "tier": tier,
+        "tokens_prompt": tokens_prompt,
+        "tokens_completion": tokens_completion,
+        "tokens_total": tokens_total,
+        "remaining_requests": remaining_requests,
+        "remaining_is_estimate": remaining_is_estimate,
+        "reset_time_utc_iso": reset_time_utc_iso,
+        "estimate_flags": {
+            "usage_estimated": usage_estimated,
+            "remaining_estimated": remaining_is_estimate,
+        },
+    }
+
+
 def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
+    calls_raw = llm_meta.get("llm_calls", [])
+    calls: list[dict[str, Any]] = []
+    if isinstance(calls_raw, list):
+        for item in calls_raw:
+            if isinstance(item, dict):
+                calls.append(dict(item))
+    if not calls:
+        calls = [
+            _compact_usage_call(
+                batch_id="single",
+                model_id=str(llm_meta.get("llm_model_used", "not used") or "not used"),
+                tier=str(llm_meta.get("llm_tier", "n/a") or "n/a"),
+                tokens_prompt=_int_or_zero(llm_meta.get("llm_tokens_prompt", 0)),
+                tokens_completion=_int_or_zero(llm_meta.get("llm_tokens_completion", 0)),
+                tokens_total=_int_or_zero(llm_meta.get("llm_tokens_total", 0)),
+                remaining_requests=llm_meta.get("llm_remaining_requests", "n/a"),
+                remaining_is_estimate=bool(llm_meta.get("llm_remaining_is_estimate", True)),
+                reset_time_utc_iso=llm_meta.get("llm_reset_time_utc_iso"),
+                usage_estimated=bool(llm_meta.get("llm_usage_estimated", True)),
+            )
+        ]
+
+    tokens_prompt_total = sum(_int_or_zero(item.get("tokens_prompt", 0)) for item in calls)
+    tokens_completion_total = sum(_int_or_zero(item.get("tokens_completion", 0)) for item in calls)
+    tokens_total_total = sum(_int_or_zero(item.get("tokens_total", 0)) for item in calls)
+    final_call = calls[-1] if calls else {}
+    model_counts = _build_model_counts(calls)
+
     return {
         "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "llm_used": bool(llm_meta.get("llm_used", False)),
@@ -625,6 +731,16 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "remaining_requests": llm_meta.get("llm_remaining_requests", "n/a"),
         "remaining_is_estimate": bool(llm_meta.get("llm_remaining_is_estimate", True)),
         "reset_time_utc_iso": llm_meta.get("llm_reset_time_utc_iso"),
+        "calls": calls,
+        "totals": {
+            "calls_count": len(calls),
+            "tokens_prompt_total": tokens_prompt_total,
+            "tokens_completion_total": tokens_completion_total,
+            "tokens_total_total": tokens_total_total,
+        },
+        "model_counts": model_counts,
+        "final_remaining_requests": final_call.get("remaining_requests", "n/a"),
+        "final_reset_time_utc_iso": final_call.get("reset_time_utc_iso"),
         "estimate_flags": {
             "usage_estimated": bool(llm_meta.get("llm_usage_estimated", True)),
             "remaining_estimated": bool(llm_meta.get("llm_remaining_is_estimate", True)),
@@ -651,6 +767,22 @@ def _write_llm_usage(repo_root: Path, payload: dict[str, Any]) -> Path:
     path = repo_root / "artifacts" / "llm_usage.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _write_batch_summaries(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "batch_summaries.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _write_patch_part(repo_root: Path, batch_id: str, patch_text: str) -> Path:
+    folder = repo_root / "artifacts" / "patch_parts"
+    folder.mkdir(parents=True, exist_ok=True)
+    safe_id = re.sub(r"[^a-zA-Z0-9_.-]", "_", batch_id)[:80] or "part"
+    path = folder / f"{safe_id}.diff"
+    path.write_text(patch_text, encoding="utf-8")
     return path
 
 
@@ -784,6 +916,10 @@ def _maybe_generate_llm_text(
     locators: list[EvidenceItem],
     candidates_count: int,
     selected_snippets: list[str] | None = None,
+    preferred_model_id: str | None = None,
+    preferred_tier: str | None = None,
+    prebuilt_messages: list[dict[str, str]] | None = None,
+    prebuilt_budget_stats: dict[str, Any] | None = None,
 ) -> tuple[str | None, dict[str, Any]]:
     normalized_route = str(route or "").strip().upper()
     if normalized_route in {"WAIT", "REFUSE", "BLOCK"}:
@@ -825,6 +961,12 @@ def _maybe_generate_llm_text(
         limits=complexity_limits,
     )
     model_id, tier = choose_model(complexity_score, model_high=model_high, model_low=model_low)
+    if preferred_model_id:
+        model_id = preferred_model_id.strip() or model_id
+        if preferred_tier:
+            tier = preferred_tier
+        else:
+            tier = "low" if "mini" in model_id.lower() else "high"
     max_output_tokens = compute_output_token_budget(
         task_type=cmd,
         intent=intent,
@@ -847,30 +989,34 @@ def _maybe_generate_llm_text(
     diff_hunks_raw = github_context.get("diff_hunks", [])
     diff_hunks = [str(item) for item in diff_hunks_raw if str(item).strip()] if isinstance(diff_hunks_raw, list) else []
 
-    budgeting_stats: dict[str, Any]
-    if intent == "patch" or cmd == "fix":
-        messages, budgeting_stats = build_messages_for_fix(
-            query=query,
-            changed_files=changed_files,
-            diff_hunks=diff_hunks,
-            max_input_tokens=max_input_tokens,
-            selected_snippets=selected_snippets,
-        )
-    elif cmd == "review":
-        messages, budgeting_stats = build_messages_for_review(
-            query=query,
-            changed_files=changed_files,
-            diff_hunks=diff_hunks,
-            max_input_tokens=max_input_tokens,
-            selected_snippets=selected_snippets,
-        )
+    if prebuilt_messages is not None:
+        messages = list(prebuilt_messages)
+        budgeting_stats = dict(prebuilt_budget_stats or {})
     else:
-        messages, budgeting_stats = build_messages_for_ask(
-            query=query,
-            locators=locators,
-            max_input_tokens=max_input_tokens,
-            selected_snippets=selected_snippets,
-        )
+        budgeting_stats: dict[str, Any]
+        if intent == "patch" or cmd == "fix":
+            messages, budgeting_stats = build_messages_for_fix(
+                query=query,
+                changed_files=changed_files,
+                diff_hunks=diff_hunks,
+                max_input_tokens=max_input_tokens,
+                selected_snippets=selected_snippets,
+            )
+        elif cmd == "review":
+            messages, budgeting_stats = build_messages_for_review(
+                query=query,
+                changed_files=changed_files,
+                diff_hunks=diff_hunks,
+                max_input_tokens=max_input_tokens,
+                selected_snippets=selected_snippets,
+            )
+        else:
+            messages, budgeting_stats = build_messages_for_ask(
+                query=query,
+                locators=locators,
+                max_input_tokens=max_input_tokens,
+                selected_snippets=selected_snippets,
+            )
 
     client = GitHubModelsClient(token=token)
     try:
@@ -904,6 +1050,21 @@ def _maybe_generate_llm_text(
         )
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
+        llm_meta["llm_calls"] = [
+            _compact_usage_call(
+                batch_id="single",
+                model_id=model_id,
+                tier=tier,
+                tokens_prompt=0,
+                tokens_completion=0,
+                tokens_total=0,
+                remaining_requests=llm_meta.get("llm_remaining_requests", "n/a"),
+                remaining_is_estimate=True,
+                reset_time_utc_iso=None,
+                usage_estimated=True,
+            )
+        ]
+        llm_meta["llm_model_counts"] = _build_model_counts(llm_meta["llm_calls"])
         return None, llm_meta
 
     llm_meta = {
@@ -943,6 +1104,21 @@ def _maybe_generate_llm_text(
         _apply_remaining_fallback(llm_meta)
     if llm_meta.get("llm_reset_time_utc_iso", None) in {None, ""}:
         llm_meta["llm_rate_limit_reset"] = "n/a"
+    llm_meta["llm_calls"] = [
+        _compact_usage_call(
+            batch_id="single",
+            model_id=str(response.model_id),
+            tier=str(tier),
+            tokens_prompt=int(response.prompt_tokens),
+            tokens_completion=int(response.completion_tokens),
+            tokens_total=int(response.total_tokens),
+            remaining_requests=llm_meta.get("llm_remaining_requests", "n/a"),
+            remaining_is_estimate=bool(llm_meta.get("llm_remaining_is_estimate", True)),
+            reset_time_utc_iso=llm_meta.get("llm_reset_time_utc_iso"),
+            usage_estimated=bool(response.usage_estimated),
+        )
+    ]
+    llm_meta["llm_model_counts"] = _build_model_counts(llm_meta["llm_calls"])
     return response.text.strip() or None, llm_meta
 
 
@@ -980,6 +1156,411 @@ def _patch_snippet(patch_text: str, max_lines: int = 250) -> str:
     if len(lines) <= max_lines:
         return patch_text
     return "\n".join(lines[:max_lines] + ["", "# ... truncated ..."])
+
+
+def _sanitize_batch_text(text: str, *, max_lines: int = 8) -> list[str]:
+    lines: list[str] = []
+    for raw in str(text or "").splitlines():
+        line = raw.strip().strip("`")
+        if not line:
+            continue
+        if line.startswith(("diff --git", "--- ", "+++ ", "@@ ", "+", "-")):
+            continue
+        lines.append(line[:220])
+        if len(lines) >= max_lines:
+            break
+    return lines
+
+
+def _extract_patch_from_llm_text(text: str) -> str:
+    payload = str(text or "")
+    fence_match = re.search(r"```diff\s*(.*?)```", payload, flags=re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        return fence_match.group(1).strip()
+    idx = payload.find("diff --git")
+    if idx >= 0:
+        return payload[idx:].strip()
+    return ""
+
+
+def _is_unified_diff(patch_text: str) -> bool:
+    text = str(patch_text or "")
+    if not text.strip():
+        return False
+    return ("--- " in text and "+++ " in text and "@@ " in text) or text.startswith("diff --git")
+
+
+def _parse_patch_ranges(patch_text: str) -> dict[str, list[tuple[int, int]]]:
+    current_path = ""
+    ranges: dict[str, list[tuple[int, int]]] = {}
+    for line in patch_text.splitlines():
+        if line.startswith("+++ "):
+            raw = line[4:].strip()
+            if raw.startswith("b/"):
+                raw = raw[2:]
+            current_path = raw if raw != "/dev/null" else ""
+            if current_path:
+                ranges.setdefault(current_path, [])
+            continue
+        if line.startswith("@@ ") and current_path:
+            match = re.search(r"\+(\d+)(?:,(\d+))?", line)
+            if not match:
+                continue
+            start = int(match.group(1))
+            count = int(match.group(2) or "1")
+            end = max(start, start + max(count, 1) - 1)
+            ranges.setdefault(current_path, []).append((start, end))
+    return ranges
+
+
+def _ranges_overlap(a: tuple[int, int], b: tuple[int, int]) -> bool:
+    return not (a[1] < b[0] or b[1] < a[0])
+
+
+def _merge_patch_parts(
+    parts: list[dict[str, Any]],
+) -> tuple[str, bool, list[str]]:
+    sorted_parts = sorted(parts, key=lambda item: str(item.get("batch_id", "")))
+    merged: list[str] = []
+    details: list[str] = []
+    seen_ranges: dict[str, list[tuple[int, int]]] = {}
+    has_conflict = False
+
+    for item in sorted_parts:
+        batch_id = str(item.get("batch_id", "") or "")
+        patch_text = str(item.get("patch", "") or "")
+        if not patch_text:
+            continue
+        ranges = _parse_patch_ranges(patch_text)
+        for path, path_ranges in ranges.items():
+            existing = seen_ranges.setdefault(path, [])
+            for candidate in path_ranges:
+                if any(_ranges_overlap(candidate, prev) for prev in existing):
+                    has_conflict = True
+                    details.append(
+                        f"conflict: path={path} range={candidate[0]}-{candidate[1]} batch={batch_id}"
+                    )
+                existing.append(candidate)
+        merged.append(patch_text.strip())
+    return "\n\n".join(part for part in merged if part), has_conflict, details
+
+
+def _should_use_batch_mode_for_review(
+    *,
+    cmd: str,
+    route: str,
+    complexity_score: int,
+    changed_files_count: int,
+) -> bool:
+    if not _env_true("RB_LLM_BATCH_ENABLE", default=False):
+        return False
+    if cmd not in {"review", "fix"}:
+        return False
+    normalized_route = str(route or "").strip().upper()
+    if normalized_route in {"WAIT", "REFUSE", "BLOCK"}:
+        return False
+    return normalized_route == "DEEP" or complexity_score >= 60 or changed_files_count >= 10
+
+
+def _run_batch_llm_review_fix(
+    *,
+    repo_root: Path,
+    cmd: str,
+    intent: str,
+    query: str,
+    route: str,
+    github_context: dict[str, Any],
+    selected_chunks: list[CandidateChunk],
+    locators: list[EvidenceItem],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    llm_disabled = not _llm_enabled()
+    if llm_disabled:
+        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _llm_default_meta(
+            "disabled"
+        )
+
+    max_input_tokens = _env_int("RB_LLM_MAX_INPUT_TOKENS", 7600)
+    planned = plan_batches(
+        task_type=cmd,
+        intent=intent,
+        github_context=github_context,
+        selected_chunks=selected_chunks,
+        limits={"max_input_tokens": max_input_tokens},
+        budgets={"max_input_tokens": max_input_tokens, "reserve_tokens": 800},
+    )
+    max_calls = max(1, _env_int("RB_LLM_BATCH_MAX_CALLS_PER_RUN", 6))
+    batches = planned[:max_calls]
+    if not batches:
+        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _llm_default_meta(
+            "no_batches"
+        )
+
+    model_high = os.getenv("RB_LLM_MODEL_HIGH", "openai/gpt-4.1").strip() or "openai/gpt-4.1"
+    model_low = os.getenv("RB_LLM_MODEL_LOW", "openai/gpt-4.1-mini").strip() or "openai/gpt-4.1-mini"
+    route_norm = str(route or "").strip().upper()
+    overall_score = score_complexity(
+        task_type=cmd,
+        intent=intent,
+        route=route_norm,
+        github_context=github_context,
+        candidates=[None] * max(0, len(selected_chunks)),
+        limits={"query_length": len(query or "")},
+    )
+    overall_model, overall_tier = choose_model(overall_score, model_high=model_high, model_low=model_low)
+    reduce_model_override = os.getenv("RB_LLM_BATCH_REDUCE_MODEL", "").strip()
+    reduce_enable = _env_true("RB_LLM_BATCH_REDUCE_ENABLE", default=True)
+
+    calls: list[dict[str, Any]] = []
+    summaries: list[dict[str, Any]] = []
+    findings: list[str] = []
+    patch_parts: list[dict[str, Any]] = []
+    last_remaining: Any = None
+    last_reset: str | None = None
+    llm_ratelimit_headers: dict[str, str] = {}
+    dropped_locators = 0
+    dropped_hunks = 0
+    dropped_snippets = 0
+    prompt_used_total = 0
+    prompt_limit_total = 0
+    max_output_tokens_max = 0
+    usage_estimated_any = False
+    any_used = False
+
+    for index, batch in enumerate(batches):
+        batch_context = dict(github_context)
+        batch_context["changed_files"] = list(batch.paths)
+        batch_context["diff_hunks"] = list(batch.diff_hunks)
+        score_batch = score_complexity(
+            task_type=cmd,
+            intent=intent,
+            route=route_norm,
+            github_context=batch_context,
+            candidates=[None] * max(0, len(batch.snippet_ids)),
+            limits={"query_length": len(query or "")},
+        )
+        batch_model, batch_tier = choose_model(score_batch, model_high=model_high, model_low=model_low)
+        if batch.estimated_input_tokens < 900 and score_batch < 35:
+            batch_model = model_low
+            batch_tier = "low"
+        if overall_tier == "high" and score_batch >= 35:
+            batch_model = model_high
+            batch_tier = "high"
+
+        batch_locators = [item for item in locators if item.file_path in set(batch.paths)]
+        batch_query = (
+            f"{query}\n"
+            f"Batch {index + 1}/{len(batches)}\n"
+            f"Focus paths: {', '.join(batch.paths[:12])}"
+        )
+        text, meta = _maybe_generate_llm_text(
+            cmd=cmd,
+            intent=intent,
+            query=batch_query,
+            route=route_norm,
+            github_context=batch_context,
+            locators=batch_locators,
+            candidates_count=max(1, len(batch.snippet_ids)),
+            selected_snippets=list(batch.snippet_ids),
+            preferred_model_id=batch_model,
+            preferred_tier=batch_tier,
+        )
+        call_entry_raw = meta.get("llm_calls", [])
+        if isinstance(call_entry_raw, list) and call_entry_raw and isinstance(call_entry_raw[0], dict):
+            call_entry = dict(call_entry_raw[0])
+        else:
+            call_entry = _compact_usage_call(
+                batch_id=batch.batch_id,
+                model_id=str(meta.get("llm_model_used", batch_model)),
+                tier=str(meta.get("llm_tier", batch_tier)),
+                tokens_prompt=_int_or_zero(meta.get("llm_tokens_prompt", 0)),
+                tokens_completion=_int_or_zero(meta.get("llm_tokens_completion", 0)),
+                tokens_total=_int_or_zero(meta.get("llm_tokens_total", 0)),
+                remaining_requests=meta.get("llm_remaining_requests", "n/a"),
+                remaining_is_estimate=bool(meta.get("llm_remaining_is_estimate", True)),
+                reset_time_utc_iso=meta.get("llm_reset_time_utc_iso"),
+                usage_estimated=bool(meta.get("llm_usage_estimated", True)),
+            )
+        call_entry["batch_id"] = batch.batch_id
+        if bool(call_entry.get("remaining_is_estimate", True)) and last_remaining not in {None, "", "n/a"}:
+            call_entry["remaining_requests"] = _remaining_after_decrement(last_remaining, decrement=1)
+        last_remaining = call_entry.get("remaining_requests", last_remaining)
+        last_reset = call_entry.get("reset_time_utc_iso", last_reset)
+        calls.append(call_entry)
+
+        llm_ratelimit_headers = dict(meta.get("llm_ratelimit_headers", llm_ratelimit_headers))
+        dropped_locators += _int_or_zero(meta.get("llm_dropped_locators_count", 0))
+        dropped_hunks += _int_or_zero(meta.get("llm_dropped_hunks_count", 0))
+        dropped_snippets += _int_or_zero(meta.get("llm_dropped_snippets_count", 0))
+        prompt_used_total += _int_or_zero(meta.get("llm_input_budget_used_est", 0))
+        prompt_limit_total += _int_or_zero(meta.get("llm_input_budget_limit", 0))
+        max_output_tokens_max = max(max_output_tokens_max, _int_or_zero(meta.get("llm_max_output_tokens_used", 0)))
+        usage_estimated_any = usage_estimated_any or bool(meta.get("llm_usage_estimated", True))
+        any_used = any_used or bool(meta.get("llm_used", False))
+
+        snippet_hashes = [
+            hashlib.blake2s(value.encode("utf-8"), digest_size=8).hexdigest()
+            for value in batch.snippet_ids
+        ]
+        summary_lines = _sanitize_batch_text(text or "")
+        summaries.append(
+            {
+                "batch_id": batch.batch_id,
+                "paths": list(batch.paths),
+                "finding_bullets": summary_lines[:6],
+                "locator_hashes": snippet_hashes[:20],
+                "estimated_input_tokens": batch.estimated_input_tokens,
+                "model_id": call_entry.get("model_id", batch_model),
+            }
+        )
+        findings.extend(summary_lines[:4])
+        if cmd == "fix":
+            patch = _extract_patch_from_llm_text(text or "")
+            if patch and _is_unified_diff(patch):
+                patch_parts.append({"batch_id": batch.batch_id, "patch": patch})
+                _write_patch_part(repo_root, batch.batch_id, patch)
+
+    reduce_text: str | None = None
+    if reduce_enable and len(summaries) > 1 and any_used:
+        summary_lines = []
+        for item in summaries[:12]:
+            paths = ", ".join(item.get("paths", [])[:6]) if isinstance(item.get("paths"), list) else ""
+            bullets = item.get("finding_bullets", [])
+            if not isinstance(bullets, list):
+                bullets = []
+            summary_lines.append(f"- batch={item.get('batch_id')} paths={paths}")
+            for bullet in bullets[:3]:
+                summary_lines.append(f"  - {bullet}")
+        reduce_messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You aggregate RepoBrain batch summaries. Return concise executive summary "
+                    "and prioritized checklist. Use only provided summaries."
+                ),
+            },
+            {
+                "role": "user",
+                "content": "\n".join(
+                    [
+                        f"Task: {intent}",
+                        f"Query: {query}",
+                        "Batch summaries:",
+                        *summary_lines,
+                    ]
+                ),
+            },
+        ]
+        reduce_budget_stats = {
+            "input_budget_limit": max_input_tokens,
+            "input_budget_used_est": estimate_tokens(reduce_messages[1]["content"]),
+            "dropped_locators_count": 0,
+            "dropped_hunks_count": 0,
+            "dropped_snippets_count": 0,
+        }
+        reduce_model = reduce_model_override or overall_model
+        reduce_tier = "low" if "mini" in reduce_model.lower() else "high"
+        reduce_output, reduce_meta = _maybe_generate_llm_text(
+            cmd=cmd,
+            intent=intent,
+            query=query,
+            route=route_norm,
+            github_context=github_context,
+            locators=[],
+            candidates_count=len(summaries),
+            preferred_model_id=reduce_model,
+            preferred_tier=reduce_tier,
+            prebuilt_messages=reduce_messages,
+            prebuilt_budget_stats=reduce_budget_stats,
+        )
+        reduce_call_raw = reduce_meta.get("llm_calls", [])
+        if isinstance(reduce_call_raw, list) and reduce_call_raw and isinstance(reduce_call_raw[0], dict):
+            reduce_call = dict(reduce_call_raw[0])
+        else:
+            reduce_call = _compact_usage_call(
+                batch_id="reduce",
+                model_id=reduce_model,
+                tier=reduce_tier,
+                tokens_prompt=_int_or_zero(reduce_meta.get("llm_tokens_prompt", 0)),
+                tokens_completion=_int_or_zero(reduce_meta.get("llm_tokens_completion", 0)),
+                tokens_total=_int_or_zero(reduce_meta.get("llm_tokens_total", 0)),
+                remaining_requests=reduce_meta.get("llm_remaining_requests", "n/a"),
+                remaining_is_estimate=bool(reduce_meta.get("llm_remaining_is_estimate", True)),
+                reset_time_utc_iso=reduce_meta.get("llm_reset_time_utc_iso"),
+                usage_estimated=bool(reduce_meta.get("llm_usage_estimated", True)),
+            )
+        reduce_call["batch_id"] = "reduce"
+        if bool(reduce_call.get("remaining_is_estimate", True)) and last_remaining not in {None, "", "n/a"}:
+            reduce_call["remaining_requests"] = _remaining_after_decrement(last_remaining, decrement=1)
+        last_remaining = reduce_call.get("remaining_requests", last_remaining)
+        last_reset = reduce_call.get("reset_time_utc_iso", last_reset)
+        calls.append(reduce_call)
+        llm_ratelimit_headers = dict(reduce_meta.get("llm_ratelimit_headers", llm_ratelimit_headers))
+        dropped_locators += _int_or_zero(reduce_meta.get("llm_dropped_locators_count", 0))
+        dropped_hunks += _int_or_zero(reduce_meta.get("llm_dropped_hunks_count", 0))
+        dropped_snippets += _int_or_zero(reduce_meta.get("llm_dropped_snippets_count", 0))
+        prompt_used_total += _int_or_zero(reduce_meta.get("llm_input_budget_used_est", 0))
+        prompt_limit_total += _int_or_zero(reduce_meta.get("llm_input_budget_limit", 0))
+        max_output_tokens_max = max(max_output_tokens_max, _int_or_zero(reduce_meta.get("llm_max_output_tokens_used", 0)))
+        usage_estimated_any = usage_estimated_any or bool(reduce_meta.get("llm_usage_estimated", True))
+        any_used = any_used or bool(reduce_meta.get("llm_used", False))
+        reduce_text = reduce_output
+
+    dedup_findings = list(dict.fromkeys(item for item in findings if item))
+    if reduce_text:
+        final_summary = reduce_text.strip()
+    else:
+        final_summary = "\n".join(dedup_findings[:6]).strip()
+    if not final_summary:
+        final_summary = "No batch LLM summary available."
+
+    tokens_prompt_total = sum(_int_or_zero(item.get("tokens_prompt", 0)) for item in calls)
+    tokens_completion_total = sum(_int_or_zero(item.get("tokens_completion", 0)) for item in calls)
+    tokens_total_total = sum(_int_or_zero(item.get("tokens_total", 0)) for item in calls)
+    model_counts = _build_model_counts(calls)
+    final_remaining = calls[-1].get("remaining_requests", "n/a") if calls else "n/a"
+    final_remaining_estimated = bool(calls[-1].get("remaining_is_estimate", True)) if calls else True
+    final_reset = calls[-1].get("reset_time_utc_iso") if calls else None
+    llm_meta = {
+        "llm_used": any_used,
+        "llm_skip_reason": "n/a" if any_used else "batch_calls_failed",
+        "llm_model_used": next(iter(model_counts.keys()), overall_model),
+        "llm_tier": "high" if any("gpt-4.1" in key and "mini" not in key for key in model_counts) else "low",
+        "llm_tokens_prompt": tokens_prompt_total,
+        "llm_tokens_completion": tokens_completion_total,
+        "llm_tokens_total": tokens_total_total,
+        "llm_usage_estimated": usage_estimated_any,
+        "llm_remaining_requests": final_remaining,
+        "llm_remaining_is_estimate": final_remaining_estimated,
+        "llm_reset_time_utc_iso": final_reset,
+        "llm_requests_remaining": final_remaining,
+        "llm_rate_limit_reset": final_reset or "n/a",
+        "llm_reason": "ok" if any_used else "batch_calls_failed",
+        "llm_complexity_score": overall_score,
+        "llm_complexity_explanation": (
+            f"batch mode: calls={len(calls)} route={route_norm} changed_files={len(github_context.get('changed_files', []))}"
+        ),
+        "llm_calls_this_run": len(calls),
+        "llm_max_output_tokens_used": max_output_tokens_max,
+        "llm_input_budget_limit": prompt_limit_total,
+        "llm_input_budget_used_est": prompt_used_total,
+        "llm_dropped_locators_count": dropped_locators,
+        "llm_dropped_hunks_count": dropped_hunks,
+        "llm_dropped_snippets_count": dropped_snippets,
+        "llm_ratelimit_headers": llm_ratelimit_headers,
+        "llm_calls": calls,
+        "llm_model_counts": model_counts,
+    }
+    if llm_meta["llm_remaining_requests"] in {None, "", "n/a"}:
+        _apply_remaining_fallback(llm_meta)
+    return {
+        "batch_used": True,
+        "planned_batches": len(planned),
+        "executed_batches": len(batches),
+        "summaries": summaries,
+        "findings": dedup_findings,
+        "summary_text": final_summary,
+        "patch_parts": patch_parts,
+    }, llm_meta
 
 
 def _maybe_apply_patch(
@@ -2195,18 +2776,87 @@ def _build_review_markdown(
         )
         for item in review_candidates
     ]
-    llm_text, llm_meta = _maybe_generate_llm_text(
-        cmd="review",
-        intent="patch" if cmd == "fix" else "review",
-        query=query or question,
-        route=str(audit_summary.get("route_final", "REVIEW")),
-        github_context=dict(github_context_seed or {}),
-        locators=review_locators,
-        candidates_count=len(review_candidates),
+    llm_intent = "patch" if cmd == "fix" else "review"
+    llm_route = str(audit_summary.get("route_final", "REVIEW"))
+    llm_context = dict(github_context_seed or {})
+    llm_complexity = score_complexity(
+        task_type=cmd,
+        intent=llm_intent,
+        route=llm_route,
+        github_context=llm_context,
+        candidates=[None] * max(0, len(review_candidates)),
+        limits={"query_length": len(query or question)},
     )
-    if llm_text:
-        review["summary_text"] = llm_text
+    use_batch_mode = _should_use_batch_mode_for_review(
+        cmd=cmd,
+        route=llm_route,
+        complexity_score=llm_complexity,
+        changed_files_count=len(changed_files),
+    )
+    batch_result: dict[str, Any] = {
+        "batch_used": False,
+        "planned_batches": 0,
+        "executed_batches": 0,
+        "summaries": [],
+        "findings": [],
+        "summary_text": "",
+        "patch_parts": [],
+    }
+    if use_batch_mode:
+        batch_result, llm_meta = _run_batch_llm_review_fix(
+            repo_root=repo_root,
+            cmd=cmd,
+            intent=llm_intent,
+            query=query or question,
+            route=llm_route,
+            github_context=llm_context,
+            selected_chunks=review_candidates,
+            locators=review_locators,
+        )
+        if str(batch_result.get("summary_text", "")).strip():
+            review["summary_text"] = str(batch_result.get("summary_text", "")).strip()
+        batch_findings = batch_result.get("findings", [])
+        if isinstance(batch_findings, list) and batch_findings:
+            notes_raw = review.get("notes", [])
+            notes = [str(item) for item in notes_raw if str(item).strip()] if isinstance(notes_raw, list) else []
+            notes.extend(str(item) for item in batch_findings[:8] if str(item).strip())
+            review["notes"] = list(dict.fromkeys(notes))
+    else:
+        llm_text, llm_meta = _maybe_generate_llm_text(
+            cmd=cmd,
+            intent=llm_intent,
+            query=query or question,
+            route=llm_route,
+            github_context=llm_context,
+            locators=review_locators,
+            candidates_count=len(review_candidates),
+        )
+        if llm_text:
+            review["summary_text"] = llm_text
     _merge_llm_meta(audit_summary, llm_meta)
+    model_counts = llm_meta.get("llm_model_counts", {})
+    if isinstance(model_counts, dict):
+        model_counts_str = ", ".join(
+            f"{model} ({count} calls)"
+            for model, count in sorted(model_counts.items(), key=lambda kv: kv[0])
+        )
+        audit_summary["llm_models_used"] = model_counts_str or "n/a"
+    audit_summary["llm_batch_used"] = bool(batch_result.get("batch_used", False))
+    audit_summary["llm_batch_calls"] = int(llm_meta.get("llm_calls_this_run", 0) or 0)
+    audit_summary["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
+    audit_summary["llm_batch_executed"] = int(batch_result.get("executed_batches", 0) or 0)
+
+    batch_summaries_raw = batch_result.get("summaries", [])
+    if isinstance(batch_summaries_raw, list) and batch_summaries_raw:
+        payload = {
+            "generated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "task": cmd,
+            "intent": llm_intent,
+            "summaries": batch_summaries_raw,
+        }
+        path = _write_batch_summaries(repo_root, payload)
+        audit_summary["batch_summaries_artifact"] = path.as_posix()
+
     check_annotations = _build_check_annotations_from_candidates(
         review_candidates,
         route=str(audit_summary.get("route_final", "REVIEW")),
@@ -2240,11 +2890,29 @@ def _build_review_markdown(
             audit["check_annotations_raw"] = check_annotations
             audit["check_intent"] = check_intent
             audit["verification_report"] = verification_report
+            audit["llm_batch_used"] = bool(batch_result.get("batch_used", False))
+            audit["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
+            audit["llm_batch_executed"] = int(batch_result.get("executed_batches", 0) or 0)
+            audit["batch_summaries_artifact"] = str(
+                audit_summary.get("batch_summaries_artifact", "n/a") or "n/a"
+            )
             _merge_llm_meta(audit, llm_meta)
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
         return body
 
     patch_text = _extract_patch_from_stats(compression_stats)
+    patch_parts_raw = batch_result.get("patch_parts", [])
+    patch_parts = patch_parts_raw if isinstance(patch_parts_raw, list) else []
+    merged_batch_patch = ""
+    batch_patch_conflicts = False
+    batch_patch_conflict_details: list[str] = []
+    if patch_parts:
+        merged_batch_patch, batch_patch_conflicts, batch_patch_conflict_details = _merge_patch_parts(
+            [item for item in patch_parts if isinstance(item, dict)]
+        )
+        if merged_batch_patch.strip():
+            patch_text = merged_batch_patch
+
     patch_written = False
     patch_apply_message = "no patch generated by engine"
     patch_apply_result: dict[str, Any] = {
@@ -2259,27 +2927,37 @@ def _build_review_markdown(
         patch_path = _write_patch_artifact(repo_root, patch_text)
         patch_written = True
         snippet = _patch_snippet(patch_text, max_lines=300)
-        patch_apply_result = _maybe_apply_patch(repo_root=repo_root, patch_path=patch_path)
-        patch_apply_message = str(patch_apply_result.get("message", patch_apply_message))
-        patch_branch = str(patch_apply_result.get("branch", "") or "")
-        if client is not None and patch_branch and bool(patch_apply_result.get("pushed", False)):
-            base_branch = ""
-            if isinstance(github_context_seed, dict):
-                base_branch = str(github_context_seed.get("base_ref", "") or "").strip()
-            if not base_branch:
-                base_branch = extract_branch_from_env()
-            patch_pr_message = _maybe_create_patch_pr(
-                repo_name=repo_name,
-                token=client.token,
-                patch_branch=patch_branch,
-                base_branch=base_branch or "main",
-                body_markdown=(
-                    "RepoBrain generated and applied a suggested patch.\n\n"
-                    f"Verification: {verification_report.get('summary', 'n/a')}"
-                ),
-            )
+        if batch_patch_conflicts:
+            patch_apply_message = "conflicting patch parts detected; auto-apply skipped"
+            patch_pr_message = "auto-pr skipped (conflicting patch parts)"
+            audit_summary["route_final"] = "WAIT"
+            review_summary = str(review.get("summary_text", "") or "").strip()
+            review["summary_text"] = (
+                f"{review_summary}\n\nConflicting patch parts were detected across batches. "
+                "Review partial diffs in artifacts and resolve manually."
+            ).strip()
         else:
-            patch_pr_message = "auto-pr skipped (patch not pushed)"
+            patch_apply_result = _maybe_apply_patch(repo_root=repo_root, patch_path=patch_path)
+            patch_apply_message = str(patch_apply_result.get("message", patch_apply_message))
+            patch_branch = str(patch_apply_result.get("branch", "") or "")
+            if client is not None and patch_branch and bool(patch_apply_result.get("pushed", False)):
+                base_branch = ""
+                if isinstance(github_context_seed, dict):
+                    base_branch = str(github_context_seed.get("base_ref", "") or "").strip()
+                if not base_branch:
+                    base_branch = extract_branch_from_env()
+                patch_pr_message = _maybe_create_patch_pr(
+                    repo_name=repo_name,
+                    token=client.token,
+                    patch_branch=patch_branch,
+                    base_branch=base_branch or "main",
+                    body_markdown=(
+                        "RepoBrain generated and applied a suggested patch.\n\n"
+                        f"Verification: {verification_report.get('summary', 'n/a')}"
+                    ),
+                )
+            else:
+                patch_pr_message = "auto-pr skipped (patch not pushed)"
     combined_patch_message = f"{patch_apply_message}; {patch_pr_message}"
 
     body = render_patch_markdown(
@@ -2315,6 +2993,15 @@ def _build_review_markdown(
         audit["check_annotations_raw"] = check_annotations
         audit["check_intent"] = check_intent
         audit["verification_report"] = verification_report
+        audit["llm_batch_used"] = bool(batch_result.get("batch_used", False))
+        audit["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
+        audit["llm_batch_executed"] = int(batch_result.get("executed_batches", 0) or 0)
+        audit["batch_summaries_artifact"] = str(
+            audit_summary.get("batch_summaries_artifact", "n/a") or "n/a"
+        )
+        audit["patch_parts_count"] = len(patch_parts)
+        audit["patch_conflicts_detected"] = batch_patch_conflicts
+        audit["patch_conflict_details"] = batch_patch_conflict_details[:20]
         _merge_llm_meta(audit, llm_meta)
         audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
     return body

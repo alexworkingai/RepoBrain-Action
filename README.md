@@ -190,6 +190,18 @@ GitHub Models LLM (optional):
   * `RB_LLM_MAX_OUTPUT_TOKENS_REVIEW` (default `1400`)
   * `RB_LLM_MAX_OUTPUT_TOKENS_FIX` (default `2000`)
 
+Batch LLM for large PRs (optional):
+
+* Enable map-reduce mode for `review`/`fix`:
+  * `RB_LLM_BATCH_ENABLE=1`
+* Batch controls:
+  * `RB_LLM_BATCH_MAX_CALLS_PER_RUN` (default `6`)
+  * `RB_LLM_BATCH_REDUCE_ENABLE` (default `1`)
+  * `RB_LLM_BATCH_REDUCE_MODEL` (optional override)
+* Planner is deterministic and budgeted (file/hunk-first, token reserve).
+* For `fix`, per-batch patch parts are merged into `artifacts/patch.diff`.
+* If patch parts conflict on overlapping ranges, RepoBrain keeps partial artifacts and returns a safe WAIT-style outcome.
+
 Example `.repobrain.yml`:
 
 ```yaml
