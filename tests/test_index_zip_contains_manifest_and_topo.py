@@ -28,7 +28,9 @@ def test_index_zip_contains_manifest_and_topo(tmp_path: Path) -> None:
         assert CHUNKS_NAME in names
 
         manifest = orjson.loads(zf.read(MANIFEST_NAME))
-        assert manifest["format_version"] == "repobrain-index.v1"
+        assert manifest["format_version"] == "1.0"
+        assert manifest["producer_version"]
+        assert manifest["tkya_backend"]
         assert manifest["files_indexed"] >= 1
         assert manifest["chunks"] >= 1
         assert "tool_versions" in manifest

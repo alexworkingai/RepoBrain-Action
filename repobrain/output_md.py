@@ -198,6 +198,20 @@ def _audit_kv_lines(audit_summary: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _version_backend_lines(audit_summary: dict[str, Any]) -> list[str]:
+    version = str(audit_summary.get("repobrain_version", "") or "").strip()
+    backend = str(
+        audit_summary.get(
+            "tkya_backend",
+            audit_summary.get("tky_engine", ""),
+        )
+        or ""
+    ).strip()
+    if not version or not backend:
+        return []
+    return [f"- RepoBrain version: `{version}`, TKYA backend: `{backend}`"]
+
+
 def enforce_comment_limit(
     md: str,
     *,
@@ -286,6 +300,7 @@ def render_answer_markdown(
             f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
             f"- selected: {int(audit_summary.get('selected', 0) or 0)}",
             f"- top_score: {audit_summary.get('top_score', 'n/a')}",
+            *_version_backend_lines(audit_summary),
             *_audit_kv_lines(audit_summary),
             "",
             _audit_note(),
@@ -319,6 +334,7 @@ def render_wait_markdown(
             "### 🧾 Audit summary",
             f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
             f"- selected: {int(audit_summary.get('selected', 0) or 0)}",
+            *_version_backend_lines(audit_summary),
             "",
             _audit_note(),
         ]
@@ -354,6 +370,7 @@ def render_refuse_markdown(
             f"- route: {_route(audit_summary)}",
             f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
             f"- selected: {int(audit_summary.get('selected', 0) or 0)}",
+            *_version_backend_lines(audit_summary),
             "",
             _audit_note(),
         ]
@@ -378,6 +395,7 @@ def render_error_markdown(
             f"- route: {_route(audit_summary)}",
             f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
             f"- selected: {int(audit_summary.get('selected', 0) or 0)}",
+            *_version_backend_lines(audit_summary),
             "",
             _audit_note(),
         ]
@@ -424,6 +442,7 @@ def render_review_markdown(
         *_mode_lines(audit_summary),
         "",
         "### 🧾 Audit summary",
+        *_version_backend_lines(audit_summary),
         *_audit_kv_lines(audit_summary),
         "",
         _audit_note(),
@@ -461,6 +480,7 @@ def render_patch_markdown(
         *_embeddings_lines(audit_summary),
         "",
         "### 🧾 Audit summary",
+        *_version_backend_lines(audit_summary),
         *_audit_kv_lines(audit_summary),
         "",
         _audit_note(),

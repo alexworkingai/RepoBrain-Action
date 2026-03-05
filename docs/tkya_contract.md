@@ -72,7 +72,7 @@ Defined in `repobrain/tky_provider.py`:
 
 #### Output model: `TKYResult`
 - `selected_chunk_ids: list[str]`
-- `route: str` (FAST/DEEP/VERIFY/REFUSE etc)
+- `route: str` (supported set: `FAST`, `DEEP`, `WAIT`, `REFUSE`, `BLOCK`, `REVIEW`)
 - `compression_stats: dict[str, Any]`
 - `rationale: str`
 
@@ -101,6 +101,15 @@ Policy keys used by TopoCore v5 wiring:
 - `security: EngineSecurity`
 - `rationale: str`
 - `stable_tokens: list[str]`
+
+Route compatibility contract:
+
+- `FAST` -> single-pass retrieval is sufficient
+- `DEEP` -> caller should run second-pass retrieval with larger candidate budget
+- `WAIT` -> caller should return pending/verification-needed response
+- `REFUSE` -> caller should safely refuse request
+- `BLOCK` -> caller should block request by policy
+- `REVIEW` -> caller should use review-style rendering and checks summary
 
 ## Expected Exceptions / Error Handling
 

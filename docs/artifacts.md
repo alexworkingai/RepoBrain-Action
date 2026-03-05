@@ -21,6 +21,9 @@ Backward-compatibility entry is also kept:
 `manifest.json` fields:
 
 - `format_version`
+- `format_compat`
+- `producer_version`
+- `tkya_backend`
 - `commit_sha`
 - `created_at`
 - `files_indexed`

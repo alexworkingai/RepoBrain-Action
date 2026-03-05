@@ -32,6 +32,12 @@ jobs:
             echo "Workflow placeholders detected in .github/workflows. Move templates to docs/ and replace TODO_* placeholders."
             exit 1
           fi
+      - name: Guard env reference is up to date
+        run: python scripts/check_env_reference_up_to_date.py
+      - name: Guard usersafe outputs
+        run: python scripts/usersafe_scan.py
+      - name: Guard TKYA contract
+        run: python scripts/check_tkya_contract_guard.py
       - name: Lint
         run: ruff check .
       - name: Tests

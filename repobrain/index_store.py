@@ -15,6 +15,7 @@ from .ai_budget_governor import QuotaSignal, build_governor_from_env
 from .chunk import chunk_text
 from .config import RepoBrainConfig
 from .embeddings_cache import EmbeddingsCache
+from . import __version__ as REPOBRAIN_VERSION
 from .llm.github_models_embeddings import (
     GitHubModelsEmbeddingsClient,
     GitHubModelsEmbeddingsError,
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 
 MAX_FILE_SIZE_BYTES = 1_000_000
 BINARY_PROBE_BYTES = 8192
-INDEX_FORMAT_VERSION = "repobrain-index.v1"
+INDEX_FORMAT_VERSION = "1.0"
 MANIFEST_NAME = "manifest.json"
 TOPO_MAP_NAME = "topo_map.json"
 CHUNKS_NAME = "index/chunks.jsonl"
@@ -451,6 +452,9 @@ def build_index(
 
     manifest = {
         "format_version": INDEX_FORMAT_VERSION,
+        "format_compat": {"min_reader_version": "1.0", "max_reader_version": "1.x"},
+        "producer_version": REPOBRAIN_VERSION,
+        "tkya_backend": str(active_cfg.tkya.backend or "lite"),
         "commit_sha": _commit_sha(),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "root": root.name,
@@ -509,13 +513,13 @@ def build_index(
                     vec = vectors_by_chunk_id.get(chunk.chunk_id)
                     if not vec:
                         continue
-                        row = {
-                            "chunk_id": chunk.chunk_id,
-                            "chunk_hash": _chunk_hash(chunk),
-                            "model_id": embeddings_meta.get("model", _embed_model(active_cfg)),
-                            "dim": len(vec),
-                            "vec": vec,
-                        }
+                    row = {
+                        "chunk_id": chunk.chunk_id,
+                        "chunk_hash": _chunk_hash(chunk),
+                        "model_id": embeddings_meta.get("model", _embed_model(active_cfg)),
+                        "dim": len(vec),
+                        "vec": vec,
+                    }
                     raw.write(orjson.dumps(row))
                     raw.write(b"\n")
 

@@ -1,5 +1,7 @@
 # RepoBrain Action (MVP Skeleton)
 
+Current release candidate: `0.5.0-rc.1`
+
 This repository contains a minimal, GitHub-Actions-friendly skeleton for:
 
 * indexing a repo (placeholder),
@@ -21,6 +23,8 @@ Quick start (PowerShell):
 Environment reference:
 
 * See `docs/env_reference.md` (generated from `repobrain/config.py`).
+* Changelog: `CHANGELOG.md`
+* Migration guide: `MIGRATION.md`
 
 GitHub Actions note:
 
@@ -276,6 +280,11 @@ PR Review Pro:
    * `/repobrain help`
 3. Find audit output in workflow artifacts:
    * artifact name: `repobrain-audit` (hash-only JSON)
+
+Enable features:
+
+* Configure RB_* flags via `docs/env_reference.md`.
+* Start with safe defaults, then enable LLM/embeddings/patch features incrementally.
 
 Demo scenarios:
 

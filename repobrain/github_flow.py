@@ -21,6 +21,7 @@ from repobrain.audit import add_timing, build_audit_base, finalize_audit
 from repobrain.ask import AnswerResult, answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.config import RepoBrainConfig, env_bool, env_int, load_config
+from repobrain import __version__ as REPOBRAIN_VERSION
 from repobrain.evidence import EvidenceItem
 from repobrain.formatting import format_refusal_comment, format_verify_comment
 from repobrain.github_publisher import (
@@ -3003,6 +3004,8 @@ def _build_qa_markdown(
     if audit is not None:
         audit["index_source"] = index_source
         add_timing(audit, "index_load_build", index_elapsed_ms)
+        audit["repobrain_version"] = REPOBRAIN_VERSION
+        audit["tkya_backend"] = str(cfg.tkya.backend or "lite")
         audit["remote_skipped_reason"] = remote_skipped_reason or "n/a"
         audit["config_loaded"] = bool(getattr(cfg, "config_loaded", False))
         audit["config_path"] = str(getattr(cfg, "config_path", "<missing>") or "<missing>")
@@ -3053,6 +3056,8 @@ def _build_qa_markdown(
     audit_summary["config_allow_commands_count"] = len(getattr(cfg, "tky_remote_allow_commands", []))
     audit_summary["config_allow_branches_count"] = len(getattr(cfg, "tky_remote_allow_branches", []))
     audit_summary["config_allow_repos_count"] = len(getattr(cfg, "tky_remote_allow_repos", []))
+    audit_summary["repobrain_version"] = REPOBRAIN_VERSION
+    audit_summary["tkya_backend"] = str(cfg.tkya.backend or "lite")
     audit_summary["tky_mode_requested"] = tky_mode
     audit_summary["tky_mode_used"] = str(
         audit_summary.get("tky_mode_used", effective_tky_mode or "baseline")
@@ -3101,6 +3106,8 @@ def _build_qa_markdown(
 
     if audit is not None:
         audit["route_final"] = str(audit_summary.get("route_final", result.tky.route))
+        audit["repobrain_version"] = REPOBRAIN_VERSION
+        audit["tkya_backend"] = str(cfg.tkya.backend or "lite")
         audit["pass_count"] = int(audit_summary.get("pass_count", 1) or 1)
         audit["retrieved"] = int(audit_summary.get("retrieved", 0) or 0)
         audit["selected"] = len(evidence_out)
@@ -3359,6 +3366,8 @@ def _build_review_markdown(
         "pass_count": 1,
         "retrieved": len(files),
         "selected": len(review.get("files_changed", [])),
+        "repobrain_version": REPOBRAIN_VERSION,
+        "tkya_backend": str(cfg.tkya.backend or "lite"),
         "tky_mode_used": str(tky_meta.get("tky_mode_used", effective_tky_mode)),
         "tky_engine": str(tky_meta.get("tky_engine", _provider_engine_name(provider))),
         "remote_skipped_reason": str(remote_skip or "n/a"),
@@ -3488,6 +3497,8 @@ def _build_review_markdown(
             audit["pass_count"] = 1
             audit["retrieved"] = len(files)
             audit["selected"] = len(review.get("files_changed", []))
+            audit["repobrain_version"] = REPOBRAIN_VERSION
+            audit["tkya_backend"] = str(cfg.tkya.backend or "lite")
             audit["verification_pass_count"] = pass_count
             audit["verification_fail_count"] = fail_count
             audit["verification_not_run_count"] = not_run_count
@@ -3587,6 +3598,8 @@ def _build_review_markdown(
         audit["pass_count"] = 1
         audit["retrieved"] = len(files)
         audit["selected"] = len(review.get("files_changed", []))
+        audit["repobrain_version"] = REPOBRAIN_VERSION
+        audit["tkya_backend"] = str(cfg.tkya.backend or "lite")
         audit["verification_pass_count"] = pass_count
         audit["verification_fail_count"] = fail_count
         audit["verification_not_run_count"] = not_run_count
@@ -3821,6 +3834,8 @@ def run_github_flow(
             "posted": False,
             "mode": mode_label,
             "tky_mode_requested": tky_mode,
+            "repobrain_version": REPOBRAIN_VERSION,
+            "tkya_backend": str(env_cfg.tkya.backend or "lite"),
         }
     )
     governor = build_governor_from_env(cfg=env_cfg)
