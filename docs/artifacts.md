@@ -64,6 +64,7 @@ When review/fix verification runs:
 
 - `artifacts/verification_report.json` is written (usersafe summary only)
 - `artifacts/patch.diff` is written when `/repobrain fix` has a generated patch
+- `artifacts/check_run_payload.json` is written when PR check payload is prepared
 
 Safe defaults:
 

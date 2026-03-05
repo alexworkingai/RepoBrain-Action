@@ -16,6 +16,12 @@ from repobrain.commands import parse_command
 from repobrain.config import RepoBrainConfig, load_config
 from repobrain.evidence import EvidenceItem
 from repobrain.formatting import format_refusal_comment, format_verify_comment
+from repobrain.github_publisher import (
+    build_check_run_payload,
+    create_pull_request,
+    publish_check_run,
+    publish_comment,
+)
 from repobrain.index_store import build_index, load_index
 from repobrain.output_md import (
     enforce_comment_limit,
@@ -32,6 +38,7 @@ from repobrain.security import detect_injection_or_exfiltration
 from repobrain.tky_local import LocalTKYProvider
 from repobrain.tky_provider import CandidateChunk, TKYResult
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
+from repobrain.quality_gates import compute_conclusion
 from repobrain.verification_runner import (
     VerificationBudgets,
     detect_capabilities,
@@ -193,13 +200,15 @@ class GitHubClient:
 
     def create_issue_comment(self, issue_number: int, body_markdown: str) -> None:
         """POST a comment to a GitHub Issue or PR thread."""
-        response = requests.post(
-            build_issue_comment_url(self.repo, issue_number),
-            json={"body": body_markdown},
-            headers=self._headers(),
-            timeout=15,
+        result = publish_comment(
+            repo=self.repo,
+            token=self.token,
+            issue_or_pr=issue_number,
+            markdown=body_markdown,
         )
-        response.raise_for_status()
+        if not bool(result.get("ok", False)):
+            status = result.get("status_code")
+            raise RuntimeError(f"Failed to create issue comment (status={status})")
 
     def add_reaction_to_issue_comment(self, comment_id: int, content: str = "eyes") -> None:
         """Add a reaction (default 👀) to an issue comment."""
@@ -526,6 +535,13 @@ def _write_verification_report(repo_root: Path, report: dict[str, Any]) -> Path:
     return path
 
 
+def _write_check_run_payload(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "check_run_payload.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
 def _verification_context_from_report(report: dict[str, Any]) -> dict[str, Any]:
     checks_raw = report.get("checks", [])
     checks: list[dict[str, str]] = []
@@ -551,6 +567,74 @@ def _verification_context_from_report(report: dict[str, Any]) -> dict[str, Any]:
         "dynamic_allowed": bool(report.get("dynamic_allowed", False)),
         "summary": str(report.get("summary", "")),
     }
+
+
+def _build_check_annotations_from_candidates(
+    candidates: list[CandidateChunk],
+    *,
+    route: str,
+    verification_report: dict[str, Any],
+) -> list[dict[str, Any]]:
+    checks_raw = verification_report.get("checks", [])
+    checks = checks_raw if isinstance(checks_raw, list) else []
+    has_fail = any(
+        isinstance(item, dict) and str(item.get("status", "")).upper() == "FAIL"
+        for item in checks
+    )
+    normalized_route = str(route or "").strip().upper()
+    if normalized_route in {"BLOCK"} or has_fail:
+        level = "failure"
+        message = "RepoBrain detected a high-risk locator."
+    elif normalized_route in {"WAIT", "REFUSE", "DEEP"}:
+        level = "warning"
+        message = "RepoBrain highlighted this locator for additional verification."
+    else:
+        level = "notice"
+        message = "RepoBrain selected this locator."
+
+    annotations: list[dict[str, Any]] = []
+    for item in candidates:
+        annotations.append(
+            {
+                "path": item.file_path,
+                "start_line": item.line_start,
+                "end_line": item.line_end,
+                "annotation_level": level,
+                "message": message,
+                "title": "RepoBrain",
+            }
+        )
+    return annotations
+
+
+def _build_check_annotations_from_evidence(
+    evidence: list[EvidenceItem],
+    *,
+    route: str,
+) -> list[dict[str, Any]]:
+    normalized_route = str(route or "").strip().upper()
+    if normalized_route in {"REFUSE", "BLOCK"}:
+        level = "failure"
+        message = "RepoBrain flagged this locator as high-risk."
+    elif normalized_route in {"WAIT", "DEEP"}:
+        level = "warning"
+        message = "RepoBrain suggests verifying this locator."
+    else:
+        level = "notice"
+        message = "RepoBrain used this locator."
+    out: list[dict[str, Any]] = []
+    for item in evidence:
+        out.append(
+            {
+                "path": item.file_path,
+                "start_line": item.line_start,
+                "end_line": item.line_end,
+                "annotation_level": level,
+                "message": message,
+                "title": "RepoBrain",
+            }
+        )
+    return out
 
 
 def _run_review_verification(
@@ -618,11 +702,21 @@ def _maybe_apply_patch(
     *,
     repo_root: Path,
     patch_path: Path,
-) -> str:
+) -> dict[str, Any]:
     if not _env_true("RB_APPLY_PATCH", default=False):
-        return "auto-apply disabled (RB_APPLY_PATCH=0)"
+        return {
+            "applied": False,
+            "pushed": False,
+            "branch": "",
+            "message": "auto-apply disabled (RB_APPLY_PATCH=0)",
+        }
     if not _env_true("RB_TRUSTED_CONTEXT", default=False):
-        return "auto-apply blocked in untrusted context"
+        return {
+            "applied": False,
+            "pushed": False,
+            "branch": "",
+            "message": "auto-apply blocked in untrusted context",
+        }
 
     run_id = os.getenv("GITHUB_RUN_ID", "").strip() or str(int(time.time()))
     branch = f"repobrain/patch/{run_id}"
@@ -645,10 +739,61 @@ def _maybe_apply_patch(
                 timeout=60,
             )
         except OSError:
-            return "cannot apply patch in this context"
+            return {
+                "applied": False,
+                "pushed": False,
+                "branch": branch,
+                "message": "cannot apply patch in this context",
+            }
         if completed.returncode != 0:
-            return "cannot push from this context"
-    return f"patch applied and pushed to `{branch}`"
+            return {
+                "applied": False,
+                "pushed": False,
+                "branch": branch,
+                "message": "cannot push from this context",
+            }
+    return {
+        "applied": True,
+        "pushed": True,
+        "branch": branch,
+        "message": f"patch applied and pushed to `{branch}`",
+    }
+
+
+def _maybe_create_patch_pr(
+    *,
+    repo_name: str,
+    token: str,
+    patch_branch: str,
+    base_branch: str,
+    body_markdown: str,
+) -> str:
+    if not _env_true("RB_CREATE_PR", default=False):
+        return "auto-pr disabled (RB_CREATE_PR=0)"
+    if not _env_true("RB_APPLY_PATCH", default=False):
+        return "auto-pr skipped (patch was not auto-applied)"
+    if not _env_true("RB_TRUSTED_CONTEXT", default=False):
+        return "auto-pr blocked in untrusted context"
+    if not patch_branch:
+        return "auto-pr skipped (no patch branch)"
+
+    result = create_pull_request(
+        repo=repo_name,
+        token=token,
+        head_branch=patch_branch,
+        base_branch=base_branch,
+        title="RepoBrain: suggested patch",
+        body_md=body_markdown,
+    )
+    if bool(result.get("ok", False)):
+        data = result.get("data", {})
+        url = data.get("html_url") if isinstance(data, dict) else None
+        return f"auto-pr created: {url}" if isinstance(url, str) and url else "auto-pr created"
+
+    status = int(result.get("status_code", 0) or 0)
+    if status in {403, 404}:
+        return f"cannot create PR from this context. Create PR manually from `{patch_branch}`."
+    return f"auto-pr failed (status={status}). Create PR manually from `{patch_branch}`."
 
 
 def _is_bot_login(login: str) -> bool:
@@ -1502,6 +1647,18 @@ def _build_qa_markdown(
         audit["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
         audit["comment_truncated"] = False
         audit["ask_result_artifact"] = "n/a"
+        audit["check_intent"] = "analysis"
+        audit["check_annotations_raw"] = _build_check_annotations_from_evidence(
+            evidence_out,
+            route=str(audit_summary.get("route_final", result.tky.route)),
+        )
+        audit["verification_report"] = {
+            "checks": [],
+            "summary": "Verification not executed for ask flow.",
+            "overall": "NOT_RUN",
+            "trusted_context": _env_true("RB_TRUSTED_CONTEXT", default=False),
+            "dynamic_allowed": _env_true("RB_ALLOW_DYNAMIC_VERIFY", default=False),
+        }
 
     t0 = time.perf_counter()
     final_route = str(audit_summary.get("route_final", result.tky.route) or result.tky.route).strip().upper()
@@ -1730,6 +1887,12 @@ def _build_review_markdown(
     changed_files = list(dict.fromkeys(str(item.get("filename", "")).strip() for item in files if item.get("filename")))
     if changed_files:
         audit_summary["touched_files"] = changed_files
+    check_annotations = _build_check_annotations_from_candidates(
+        review_candidates,
+        route=str(audit_summary.get("route_final", "REVIEW")),
+        verification_report=verification_report,
+    )
+    check_intent = "patch" if cmd == "fix" else "review"
 
     if cmd != "fix":
         body = render_review_markdown(
@@ -1753,24 +1916,56 @@ def _build_review_markdown(
             audit["verification_not_run_count"] = not_run_count
             audit["tky_mode_used"] = str(audit_summary.get("tky_mode_used", "n/a"))
             audit["tky_engine"] = str(audit_summary.get("tky_engine", "n/a"))
+            audit["pr_head_sha"] = head_sha
+            audit["check_annotations_raw"] = check_annotations
+            audit["check_intent"] = check_intent
+            audit["verification_report"] = verification_report
         return body
 
     patch_text = _extract_patch_from_stats(compression_stats)
     patch_written = False
     patch_apply_message = "no patch generated by engine"
+    patch_apply_result: dict[str, Any] = {
+        "applied": False,
+        "pushed": False,
+        "branch": "",
+        "message": patch_apply_message,
+    }
+    patch_pr_message = "auto-pr skipped"
     snippet = ""
     if patch_text:
         patch_path = _write_patch_artifact(repo_root, patch_text)
         patch_written = True
         snippet = _patch_snippet(patch_text, max_lines=300)
-        patch_apply_message = _maybe_apply_patch(repo_root=repo_root, patch_path=patch_path)
+        patch_apply_result = _maybe_apply_patch(repo_root=repo_root, patch_path=patch_path)
+        patch_apply_message = str(patch_apply_result.get("message", patch_apply_message))
+        patch_branch = str(patch_apply_result.get("branch", "") or "")
+        if client is not None and patch_branch and bool(patch_apply_result.get("pushed", False)):
+            base_branch = ""
+            if isinstance(github_context_seed, dict):
+                base_branch = str(github_context_seed.get("base_ref", "") or "").strip()
+            if not base_branch:
+                base_branch = extract_branch_from_env()
+            patch_pr_message = _maybe_create_patch_pr(
+                repo_name=repo_name,
+                token=client.token,
+                patch_branch=patch_branch,
+                base_branch=base_branch or "main",
+                body_markdown=(
+                    "RepoBrain generated and applied a suggested patch.\n\n"
+                    f"Verification: {verification_report.get('summary', 'n/a')}"
+                ),
+            )
+        else:
+            patch_pr_message = "auto-pr skipped (patch not pushed)"
+    combined_patch_message = f"{patch_apply_message}; {patch_pr_message}"
 
     body = render_patch_markdown(
         review=review,
         verification_report=verification_report,
         patch_snippet=snippet,
         patch_written=patch_written,
-        patch_apply_message=patch_apply_message,
+        patch_apply_message=combined_patch_message,
         audit_summary=audit_summary,
     )
     body, truncated = enforce_comment_limit(body)
@@ -1790,8 +1985,14 @@ def _build_review_markdown(
         audit["verification_not_run_count"] = not_run_count
         audit["patch_generated"] = patch_written
         audit["patch_apply_message"] = patch_apply_message
+        audit["patch_pr_message"] = patch_pr_message
+        audit["patch_branch"] = str(patch_apply_result.get("branch", "") or "")
         audit["tky_mode_used"] = str(audit_summary.get("tky_mode_used", "n/a"))
         audit["tky_engine"] = str(audit_summary.get("tky_engine", "n/a"))
+        audit["pr_head_sha"] = head_sha
+        audit["check_annotations_raw"] = check_annotations
+        audit["check_intent"] = check_intent
+        audit["verification_report"] = verification_report
     return body
 
 
@@ -1864,6 +2065,100 @@ def _build_verify_markdown(
     if audit is not None:
         add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
     return body
+
+
+def _resolve_pr_head_sha(
+    *,
+    client: GitHubClient | None,
+    issue_number: int | None,
+    audit: dict[str, Any],
+    github_context_seed: dict[str, Any],
+) -> str:
+    sha = str(audit.get("pr_head_sha", "") or "").strip()
+    if sha:
+        return sha
+    sha = str(github_context_seed.get("head_sha", "") or "").strip()
+    if sha:
+        return sha
+    if client is not None and issue_number is not None:
+        pull = client.get_pull(issue_number)
+        head = pull.get("head", {})
+        if isinstance(head, dict):
+            sha = str(head.get("sha", "") or "").strip()
+            if sha:
+                return sha
+    return extract_sha_from_env()
+
+
+def _publish_pr_check_run(
+    *,
+    repo_root: Path,
+    client: GitHubClient | None,
+    cmd: str,
+    issue_number: int | None,
+    body_markdown: str,
+    audit: dict[str, Any],
+    github_context_seed: dict[str, Any],
+) -> None:
+    if client is None:
+        return
+    if cmd not in {"ask", "locate", "explain", "review", "fix"}:
+        return
+
+    head_sha = _resolve_pr_head_sha(
+        client=client,
+        issue_number=issue_number,
+        audit=audit,
+        github_context_seed=github_context_seed,
+    )
+    if not head_sha:
+        return
+
+    verification_report_raw = audit.get("verification_report", {})
+    verification_report = (
+        dict(verification_report_raw) if isinstance(verification_report_raw, dict) else {}
+    )
+    route = str(audit.get("route_final", "FAST") or "FAST")
+    intent = str(audit.get("check_intent", "analysis") or "analysis")
+    conclusion, headline, details = compute_conclusion(route, verification_report, intent)
+    check_name = "RepoBrain Fix" if cmd == "fix" else "RepoBrain Review"
+    annotations_raw = audit.get("check_annotations_raw", [])
+    annotations = annotations_raw if isinstance(annotations_raw, list) else []
+
+    summary_md = "\n".join(
+        [
+            f"Conclusion: **{conclusion}**",
+            f"Route: `{route}`",
+            f"Intent: `{intent}`",
+            f"Headline: {headline}",
+            details,
+        ]
+    )
+    payload = build_check_run_payload(
+        name=check_name,
+        head_sha=head_sha,
+        conclusion=conclusion,
+        summary_md=summary_md,
+        text_md=body_markdown,
+        annotations=annotations,
+    )
+    _write_check_run_payload(repo_root, payload)
+    result = publish_check_run(
+        repo=client.repo,
+        token=client.token,
+        name=check_name,
+        head_sha=head_sha,
+        conclusion=conclusion,
+        summary_md=summary_md,
+        text_md=body_markdown,
+        annotations=annotations,
+    )
+    audit["check_run_name"] = check_name
+    audit["check_run_conclusion"] = conclusion
+    audit["check_run_published"] = bool(result.get("ok", False))
+    audit["check_run_status_code"] = result.get("status_code")
+    if not bool(result.get("ok", False)):
+        print("Check-run publish unavailable, using comment fallback only.")
 
 
 def run_github_flow(
@@ -2074,6 +2369,58 @@ def run_github_flow(
                     "retrieved": 0,
                     "selected": 0,
                 },
+            )
+
+    if event_ctx.is_pull_request and cmd in {"ask", "locate", "explain", "review", "fix"}:
+        if dry_run:
+            dry_head_sha = _resolve_pr_head_sha(
+                client=None,
+                issue_number=resolved_issue_number,
+                audit=audit,
+                github_context_seed=github_context_seed,
+            )
+            if dry_head_sha:
+                verification_report_raw = audit.get("verification_report", {})
+                verification_report = (
+                    dict(verification_report_raw) if isinstance(verification_report_raw, dict) else {}
+                )
+                route = str(audit.get("route_final", "FAST") or "FAST")
+                intent = str(audit.get("check_intent", "analysis") or "analysis")
+                conclusion, headline, details = compute_conclusion(route, verification_report, intent)
+                check_name = "RepoBrain Fix" if cmd == "fix" else "RepoBrain Review"
+                annotations_raw = audit.get("check_annotations_raw", [])
+                annotations = annotations_raw if isinstance(annotations_raw, list) else []
+                summary_md = "\n".join(
+                    [
+                        f"Conclusion: **{conclusion}**",
+                        f"Route: `{route}`",
+                        f"Intent: `{intent}`",
+                        f"Headline: {headline}",
+                        details,
+                    ]
+                )
+                payload = build_check_run_payload(
+                    name=check_name,
+                    head_sha=dry_head_sha,
+                    conclusion=conclusion,
+                    summary_md=summary_md,
+                    text_md=body_markdown,
+                    annotations=annotations,
+                )
+                _write_check_run_payload(repo_root, payload)
+                audit["check_run_name"] = check_name
+                audit["check_run_conclusion"] = conclusion
+                audit["check_run_published"] = False
+                audit["check_run_status_code"] = "dry_run"
+        else:
+            _publish_pr_check_run(
+                repo_root=repo_root,
+                client=client,
+                cmd=cmd,
+                issue_number=resolved_issue_number,
+                body_markdown=body_markdown,
+                audit=audit,
+                github_context_seed=github_context_seed,
             )
 
     if dry_run:

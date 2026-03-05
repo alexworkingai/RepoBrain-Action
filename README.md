@@ -34,6 +34,7 @@ PR Review:
 * RepoBrain fetches changed files, builds a lightweight risk summary, and posts a markdown PR review comment.
 * `/repobrain review` is not available in regular Issues (non-PR threads).
 * `/repobrain fix <instruction>` can generate a patch proposal (`artifacts/patch.diff`) with usersafe diff snippet.
+* In PR context RepoBrain also publishes a GitHub Check Run (`RepoBrain Review` / `RepoBrain Fix`) with usersafe annotations.
 
 Index cache / prebuild:
 
@@ -159,6 +160,11 @@ Verification runner safety:
   * `RB_TRUSTED_CONTEXT=1`
   * `RB_ALLOW_DYNAMIC_VERIFY=1`
 * In untrusted context (default for `issue_comment`), dynamic checks are marked `NOT_RUN`.
+* Quality gate env flags:
+  * `RB_REQUIRE_VERIFY_FOR_PATCH=0|1`
+  * `RB_FAIL_ON_NOT_RUN=0|1`
+* Auto PR after patch push is opt-in:
+  * `RB_CREATE_PR=1` (requires `RB_APPLY_PATCH=1` and `RB_TRUSTED_CONTEXT=1`).
 
 Example `.repobrain.yml`:
 

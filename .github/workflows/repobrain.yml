@@ -61,6 +61,9 @@ jobs:
           RB_TRUSTED_CONTEXT: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
           RB_ALLOW_DYNAMIC_VERIFY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
           RB_APPLY_PATCH: "0"
+          RB_CREATE_PR: "0"
+          RB_REQUIRE_VERIFY_FOR_PATCH: "0"
+          RB_FAIL_ON_NOT_RUN: "0"
         with:
           # remote_url intentionally not set here; use repobrain_remote_stub_test.yml for stub remote tests.
           tky_mode: "auto"
@@ -117,4 +120,11 @@ jobs:
         with:
           name: repobrain-verification
           path: artifacts/verification_report.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain check-run payload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-check-run-payload
+          path: artifacts/check_run_payload.json
           if-no-files-found: ignore
