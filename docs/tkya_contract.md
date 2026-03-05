@@ -8,7 +8,7 @@ This document captures the **actual runtime contract** between RepoBrain and the
   - `repobrain/ask.py` (`make_provider`) returns `LocalTKYProvider` for `mode=local`.
 - Local provider execution:
   - `repobrain/tky_local.py` calls `get_engine()` from `repobrain/tkya/engine.py`.
-  - Default backend is `lite` (`TopoCoreLite`).
+  - Default backend is `v5` when vendor file exists, otherwise `lite` (`TopoCoreLite` fallback).
   - Advanced backend is `v5` (`RB_TKYA_BACKEND=v5`), loaded from vendor file.
   - Legacy vendor backend remains available via `RB_TKYA_BACKEND=original`.
 - Engine direct usage points:
@@ -50,8 +50,9 @@ This document captures the **actual runtime contract** between RepoBrain and the
 - **Found in code:** `artifacts/index-package.zip`
   - created by `scripts/run_index.py`
   - loaded/reused in `scripts/run_ask.py` and `repobrain/github_flow.py`
-- **Not found in code:** `repobrain-index-<commit>.zip` naming pattern
-- **Not found in code:** separate artifact/file named `"topo map"` (or equivalent topomap output)
+- **Found in code:** `artifacts/repobrain-index-<commit>.zip` (commit-tagged copy)
+- **Found in code:** zip entries `manifest.json` + `topo_map.json` + `index/chunks.jsonl`
+- Artifact contract reference: `docs/artifacts.md`
 
 ## TKYA Engine Contract (Expected by RepoBrain)
 
@@ -135,15 +136,23 @@ Policy keys used by TopoCore v5 wiring:
 - Input: repository root files scanned/chunked
 - Output:
   - `artifacts/index-package.zip`
+  - `artifacts/repobrain-index-<commit>.zip`
   - contains:
     - `manifest.json`
-    - `chunks.jsonl`
+    - `topo_map.json`
+    - `index/chunks.jsonl`
+    - `chunks.jsonl` (legacy compatibility)
 
 ### Ask step
 - Requires:
   - existing `artifacts/index-package.zip`, or
   - auto-build through `load_or_build_chunks_with_meta`
-- Ask reads chunks, retrieves top-k, calls TKY provider, emits markdown answer/evidence and audit summary.
+- Ask reads chunks, retrieves top-k, calls TKY provider, emits usersafe markdown:
+  - route-aware headers (`Answer/Needs verification/Refused/Blocked`)
+  - file locators only (no raw code snippets)
+  - verification summary (`PASS/WARN/NOT_RUN`)
+  - deep-pass marker for 2-pass retrieval
+- If rendered markdown is oversized, output is truncated for comment safety and full body is written to `artifacts/ask_result.md`.
 
 ## Existing Env/Config Knobs
 

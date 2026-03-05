@@ -37,8 +37,16 @@ PR Review:
 Index cache / prebuild:
 
 * `artifacts/index-package.zip` is reused when present; RepoBrain skips rebuild for `help` and `review`.
+* Index build also writes `artifacts/repobrain-index-<commit>.zip` with stable entries: `manifest.json`, `topo_map.json`, `index/chunks.jsonl`.
 * GitHub Actions can prebuild/cache the index via `.github/workflows/repobrain_index_cache.yml`.
 * The issue-comment workflow restores the Actions cache before running the local action.
+* Full artifact contract is documented in `docs/artifacts.md`.
+
+Usersafe Ask output:
+
+* Ask/Explain/Locate comments use route-aware templates (`Answer`, `Needs verification`, `Refused`, `Blocked`).
+* Comments include only file locators and audit metadata (no raw source snippets, no env/token dumps).
+* If rendered output is too large, RepoBrain truncates the comment and writes full markdown to `artifacts/ask_result.md`.
 
 Retrieval quality / privacy:
 
@@ -117,6 +125,11 @@ Local TKYA backend options:
   * `RB_TKYA_V2_SHIM_STRICT=1`
 * v5 trace is hash-only and versioned (`trace_schema_version=1.1`, policy `1.x`).
 * Detailed permanent architecture doc: `docs/topocore_v5_architecture.md`.
+
+Canary workflow:
+
+* `.github/workflows/canary_v5.yml` provides `workflow_dispatch` canary for v5 wiring.
+* It runs v5-specific checks only when vendor file is present; otherwise runs fallback smoke checks.
 
 R&D track (R&D-1..R&D-9, local-safe):
 

@@ -15,12 +15,18 @@ from repobrain.commands import parse_command
 from repobrain.config import RepoBrainConfig, load_config
 from repobrain.evidence import EvidenceItem
 from repobrain.formatting import (
-    format_github_comment,
     format_pr_review_comment,
     format_refusal_comment,
     format_verify_comment,
 )
 from repobrain.index_store import build_index, load_index
+from repobrain.output_md import (
+    enforce_comment_limit,
+    render_answer_markdown,
+    render_error_markdown,
+    render_refuse_markdown,
+    render_wait_markdown,
+)
 from repobrain.retrieve_pro import retrieve_topk_pro
 from repobrain.review import build_pr_review
 from repobrain.security import detect_injection_or_exfiltration
@@ -372,6 +378,133 @@ def resolve_repo_root(start: Path | None = None, *, max_depth: int = 5) -> Path:
             break
         candidate = candidate.parent
     return Path.cwd().resolve()
+
+
+def _extract_changed_files(payload: dict[str, Any]) -> list[str]:
+    changed: list[str] = []
+    files_raw = payload.get("files", [])
+    if isinstance(files_raw, list):
+        for item in files_raw:
+            if isinstance(item, dict):
+                path = str(item.get("filename", "") or "").strip()
+            else:
+                path = str(item).strip()
+            if path:
+                changed.append(path)
+    changed_files_raw = payload.get("changed_files", [])
+    if isinstance(changed_files_raw, list):
+        for item in changed_files_raw:
+            path = str(item).strip()
+            if path:
+                changed.append(path)
+    return sorted(set(changed))
+
+
+def _extract_diff_hunks(payload: dict[str, Any]) -> list[str]:
+    hunks_raw = payload.get("diff_hunks", [])
+    if not isinstance(hunks_raw, list):
+        return []
+    hunks: list[str] = []
+    for item in hunks_raw:
+        text = str(item).strip()
+        if text:
+            hunks.append(text)
+    return hunks
+
+
+def _build_github_context_seed(
+    *,
+    payload: dict[str, Any],
+    event_ctx: EventContext,
+    resolved_issue_number: int | None,
+) -> dict[str, Any]:
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "").strip()
+    run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
+    actor = os.environ.get("GITHUB_ACTOR", "").strip()
+    ref = os.environ.get("GITHUB_REF", "").strip()
+    repository = extract_repo_from_env()
+    sha = extract_sha_from_env()
+
+    pull = payload.get("pull_request", {})
+    issue = payload.get("issue", {})
+    if isinstance(issue, dict) and isinstance(issue.get("pull_request"), dict):
+        pull = issue.get("pull_request", {})
+
+    base_sha = ""
+    head_sha = ""
+    base_ref = ""
+    head_ref = ""
+    if isinstance(pull, dict):
+        base = pull.get("base", {})
+        head = pull.get("head", {})
+        if isinstance(base, dict):
+            base_sha = str(base.get("sha", "") or "")
+            base_ref = str(base.get("ref", "") or "")
+        if isinstance(head, dict):
+            head_sha = str(head.get("sha", "") or "")
+            head_ref = str(head.get("ref", "") or "")
+
+    return {
+        "event_name": event_name,
+        "repository": repository,
+        "sha": sha,
+        "ref": ref,
+        "run_id": run_id,
+        "actor": actor,
+        "issue_number": resolved_issue_number,
+        "pr_number": resolved_issue_number if event_ctx.is_pull_request else None,
+        "is_pr": event_ctx.is_pull_request,
+        "base_sha": base_sha,
+        "head_sha": head_sha,
+        "base_ref": base_ref,
+        "head_ref": head_ref,
+        "changed_files": _extract_changed_files(payload),
+        "diff_hunks": _extract_diff_hunks(payload),
+    }
+
+
+def _build_verification_context_seed(*, time_budget_s: int = 30) -> dict[str, Any]:
+    repo_root = resolve_repo_root()
+    can_run_pytest = (repo_root / "tests").exists()
+    can_run_ruff = (repo_root / "pyproject.toml").exists()
+    return {
+        "can_run_pytest": can_run_pytest,
+        "can_run_ruff": can_run_ruff,
+        "time_budget_s": int(time_budget_s),
+        "mode": "ci" if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true" else "local",
+        "allow_patch_apply": os.getenv("RB_APPLY_PATCH", "").strip() == "1",
+        "network_allowed": os.getenv("RB_TKYA_ALLOW_REMOTE", "").strip() == "1",
+        "checks": [],
+        "required_checks": ["ruff", "pytest"],
+    }
+
+
+def _extract_verification_audit_fields(compression_stats: dict[str, Any]) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    key_map = (
+        "verification_pass_count",
+        "verification_fail_count",
+        "verification_pending_count",
+        "verification_not_run_count",
+        "verification_gate_decision",
+        "verification_gate_reason",
+        "verification_profile",
+    )
+    for key in key_map:
+        if key in compression_stats:
+            fields[key] = compression_stats[key]
+    for list_key in ("verified", "not_run", "verification_failed", "verification_pending"):
+        raw = compression_stats.get(list_key, [])
+        if isinstance(raw, list):
+            fields[list_key] = [str(item) for item in raw if str(item).strip()]
+    return fields
+
+
+def _write_ask_result_markdown(repo_root: Path, markdown: str) -> Path:
+    path = repo_root / "artifacts" / "ask_result.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(markdown, encoding="utf-8")
+    return path
 
 
 def _is_bot_login(login: str) -> bool:
@@ -729,7 +862,19 @@ def _qa_limits(
     perf_max_vectors: int,
     perf_max_edges: int,
     perf_max_paths: int,
+    github_context: dict[str, Any] | None = None,
+    verification_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    policy: dict[str, Any] = {
+        "no_raw_text": True,
+        "privacy_mode": "signatures_only",
+        "github_context": dict(github_context or {}),
+        "verification_context": dict(verification_context or {}),
+        "runtime": {
+            "mode": "ci" if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true" else "local",
+            "network_allowed": os.getenv("RB_TKYA_ALLOW_REMOTE", "").strip() == "1",
+        },
+    }
     return {
         "max_sources": max_sources,
         "min_score_keep": min_score_keep,
@@ -748,7 +893,7 @@ def _qa_limits(
         "route_hint": route_hint,
         "task_type": cmd,
         "privacy_mode": "signatures_only",
-        "policy": {"no_raw_text": True, "privacy_mode": "signatures_only"},
+        "policy": policy,
         "repo_ctx": {
             "repo": extract_repo_from_env(),
             "sha": extract_sha_from_env(),
@@ -853,6 +998,8 @@ def run_qa_two_pass(
     tky_mode_requested: str = "baseline",
     remote_fail_open: bool = True,
     timings_ms: dict[str, float] | None = None,
+    github_context: dict[str, Any] | None = None,
+    verification_context: dict[str, Any] | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Run at most two retrieval+TKY passes using the TKY route from pass 1."""
     topk_fast = int(getattr(cfg, "topk_fast", getattr(cfg, "topk", 30)))
@@ -893,6 +1040,8 @@ def run_qa_two_pass(
         perf_max_vectors=perf_max_vectors,
         perf_max_edges=perf_max_edges,
         perf_max_paths=perf_max_paths,
+        github_context=github_context,
+        verification_context=verification_context,
     )
     t0 = time.perf_counter()
     result1, active_provider, pass1_meta = _answer_with_remote_fallback(
@@ -957,6 +1106,8 @@ def run_qa_two_pass(
             perf_max_vectors=perf_max_vectors,
             perf_max_edges=perf_max_edges,
             perf_max_paths=perf_max_paths,
+            github_context=github_context,
+            verification_context=verification_context,
         )
         t0 = time.perf_counter()
         final_result, active_provider, pass2_meta = _answer_with_remote_fallback(
@@ -1094,6 +1245,8 @@ def _build_qa_markdown(
     api_key: str,
     hmac_secret: str,
     enable_hmac: bool,
+    github_context_seed: dict[str, Any] | None = None,
+    verification_context_seed: dict[str, Any] | None = None,
     audit: dict[str, Any] | None = None,
 ) -> str:
     resolved_repo_root = resolve_repo_root(repo_root)
@@ -1148,6 +1301,8 @@ def _build_qa_markdown(
         tky_mode_requested=effective_tky_mode,
         remote_fail_open=remote_fail_open,
         timings_ms=(audit.get("timings_ms") if isinstance(audit, dict) else None),
+        github_context=github_context_seed,
+        verification_context=verification_context_seed,
     )
     audit_summary = dict(result.audit_summary)
     audit_summary.update(loop_audit)
@@ -1162,14 +1317,19 @@ def _build_qa_markdown(
     audit_summary["tky_mode_used"] = str(
         audit_summary.get("tky_mode_used", effective_tky_mode or "baseline")
     )
+    compression_stats = result.tky.compression_stats if isinstance(result.tky.compression_stats, dict) else {}
+    audit_summary.update(_extract_verification_audit_fields(compression_stats))
     audit_summary["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
     if "tky_engine" not in audit_summary:
         audit_summary["tky_engine"] = _provider_engine_name(provider)
+    if github_context_seed:
+        touched_files = github_context_seed.get("changed_files", [])
+        if isinstance(touched_files, list) and touched_files:
+            audit_summary["touched_files"] = [str(item) for item in touched_files if str(item).strip()]
     evidence_out = result.evidence
     answer_text_out = result.answer_text
     if cmd == "locate":
         evidence_out = _dedupe_evidence_by_file(result.evidence, max_files=5)
-        audit_summary["route_final"] = "LOCATE"
     elif cmd == "explain":
         evidence_out = _dedupe_evidence_by_file(result.evidence, max_files=7)
         answer_text_out = _build_explain_answer(evidence_out, question)
@@ -1196,17 +1356,40 @@ def _build_qa_markdown(
         audit["tky_remote_status"] = audit_summary.get("tky_remote_status", None)
         audit["tky_fallback_reason"] = str(audit_summary.get("tky_fallback_reason", "n/a") or "n/a")
         audit["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
+        audit["comment_truncated"] = False
+        audit["ask_result_artifact"] = "n/a"
 
     t0 = time.perf_counter()
-    body = format_github_comment(
-        answer_text_out,
-        evidence_out,
-        audit_summary,
-        result.next_steps,
-        command=cmd,
-        repo=extract_repo_from_env() or None,
-        sha=extract_sha_from_env() or None,
-    )
+    final_route = str(audit_summary.get("route_final", result.tky.route) or result.tky.route).strip().upper()
+    if final_route == "WAIT":
+        full_body = render_wait_markdown(
+            reason=result.tky.rationale or "Verification is pending.",
+            audit_summary=audit_summary,
+        )
+    elif final_route in {"REFUSE", "BLOCK"}:
+        full_body = render_refuse_markdown(
+            reason=result.tky.rationale or "Request was refused by TKY route.",
+            audit_summary=audit_summary,
+            blocked=final_route == "BLOCK",
+        )
+    else:
+        full_body = render_answer_markdown(
+            answer_text=answer_text_out,
+            evidence=evidence_out,
+            audit_summary=audit_summary,
+            next_steps=result.next_steps,
+            command=cmd,
+            repo=extract_repo_from_env() or None,
+            sha=extract_sha_from_env() or None,
+        )
+    body, was_truncated = enforce_comment_limit(full_body)
+    if was_truncated:
+        artifact_path = _write_ask_result_markdown(resolved_repo_root, full_body)
+        if audit is not None:
+            audit["comment_truncated"] = True
+            audit["ask_result_artifact"] = artifact_path.as_posix()
+    elif audit is not None:
+        audit["comment_truncated"] = False
     if audit is not None:
         add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
     return body
@@ -1347,8 +1530,15 @@ def run_github_flow(
 ) -> str:
     """Run RepoBrain GitHub flow in dry-run or post mode."""
     event_ctx = extract_event_context_from_event(event_path)
+    event_payload = _load_event_payload(event_path)
     source_text = (comment_text or "").strip() or event_ctx.comment_text.strip()
     resolved_issue_number = issue_number if issue_number is not None else event_ctx.issue_number
+    github_context_seed = _build_github_context_seed(
+        payload=event_payload,
+        event_ctx=event_ctx,
+        resolved_issue_number=resolved_issue_number,
+    )
+    verification_context_seed = _build_verification_context_seed(time_budget_s=30)
     mode_label = "DRY_RUN" if dry_run else "POST_MODE"
     repo_name = extract_repo_from_env()
     sha_value = extract_sha_from_env()
@@ -1499,17 +1689,31 @@ def run_github_flow(
         )
         audit["index_source"] = "n/a"
     else:
-        body_markdown = _build_qa_markdown(
-            repo_root=repo_root,
-            cmd=cmd,
-            query=query,
-            tky_mode=tky_mode,
-            remote_url=remote_url,
-            api_key=api_key,
-            hmac_secret=hmac_secret,
-            enable_hmac=enable_hmac,
-            audit=audit,
-        )
+        try:
+            body_markdown = _build_qa_markdown(
+                repo_root=repo_root,
+                cmd=cmd,
+                query=query,
+                tky_mode=tky_mode,
+                remote_url=remote_url,
+                api_key=api_key,
+                hmac_secret=hmac_secret,
+                enable_hmac=enable_hmac,
+                github_context_seed=github_context_seed,
+                verification_context_seed=verification_context_seed,
+                audit=audit,
+            )
+        except Exception:
+            audit["route_final"] = "ERROR"
+            audit["pass_count"] = 1
+            body_markdown = render_error_markdown(
+                message="Unexpected processing error. Try a narrower query or run again.",
+                audit_summary={
+                    "route_final": "ERROR",
+                    "retrieved": 0,
+                    "selected": 0,
+                },
+            )
 
     if dry_run:
         print(body_markdown)

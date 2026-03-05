@@ -94,3 +94,10 @@ jobs:
           name: repobrain-audit
           path: artifacts/audit/*.json
           if-no-files-found: ignore
+      - name: Upload RepoBrain ask markdown artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-ask-result
+          path: artifacts/ask_result.md
+          if-no-files-found: ignore
