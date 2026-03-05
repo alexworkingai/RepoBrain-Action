@@ -79,6 +79,12 @@ jobs:
           RB_LLM_BATCH_MAX_CALLS_PER_RUN: "6"
           RB_LLM_BATCH_REDUCE_ENABLE: "1"
           RB_LLM_BATCH_REDUCE_MODEL: ""
+          RB_EMBED_ENABLED: "0"
+          RB_EMBED_MODEL: "openai/text-embedding-3-small"
+          RB_EMBED_BATCH_SIZE: "64"
+          RB_RETRIEVAL_VECTOR_TOPK: "30"
+          RB_RETRIEVAL_W_LEX: "0.55"
+          RB_RETRIEVAL_W_VEC: "0.45"
         with:
           # remote_url intentionally not set here; use repobrain_remote_stub_test.yml for stub remote tests.
           tky_mode: "auto"
@@ -163,4 +169,11 @@ jobs:
         with:
           name: repobrain-llm-usage
           path: artifacts/llm_usage.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain embeddings usage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-embeddings-usage
+          path: artifacts/embeddings_usage.json
           if-no-files-found: ignore

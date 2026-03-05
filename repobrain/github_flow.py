@@ -24,7 +24,7 @@ from repobrain.github_publisher import (
     publish_check_run,
     publish_comment,
 )
-from repobrain.index_store import build_index, load_index
+from repobrain.index_store import build_index, load_index, load_index_embeddings
 from repobrain.output_md import (
     enforce_comment_limit,
     render_answer_markdown,
@@ -35,6 +35,7 @@ from repobrain.output_md import (
     render_wait_markdown,
 )
 from repobrain.retrieve_pro import retrieve_topk_pro
+from repobrain.retrieval.hybrid import rank_hybrid_candidates
 from repobrain.review import build_pr_review
 from repobrain.security import detect_injection_or_exfiltration
 from repobrain.tky_local import LocalTKYProvider
@@ -42,6 +43,10 @@ from repobrain.tky_provider import CandidateChunk, TKYResult
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
 from repobrain.quality_gates import compute_conclusion
 from repobrain.llm.github_models import GitHubModelsClient, GitHubModelsError
+from repobrain.llm.github_models_embeddings import (
+    GitHubModelsEmbeddingsClient,
+    GitHubModelsEmbeddingsError,
+)
 from repobrain.llm.batch_planner import plan_batches
 from repobrain.llm.model_selector import (
     choose_model,
@@ -614,6 +619,12 @@ def _merge_llm_meta(target: dict[str, Any], llm_meta: dict[str, Any]) -> None:
             target[key] = value
 
 
+def _merge_embeddings_meta(target: dict[str, Any], meta: dict[str, Any]) -> None:
+    for key, value in meta.items():
+        if key.startswith("embed_"):
+            target[key] = value
+
+
 def _apply_remaining_fallback(llm_meta: dict[str, Any]) -> None:
     if llm_meta.get("llm_remaining_requests", None) not in {None, "", "n/a"}:
         return
@@ -769,6 +780,126 @@ def _write_llm_usage(repo_root: Path, payload: dict[str, Any]) -> Path:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
 
+
+def _embeddings_enabled() -> bool:
+    return _env_true("RB_EMBED_ENABLED", default=False)
+
+
+def _embeddings_model() -> str:
+    value = os.getenv("RB_EMBED_MODEL", "").strip()
+    return value or "openai/text-embedding-3-small"
+
+
+def _default_embeddings_meta(reason: str) -> dict[str, Any]:
+    return {
+        "embed_used": False,
+        "embed_reason": reason,
+        "embed_model_id": _embeddings_model(),
+        "embed_tokens_prompt": 0,
+        "embed_tokens_total": 0,
+        "embed_usage_estimated": True,
+        "embed_remaining_requests": "n/a",
+        "embed_remaining_is_estimate": True,
+        "embed_reset_time_utc_iso": None,
+        "embed_chunks_embedded": 0,
+        "embed_query_embedded": False,
+        "embed_calls": [],
+        "embed_calls_count": 0,
+    }
+
+
+def _build_embeddings_usage_payload(meta: dict[str, Any]) -> dict[str, Any]:
+    calls_raw = meta.get("embed_calls", [])
+    calls = [dict(item) for item in calls_raw if isinstance(item, dict)] if isinstance(calls_raw, list) else []
+    prompt_total = sum(_int_or_zero(item.get("tokens_prompt", 0)) for item in calls)
+    total_tokens = sum(_int_or_zero(item.get("tokens_total", 0)) for item in calls)
+    last = calls[-1] if calls else {}
+    return {
+        "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "embed_used": bool(meta.get("embed_used", False)),
+        "reason": str(meta.get("embed_reason", "n/a") or "n/a"),
+        "model_id": str(meta.get("embed_model_id", _embeddings_model())),
+        "calls": calls,
+        "totals": {
+            "calls_count": len(calls),
+            "tokens_prompt_total": prompt_total,
+            "tokens_total_total": total_tokens,
+        },
+        "remaining_requests": meta.get("embed_remaining_requests", last.get("remaining_requests", "n/a")),
+        "remaining_is_estimate": bool(
+            meta.get("embed_remaining_is_estimate", last.get("remaining_is_estimate", True))
+        ),
+        "reset_time_utc_iso": meta.get("embed_reset_time_utc_iso", last.get("reset_time_utc_iso")),
+        "chunks_embedded": int(meta.get("embed_chunks_embedded", 0) or 0),
+        "query_embedded": bool(meta.get("embed_query_embedded", False)),
+    }
+
+
+def _write_embeddings_usage(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "embeddings_usage.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _maybe_embed_query(
+    *,
+    question: str,
+    chunks_embedded_count: int,
+) -> tuple[list[float] | None, dict[str, Any]]:
+    if not _embeddings_enabled():
+        meta = _default_embeddings_meta("disabled")
+        meta["embed_chunks_embedded"] = chunks_embedded_count
+        return None, meta
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    if not token:
+        meta = _default_embeddings_meta("missing_github_token")
+        meta["embed_chunks_embedded"] = chunks_embedded_count
+        return None, meta
+    client = GitHubModelsEmbeddingsClient(token=token)
+    model_id = _embeddings_model()
+    try:
+        response = client.embed(model_id=model_id, inputs=[question])
+    except GitHubModelsEmbeddingsError as exc:
+        meta = _default_embeddings_meta(f"embed_error:{exc.reason}")
+        meta["embed_chunks_embedded"] = chunks_embedded_count
+        meta["embed_model_id"] = model_id
+        return None, meta
+    if not response.vectors:
+        meta = _default_embeddings_meta("query_vector_missing")
+        meta["embed_chunks_embedded"] = chunks_embedded_count
+        meta["embed_model_id"] = model_id
+        return None, meta
+    vector = response.vectors[0]
+    call = {
+        "batch_id": "query",
+        "model_id": model_id,
+        "tokens_prompt": response.prompt_tokens,
+        "tokens_total": response.total_tokens,
+        "remaining_requests": response.remaining_requests,
+        "remaining_is_estimate": response.remaining_is_estimate,
+        "reset_time_utc_iso": response.reset_time_utc_iso,
+        "estimate_flags": {
+            "usage_estimated": response.usage_estimated,
+            "remaining_estimated": response.remaining_is_estimate,
+        },
+    }
+    meta = {
+        "embed_used": True,
+        "embed_reason": "ok",
+        "embed_model_id": model_id,
+        "embed_tokens_prompt": response.prompt_tokens,
+        "embed_tokens_total": response.total_tokens,
+        "embed_usage_estimated": response.usage_estimated,
+        "embed_remaining_requests": response.remaining_requests,
+        "embed_remaining_is_estimate": response.remaining_is_estimate,
+        "embed_reset_time_utc_iso": response.reset_time_utc_iso,
+        "embed_chunks_embedded": chunks_embedded_count,
+        "embed_query_embedded": True,
+        "embed_calls": [call],
+        "embed_calls_count": 1,
+    }
+    return [float(item) for item in vector], meta
 
 def _write_batch_summaries(repo_root: Path, payload: dict[str, Any]) -> Path:
     path = repo_root / "artifacts" / "batch_summaries.json"
@@ -1893,28 +2024,61 @@ def question_from_command(cmd: str, query: str) -> str:
 
 def load_or_build_chunks(repo_root: Path, index_path: Path) -> list[CandidateChunk]:
     """Load prebuilt index, or build and persist it if missing."""
-    chunks, _, _ = load_or_build_chunks_with_meta(repo_root, index_path)
+    chunks, _, _, _, _ = _normalize_chunks_meta(load_or_build_chunks_with_meta(repo_root, index_path))
     return chunks
 
 
 def load_or_build_chunks_with_meta(
     repo_root: Path,
     index_path: Path,
-) -> tuple[list[CandidateChunk], str, float]:
-    """Load/build index and return (chunks, source, elapsed_ms)."""
+) -> tuple[list[CandidateChunk], str, float, dict[str, list[float]], dict[str, Any]]:
+    """Load/build index and return chunks, source, elapsed_ms, vectors, vectors_meta."""
     started = time.perf_counter()
     existed_before = index_path.exists()
     cache_restored = os.environ.get("RB_INDEX_CACHE_RESTORED", "").strip() == "1"
 
     if existed_before:
         chunks = load_index(index_path)
+        vectors, vectors_meta = load_index_embeddings(index_path)
         source = "cache_hit" if cache_restored else "artifact_present"
-        return chunks, source, (time.perf_counter() - started) * 1000.0
+        return chunks, source, (time.perf_counter() - started) * 1000.0, vectors, vectors_meta
 
     index_path.parent.mkdir(parents=True, exist_ok=True)
     build_index(root=repo_root, out_zip=index_path, store_text=False)
     chunks = load_index(index_path)
-    return chunks, "rebuilt", (time.perf_counter() - started) * 1000.0
+    vectors, vectors_meta = load_index_embeddings(index_path)
+    return chunks, "rebuilt", (time.perf_counter() - started) * 1000.0, vectors, vectors_meta
+
+
+def _normalize_chunks_meta(
+    value: tuple[Any, ...] | list[Any],
+) -> tuple[list[CandidateChunk], str, float, dict[str, list[float]], dict[str, Any]]:
+    """Normalize old/new load_or_build_chunks_with_meta return signatures."""
+    if isinstance(value, tuple) and len(value) == 5:
+        chunks, source, elapsed_ms, vectors, vectors_meta = value
+        return (
+            list(chunks),
+            str(source),
+            float(elapsed_ms),
+            dict(vectors),
+            dict(vectors_meta),
+        )
+    if isinstance(value, tuple) and len(value) == 3:
+        chunks, source, elapsed_ms = value
+        return list(chunks), str(source), float(elapsed_ms), {}, {"enabled": False}
+    if isinstance(value, list) and len(value) == 5:
+        chunks, source, elapsed_ms, vectors, vectors_meta = value
+        return (
+            list(chunks),
+            str(source),
+            float(elapsed_ms),
+            dict(vectors),
+            dict(vectors_meta),
+        )
+    if isinstance(value, list) and len(value) == 3:
+        chunks, source, elapsed_ms = value
+        return list(chunks), str(source), float(elapsed_ms), {}, {"enabled": False}
+    raise ValueError("Unsupported chunks metadata shape")
 
 
 def should_build_index(index_path: Path) -> bool:
@@ -1983,7 +2147,39 @@ def _retrieve_candidates(
     *,
     topk: int,
     cmd: str,
+    chunk_vectors_by_id: dict[str, list[float]] | None = None,
+    query_vector: list[float] | None = None,
 ) -> list[CandidateChunk]:
+    vectors = chunk_vectors_by_id or {}
+    if vectors and query_vector:
+        vector_topk = _env_int("RB_RETRIEVAL_VECTOR_TOPK", 30)
+        try:
+            w_lex = float(os.getenv("RB_RETRIEVAL_W_LEX", "0.55") or 0.55)
+        except ValueError:
+            w_lex = 0.55
+        try:
+            w_vec = float(os.getenv("RB_RETRIEVAL_W_VEC", "0.45") or 0.45)
+        except ValueError:
+            w_vec = 0.45
+        total = w_lex + w_vec
+        if total <= 0.0:
+            w_lex, w_vec = 0.55, 0.45
+        else:
+            w_lex, w_vec = w_lex / total, w_vec / total
+        hybrid = rank_hybrid_candidates(
+            question=question,
+            chunks=chunks,
+            topk=topk,
+            task_type=cmd,
+            chunk_vectors_by_id=vectors,
+            query_vector=query_vector,
+            weight_lex=w_lex,
+            weight_vec=w_vec,
+            vector_topk=vector_topk,
+            max_per_file=2,
+        )
+        return hybrid.candidates
+
     if cmd == "ask":
         return retrieve_topk(question, chunks, topk=topk)
     return retrieve_topk_pro(question, chunks, topk=topk, task_type=cmd, max_per_file=2)
@@ -2147,6 +2343,8 @@ def run_qa_two_pass(
     question: str,
     cmd: str,
     chunks: list[CandidateChunk],
+    chunk_vectors_by_id: dict[str, list[float]] | None = None,
+    query_vector: list[float] | None = None,
     provider: Any,
     cfg: Any,
     tky_mode_requested: str = "baseline",
@@ -2167,7 +2365,14 @@ def run_qa_two_pass(
     perf_max_paths = int(getattr(cfg, "tky_perf_max_paths", 4096))
     active_provider = provider
     t0 = time.perf_counter()
-    pass1_candidates = _retrieve_candidates(question, chunks, topk=topk_fast, cmd=cmd)
+    pass1_candidates = _retrieve_candidates(
+        question,
+        chunks,
+        topk=topk_fast,
+        cmd=cmd,
+        chunk_vectors_by_id=chunk_vectors_by_id,
+        query_vector=query_vector,
+    )
     if timings_ms is not None:
         timings_ms["retrieve_pass1"] = round((time.perf_counter() - t0) * 1000.0, 3)
     pass1_top_score = _top_score(pass1_candidates)
@@ -2233,7 +2438,14 @@ def run_qa_two_pass(
     )
     if should_second_pass:
         t0 = time.perf_counter()
-        pass2_candidates = _retrieve_candidates(question, chunks, topk=topk_deep, cmd=cmd)
+        pass2_candidates = _retrieve_candidates(
+            question,
+            chunks,
+            topk=topk_deep,
+            cmd=cmd,
+            chunk_vectors_by_id=chunk_vectors_by_id,
+            query_vector=query_vector,
+        )
         if timings_ms is not None:
             timings_ms["retrieve_pass2"] = round((time.perf_counter() - t0) * 1000.0, 3)
         pass2_top_score = _top_score(pass2_candidates)
@@ -2419,7 +2631,19 @@ def _build_qa_markdown(
     remote_fail_open = bool(getattr(cfg, "tky_remote_fail_open", True))
     index_path = resolved_repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
-    chunks, index_source, index_elapsed_ms = load_or_build_chunks_with_meta(resolved_repo_root, index_path)
+    chunks, index_source, index_elapsed_ms, chunk_vectors_by_id, vectors_meta = _normalize_chunks_meta(
+        load_or_build_chunks_with_meta(resolved_repo_root, index_path)
+    )
+    chunks_embedded_count = len(chunk_vectors_by_id)
+    query_vector, embeddings_meta = _maybe_embed_query(
+        question=question,
+        chunks_embedded_count=chunks_embedded_count,
+    )
+    if not query_vector:
+        embeddings_meta["embed_chunks_embedded"] = chunks_embedded_count
+        embeddings_meta["embed_query_embedded"] = False
+    index_embeddings_model = str(vectors_meta.get("model", "") or "")
+    index_embeddings_dim = int(vectors_meta.get("dim", 0) or 0)
     if audit is not None:
         audit["index_source"] = index_source
         add_timing(audit, "index_load_build", index_elapsed_ms)
@@ -2432,6 +2656,8 @@ def _build_qa_markdown(
         audit["config_allow_repos_count"] = len(getattr(cfg, "tky_remote_allow_repos", []))
         audit["tky_mode_requested"] = tky_mode
         audit["tky_mode_used"] = effective_tky_mode
+        audit["embed_index_model"] = index_embeddings_model or "n/a"
+        audit["embed_index_dim"] = index_embeddings_dim
     print(
         "CONFIG: "
         f"loaded={bool(getattr(cfg, 'config_loaded', False))} "
@@ -2450,6 +2676,8 @@ def _build_qa_markdown(
         question=question,
         cmd=cmd,
         chunks=chunks,
+        chunk_vectors_by_id=chunk_vectors_by_id,
+        query_vector=query_vector,
         provider=provider,
         cfg=cfg,
         tky_mode_requested=effective_tky_mode,
@@ -2476,6 +2704,15 @@ def _build_qa_markdown(
     audit_summary["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
     if "tky_engine" not in audit_summary:
         audit_summary["tky_engine"] = _provider_engine_name(provider)
+    audit_summary.update(embeddings_meta)
+    audit_summary["embed_index_model"] = index_embeddings_model or "n/a"
+    audit_summary["embed_index_dim"] = index_embeddings_dim
+    if not audit_summary.get("embed_model_id"):
+        audit_summary["embed_model_id"] = _embeddings_model()
+    if "embed_used" not in audit_summary:
+        audit_summary["embed_used"] = False
+    if "embed_reason" not in audit_summary:
+        audit_summary["embed_reason"] = "n/a"
     if github_context_seed:
         touched_files = github_context_seed.get("changed_files", [])
         if isinstance(touched_files, list) and touched_files:
@@ -2539,6 +2776,10 @@ def _build_qa_markdown(
         }
         _merge_llm_meta(audit, llm_meta)
         audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
+        _merge_embeddings_meta(audit, embeddings_meta)
+        audit["embed_index_model"] = index_embeddings_model or "n/a"
+        audit["embed_index_dim"] = index_embeddings_dim
+        audit["embeddings_usage_payload"] = _build_embeddings_usage_payload(embeddings_meta)
 
     t0 = time.perf_counter()
     final_route = str(audit_summary.get("route_final", result.tky.route) or result.tky.route).strip().upper()
@@ -3438,6 +3679,10 @@ def run_github_flow(
     if isinstance(llm_usage_payload_raw, dict) and llm_usage_payload_raw:
         llm_path = _write_llm_usage(repo_root, llm_usage_payload_raw)
         audit["llm_usage_artifact"] = llm_path.as_posix()
+    embeddings_usage_payload_raw = audit.get("embeddings_usage_payload", {})
+    if isinstance(embeddings_usage_payload_raw, dict) and embeddings_usage_payload_raw:
+        embed_path = _write_embeddings_usage(repo_root, embeddings_usage_payload_raw)
+        audit["embeddings_usage_artifact"] = embed_path.as_posix()
 
     if dry_run:
         print(body_markdown)

@@ -37,16 +37,14 @@ def _evidence_lines(
 
 
 def _verification_lines(audit_summary: dict[str, Any]) -> list[str]:
-    p = int(audit_summary.get("verification_pass_count", 0) or 0)
-    f = int(audit_summary.get("verification_fail_count", 0) or 0)
-    q = int(audit_summary.get("verification_pending_count", 0) or 0)
-    n = int(audit_summary.get("verification_not_run_count", 0) or 0)
+    passed = int(audit_summary.get("verification_pass_count", 0) or 0)
+    failed = int(audit_summary.get("verification_fail_count", 0) or 0)
+    pending = int(audit_summary.get("verification_pending_count", 0) or 0)
+    not_run = int(audit_summary.get("verification_not_run_count", 0) or 0)
 
-    if f > 0:
+    if failed > 0 or pending > 0:
         status = "WARN"
-    elif q > 0:
-        status = "WARN"
-    elif p > 0 and n == 0:
+    elif passed > 0 and not_run == 0:
         status = "PASS"
     else:
         status = "NOT_RUN"
@@ -54,9 +52,9 @@ def _verification_lines(audit_summary: dict[str, Any]) -> list[str]:
     lines = [
         "### 🔎 Verification",
         f"- Status: **{status}**",
-        f"- PASS: {p}, WARN: {f + q}, NOT_RUN: {n}",
+        f"- PASS: {passed}, WARN: {failed + pending}, NOT_RUN: {not_run}",
     ]
-    if status == "NOT_RUN" or n > 0:
+    if status == "NOT_RUN" or not_run > 0:
         lines.append("- checks were not run.")
     return lines
 
@@ -98,10 +96,7 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     remaining_is_estimate = bool(
         audit_summary.get("llm_remaining_is_estimate", audit_summary.get("llm_remaining_estimated", False))
     )
-    reset_raw = audit_summary.get(
-        "llm_reset_time_utc_iso",
-        audit_summary.get("llm_rate_limit_reset", None),
-    )
+    reset_raw = audit_summary.get("llm_reset_time_utc_iso", audit_summary.get("llm_rate_limit_reset", None))
     reset_value = str(reset_raw) if reset_raw not in {None, ""} else "n/a"
     input_budget_used = int(audit_summary.get("llm_input_budget_used_est", 0) or 0)
     input_budget_limit = int(audit_summary.get("llm_input_budget_limit", 0) or 0)
@@ -112,20 +107,13 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     models_used = str(audit_summary.get("llm_models_used", "n/a") or "n/a")
     return [
         "### 🤖 LLM",
-        (
-            "- LLM used: yes"
-            if llm_used
-            else f"- LLM used: no ({skip_reason})"
-        ),
+        "- LLM used: yes" if llm_used else f"- LLM used: no ({skip_reason})",
         f"- LLM model used: `{model_id}`",
         (
             f"- Tokens used: prompt={prompt} completion={completion} total={total} "
             f"({'estimate' if usage_estimated else 'reported'})"
         ),
-        (
-            f"- Requests remaining today: {remaining}"
-            f"{' (estimated)' if remaining_is_estimate else ''}"
-        ),
+        f"- Requests remaining today: {remaining}{' (estimated)' if remaining_is_estimate else ''}",
         f"- Reset time UTC: {reset_value}",
         f"- Calls this run: {calls_count}",
         f"- Models used: {models_used}",
@@ -134,6 +122,36 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
             "- Dropped context items: "
             f"locators={dropped_locators}, hunks={dropped_hunks}, snippets={dropped_snippets}"
         ),
+    ]
+
+
+def _embeddings_lines(audit_summary: dict[str, Any]) -> list[str]:
+    embed_used = bool(audit_summary.get("embed_used", False))
+    embed_reason = str(audit_summary.get("embed_reason", "n/a") or "n/a")
+    model_id = str(audit_summary.get("embed_model_id", "not used") or "not used")
+    index_model = str(audit_summary.get("embed_index_model", "n/a") or "n/a")
+    index_dim = int(audit_summary.get("embed_index_dim", 0) or 0)
+    tokens_prompt = int(audit_summary.get("embed_tokens_prompt", 0) or 0)
+    tokens_total = int(audit_summary.get("embed_tokens_total", 0) or 0)
+    usage_estimated = bool(audit_summary.get("embed_usage_estimated", True))
+    remaining = audit_summary.get("embed_remaining_requests", "n/a")
+    remaining_is_estimate = bool(audit_summary.get("embed_remaining_is_estimate", True))
+    reset_raw = audit_summary.get("embed_reset_time_utc_iso")
+    reset_value = str(reset_raw) if reset_raw not in {None, ""} else "n/a"
+    chunks_embedded = int(audit_summary.get("embed_chunks_embedded", 0) or 0)
+    query_embedded = bool(audit_summary.get("embed_query_embedded", False))
+    return [
+        "### Embeddings",
+        "- Embeddings used: yes" if embed_used else f"- Embeddings used: no ({embed_reason})",
+        f"- Embeddings model: `{model_id}`",
+        f"- Index vectors: model={index_model}, dim={index_dim}, chunks={chunks_embedded}",
+        f"- Query embedded: {'yes' if query_embedded else 'no'}",
+        (
+            f"- Tokens used: prompt={tokens_prompt} total={tokens_total} "
+            f"({'estimate' if usage_estimated else 'reported'})"
+        ),
+        f"- Requests remaining today: {remaining}{' (estimated)' if remaining_is_estimate else ''}",
+        f"- Reset time UTC: {reset_value}",
     ]
 
 
@@ -228,6 +246,8 @@ def render_answer_markdown(
                 "",
                 *_llm_lines(audit_summary),
                 "",
+                *_embeddings_lines(audit_summary),
+                "",
                 "### 🧭 Route details",
                 *_mode_lines(audit_summary),
             ]
@@ -244,6 +264,8 @@ def render_answer_markdown(
                 *_verification_lines(audit_summary),
                 "",
                 *_llm_lines(audit_summary),
+                "",
+                *_embeddings_lines(audit_summary),
                 "",
                 "### 🧭 Route details",
                 *_mode_lines(audit_summary),
@@ -273,7 +295,7 @@ def render_wait_markdown(
     reason: str,
     audit_summary: dict[str, Any],
 ) -> str:
-    md = "\n".join(
+    return "\n".join(
         [
             "### ⏳ Needs verification",
             reason or "Verification is pending.",
@@ -283,6 +305,8 @@ def render_wait_markdown(
             "- checks were not run.",
             "",
             *_llm_lines(audit_summary),
+            "",
+            *_embeddings_lines(audit_summary),
             "",
             "### 🧭 Route details",
             "- Route/Mode: `WAIT`",
@@ -295,7 +319,6 @@ def render_wait_markdown(
             _audit_note(),
         ]
     )
-    return md
 
 
 def render_refuse_markdown(
@@ -305,7 +328,7 @@ def render_refuse_markdown(
     blocked: bool = False,
 ) -> str:
     title = "### 🛑 Blocked" if blocked else "### 🚫 Refused"
-    md = "\n".join(
+    return "\n".join(
         [
             title,
             reason or "Request was refused by policy.",
@@ -321,6 +344,8 @@ def render_refuse_markdown(
             "",
             *_llm_lines(audit_summary),
             "",
+            *_embeddings_lines(audit_summary),
+            "",
             "### 🧾 Audit summary",
             f"- route: {_route(audit_summary)}",
             f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
@@ -329,7 +354,6 @@ def render_refuse_markdown(
             _audit_note(),
         ]
     )
-    return md
 
 
 def render_error_markdown(
@@ -337,12 +361,14 @@ def render_error_markdown(
     message: str,
     audit_summary: dict[str, Any],
 ) -> str:
-    md = "\n".join(
+    return "\n".join(
         [
             "### 🛑 Error",
             message.strip() or "Unexpected error.",
             "",
             *_llm_lines(audit_summary),
+            "",
+            *_embeddings_lines(audit_summary),
             "",
             "### 🧾 Audit summary",
             f"- route: {_route(audit_summary)}",
@@ -352,7 +378,6 @@ def render_error_markdown(
             _audit_note(),
         ]
     )
-    return md
 
 
 def render_review_markdown(
@@ -388,6 +413,8 @@ def render_review_markdown(
         *_verification_report_lines(verification_report),
         "",
         *_llm_lines(audit_summary),
+        "",
+        *_embeddings_lines(audit_summary),
         "",
         "### 🧭 Route details",
         *_mode_lines(audit_summary),
@@ -426,6 +453,8 @@ def render_patch_markdown(
         *_verification_report_lines(verification_report),
         "",
         *_llm_lines(audit_summary),
+        "",
+        *_embeddings_lines(audit_summary),
         "",
         "### 🧾 Audit summary",
         *_audit_kv_lines(audit_summary),

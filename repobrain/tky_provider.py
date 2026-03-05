@@ -18,6 +18,8 @@ class CandidateChunk:
     score: float
     text: str | None = None  # Optional: keep None by default for safety
     signature: list[int] | None = None  # Hashed token signature (no raw tokens/text)
+    score_local: float | None = None
+    score_vec: float | None = None
 
 
 @dataclass(frozen=True)

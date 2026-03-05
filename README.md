@@ -54,6 +54,13 @@ Retrieval quality / privacy:
 
 * Index stores hashed token signatures (no raw text by default) to improve retrieval quality safely.
 * Retrieval Pro uses a hybrid score (signature overlap + path overlap + exact identifier hits) and file diversity caps.
+* Optional embeddings retrieval can be enabled with `RB_EMBED_ENABLED=1` (GitHub Models, default model `openai/text-embedding-3-small`).
+* Index embeds chunks in batches and caches vectors by chunk hash in `artifacts/.repobrain_cache/embeddings.sqlite`.
+* Index package stores vectors in `index/embeddings.jsonl` (metadata + vectors), while raw chunk text remains disabled by default.
+* Runtime hybrid ranking blends lexical and vector scores:
+  * `RB_RETRIEVAL_W_LEX` (default `0.55`)
+  * `RB_RETRIEVAL_W_VEC` (default `0.45`)
+  * `RB_RETRIEVAL_VECTOR_TOPK` (default `30`)
 * Signatures are built from chunk metadata and can be compared without storing source text.
 * Unicode-friendly tokenization improves RU/EN queries.
 * Retrieval uses Jaccard over hashed signatures plus small path-based boosts.
@@ -201,6 +208,11 @@ Batch LLM for large PRs (optional):
 * Planner is deterministic and budgeted (file/hunk-first, token reserve).
 * For `fix`, per-batch patch parts are merged into `artifacts/patch.diff`.
 * If patch parts conflict on overlapping ranges, RepoBrain keeps partial artifacts and returns a safe WAIT-style outcome.
+
+Embeddings usage artifact:
+
+* When embeddings are enabled, RepoBrain writes `artifacts/embeddings_usage.json` with usersafe metrics only:
+  * model, calls/tokens totals, remaining/reset, chunks embedded, query embedded.
 
 Example `.repobrain.yml`:
 

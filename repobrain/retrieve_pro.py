@@ -188,6 +188,8 @@ def retrieve_topk_pro(
                 score=chunk_score,
                 text=chunk.text,
                 signature=chunk.signature,
+                score_local=chunk_score,
+                score_vec=None,
             )
         )
 

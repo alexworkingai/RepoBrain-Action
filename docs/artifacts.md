@@ -12,6 +12,7 @@ Required entries **inside** the zip:
 - `manifest.json`
 - `topo_map.json`
 - `index/chunks.jsonl`
+- `index/embeddings.jsonl` (when embeddings were produced)
 
 Backward-compatibility entry is also kept:
 
@@ -28,6 +29,25 @@ Backward-compatibility entry is also kept:
 - `topo`
 - `exclusions`
 - `tool_versions`
+
+`manifest.json.embeddings` includes usersafe embedding metadata:
+
+- `enabled`
+- `model`
+- `dim`
+- `chunks_embedded`
+- `cache_hits`
+- `cache_misses`
+- `calls`
+- `reason`
+
+`index/embeddings.jsonl` row format:
+
+- `chunk_id`
+- `chunk_hash`
+- `model_id`
+- `dim`
+- `vec`
 
 `topo_map.json` is usersafe and metadata-only (graph counts, metrics, file-level chunk counts).  
 No raw source code is embedded by default (`store_text=false`).
@@ -67,6 +87,7 @@ When review/fix verification runs:
 - `artifacts/patch_parts/*.diff` stores per-batch patch parts when batch LLM fix mode is enabled
 - `artifacts/check_run_payload.json` is written when PR check payload is prepared
 - `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
+- `artifacts/embeddings_usage.json` is written when embeddings are enabled
 - `artifacts/batch_summaries.json` stores usersafe map-stage summaries for batch runs
 
 `artifacts/llm_usage.json` (usersafe) includes:
@@ -87,6 +108,17 @@ When review/fix verification runs:
 - `totals` (`calls_count`, token totals)
 - `model_counts` (model -> call count)
 - `final_remaining_requests`, `final_reset_time_utc_iso`
+
+`artifacts/embeddings_usage.json` (usersafe) includes:
+
+- `date_utc`
+- `embed_used`, `reason`
+- `model_id`
+- `calls`
+- `totals`
+- `remaining_requests`, `remaining_is_estimate`
+- `reset_time_utc_iso`
+- `chunks_embedded`, `query_embedded`
 
 Safe defaults:
 

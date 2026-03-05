@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from repobrain.evidence import EvidenceItem
 from repobrain.output_md import render_answer_markdown
@@ -47,3 +47,4 @@ def test_render_answer_markdown_includes_llm_metadata() -> None:
     assert "Requests remaining today: 33" in md
     assert "Reset time UTC: 2026-03-05T23:59:59Z" in md
     assert "Prompt budget: used~800 / limit=1200" in md
+
