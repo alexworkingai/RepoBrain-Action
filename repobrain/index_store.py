@@ -6,11 +6,12 @@ import os
 from pathlib import Path
 import sys
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 import zipfile
 
 import orjson
 
+from .ai_budget_governor import QuotaSignal, build_governor_from_env
 from .chunk import chunk_text
 from .embeddings_cache import EmbeddingsCache
 from .llm.github_models_embeddings import (
@@ -20,6 +21,9 @@ from .llm.github_models_embeddings import (
 from .scan import DEFAULT_EXCLUDE_GLOBS, scan_files
 from .signatures import build_chunk_signature
 from .tky_provider import CandidateChunk
+
+if TYPE_CHECKING:
+    from .ai_budget_governor import AIBudgetGovernor
 
 MAX_FILE_SIZE_BYTES = 1_000_000
 BINARY_PROBE_BYTES = 8192
@@ -138,6 +142,7 @@ def _build_embeddings_usage_payload(
     calls: list[dict[str, Any]],
     chunks_embedded: int,
     query_embedded: bool,
+    budget_action: str = "n/a",
 ) -> dict[str, Any]:
     prompt_total = sum(int(item.get("tokens_prompt", 0) or 0) for item in calls)
     total_tokens = sum(int(item.get("tokens_total", 0) or 0) for item in calls)
@@ -146,6 +151,7 @@ def _build_embeddings_usage_payload(
         "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "embed_used": bool(used),
         "reason": reason,
+        "budget_action": budget_action,
         "model_id": model_id,
         "calls": calls,
         "totals": {
@@ -204,6 +210,7 @@ def _compute_chunk_embeddings(
     *,
     root: Path,
     chunks: list[CandidateChunk],
+    governor: AIBudgetGovernor | None = None,
 ) -> tuple[dict[str, list[float]], dict[str, Any]]:
     enabled = _embed_enabled()
     model_id = _embed_model()
@@ -220,6 +227,9 @@ def _compute_chunk_embeddings(
         "cache_hits": 0,
         "cache_misses": 0,
         "calls": 0,
+        "status": "DISABLED",
+        "skipped_chunks": 0,
+        "budget_action": "n/a",
         "reason": "disabled",
     }
     if not enabled:
@@ -232,6 +242,7 @@ def _compute_chunk_embeddings(
                 calls=[],
                 chunks_embedded=0,
                 query_embedded=False,
+                budget_action="n/a",
             ),
         )
         return {}, base_meta
@@ -246,6 +257,7 @@ def _compute_chunk_embeddings(
                 calls=[],
                 chunks_embedded=0,
                 query_embedded=False,
+                budget_action="n/a",
             ),
         )
         return {}, base_meta
@@ -263,11 +275,22 @@ def _compute_chunk_embeddings(
             misses.append((chunk, chunk_hash))
 
     calls: list[dict[str, Any]] = []
+    budget_skipped = 0
+    budget_reason = "n/a"
+    budget_action = "n/a"
     if misses:
         client = GitHubModelsEmbeddingsClient(token=token)
         for start in range(0, len(misses), batch_size):
             batch = misses[start : start + batch_size]
             inputs = [item[0].text or "" for item in batch]
+            if governor is not None:
+                next_cost_est = max(1, int(sum(len(item) for item in inputs) / 4))
+                decision = governor.can_call_embed(next_call_cost_est=next_cost_est)
+                if not decision.allow or decision.disable_embeddings:
+                    budget_skipped = len(misses) - start
+                    budget_reason = decision.reason
+                    budget_action = decision.budget_action
+                    break
             try:
                 response = client.embed(model_id=model_id, inputs=inputs)
             except GitHubModelsEmbeddingsError as exc:
@@ -277,6 +300,8 @@ def _compute_chunk_embeddings(
                         "cache_hits": len(chunks) - len(misses),
                         "cache_misses": len(misses),
                         "calls": len(calls),
+                        "status": "PARTIAL" if vectors_by_chunk_id else "DISABLED",
+                        "skipped_chunks": len(misses) - start,
                     }
                 )
                 _write_embeddings_usage(
@@ -288,6 +313,7 @@ def _compute_chunk_embeddings(
                         calls=calls,
                         chunks_embedded=len(vectors_by_chunk_id),
                         query_embedded=False,
+                        budget_action=budget_action,
                     ),
                 )
                 return vectors_by_chunk_id, base_meta
@@ -302,6 +328,7 @@ def _compute_chunk_embeddings(
                         calls=calls,
                         chunks_embedded=len(vectors_by_chunk_id),
                         query_embedded=False,
+                        budget_action=budget_action,
                     ),
                 )
                 return vectors_by_chunk_id, base_meta
@@ -311,6 +338,17 @@ def _compute_chunk_embeddings(
                 vectors_by_chunk_id[chunk.chunk_id] = vec_norm
                 cache_rows.append((chunk_hash, vec_norm))
             cache.put_many(model_id=model_id, entries=cache_rows)
+            if governor is not None:
+                governor.observe_embed_signal(
+                    QuotaSignal(
+                        remaining_requests=response.remaining_requests,
+                        reset_time_utc_iso=response.reset_time_utc_iso,
+                        remaining_is_estimate=response.remaining_is_estimate,
+                        usage_estimated=response.usage_estimated,
+                        ratelimit_headers=dict(response.ratelimit_headers),
+                    ),
+                    {"tokens_total": response.total_tokens},
+                )
             calls.append(
                 {
                     "batch_id": f"index_{start // batch_size}",
@@ -327,6 +365,11 @@ def _compute_chunk_embeddings(
             )
 
     dim = len(next(iter(vectors_by_chunk_id.values()), []))
+    status = "OK" if vectors_by_chunk_id else "DISABLED"
+    reason = "ok" if vectors_by_chunk_id else "no_vectors"
+    if budget_skipped > 0:
+        status = "PARTIAL" if vectors_by_chunk_id else "DISABLED"
+        reason = f"budget:{budget_reason}"
     embed_meta = {
         "enabled": bool(vectors_by_chunk_id),
         "mode": "vector",
@@ -337,7 +380,10 @@ def _compute_chunk_embeddings(
         "cache_hits": len(chunks) - len(misses),
         "cache_misses": len(misses),
         "calls": len(calls),
-        "reason": "ok" if vectors_by_chunk_id else "no_vectors",
+        "status": status,
+        "skipped_chunks": budget_skipped,
+        "budget_action": budget_action,
+        "reason": reason,
     }
     _write_embeddings_usage(
         root,
@@ -348,12 +394,18 @@ def _compute_chunk_embeddings(
             calls=calls,
             chunks_embedded=len(vectors_by_chunk_id),
             query_embedded=False,
+            budget_action=budget_action,
         ),
     )
     return vectors_by_chunk_id, embed_meta
 
 
-def build_index(root: Path, out_zip: Path, store_text: bool = False) -> None:
+def build_index(
+    root: Path,
+    out_zip: Path,
+    store_text: bool = False,
+    governor: AIBudgetGovernor | None = None,
+) -> None:
     """Build a local zip index package from files under root."""
     root = root.resolve()
     out_zip = out_zip.resolve()
@@ -383,7 +435,12 @@ def build_index(root: Path, out_zip: Path, store_text: bool = False) -> None:
         all_chunks,
         key=lambda chunk: (chunk.file_path, chunk.line_start, chunk.line_end, chunk.chunk_id),
     )
-    vectors_by_chunk_id, embeddings_meta = _compute_chunk_embeddings(root=root, chunks=all_chunks)
+    active_governor = governor or build_governor_from_env()
+    vectors_by_chunk_id, embeddings_meta = _compute_chunk_embeddings(
+        root=root,
+        chunks=all_chunks,
+        governor=active_governor,
+    )
 
     topo_map = _build_topo_map(
         file_chunk_counts=file_chunk_counts,

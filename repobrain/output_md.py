@@ -105,6 +105,7 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     dropped_snippets = int(audit_summary.get("llm_dropped_snippets_count", 0) or 0)
     calls_count = int(audit_summary.get("llm_calls_this_run", 0) or 0)
     models_used = str(audit_summary.get("llm_models_used", "n/a") or "n/a")
+    budget_action = str(audit_summary.get("llm_budget_action", "n/a") or "n/a")
     return [
         "### 🤖 LLM",
         "- LLM used: yes" if llm_used else f"- LLM used: no ({skip_reason})",
@@ -122,6 +123,7 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
             "- Dropped context items: "
             f"locators={dropped_locators}, hunks={dropped_hunks}, snippets={dropped_snippets}"
         ),
+        *([f"- AI Budget action: {budget_action}"] if budget_action != "n/a" else []),
     ]
 
 
@@ -140,6 +142,7 @@ def _embeddings_lines(audit_summary: dict[str, Any]) -> list[str]:
     reset_value = str(reset_raw) if reset_raw not in {None, ""} else "n/a"
     chunks_embedded = int(audit_summary.get("embed_chunks_embedded", 0) or 0)
     query_embedded = bool(audit_summary.get("embed_query_embedded", False))
+    budget_action = str(audit_summary.get("embed_budget_action", "n/a") or "n/a")
     return [
         "### Embeddings",
         "- Embeddings used: yes" if embed_used else f"- Embeddings used: no ({embed_reason})",
@@ -152,6 +155,7 @@ def _embeddings_lines(audit_summary: dict[str, Any]) -> list[str]:
         ),
         f"- Requests remaining today: {remaining}{' (estimated)' if remaining_is_estimate else ''}",
         f"- Reset time UTC: {reset_value}",
+        *([f"- AI Budget action: {budget_action}"] if budget_action != "n/a" else []),
     ]
 
 

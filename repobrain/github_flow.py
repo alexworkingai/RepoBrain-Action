@@ -12,6 +12,11 @@ from typing import Any
 
 import requests
 
+from repobrain.ai_budget_governor import (
+    AIBudgetGovernor,
+    QuotaSignal,
+    build_governor_from_env,
+)
 from repobrain.audit import add_timing, build_audit_base, finalize_audit
 from repobrain.ask import AnswerResult, answer_question, make_provider
 from repobrain.commands import parse_command
@@ -595,6 +600,8 @@ def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
         "llm_remaining_is_estimate": True,
         "llm_reset_time_utc_iso": None,
         "llm_reason": reason,
+        "llm_budget_action": "n/a",
+        "llm_governor_reason": "n/a",
         "llm_complexity_score": 0,
         "llm_complexity_explanation": "n/a",
         "llm_calls_this_run": 0,
@@ -727,6 +734,8 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "llm_used": bool(llm_meta.get("llm_used", False)),
         "skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
+        "budget_action": str(llm_meta.get("llm_budget_action", "n/a") or "n/a"),
+        "governor_reason": str(llm_meta.get("llm_governor_reason", "n/a") or "n/a"),
         "model_id": str(llm_meta.get("llm_model_used", "not used")),
         "tier": str(llm_meta.get("llm_tier", "n/a")),
         "calls_this_run": int(llm_meta.get("llm_calls_this_run", 0) or 0),
@@ -795,6 +804,8 @@ def _default_embeddings_meta(reason: str) -> dict[str, Any]:
         "embed_used": False,
         "embed_reason": reason,
         "embed_model_id": _embeddings_model(),
+        "embed_budget_action": "n/a",
+        "embed_governor_reason": "n/a",
         "embed_tokens_prompt": 0,
         "embed_tokens_total": 0,
         "embed_usage_estimated": True,
@@ -818,6 +829,8 @@ def _build_embeddings_usage_payload(meta: dict[str, Any]) -> dict[str, Any]:
         "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "embed_used": bool(meta.get("embed_used", False)),
         "reason": str(meta.get("embed_reason", "n/a") or "n/a"),
+        "budget_action": str(meta.get("embed_budget_action", "n/a") or "n/a"),
+        "governor_reason": str(meta.get("embed_governor_reason", "n/a") or "n/a"),
         "model_id": str(meta.get("embed_model_id", _embeddings_model())),
         "calls": calls,
         "totals": {
@@ -842,10 +855,98 @@ def _write_embeddings_usage(repo_root: Path, payload: dict[str, Any]) -> Path:
     return path
 
 
+def _build_ai_quota_snapshot_payload(
+    *,
+    audit: dict[str, Any],
+    governor: AIBudgetGovernor | None,
+) -> dict[str, Any]:
+    llm_payload = audit.get("llm_usage_payload", {})
+    llm_usage = dict(llm_payload) if isinstance(llm_payload, dict) else {}
+    embed_payload = audit.get("embeddings_usage_payload", {})
+    embed_usage = dict(embed_payload) if isinstance(embed_payload, dict) else {}
+
+    llm_totals = llm_usage.get("totals", {})
+    llm_totals = dict(llm_totals) if isinstance(llm_totals, dict) else {}
+    embed_totals = embed_usage.get("totals", {})
+    embed_totals = dict(embed_totals) if isinstance(embed_totals, dict) else {}
+
+    llm_model_counts = llm_usage.get("model_counts", {})
+    llm_model_counts = dict(llm_model_counts) if isinstance(llm_model_counts, dict) else {}
+
+    governor_summary = governor.summary() if governor is not None else {
+        "policy": {},
+        "decisions_log_summary": {"decisions_total": 0, "reason_counts": {}, "budget_action_counts": {}},
+        "final_state": {},
+    }
+
+    return {
+        "run_id": str(audit.get("run_id", "")),
+        "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "llm": {
+            "calls_count": int(llm_totals.get("calls_count", 0) or 0),
+            "tokens_total": int(llm_totals.get("tokens_total_total", 0) or 0),
+            "last_remaining": llm_usage.get(
+                "final_remaining_requests",
+                llm_usage.get("remaining_requests", "n/a"),
+            ),
+            "last_reset_iso": llm_usage.get(
+                "final_reset_time_utc_iso",
+                llm_usage.get("reset_time_utc_iso"),
+            ),
+            "estimate_flags": dict(llm_usage.get("estimate_flags", {})),
+            "model_counts": llm_model_counts,
+        },
+        "embeddings": {
+            "calls_count": int(embed_totals.get("calls_count", 0) or 0),
+            "tokens_total": int(embed_totals.get("tokens_total_total", 0) or 0),
+            "last_remaining": embed_usage.get("remaining_requests", "n/a"),
+            "last_reset_iso": embed_usage.get("reset_time_utc_iso"),
+            "estimate_flags": {
+                "usage_estimated": bool(embed_usage.get("remaining_is_estimate", True)),
+                "remaining_estimated": bool(embed_usage.get("remaining_is_estimate", True)),
+            },
+            "chunks_embedded": int(embed_usage.get("chunks_embedded", 0) or 0),
+            "query_embedded": bool(embed_usage.get("query_embedded", False)),
+        },
+        "governor": governor_summary,
+    }
+
+
+def _write_ai_quota_snapshot(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "ai_quota_snapshot.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _finalize_run(
+    *,
+    repo_root: Path,
+    audit: dict[str, Any],
+    governor: AIBudgetGovernor | None,
+) -> None:
+    llm_usage_payload_raw = audit.get("llm_usage_payload", {})
+    if isinstance(llm_usage_payload_raw, dict) and llm_usage_payload_raw:
+        llm_path = _write_llm_usage(repo_root, llm_usage_payload_raw)
+        audit["llm_usage_artifact"] = llm_path.as_posix()
+
+    embeddings_usage_payload_raw = audit.get("embeddings_usage_payload", {})
+    if isinstance(embeddings_usage_payload_raw, dict) and embeddings_usage_payload_raw:
+        embed_path = _write_embeddings_usage(repo_root, embeddings_usage_payload_raw)
+        audit["embeddings_usage_artifact"] = embed_path.as_posix()
+
+    snapshot = _build_ai_quota_snapshot_payload(audit=audit, governor=governor)
+    snapshot_path = _write_ai_quota_snapshot(repo_root, snapshot)
+    audit["ai_quota_snapshot_artifact"] = snapshot_path.as_posix()
+    audit["ai_governor"] = snapshot.get("governor", {})
+    _set_last_audit(audit)
+
+
 def _maybe_embed_query(
     *,
     question: str,
     chunks_embedded_count: int,
+    governor: AIBudgetGovernor | None = None,
 ) -> tuple[list[float] | None, dict[str, Any]]:
     if not _embeddings_enabled():
         meta = _default_embeddings_meta("disabled")
@@ -858,6 +959,16 @@ def _maybe_embed_query(
         return None, meta
     client = GitHubModelsEmbeddingsClient(token=token)
     model_id = _embeddings_model()
+    if governor is not None:
+        next_cost_est = max(1, int(len(question or "") / 4))
+        decision = governor.can_call_embed(next_call_cost_est=next_cost_est)
+        if not decision.allow or decision.disable_embeddings:
+            meta = _default_embeddings_meta(f"budget:{decision.reason}")
+            meta["embed_budget_action"] = decision.budget_action
+            meta["embed_governor_reason"] = decision.reason
+            meta["embed_chunks_embedded"] = chunks_embedded_count
+            meta["embed_model_id"] = model_id
+            return None, meta
     try:
         response = client.embed(model_id=model_id, inputs=[question])
     except GitHubModelsEmbeddingsError as exc:
@@ -888,6 +999,8 @@ def _maybe_embed_query(
         "embed_used": True,
         "embed_reason": "ok",
         "embed_model_id": model_id,
+        "embed_budget_action": "n/a",
+        "embed_governor_reason": "n/a",
         "embed_tokens_prompt": response.prompt_tokens,
         "embed_tokens_total": response.total_tokens,
         "embed_usage_estimated": response.usage_estimated,
@@ -899,6 +1012,17 @@ def _maybe_embed_query(
         "embed_calls": [call],
         "embed_calls_count": 1,
     }
+    if governor is not None:
+        governor.observe_embed_signal(
+            QuotaSignal(
+                remaining_requests=response.remaining_requests,
+                reset_time_utc_iso=response.reset_time_utc_iso,
+                remaining_is_estimate=response.remaining_is_estimate,
+                usage_estimated=response.usage_estimated,
+                ratelimit_headers=dict(response.ratelimit_headers),
+            ),
+            {"tokens_total": response.total_tokens},
+        )
     return [float(item) for item in vector], meta
 
 def _write_batch_summaries(repo_root: Path, payload: dict[str, Any]) -> Path:
@@ -1051,6 +1175,7 @@ def _maybe_generate_llm_text(
     preferred_tier: str | None = None,
     prebuilt_messages: list[dict[str, str]] | None = None,
     prebuilt_budget_stats: dict[str, Any] | None = None,
+    governor: AIBudgetGovernor | None = None,
 ) -> tuple[str | None, dict[str, Any]]:
     normalized_route = str(route or "").strip().upper()
     if normalized_route in {"WAIT", "REFUSE", "BLOCK"}:
@@ -1149,6 +1274,68 @@ def _maybe_generate_llm_text(
                 selected_snippets=selected_snippets,
             )
 
+    prompt_cost_est = int(budgeting_stats.get("input_budget_used_est", estimate_tokens(query)))
+    next_call_cost_est = max(1, prompt_cost_est + int(max_output_tokens))
+    governor_action = "n/a"
+    governor_reason = "n/a"
+    if governor is not None:
+        decision = governor.can_call_llm(
+            next_call_cost_est=next_call_cost_est,
+            tier=tier,
+            intent=intent,
+        )
+        governor_action = decision.budget_action
+        governor_reason = decision.reason
+        if not decision.allow:
+            llm_meta = _llm_default_meta(f"budget:{decision.reason}")
+            llm_meta["llm_model_used"] = model_id
+            llm_meta["llm_tier"] = tier
+            llm_meta["llm_budget_action"] = decision.budget_action
+            llm_meta["llm_governor_reason"] = decision.reason
+            llm_meta["llm_complexity_score"] = complexity_score
+            llm_meta["llm_complexity_explanation"] = explanation
+            llm_meta["llm_calls_this_run"] = 0
+            llm_meta["llm_max_output_tokens_used"] = max_output_tokens
+            llm_meta["llm_input_budget_limit"] = int(budgeting_stats.get("input_budget_limit", 0) or 0)
+            llm_meta["llm_input_budget_used_est"] = int(
+                budgeting_stats.get("input_budget_used_est", 0) or 0
+            )
+            llm_meta["llm_dropped_locators_count"] = int(
+                budgeting_stats.get("dropped_locators_count", 0) or 0
+            )
+            llm_meta["llm_dropped_hunks_count"] = int(
+                budgeting_stats.get("dropped_hunks_count", 0) or 0
+            )
+            llm_meta["llm_dropped_snippets_count"] = int(
+                budgeting_stats.get("dropped_snippets_count", 0) or 0
+            )
+            if governor.llm_last_remaining is not None:
+                llm_meta["llm_remaining_requests"] = governor.llm_last_remaining
+                llm_meta["llm_requests_remaining"] = governor.llm_last_remaining
+                llm_meta["llm_remaining_is_estimate"] = governor.llm_remaining_is_estimate
+            else:
+                _apply_remaining_fallback(llm_meta)
+            llm_meta["llm_calls"] = [
+                _compact_usage_call(
+                    batch_id="single",
+                    model_id=model_id,
+                    tier=tier,
+                    tokens_prompt=0,
+                    tokens_completion=0,
+                    tokens_total=0,
+                    remaining_requests=llm_meta.get("llm_remaining_requests", "n/a"),
+                    remaining_is_estimate=bool(llm_meta.get("llm_remaining_is_estimate", True)),
+                    reset_time_utc_iso=governor.llm_last_reset,
+                    usage_estimated=True,
+                )
+            ]
+            llm_meta["llm_model_counts"] = _build_model_counts(llm_meta["llm_calls"])
+            return None, llm_meta
+        if decision.switch_to_mini and "mini" not in model_id.lower():
+            model_id = model_low
+            tier = "low"
+        if decision.budget_action != "n/a":
+            governor_action = decision.budget_action
     client = GitHubModelsClient(token=token)
     try:
         response = client.chat(
@@ -1162,6 +1349,8 @@ def _maybe_generate_llm_text(
         llm_meta = _llm_default_meta(f"LLM_NOT_AVAILABLE:{exc.reason}")
         llm_meta["llm_model_used"] = model_id
         llm_meta["llm_tier"] = tier
+        llm_meta["llm_budget_action"] = governor_action
+        llm_meta["llm_governor_reason"] = governor_reason
         llm_meta["llm_complexity_score"] = complexity_score
         llm_meta["llm_complexity_explanation"] = explanation
         llm_meta["llm_calls_this_run"] = 1
@@ -1203,6 +1392,8 @@ def _maybe_generate_llm_text(
         "llm_skip_reason": "n/a",
         "llm_model_used": response.model_id,
         "llm_tier": tier,
+        "llm_budget_action": governor_action,
+        "llm_governor_reason": governor_reason,
         "llm_tokens_prompt": response.prompt_tokens,
         "llm_tokens_completion": response.completion_tokens,
         "llm_tokens_total": response.total_tokens,
@@ -1228,6 +1419,21 @@ def _maybe_generate_llm_text(
         "llm_dropped_snippets_count": int(budgeting_stats.get("dropped_snippets_count", 0) or 0),
         "llm_ratelimit_headers": dict(response.ratelimit_headers),
     }
+    if governor is not None:
+        governor.observe_llm_signal(
+            QuotaSignal(
+                remaining_requests=response.requests_remaining,
+                reset_time_utc_iso=response.reset_time_utc_iso,
+                remaining_is_estimate=response.remaining_is_estimate,
+                usage_estimated=response.usage_estimated,
+                ratelimit_headers=dict(response.ratelimit_headers),
+            ),
+            {
+                "tokens_total": response.total_tokens,
+                "tokens_prompt": response.prompt_tokens,
+                "tokens_completion": response.completion_tokens,
+            },
+        )
     if response.requests_remaining is None:
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
@@ -1403,6 +1609,7 @@ def _run_batch_llm_review_fix(
     github_context: dict[str, Any],
     selected_chunks: list[CandidateChunk],
     locators: list[EvidenceItem],
+    governor: AIBudgetGovernor | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     llm_disabled = not _llm_enabled()
     if llm_disabled:
@@ -1420,12 +1627,6 @@ def _run_batch_llm_review_fix(
         budgets={"max_input_tokens": max_input_tokens, "reserve_tokens": 800},
     )
     max_calls = max(1, _env_int("RB_LLM_BATCH_MAX_CALLS_PER_RUN", 6))
-    batches = planned[:max_calls]
-    if not batches:
-        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _llm_default_meta(
-            "no_batches"
-        )
-
     model_high = os.getenv("RB_LLM_MODEL_HIGH", "openai/gpt-4.1").strip() or "openai/gpt-4.1"
     model_low = os.getenv("RB_LLM_MODEL_LOW", "openai/gpt-4.1-mini").strip() or "openai/gpt-4.1-mini"
     route_norm = str(route or "").strip().upper()
@@ -1440,6 +1641,39 @@ def _run_batch_llm_review_fix(
     overall_model, overall_tier = choose_model(overall_score, model_high=model_high, model_low=model_low)
     reduce_model_override = os.getenv("RB_LLM_BATCH_REDUCE_MODEL", "").strip()
     reduce_enable = _env_true("RB_LLM_BATCH_REDUCE_ENABLE", default=True)
+    pre_batch_action = "n/a"
+    pre_batch_reason = "n/a"
+    if governor is not None:
+        bootstrap_decision = governor.can_call_llm(
+            next_call_cost_est=max(1, int(max_input_tokens / 2)),
+            tier=overall_tier,
+            intent=intent,
+        )
+        pre_batch_action = bootstrap_decision.budget_action
+        pre_batch_reason = bootstrap_decision.reason
+        if not bootstrap_decision.allow:
+            llm_meta = _llm_default_meta(f"budget:{bootstrap_decision.reason}")
+            llm_meta["llm_budget_action"] = bootstrap_decision.budget_action
+            llm_meta["llm_governor_reason"] = bootstrap_decision.reason
+            return {
+                "batch_used": False,
+                "summaries": [],
+                "findings": [],
+                "patch_parts": [],
+            }, llm_meta
+        if bootstrap_decision.switch_to_mini:
+            overall_model = model_low
+            overall_tier = "low"
+        if bootstrap_decision.max_calls is not None:
+            max_calls = min(max_calls, max(1, int(bootstrap_decision.max_calls)))
+        if bootstrap_decision.disable_reduce:
+            reduce_enable = False
+
+    batches = planned[:max_calls]
+    if not batches:
+        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _llm_default_meta(
+            "no_batches"
+        )
 
     calls: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
@@ -1456,6 +1690,12 @@ def _run_batch_llm_review_fix(
     max_output_tokens_max = 0
     usage_estimated_any = False
     any_used = False
+    budget_actions: list[str] = []
+    governor_reasons: list[str] = []
+    if pre_batch_action != "n/a":
+        budget_actions.append(str(pre_batch_action))
+    if pre_batch_reason != "n/a":
+        governor_reasons.append(str(pre_batch_reason))
 
     for index, batch in enumerate(batches):
         batch_context = dict(github_context)
@@ -1494,6 +1734,7 @@ def _run_batch_llm_review_fix(
             selected_snippets=list(batch.snippet_ids),
             preferred_model_id=batch_model,
             preferred_tier=batch_tier,
+            governor=governor,
         )
         call_entry_raw = meta.get("llm_calls", [])
         if isinstance(call_entry_raw, list) and call_entry_raw and isinstance(call_entry_raw[0], dict):
@@ -1527,6 +1768,12 @@ def _run_batch_llm_review_fix(
         max_output_tokens_max = max(max_output_tokens_max, _int_or_zero(meta.get("llm_max_output_tokens_used", 0)))
         usage_estimated_any = usage_estimated_any or bool(meta.get("llm_usage_estimated", True))
         any_used = any_used or bool(meta.get("llm_used", False))
+        action_value = str(meta.get("llm_budget_action", "n/a") or "n/a")
+        reason_value = str(meta.get("llm_governor_reason", "n/a") or "n/a")
+        if action_value != "n/a":
+            budget_actions.append(action_value)
+        if reason_value != "n/a":
+            governor_reasons.append(reason_value)
 
         snippet_hashes = [
             hashlib.blake2s(value.encode("utf-8"), digest_size=8).hexdigest()
@@ -1602,6 +1849,7 @@ def _run_batch_llm_review_fix(
             preferred_tier=reduce_tier,
             prebuilt_messages=reduce_messages,
             prebuilt_budget_stats=reduce_budget_stats,
+            governor=governor,
         )
         reduce_call_raw = reduce_meta.get("llm_calls", [])
         if isinstance(reduce_call_raw, list) and reduce_call_raw and isinstance(reduce_call_raw[0], dict):
@@ -1634,6 +1882,12 @@ def _run_batch_llm_review_fix(
         max_output_tokens_max = max(max_output_tokens_max, _int_or_zero(reduce_meta.get("llm_max_output_tokens_used", 0)))
         usage_estimated_any = usage_estimated_any or bool(reduce_meta.get("llm_usage_estimated", True))
         any_used = any_used or bool(reduce_meta.get("llm_used", False))
+        action_value = str(reduce_meta.get("llm_budget_action", "n/a") or "n/a")
+        reason_value = str(reduce_meta.get("llm_governor_reason", "n/a") or "n/a")
+        if action_value != "n/a":
+            budget_actions.append(action_value)
+        if reason_value != "n/a":
+            governor_reasons.append(reason_value)
         reduce_text = reduce_output
 
     dedup_findings = list(dict.fromkeys(item for item in findings if item))
@@ -1656,6 +1910,8 @@ def _run_batch_llm_review_fix(
         "llm_skip_reason": "n/a" if any_used else "batch_calls_failed",
         "llm_model_used": next(iter(model_counts.keys()), overall_model),
         "llm_tier": "high" if any("gpt-4.1" in key and "mini" not in key for key in model_counts) else "low",
+        "llm_budget_action": "; ".join(dict.fromkeys(budget_actions)) if budget_actions else "n/a",
+        "llm_governor_reason": "; ".join(dict.fromkeys(governor_reasons)) if governor_reasons else "n/a",
         "llm_tokens_prompt": tokens_prompt_total,
         "llm_tokens_completion": tokens_completion_total,
         "llm_tokens_total": tokens_total_total,
@@ -2024,13 +2280,16 @@ def question_from_command(cmd: str, query: str) -> str:
 
 def load_or_build_chunks(repo_root: Path, index_path: Path) -> list[CandidateChunk]:
     """Load prebuilt index, or build and persist it if missing."""
-    chunks, _, _, _, _ = _normalize_chunks_meta(load_or_build_chunks_with_meta(repo_root, index_path))
+    chunks, _, _, _, _ = _normalize_chunks_meta(
+        load_or_build_chunks_with_meta(repo_root, index_path)
+    )
     return chunks
 
 
 def load_or_build_chunks_with_meta(
     repo_root: Path,
     index_path: Path,
+    governor: AIBudgetGovernor | None = None,
 ) -> tuple[list[CandidateChunk], str, float, dict[str, list[float]], dict[str, Any]]:
     """Load/build index and return chunks, source, elapsed_ms, vectors, vectors_meta."""
     started = time.perf_counter()
@@ -2044,7 +2303,10 @@ def load_or_build_chunks_with_meta(
         return chunks, source, (time.perf_counter() - started) * 1000.0, vectors, vectors_meta
 
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    build_index(root=repo_root, out_zip=index_path, store_text=False)
+    if governor is None:
+        build_index(root=repo_root, out_zip=index_path, store_text=False)
+    else:
+        build_index(root=repo_root, out_zip=index_path, store_text=False, governor=governor)
     chunks = load_index(index_path)
     vectors, vectors_meta = load_index_embeddings(index_path)
     return chunks, "rebuilt", (time.perf_counter() - started) * 1000.0, vectors, vectors_meta
@@ -2614,6 +2876,7 @@ def _build_qa_markdown(
     github_context_seed: dict[str, Any] | None = None,
     verification_context_seed: dict[str, Any] | None = None,
     audit: dict[str, Any] | None = None,
+    governor: AIBudgetGovernor | None = None,
 ) -> str:
     resolved_repo_root = resolve_repo_root(repo_root)
     cfg = load_config(resolved_repo_root)
@@ -2632,18 +2895,21 @@ def _build_qa_markdown(
     index_path = resolved_repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
     chunks, index_source, index_elapsed_ms, chunk_vectors_by_id, vectors_meta = _normalize_chunks_meta(
-        load_or_build_chunks_with_meta(resolved_repo_root, index_path)
+        load_or_build_chunks_with_meta(resolved_repo_root, index_path, governor=governor)
     )
     chunks_embedded_count = len(chunk_vectors_by_id)
     query_vector, embeddings_meta = _maybe_embed_query(
         question=question,
         chunks_embedded_count=chunks_embedded_count,
+        governor=governor,
     )
     if not query_vector:
         embeddings_meta["embed_chunks_embedded"] = chunks_embedded_count
         embeddings_meta["embed_query_embedded"] = False
     index_embeddings_model = str(vectors_meta.get("model", "") or "")
     index_embeddings_dim = int(vectors_meta.get("dim", 0) or 0)
+    index_embeddings_status = str(vectors_meta.get("status", "n/a") or "n/a")
+    index_embeddings_reason = str(vectors_meta.get("reason", "n/a") or "n/a")
     if audit is not None:
         audit["index_source"] = index_source
         add_timing(audit, "index_load_build", index_elapsed_ms)
@@ -2658,6 +2924,8 @@ def _build_qa_markdown(
         audit["tky_mode_used"] = effective_tky_mode
         audit["embed_index_model"] = index_embeddings_model or "n/a"
         audit["embed_index_dim"] = index_embeddings_dim
+        audit["embed_index_status"] = index_embeddings_status
+        audit["embed_index_reason"] = index_embeddings_reason
     print(
         "CONFIG: "
         f"loaded={bool(getattr(cfg, 'config_loaded', False))} "
@@ -2707,6 +2975,8 @@ def _build_qa_markdown(
     audit_summary.update(embeddings_meta)
     audit_summary["embed_index_model"] = index_embeddings_model or "n/a"
     audit_summary["embed_index_dim"] = index_embeddings_dim
+    audit_summary["embed_index_status"] = index_embeddings_status
+    audit_summary["embed_index_reason"] = index_embeddings_reason
     if not audit_summary.get("embed_model_id"):
         audit_summary["embed_model_id"] = _embeddings_model()
     if "embed_used" not in audit_summary:
@@ -2733,6 +3003,7 @@ def _build_qa_markdown(
         github_context=dict(github_context_seed or {}),
         locators=evidence_out,
         candidates_count=int(audit_summary.get("retrieved", len(evidence_out)) or 0),
+        governor=governor,
     )
     if llm_text and cmd in {"ask", "explain"}:
         answer_text_out = llm_text
@@ -2779,6 +3050,8 @@ def _build_qa_markdown(
         _merge_embeddings_meta(audit, embeddings_meta)
         audit["embed_index_model"] = index_embeddings_model or "n/a"
         audit["embed_index_dim"] = index_embeddings_dim
+        audit["embed_index_status"] = index_embeddings_status
+        audit["embed_index_reason"] = index_embeddings_reason
         audit["embeddings_usage_payload"] = _build_embeddings_usage_payload(embeddings_meta)
 
     t0 = time.perf_counter()
@@ -2869,6 +3142,7 @@ def _build_review_markdown(
     github_context_seed: dict[str, Any] | None = None,
     verification_context_seed: dict[str, Any] | None = None,
     audit: dict[str, Any] | None = None,
+    governor: AIBudgetGovernor | None = None,
 ) -> str:
     if not is_pull_request:
         if audit is not None:
@@ -3053,6 +3327,7 @@ def _build_review_markdown(
             github_context=llm_context,
             selected_chunks=review_candidates,
             locators=review_locators,
+            governor=governor,
         )
         if str(batch_result.get("summary_text", "")).strip():
             review["summary_text"] = str(batch_result.get("summary_text", "")).strip()
@@ -3071,6 +3346,7 @@ def _build_review_markdown(
             github_context=llm_context,
             locators=review_locators,
             candidates_count=len(review_candidates),
+            governor=governor,
         )
         if llm_text:
             review["summary_text"] = llm_text
@@ -3455,6 +3731,8 @@ def run_github_flow(
             "tky_mode_requested": tky_mode,
         }
     )
+    governor = build_governor_from_env()
+    audit["ai_governor_policy"] = governor.summary().get("policy", {})
 
     if not source_text:
         print(f"Mode={mode_label}")
@@ -3468,7 +3746,7 @@ def run_github_flow(
         t0 = time.perf_counter()
         _ = HELP_TEXT.strip()
         add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
-        _set_last_audit(audit)
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
         return "IGNORED"
 
     if _is_bot_login(event_ctx.comment_user_login):
@@ -3480,7 +3758,7 @@ def run_github_flow(
         audit["task_type"] = "ignored_bot"
         audit["route_final"] = "IGNORED_BOT"
         audit["pass_count"] = 1
-        _set_last_audit(audit)
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
         return "IGNORED_BOT"
 
     if not source_text.startswith("/repobrain"):
@@ -3492,7 +3770,7 @@ def run_github_flow(
         audit["task_type"] = "ignored"
         audit["route_final"] = "IGNORED"
         audit["pass_count"] = 1
-        _set_last_audit(audit)
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
         return "IGNORED"
 
     t0 = time.perf_counter()
@@ -3534,11 +3812,11 @@ def run_github_flow(
 
         if dry_run:
             print(body_markdown)
-            _set_last_audit(audit)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
             return "DRY_RUN_OK"
 
         if resolved_issue_number is None:
-            _set_last_audit(audit)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
             raise ValueError("issue_number is required when dry_run=False")
 
         client = _build_post_client()
@@ -3549,13 +3827,13 @@ def run_github_flow(
         add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
         audit["posted"] = True
         print(f"Posted comment to issue #{resolved_issue_number}")
-        _set_last_audit(audit)
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
         return "POSTED_OK"
 
     client: GitHubClient | None = None
     if not dry_run:
         if resolved_issue_number is None:
-            _set_last_audit(audit)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
             raise ValueError("issue_number is required when dry_run=False")
         client = _build_post_client()
         if _internal_reactions_enabled() and event_ctx.comment_id is not None:
@@ -3585,6 +3863,7 @@ def run_github_flow(
             github_context_seed=github_context_seed,
             verification_context_seed=verification_context_seed,
             audit=audit,
+            governor=governor,
         )
         audit["index_source"] = "n/a"
     elif cmd == "verify":
@@ -3610,6 +3889,7 @@ def run_github_flow(
                 github_context_seed=github_context_seed,
                 verification_context_seed=verification_context_seed,
                 audit=audit,
+                governor=governor,
             )
         except Exception:
             audit["route_final"] = "ERROR"
@@ -3675,22 +3955,13 @@ def run_github_flow(
                 github_context_seed=github_context_seed,
             )
 
-    llm_usage_payload_raw = audit.get("llm_usage_payload", {})
-    if isinstance(llm_usage_payload_raw, dict) and llm_usage_payload_raw:
-        llm_path = _write_llm_usage(repo_root, llm_usage_payload_raw)
-        audit["llm_usage_artifact"] = llm_path.as_posix()
-    embeddings_usage_payload_raw = audit.get("embeddings_usage_payload", {})
-    if isinstance(embeddings_usage_payload_raw, dict) and embeddings_usage_payload_raw:
-        embed_path = _write_embeddings_usage(repo_root, embeddings_usage_payload_raw)
-        audit["embeddings_usage_artifact"] = embed_path.as_posix()
-
     if dry_run:
         print(body_markdown)
-        _set_last_audit(audit)
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
         return "DRY_RUN_OK"
 
     if client is None:
-        _set_last_audit(audit)
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
         raise ValueError("GitHub client was not initialized")
 
     t0 = time.perf_counter()
@@ -3698,5 +3969,5 @@ def run_github_flow(
     add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
     audit["posted"] = True
     print(f"Posted comment to issue #{resolved_issue_number}")
-    _set_last_audit(audit)
+    _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
     return "POSTED_OK"

@@ -214,6 +214,28 @@ Embeddings usage artifact:
 * When embeddings are enabled, RepoBrain writes `artifacts/embeddings_usage.json` with usersafe metrics only:
   * model, calls/tokens totals, remaining/reset, chunks embedded, query embedded.
 
+AI Budget Governor:
+
+* RepoBrain uses a unified budget governor for LLM + embeddings calls.
+* Governor is conservative by default and can only throttle/disable calls (it never auto-enables AI).
+* It can:
+  * deny calls when remaining/buffer is too low
+  * downgrade model to `gpt-4.1-mini`
+  * disable batch reduce when quota is low
+  * stop embeddings early and continue with lexical fallback
+* Main env knobs:
+  * `RB_AI_STOP_AT_REMAINING` (default `1`)
+  * `RB_AI_MIN_REMAINING_BUFFER` (default `2`)
+  * `RB_AI_MAX_LLM_CALLS_PER_RUN` (default `6`)
+  * `RB_AI_MAX_EMBED_CALLS_PER_RUN` (default `10`)
+  * `RB_AI_DISABLE_REDUCE_WHEN_REMAINING_LT` (default `3`)
+  * `RB_AI_SWITCH_TO_MINI_WHEN_REMAINING_LT` (default `5`)
+  * `RB_AI_DISABLE_EMBED_WHEN_REMAINING_LT` (default `3`)
+  * `RB_AI_MAX_TOKENS_PER_RUN_LLM` (default `12000`)
+  * `RB_AI_MAX_TOKENS_PER_RUN_EMBED` (default `200000`)
+  * `RB_AI_ESTIMATE_MODE_CONSERVATIVE` (default `1`)
+  * `RB_AI_TIME_BUDGET_S` (default `240`)
+
 Example `.repobrain.yml`:
 
 ```yaml

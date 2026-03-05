@@ -85,6 +85,17 @@ jobs:
           RB_RETRIEVAL_VECTOR_TOPK: "30"
           RB_RETRIEVAL_W_LEX: "0.55"
           RB_RETRIEVAL_W_VEC: "0.45"
+          RB_AI_STOP_AT_REMAINING: "1"
+          RB_AI_MIN_REMAINING_BUFFER: "2"
+          RB_AI_MAX_LLM_CALLS_PER_RUN: "6"
+          RB_AI_MAX_EMBED_CALLS_PER_RUN: "10"
+          RB_AI_DISABLE_REDUCE_WHEN_REMAINING_LT: "3"
+          RB_AI_SWITCH_TO_MINI_WHEN_REMAINING_LT: "5"
+          RB_AI_DISABLE_EMBED_WHEN_REMAINING_LT: "3"
+          RB_AI_ESTIMATE_MODE_CONSERVATIVE: "1"
+          RB_AI_MAX_TOKENS_PER_RUN_LLM: "12000"
+          RB_AI_MAX_TOKENS_PER_RUN_EMBED: "200000"
+          RB_AI_TIME_BUDGET_S: "240"
         with:
           # remote_url intentionally not set here; use repobrain_remote_stub_test.yml for stub remote tests.
           tky_mode: "auto"
@@ -176,4 +187,11 @@ jobs:
         with:
           name: repobrain-embeddings-usage
           path: artifacts/embeddings_usage.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain AI quota snapshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-ai-quota-snapshot
+          path: artifacts/ai_quota_snapshot.json
           if-no-files-found: ignore

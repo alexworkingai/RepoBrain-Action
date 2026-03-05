@@ -89,6 +89,7 @@ When review/fix verification runs:
 - `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
 - `artifacts/embeddings_usage.json` is written when embeddings are enabled
 - `artifacts/batch_summaries.json` stores usersafe map-stage summaries for batch runs
+- `artifacts/ai_quota_snapshot.json` is always written at flow end (usersafe governor summary)
 
 `artifacts/llm_usage.json` (usersafe) includes:
 
@@ -119,6 +120,22 @@ When review/fix verification runs:
 - `remaining_requests`, `remaining_is_estimate`
 - `reset_time_utc_iso`
 - `chunks_embedded`, `query_embedded`
+
+`artifacts/ai_quota_snapshot.json` (usersafe) includes:
+
+- `run_id`, `date_utc`
+- `llm`:
+  - `calls_count`, `tokens_total`
+  - `last_remaining`, `last_reset_iso`
+  - `estimate_flags`, `model_counts`
+- `embeddings`:
+  - `calls_count`, `tokens_total`
+  - `last_remaining`, `last_reset_iso`
+  - `estimate_flags`, `chunks_embedded`, `query_embedded`
+- `governor`:
+  - `policy`
+  - `decisions_log_summary`
+  - `final_state`
 
 Safe defaults:
 
