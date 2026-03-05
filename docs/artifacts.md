@@ -65,6 +65,16 @@ When review/fix verification runs:
 - `artifacts/verification_report.json` is written (usersafe summary only)
 - `artifacts/patch.diff` is written when `/repobrain fix` has a generated patch
 - `artifacts/check_run_payload.json` is written when PR check payload is prepared
+- `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
+
+`artifacts/llm_usage.json` (usersafe) includes:
+
+- `date_utc`
+- `model_id`, `tier`
+- `calls_this_run`
+- `tokens_prompt`, `tokens_completion`, `tokens_total`
+- `estimate_flags` (reported vs estimated usage/remaining)
+- `ratelimit_headers_subset` (`x-ratelimit-*` only)
 
 Safe defaults:
 

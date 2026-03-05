@@ -83,6 +83,26 @@ def _verification_report_lines(verification_report: dict[str, Any]) -> list[str]
     return lines
 
 
+def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
+    model_id = str(audit_summary.get("llm_model_used", "not used") or "not used")
+    prompt = int(audit_summary.get("llm_tokens_prompt", 0) or 0)
+    completion = int(audit_summary.get("llm_tokens_completion", 0) or 0)
+    total = int(audit_summary.get("llm_tokens_total", 0) or 0)
+    usage_estimated = bool(audit_summary.get("llm_usage_estimated", False))
+    remaining = audit_summary.get("llm_requests_remaining", "n/a")
+    reset_value = str(audit_summary.get("llm_rate_limit_reset", "n/a") or "n/a")
+    return [
+        "### 🤖 LLM",
+        f"- LLM model used: `{model_id}`",
+        (
+            f"- Tokens used: prompt={prompt} completion={completion} total={total} "
+            f"({'estimate' if usage_estimated else 'reported'})"
+        ),
+        f"- Requests remaining today: {remaining}",
+        f"- Rate limit reset: {reset_value}",
+    ]
+
+
 def _mode_lines(audit_summary: dict[str, Any]) -> list[str]:
     route = _route(audit_summary)
     pass_count = int(audit_summary.get("pass_count", 1) or 1)
@@ -172,6 +192,8 @@ def render_answer_markdown(
                 "",
                 *_verification_lines(audit_summary),
                 "",
+                *_llm_lines(audit_summary),
+                "",
                 "### 🧭 Route details",
                 *_mode_lines(audit_summary),
             ]
@@ -186,6 +208,8 @@ def render_answer_markdown(
                 *_touched_files_lines(audit_summary),
                 "",
                 *_verification_lines(audit_summary),
+                "",
+                *_llm_lines(audit_summary),
                 "",
                 "### 🧭 Route details",
                 *_mode_lines(audit_summary),
@@ -224,6 +248,8 @@ def render_wait_markdown(
             "- Status: **NOT_RUN**",
             "- checks were not run.",
             "",
+            *_llm_lines(audit_summary),
+            "",
             "### 🧭 Route details",
             "- Route/Mode: `WAIT`",
             "- Passes: `1`",
@@ -259,6 +285,8 @@ def render_refuse_markdown(
             "- Status: **NOT_RUN**",
             "- checks were not run.",
             "",
+            *_llm_lines(audit_summary),
+            "",
             "### 🧾 Audit summary",
             f"- route: {_route(audit_summary)}",
             f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
@@ -279,6 +307,8 @@ def render_error_markdown(
         [
             "### 🛑 Error",
             message.strip() or "Unexpected error.",
+            "",
+            *_llm_lines(audit_summary),
             "",
             "### 🧾 Audit summary",
             f"- route: {_route(audit_summary)}",
@@ -323,6 +353,8 @@ def render_review_markdown(
         "",
         *_verification_report_lines(verification_report),
         "",
+        *_llm_lines(audit_summary),
+        "",
         "### 🧭 Route details",
         *_mode_lines(audit_summary),
         "",
@@ -359,9 +391,12 @@ def render_patch_markdown(
         "",
         *_verification_report_lines(verification_report),
         "",
+        *_llm_lines(audit_summary),
+        "",
         "### 🧾 Audit summary",
         *_audit_kv_lines(audit_summary),
         "",
         _audit_note(),
     ]
     return "\n".join(sections)
+

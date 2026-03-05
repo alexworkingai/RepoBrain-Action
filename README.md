@@ -166,6 +166,21 @@ Verification runner safety:
 * Auto PR after patch push is opt-in:
   * `RB_CREATE_PR=1` (requires `RB_APPLY_PATCH=1` and `RB_TRUSTED_CONTEXT=1`).
 
+GitHub Models LLM (optional):
+
+* Enable only when needed:
+  * workflow permission: `models: read`
+  * env: `RB_LLM_ENABLED=1`, `RB_LLM_PROVIDER=github_models`
+* RepoBrain uses GitHub Models endpoint with `GITHUB_TOKEN`:
+  * `https://models.github.ai/inference/chat/completions`
+* Model selection is deterministic:
+  * complex tasks -> `openai/gpt-4.1` (high tier)
+  * simple tasks -> `openai/gpt-4.1-mini` (low tier)
+* Reports include LLM diagnostics:
+  * model id
+  * token usage (`prompt/completion/total`, reported or estimated)
+  * remaining requests / reset time (from rate-limit headers when available)
+
 Example `.repobrain.yml`:
 
 ```yaml

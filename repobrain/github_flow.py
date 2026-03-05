@@ -39,6 +39,13 @@ from repobrain.tky_local import LocalTKYProvider
 from repobrain.tky_provider import CandidateChunk, TKYResult
 from repobrain.tky_remote import RemoteTKYError, RemoteTKYProvider
 from repobrain.quality_gates import compute_conclusion
+from repobrain.llm.github_models import GitHubModelsClient, GitHubModelsError
+from repobrain.llm.model_selector import choose_model, complexity_explanation, score_complexity
+from repobrain.llm.prompts import (
+    build_messages_for_ask,
+    build_messages_for_fix,
+    build_messages_for_review,
+)
 from repobrain.verification_runner import (
     VerificationBudgets,
     detect_capabilities,
@@ -528,6 +535,74 @@ def _env_true(name: str, default: bool = False) -> bool:
     return raw in {"1", "true", "yes", "y", "on"}
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return int(default)
+    try:
+        return int(raw)
+    except ValueError:
+        return int(default)
+
+
+def _llm_enabled() -> bool:
+    if not _env_true("RB_LLM_ENABLED", default=False):
+        return False
+    provider = os.getenv("RB_LLM_PROVIDER", "").strip().lower()
+    return provider == "github_models"
+
+
+def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
+    return {
+        "llm_model_used": "not used",
+        "llm_tier": "n/a",
+        "llm_tokens_prompt": 0,
+        "llm_tokens_completion": 0,
+        "llm_tokens_total": 0,
+        "llm_usage_estimated": True,
+        "llm_requests_remaining": "n/a",
+        "llm_rate_limit_reset": "n/a",
+        "llm_reason": reason,
+        "llm_complexity_score": 0,
+        "llm_complexity_explanation": "n/a",
+        "llm_calls_this_run": 0,
+        "llm_ratelimit_headers": {},
+    }
+
+
+def _merge_llm_meta(target: dict[str, Any], llm_meta: dict[str, Any]) -> None:
+    for key, value in llm_meta.items():
+        if key.startswith("llm_"):
+            target[key] = value
+
+
+def _apply_remaining_fallback(llm_meta: dict[str, Any]) -> None:
+    if llm_meta.get("llm_requests_remaining", None) not in {None, "", "n/a"}:
+        return
+    tier = str(llm_meta.get("llm_tier", "low") or "low").strip().lower()
+    daily_limit = 50 if tier == "high" else 150
+    calls = int(llm_meta.get("llm_calls_this_run", 0) or 0)
+    llm_meta["llm_requests_remaining"] = max(0, daily_limit - calls)
+    llm_meta["llm_usage_estimated"] = True
+
+
+def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "model_id": str(llm_meta.get("llm_model_used", "not used")),
+        "tier": str(llm_meta.get("llm_tier", "n/a")),
+        "calls_this_run": int(llm_meta.get("llm_calls_this_run", 0) or 0),
+        "tokens_prompt": int(llm_meta.get("llm_tokens_prompt", 0) or 0),
+        "tokens_completion": int(llm_meta.get("llm_tokens_completion", 0) or 0),
+        "tokens_total": int(llm_meta.get("llm_tokens_total", 0) or 0),
+        "estimate_flags": {
+            "usage_estimated": bool(llm_meta.get("llm_usage_estimated", True)),
+            "remaining_estimated": bool(llm_meta.get("llm_remaining_estimated", False)),
+        },
+        "ratelimit_headers_subset": dict(llm_meta.get("llm_ratelimit_headers", {})),
+    }
+
+
 def _write_verification_report(repo_root: Path, report: dict[str, Any]) -> Path:
     path = repo_root / "artifacts" / "verification_report.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -537,6 +612,13 @@ def _write_verification_report(repo_root: Path, report: dict[str, Any]) -> Path:
 
 def _write_check_run_payload(repo_root: Path, payload: dict[str, Any]) -> Path:
     path = repo_root / "artifacts" / "check_run_payload.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _write_llm_usage(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "llm_usage.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
@@ -660,6 +742,124 @@ def _run_review_verification(
         allow_dynamic=allow_dynamic,
     )
     return report.to_dict()
+
+
+def _maybe_generate_llm_text(
+    *,
+    cmd: str,
+    intent: str,
+    query: str,
+    route: str,
+    github_context: dict[str, Any],
+    locators: list[EvidenceItem],
+    candidates_count: int,
+) -> tuple[str | None, dict[str, Any]]:
+    llm_meta = _llm_default_meta("disabled")
+    if not _llm_enabled():
+        _apply_remaining_fallback(llm_meta)
+        llm_meta["llm_remaining_estimated"] = True
+        return None, llm_meta
+
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    if not token:
+        llm_meta = _llm_default_meta("missing_github_token")
+        _apply_remaining_fallback(llm_meta)
+        llm_meta["llm_remaining_estimated"] = True
+        return None, llm_meta
+
+    max_input_tokens = _env_int("RB_LLM_MAX_INPUT_TOKENS", 7600)
+    max_output_tokens = _env_int("RB_LLM_MAX_OUTPUT_TOKENS", 1200)
+    model_high = os.getenv("RB_LLM_MODEL_HIGH", "openai/gpt-4.1").strip() or "openai/gpt-4.1"
+    model_low = os.getenv("RB_LLM_MODEL_LOW", "openai/gpt-4.1-mini").strip() or "openai/gpt-4.1-mini"
+
+    complexity_limits = {"query_length": len(query or "")}
+    complexity_score = score_complexity(
+        task_type=cmd,
+        intent=intent,
+        route=route,
+        github_context=github_context,
+        candidates=[None] * max(0, int(candidates_count)),
+        limits=complexity_limits,
+    )
+    model_id, tier = choose_model(complexity_score, model_high=model_high, model_low=model_low)
+    explanation = complexity_explanation(
+        task_type=cmd,
+        intent=intent,
+        route=route,
+        changed_files_count=len(github_context.get("changed_files", []))
+        if isinstance(github_context.get("changed_files", []), list)
+        else 0,
+        candidates_count=max(0, int(candidates_count)),
+        query_length=len(query or ""),
+        score=complexity_score,
+    )
+
+    changed_files_raw = github_context.get("changed_files", [])
+    changed_files = [str(item) for item in changed_files_raw if str(item).strip()] if isinstance(changed_files_raw, list) else []
+    diff_hunks_raw = github_context.get("diff_hunks", [])
+    diff_hunks = [str(item) for item in diff_hunks_raw if str(item).strip()] if isinstance(diff_hunks_raw, list) else []
+
+    if intent == "patch" or cmd == "fix":
+        messages = build_messages_for_fix(
+            query=query,
+            changed_files=changed_files,
+            diff_hunks=diff_hunks,
+            max_input_tokens=max_input_tokens,
+        )
+    elif cmd == "review":
+        messages = build_messages_for_review(
+            query=query,
+            changed_files=changed_files,
+            diff_hunks=diff_hunks,
+            max_input_tokens=max_input_tokens,
+        )
+    else:
+        messages = build_messages_for_ask(
+            query=query,
+            locators=locators,
+            max_input_tokens=max_input_tokens,
+        )
+
+    client = GitHubModelsClient(token=token)
+    try:
+        response = client.chat(
+            model_id=model_id,
+            messages=messages,
+            max_tokens=max_output_tokens,
+            temperature=0.1,
+            stream=False,
+        )
+    except GitHubModelsError as exc:
+        llm_meta = _llm_default_meta(f"LLM_NOT_AVAILABLE:{exc.reason}")
+        llm_meta["llm_model_used"] = model_id
+        llm_meta["llm_tier"] = tier
+        llm_meta["llm_complexity_score"] = complexity_score
+        llm_meta["llm_complexity_explanation"] = explanation
+        llm_meta["llm_calls_this_run"] = 1
+        _apply_remaining_fallback(llm_meta)
+        llm_meta["llm_remaining_estimated"] = True
+        return None, llm_meta
+
+    llm_meta = {
+        "llm_model_used": response.model_id,
+        "llm_tier": tier,
+        "llm_tokens_prompt": response.prompt_tokens,
+        "llm_tokens_completion": response.completion_tokens,
+        "llm_tokens_total": response.total_tokens,
+        "llm_usage_estimated": bool(response.usage_estimated),
+        "llm_requests_remaining": response.requests_remaining if response.requests_remaining is not None else "n/a",
+        "llm_rate_limit_reset": response.rate_limit_reset or "n/a",
+        "llm_reason": "ok",
+        "llm_complexity_score": complexity_score,
+        "llm_complexity_explanation": explanation,
+        "llm_calls_this_run": 1,
+        "llm_ratelimit_headers": dict(response.ratelimit_headers),
+        "llm_remaining_estimated": False,
+    }
+    if response.requests_remaining is None:
+        _apply_remaining_fallback(llm_meta)
+        llm_meta["llm_remaining_estimated"] = True
+    return response.text.strip() or None, llm_meta
 
 
 def _extract_patch_from_stats(compression_stats: dict[str, Any]) -> str:
@@ -1623,6 +1823,19 @@ def _build_qa_markdown(
         evidence_out = _dedupe_evidence_by_file(result.evidence, max_files=7)
         answer_text_out = _build_explain_answer(evidence_out, question)
 
+    llm_text, llm_meta = _maybe_generate_llm_text(
+        cmd=cmd,
+        intent="analysis",
+        query=question,
+        route=str(audit_summary.get("route_final", result.tky.route)),
+        github_context=dict(github_context_seed or {}),
+        locators=evidence_out,
+        candidates_count=int(audit_summary.get("retrieved", len(evidence_out)) or 0),
+    )
+    if llm_text and cmd in {"ask", "explain"}:
+        answer_text_out = llm_text
+    _merge_llm_meta(audit_summary, llm_meta)
+
     if audit is not None:
         audit["route_final"] = str(audit_summary.get("route_final", result.tky.route))
         audit["pass_count"] = int(audit_summary.get("pass_count", 1) or 1)
@@ -1659,6 +1872,8 @@ def _build_qa_markdown(
             "trusted_context": _env_true("RB_TRUSTED_CONTEXT", default=False),
             "dynamic_allowed": _env_true("RB_ALLOW_DYNAMIC_VERIFY", default=False),
         }
+        _merge_llm_meta(audit, llm_meta)
+        audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
 
     t0 = time.perf_counter()
     final_route = str(audit_summary.get("route_final", result.tky.route) or result.tky.route).strip().upper()
@@ -1887,6 +2102,27 @@ def _build_review_markdown(
     changed_files = list(dict.fromkeys(str(item.get("filename", "")).strip() for item in files if item.get("filename")))
     if changed_files:
         audit_summary["touched_files"] = changed_files
+    review_locators = [
+        EvidenceItem(
+            file_path=item.file_path,
+            line_start=item.line_start,
+            line_end=item.line_end,
+            score=item.score,
+        )
+        for item in review_candidates
+    ]
+    llm_text, llm_meta = _maybe_generate_llm_text(
+        cmd="review",
+        intent="patch" if cmd == "fix" else "review",
+        query=query or question,
+        route=str(audit_summary.get("route_final", "REVIEW")),
+        github_context=dict(github_context_seed or {}),
+        locators=review_locators,
+        candidates_count=len(review_candidates),
+    )
+    if llm_text:
+        review["summary_text"] = llm_text
+    _merge_llm_meta(audit_summary, llm_meta)
     check_annotations = _build_check_annotations_from_candidates(
         review_candidates,
         route=str(audit_summary.get("route_final", "REVIEW")),
@@ -1920,6 +2156,8 @@ def _build_review_markdown(
             audit["check_annotations_raw"] = check_annotations
             audit["check_intent"] = check_intent
             audit["verification_report"] = verification_report
+            _merge_llm_meta(audit, llm_meta)
+            audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
         return body
 
     patch_text = _extract_patch_from_stats(compression_stats)
@@ -1993,6 +2231,8 @@ def _build_review_markdown(
         audit["check_annotations_raw"] = check_annotations
         audit["check_intent"] = check_intent
         audit["verification_report"] = verification_report
+        _merge_llm_meta(audit, llm_meta)
+        audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
     return body
 
 
@@ -2422,6 +2662,11 @@ def run_github_flow(
                 audit=audit,
                 github_context_seed=github_context_seed,
             )
+
+    llm_usage_payload_raw = audit.get("llm_usage_payload", {})
+    if isinstance(llm_usage_payload_raw, dict) and llm_usage_payload_raw:
+        llm_path = _write_llm_usage(repo_root, llm_usage_payload_raw)
+        audit["llm_usage_artifact"] = llm_path.as_posix()
 
     if dry_run:
         print(body_markdown)

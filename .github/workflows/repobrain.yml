@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  models: read
   checks: read
   statuses: read
   actions: read
@@ -64,6 +65,12 @@ jobs:
           RB_CREATE_PR: "0"
           RB_REQUIRE_VERIFY_FOR_PATCH: "0"
           RB_FAIL_ON_NOT_RUN: "0"
+          RB_LLM_ENABLED: "0"
+          RB_LLM_PROVIDER: ""
+          RB_LLM_MODEL_HIGH: "openai/gpt-4.1"
+          RB_LLM_MODEL_LOW: "openai/gpt-4.1-mini"
+          RB_LLM_MAX_INPUT_TOKENS: "7600"
+          RB_LLM_MAX_OUTPUT_TOKENS: "1200"
         with:
           # remote_url intentionally not set here; use repobrain_remote_stub_test.yml for stub remote tests.
           tky_mode: "auto"
@@ -127,4 +134,11 @@ jobs:
         with:
           name: repobrain-check-run-payload
           path: artifacts/check_run_payload.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain LLM usage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-llm-usage
+          path: artifacts/llm_usage.json
           if-no-files-found: ignore
