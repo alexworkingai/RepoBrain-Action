@@ -44,6 +44,8 @@ def test_validate_artifacts_fails_when_llm_required_but_not_used(tmp_path: Path)
         {
             "llm_used": False,
             "model_id": "not used",
+            "skip_reason": "route=WAIT",
+            "decision_route": "WAIT",
             "tokens_total": 0,
             "remaining_requests": 10,
             "reset_time_utc_iso": None,
@@ -56,6 +58,7 @@ def test_validate_artifacts_fails_when_llm_required_but_not_used(tmp_path: Path)
 
     assert status == "FAIL"
     assert any("llm_used must be true" in note for note in notes)
+    assert any("skip_reason=route=WAIT" in note for note in notes)
 
 
 def test_validate_artifacts_fails_when_batch_calls_below_threshold(tmp_path: Path) -> None:
@@ -96,10 +99,12 @@ def test_embeddings_evidence_accepts_ok_partial(tmp_path: Path) -> None:
     _write_json(
         tmp_path / "index_embeddings_evidence.json",
         {
-            "index_has_embeddings_file": False,
-            "index_embeddings_status": "PARTIAL",
-            "index_embeddings_model": "openai/text-embedding-3-small",
-            "index_embeddings_chunks": 12,
+            "status": "PARTIAL",
+            "reason": "query_embedded_but_index_vectors_not_used",
+            "index_vectors_used": False,
+            "embeddings_file_present_in_zip": False,
+            "model": "openai/text-embedding-3-small",
+            "chunks_with_vectors": 12,
         },
     )
     requirements = module.ScenarioRequirements(
@@ -111,3 +116,35 @@ def test_embeddings_evidence_accepts_ok_partial(tmp_path: Path) -> None:
 
     assert status == "PASS"
     assert any("index_embeddings_evidence.status=PARTIAL" in note for note in notes)
+
+
+def test_validate_artifacts_patch_missing_shows_debug_reason(tmp_path: Path) -> None:
+    module = _load_module()
+    _write_base_artifacts(tmp_path)
+    _write_json(
+        tmp_path / "llm_usage.json",
+        {
+            "llm_used": False,
+            "model_id": "not used",
+            "skip_reason": "route=WAIT",
+            "decision_route": "WAIT",
+            "tokens_total": 0,
+            "remaining_requests": 10,
+            "reset_time_utc_iso": None,
+            "totals": {"calls_count": 0},
+        },
+    )
+    _write_json(
+        tmp_path / "patch_generation_debug.json",
+        {
+            "reason": "diff_not_found_in_engine_or_llm_output",
+            "llm_skip_reason": "route=WAIT",
+            "decision_route": "WAIT",
+        },
+    )
+    requirements = module.ScenarioRequirements(require_patch=True)
+
+    status, notes = module.validate_artifacts("fix_patch_required_dispatch", tmp_path, requirements)
+
+    assert status == "FAIL"
+    assert any("patch_debug_reason=diff_not_found_in_engine_or_llm_output" in note for note in notes)

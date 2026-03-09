@@ -120,3 +120,50 @@ def test_commit_and_push_stages_before_commit(monkeypatch) -> None:
     push_idx = next(i for i, call in enumerate(calls) if call[:2] == ["git", "push"])
 
     assert add_idx < commit_idx < push_idx
+
+
+def test_gh_retry_on_tls_timeout(monkeypatch) -> None:
+    module = _load_module()
+    calls: list[list[str]] = []
+    responses = [
+        module.CmdResult(code=1, out="", err="TLS handshake timeout"),
+        module.CmdResult(code=0, out="[]", err=""),
+    ]
+    sleeps: list[int] = []
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del cwd, check
+        calls.append(args)
+        return responses.pop(0)
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: sleeps.append(int(seconds)))
+
+    result, attempts = module._run_gh_cmd_with_retries(  # noqa: SLF001
+        ["gh", "run", "list"],
+        retries=3,
+        backoff_s=2,
+        check=True,
+    )
+
+    assert result.code == 0
+    assert attempts == 2
+    assert sleeps == [2]
+    assert len(calls) == 2
+
+
+def test_fix_scenario_toggles_include_allow_dynamic_verify() -> None:
+    module = _load_module()
+    scenarios = module._build_scenarios(  # noqa: SLF001
+        require_llm_used=True,
+        require_embeddings_used=True,
+        require_patch=True,
+        require_batch_calls_min=2,
+    )
+    fix_spec = next(item for item in scenarios if item.name == "fix_patch_required_dispatch")
+    assert fix_spec.allow_dynamic_verify is True

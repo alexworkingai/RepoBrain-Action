@@ -731,6 +731,7 @@ def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
         "llm_remaining_is_estimate": True,
         "llm_reset_time_utc_iso": None,
         "llm_reason": reason,
+        "llm_decision_route": "n/a",
         "llm_budget_action": "n/a",
         "llm_governor_reason": "n/a",
         "llm_complexity_score": 0,
@@ -865,6 +866,7 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "llm_used": bool(llm_meta.get("llm_used", False)),
         "skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
+        "decision_route": str(llm_meta.get("llm_decision_route", "n/a") or "n/a"),
         "budget_action": str(llm_meta.get("llm_budget_action", "n/a") or "n/a"),
         "governor_reason": str(llm_meta.get("llm_governor_reason", "n/a") or "n/a"),
         "model_id": str(llm_meta.get("llm_model_used", "not used")),
@@ -1001,6 +1003,7 @@ def _build_index_embeddings_evidence_payload(
     index_path: Path,
     vectors_meta: dict[str, Any],
     embeddings_meta: dict[str, Any],
+    index_vectors_used: bool,
 ) -> dict[str, Any]:
     chunks = int(
         vectors_meta.get(
@@ -1009,13 +1012,38 @@ def _build_index_embeddings_evidence_payload(
         )
         or 0
     )
+    query_embedded = bool(embeddings_meta.get("embed_query_embedded", False))
+    vectors_available = chunks > 0
     status = str(vectors_meta.get("status", "UNKNOWN") or "UNKNOWN").upper()
-    if status not in {"OK", "PARTIAL", "DISABLED", "UNKNOWN"}:
+    reason = str(vectors_meta.get("reason", "n/a") or "n/a")
+    if index_vectors_used:
+        status = "OK"
+        reason = "index_vectors_used_for_hybrid_scoring"
+    elif query_embedded and vectors_available:
+        status = "PARTIAL"
+        reason = "query_embedded_but_index_vectors_not_used"
+    elif query_embedded and not vectors_available:
+        status = "DISABLED"
+        reason = "query_embedded_but_index_vectors_missing"
+    elif status not in {"OK", "PARTIAL", "DISABLED", "UNKNOWN"}:
         status = "UNKNOWN"
+        reason = "invalid_index_embeddings_status"
+    elif reason == "n/a":
+        reason = "query_embedding_not_available"
+
     model = str(vectors_meta.get("model", "") or embeddings_meta.get("embed_model_id", "") or "n/a")
+    file_present = _index_zip_has_embeddings(index_path)
     return {
-        "index_has_embeddings_file": _index_zip_has_embeddings(index_path),
+        "status": status,
+        "reason": reason,
+        "index_vectors_used": bool(index_vectors_used),
+        "embeddings_file_present_in_zip": file_present,
+        "model": model,
+        "chunks_with_vectors": chunks,
+        # Backward-compatible keys used by existing harness/tests.
+        "index_has_embeddings_file": file_present,
         "index_embeddings_status": status,
+        "index_embeddings_reason": reason,
         "index_embeddings_model": model,
         "index_embeddings_chunks": chunks,
     }
@@ -1392,17 +1420,20 @@ def _maybe_generate_llm_text(
     normalized_route = str(route or "").strip().upper()
     if normalized_route in {"WAIT", "REFUSE", "BLOCK"}:
         llm_meta = _llm_default_meta(f"route={normalized_route}")
+        llm_meta["llm_decision_route"] = normalized_route
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
     if cmd == "locate" and not _env_true("RB_LLM_ALLOW_LOCATE", default=False):
         llm_meta = _llm_default_meta("locate_disabled")
+        llm_meta["llm_decision_route"] = normalized_route or "n/a"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
     llm_meta = _llm_default_meta("disabled")
+    llm_meta["llm_decision_route"] = normalized_route or "n/a"
     if not _llm_enabled():
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
@@ -1413,6 +1444,7 @@ def _maybe_generate_llm_text(
         token = os.getenv("GITHUB_TOKEN", "").strip()
     if not token:
         llm_meta = _llm_default_meta("missing_github_token")
+        llm_meta["llm_decision_route"] = normalized_route or "n/a"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
@@ -1504,6 +1536,7 @@ def _maybe_generate_llm_text(
         governor_reason = decision.reason
         if not decision.allow:
             llm_meta = _llm_default_meta(f"budget:{decision.reason}")
+            llm_meta["llm_decision_route"] = normalized_route or "n/a"
             llm_meta["llm_model_used"] = model_id
             llm_meta["llm_tier"] = tier
             llm_meta["llm_budget_action"] = decision.budget_action
@@ -1563,6 +1596,7 @@ def _maybe_generate_llm_text(
         )
     except GitHubModelsError as exc:
         llm_meta = _llm_default_meta(f"LLM_NOT_AVAILABLE:{exc.reason}")
+        llm_meta["llm_decision_route"] = normalized_route or "n/a"
         llm_meta["llm_model_used"] = model_id
         llm_meta["llm_tier"] = tier
         llm_meta["llm_budget_action"] = governor_action
@@ -1606,6 +1640,7 @@ def _maybe_generate_llm_text(
     llm_meta = {
         "llm_used": True,
         "llm_skip_reason": "n/a",
+        "llm_decision_route": normalized_route or "n/a",
         "llm_model_used": response.model_id,
         "llm_tier": tier,
         "llm_budget_action": governor_action,
@@ -1725,23 +1760,28 @@ def _sanitize_batch_text(text: str, *, max_lines: int = 8) -> list[str]:
     return lines
 
 
-def _extract_patch_from_llm_text(text: str) -> str:
+def _extract_patch_from_llm_text_with_flags(text: str) -> tuple[str, bool, bool]:
     payload = str(text or "")
     fence_match = re.search(r"```diff\s*(.*?)```", payload, flags=re.DOTALL | re.IGNORECASE)
     if fence_match:
-        return fence_match.group(1).strip()
+        return fence_match.group(1).strip(), True, False
     idx = payload.find("diff --git")
     if idx >= 0:
-        return payload[idx:].strip()
+        return payload[idx:].strip(), False, True
     payload_stripped = payload.strip()
     if payload_stripped.startswith("--- ") and "\n+++ " in payload_stripped:
-        return payload_stripped
+        return payload_stripped, False, True
     idx_plain = payload.find("\n--- ")
     if idx_plain >= 0:
         candidate = payload[idx_plain + 1 :].strip()
         if candidate.startswith("--- ") and "\n+++ " in candidate:
-            return candidate
-    return ""
+            return candidate, False, True
+    return "", False, False
+
+
+def _extract_patch_from_llm_text(text: str) -> str:
+    patch_text, _, _ = _extract_patch_from_llm_text_with_flags(text)
+    return patch_text
 
 
 def _is_unified_diff(patch_text: str) -> bool:
@@ -1882,11 +1922,12 @@ def _run_batch_llm_review_fix(
     locators: list[EvidenceItem],
     governor: AIBudgetGovernor | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    route_norm = str(route or "").strip().upper()
     llm_disabled = not _llm_enabled()
     if llm_disabled:
-        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _llm_default_meta(
-            "disabled"
-        )
+        llm_meta = _llm_default_meta("disabled")
+        llm_meta["llm_decision_route"] = route_norm or "n/a"
+        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, llm_meta
 
     cfg = _runtime_env_cfg()
     max_input_tokens = int(cfg.llm.max_input_tokens)
@@ -1904,7 +1945,6 @@ def _run_batch_llm_review_fix(
     max_calls = max(1, int(cfg.batch.max_calls_per_run))
     model_high = str(cfg.llm.model_high or "openai/gpt-4.1")
     model_low = str(cfg.llm.model_low or "openai/gpt-4.1-mini")
-    route_norm = str(route or "").strip().upper()
     overall_score = score_complexity(
         task_type=cmd,
         intent=intent,
@@ -1928,6 +1968,7 @@ def _run_batch_llm_review_fix(
         pre_batch_reason = bootstrap_decision.reason
         if not bootstrap_decision.allow:
             llm_meta = _llm_default_meta(f"budget:{bootstrap_decision.reason}")
+            llm_meta["llm_decision_route"] = route_norm or "n/a"
             llm_meta["llm_budget_action"] = bootstrap_decision.budget_action
             llm_meta["llm_governor_reason"] = bootstrap_decision.reason
             return {
@@ -1946,9 +1987,9 @@ def _run_batch_llm_review_fix(
 
     batches = planned[:max_calls]
     if not batches:
-        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _llm_default_meta(
-            "no_batches"
-        )
+        llm_meta = _llm_default_meta("no_batches")
+        llm_meta["llm_decision_route"] = route_norm or "n/a"
+        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, llm_meta
 
     calls: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
@@ -2183,6 +2224,7 @@ def _run_batch_llm_review_fix(
     llm_meta = {
         "llm_used": any_used,
         "llm_skip_reason": "n/a" if any_used else "batch_calls_failed",
+        "llm_decision_route": route_norm or "n/a",
         "llm_model_used": next(iter(model_counts.keys()), overall_model),
         "llm_tier": "high" if any("gpt-4.1" in key and "mini" not in key for key in model_counts) else "low",
         "llm_budget_action": "; ".join(dict.fromkeys(budget_actions)) if budget_actions else "n/a",
@@ -3197,19 +3239,37 @@ def _build_qa_markdown(
     if not query_vector:
         embeddings_meta["embed_chunks_embedded"] = chunks_embedded_count
         embeddings_meta["embed_query_embedded"] = False
+    index_vectors_available = chunks_embedded_count > 0
+    index_vectors_used = bool(query_vector) and index_vectors_available
     index_embeddings_model = str(vectors_meta.get("model", "") or "")
     index_embeddings_dim = int(vectors_meta.get("dim", 0) or 0)
-    index_embeddings_status = str(vectors_meta.get("status", "n/a") or "n/a")
+    index_embeddings_status = str(vectors_meta.get("status", "UNKNOWN") or "UNKNOWN").upper()
     index_embeddings_reason = str(vectors_meta.get("reason", "n/a") or "n/a")
+    if index_vectors_used:
+        index_embeddings_status = "OK"
+        index_embeddings_reason = "index_vectors_used_for_hybrid_scoring"
+    elif bool(embeddings_meta.get("embed_query_embedded", False)) and index_vectors_available:
+        index_embeddings_status = "PARTIAL"
+        index_embeddings_reason = "query_embedded_but_index_vectors_not_used"
+    elif bool(embeddings_meta.get("embed_query_embedded", False)) and not index_vectors_available:
+        index_embeddings_status = "DISABLED"
+        index_embeddings_reason = "query_embedded_but_index_vectors_missing"
+    elif index_embeddings_status not in {"OK", "PARTIAL", "DISABLED", "UNKNOWN"}:
+        index_embeddings_status = "UNKNOWN"
+        index_embeddings_reason = "invalid_index_embeddings_status"
+    elif index_embeddings_reason == "n/a":
+        index_embeddings_reason = "query_embedding_not_available"
+
     is_dispatch_e2e = (
         os.environ.get("GITHUB_EVENT_NAME", "").strip() == "workflow_dispatch"
         and bool(os.environ.get("RB_E2E_COMMAND", "").strip())
     )
-    if _embeddings_enabled() and bool(embeddings_meta.get("embed_query_embedded", False)) and is_dispatch_e2e:
+    if _embeddings_enabled() and is_dispatch_e2e:
         evidence_payload = _build_index_embeddings_evidence_payload(
             index_path=index_path,
             vectors_meta=vectors_meta,
             embeddings_meta=embeddings_meta,
+            index_vectors_used=index_vectors_used,
         )
         evidence_path = _write_index_embeddings_evidence(resolved_repo_root, evidence_payload)
         if audit is not None:
@@ -3286,7 +3346,10 @@ def _build_qa_markdown(
     audit_summary["embed_index_dim"] = index_embeddings_dim
     audit_summary["embed_index_status"] = index_embeddings_status
     audit_summary["embed_index_reason"] = index_embeddings_reason
-    if is_dispatch_e2e and _embeddings_enabled() and bool(embeddings_meta.get("embed_query_embedded", False)):
+    audit_summary["index_vectors_used"] = index_vectors_used
+    audit_summary["embeddings_index_status"] = index_embeddings_status
+    audit_summary["embeddings_index_reason"] = index_embeddings_reason
+    if is_dispatch_e2e and _embeddings_enabled():
         audit_summary["index_embeddings_evidence_artifact"] = "artifacts/index_embeddings_evidence.json"
     if not audit_summary.get("embed_model_id"):
         audit_summary["embed_model_id"] = _embeddings_model()
@@ -3365,6 +3428,9 @@ def _build_qa_markdown(
         audit["embed_index_dim"] = index_embeddings_dim
         audit["embed_index_status"] = index_embeddings_status
         audit["embed_index_reason"] = index_embeddings_reason
+        audit["index_vectors_used"] = index_vectors_used
+        audit["embeddings_index_status"] = index_embeddings_status
+        audit["embeddings_index_reason"] = index_embeddings_reason
         audit["embeddings_usage_payload"] = _build_embeddings_usage_payload(embeddings_meta)
 
     t0 = time.perf_counter()
@@ -3748,8 +3814,12 @@ def _build_review_markdown(
         )
         if merged_batch_patch.strip():
             patch_text = merged_batch_patch
+    found_fenced_diff = False
+    found_raw_diff = False
     if not patch_text and llm_text_for_patch:
-        patch_text = _extract_patch_from_llm_text(llm_text_for_patch)
+        patch_text, found_fenced_diff, found_raw_diff = _extract_patch_from_llm_text_with_flags(
+            llm_text_for_patch
+        )
 
     patch_written = False
     patch_apply_message = "no patch generated by engine"
@@ -3802,6 +3872,12 @@ def _build_review_markdown(
             "reason": "diff_not_found_in_engine_or_llm_output",
             "llm_used": bool(llm_meta.get("llm_used", False)),
             "model": str(llm_meta.get("llm_model_used", "n/a") or "n/a"),
+            "llm_skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
+            "decision_route": str(audit_summary.get("route_final", "n/a") or "n/a"),
+            "governor_reason": str(llm_meta.get("llm_governor_reason", "n/a") or "n/a"),
+            "extracted_len": len(str(patch_text or "").strip()),
+            "found_fenced_diff": bool(found_fenced_diff),
+            "found_raw_diff": bool(found_raw_diff),
             "output_truncated": False,
         }
         debug_path = _write_patch_generation_debug(repo_root, patch_debug_payload)

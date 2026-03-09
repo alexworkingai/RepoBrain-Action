@@ -20,6 +20,14 @@ STRONG_SECRET_PATTERNS = (
     re.compile(r"BEGIN (?:RSA )?PRIVATE KEY"),
 )
 
+TRANSIENT_GH_ERROR_MARKERS = (
+    "tls handshake timeout",
+    "timeout",
+    "temporary failure",
+    "eof",
+    "connection reset",
+)
+
 
 @dataclass
 class CmdResult:
@@ -78,6 +86,50 @@ def run_cmd(args: list[str], *, cwd: Path | None = None, check: bool = True) -> 
     return result
 
 
+def _is_transient_gh_error(result: CmdResult) -> bool:
+    blob = f"{result.err}\n{result.out}".lower()
+    return any(marker in blob for marker in TRANSIENT_GH_ERROR_MARKERS)
+
+
+def _run_gh_cmd_with_retries(
+    args: list[str],
+    *,
+    retries: int,
+    backoff_s: int,
+    check: bool = True,
+) -> tuple[CmdResult, int]:
+    attempts_total = max(1, int(retries))
+    base_backoff = max(1, int(backoff_s))
+    last_result = CmdResult(code=1, out="", err="no result")
+
+    for attempt in range(1, attempts_total + 1):
+        result = run_cmd(args, check=False)
+        last_result = result
+        if result.code == 0:
+            return result, attempt
+
+        if attempt >= attempts_total or not _is_transient_gh_error(result):
+            break
+
+        sleep_for = base_backoff * (2 ** (attempt - 1))
+        err_text = result.err or result.out or "unknown transient error"
+        print(
+            f"[gh-retry] WARN attempt {attempt}/{attempts_total} failed: {err_text}. "
+            f"retrying in {sleep_for}s",
+            flush=True,
+        )
+        time.sleep(sleep_for)
+
+    if check and last_result.code != 0:
+        cmd_text = " ".join(args)
+        err_text = last_result.err or last_result.out or "no output"
+        raise RuntimeError(
+            f"Command failed after {attempts_total} attempt(s): {cmd_text}\n{err_text}"
+        )
+
+    return last_result, attempts_total
+
+
 def parse_repo_slug(remote_url: str) -> str:
     value = remote_url.strip()
     if value.endswith(".git"):
@@ -127,8 +179,10 @@ def _find_run(
     branch: str,
     event: str,
     since: datetime,
+    gh_retries: int,
+    gh_backoff_s: int,
 ) -> tuple[dict[str, Any] | None, int]:
-    result = run_cmd(
+    result, _ = _run_gh_cmd_with_retries(
         [
             "gh",
             "run",
@@ -146,6 +200,8 @@ def _find_run(
             "--limit",
             "30",
         ],
+        retries=gh_retries,
+        backoff_s=gh_backoff_s,
         check=True,
     )
     data = json.loads(result.out or "[]")
@@ -180,6 +236,8 @@ def _wait_for_run(
     event: str,
     since: datetime,
     timeout_s: int = 480,
+    gh_retries: int = 5,
+    gh_backoff_s: int = 2,
 ) -> dict[str, Any]:
     started = time.time()
     run_item: dict[str, Any] | None = None
@@ -192,6 +250,8 @@ def _wait_for_run(
             branch=branch,
             event=event,
             since=since,
+            gh_retries=gh_retries,
+            gh_backoff_s=gh_backoff_s,
         )
         last_seen_count = seen_count
         if run_item is not None:
@@ -206,7 +266,7 @@ def _wait_for_run(
             last_heartbeat = elapsed
         time.sleep(2)
     if run_item is None:
-        diagnostics = run_cmd(
+        diagnostics, _ = _run_gh_cmd_with_retries(
             [
                 "gh",
                 "run",
@@ -220,6 +280,8 @@ def _wait_for_run(
                 "--limit",
                 "20",
             ],
+            retries=gh_retries,
+            backoff_s=gh_backoff_s,
             check=False,
         )
         diag_text = diagnostics.out or diagnostics.err or "no diagnostics"
@@ -230,7 +292,7 @@ def _wait_for_run(
         )
     run_id = str(run_item.get("databaseId"))
     run_cmd(["gh", "run", "watch", run_id, "--repo", repo, "--interval", "10"], check=False)
-    view = run_cmd(
+    view, _ = _run_gh_cmd_with_retries(
         [
             "gh",
             "run",
@@ -241,6 +303,8 @@ def _wait_for_run(
             "--json",
             "databaseId,status,conclusion,url,createdAt,updatedAt",
         ],
+        retries=gh_retries,
+        backoff_s=gh_backoff_s,
         check=True,
     )
     data = json.loads(view.out or "{}")
@@ -249,14 +313,24 @@ def _wait_for_run(
     return data
 
 
-def _download_artifacts(repo: str, run_id: str, out_dir: Path) -> tuple[bool, str]:
+def _download_artifacts(
+    repo: str,
+    run_id: str,
+    out_dir: Path,
+    *,
+    gh_retries: int,
+    gh_backoff_s: int,
+) -> tuple[bool, str]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    result = run_cmd(
+    result, attempts_used = _run_gh_cmd_with_retries(
         ["gh", "run", "download", run_id, "--repo", repo, "--dir", str(out_dir)],
+        retries=gh_retries,
+        backoff_s=gh_backoff_s,
         check=False,
     )
     if result.code != 0:
-        return False, result.err or result.out or "artifact download failed"
+        err = result.err or result.out or "artifact download failed"
+        return False, f"{err} (attempts={attempts_used})"
     return True, "ok"
 
 
@@ -297,7 +371,7 @@ def _index_embeddings_evidence_status(artifacts_root: Path) -> str:
         payload = _load_json(evidence)
     except json.JSONDecodeError:
         return ""
-    return str(payload.get("index_embeddings_status", "") or "").upper()
+    return str(payload.get("status", payload.get("index_embeddings_status", "")) or "").upper()
 
 
 def _has_patch_artifact(artifacts_root: Path) -> bool:
@@ -382,7 +456,12 @@ def validate_artifacts(
             if bool(llm_payload.get("llm_used", False)):
                 pass_note("llm_used=true")
             else:
-                fail("llm_used must be true")
+                skip_reason = str(llm_payload.get("skip_reason", "n/a") or "n/a")
+                decision_route = str(llm_payload.get("decision_route", "n/a") or "n/a")
+                fail(
+                    "llm_used must be true "
+                    f"(skip_reason={skip_reason}, route={decision_route})"
+                )
             model_id = str(llm_payload.get("model_id", "") or "")
             if model_id in {"openai/gpt-4.1", "openai/gpt-4.1-mini"}:
                 pass_note(f"model_id accepted: {model_id}")
@@ -420,24 +499,43 @@ def validate_artifacts(
                 fail("embeddings remaining_requests missing")
 
     if requirements.require_index_embeddings:
-        zip_path, has_embeddings_jsonl = _first_zip_with_embeddings(artifacts_root)
-        if has_embeddings_jsonl:
-            pass_note(f"index embeddings found in zip: {zip_path.as_posix() if zip_path else 'n/a'}")
+        evidence_status = _index_embeddings_evidence_status(artifacts_root)
+        if evidence_status in {"OK", "PARTIAL"}:
+            pass_note(f"index_embeddings_evidence.status={evidence_status}")
         else:
-            evidence_status = _index_embeddings_evidence_status(artifacts_root)
-            if evidence_status in {"OK", "PARTIAL"}:
-                pass_note(f"index_embeddings_evidence.status={evidence_status}")
-            else:
-                fail(
-                    "index embeddings evidence missing: no index/embeddings.jsonl and no "
+            zip_path, has_embeddings_jsonl = _first_zip_with_embeddings(artifacts_root)
+            if has_embeddings_jsonl:
+                notes.append(
+                    "INFO: index embeddings found in zip, but strict mode expects "
                     "index_embeddings_evidence.status in {OK, PARTIAL}"
                 )
+                notes.append(f"INFO: zip source={zip_path.as_posix() if zip_path else 'n/a'}")
+            fail(
+                "index embeddings evidence missing/invalid: expected "
+                "index_embeddings_evidence.status in {OK, PARTIAL}"
+            )
 
     if requirements.require_patch:
         if _has_patch_artifact(artifacts_root):
             pass_note("patch artifact found (patch.diff or patch_parts/*.diff)")
         else:
-            fail("patch artifact missing: expected patch.diff or patch_parts/*.diff")
+            debug_path = _find_first(artifacts_root, "patch_generation_debug.json")
+            llm_skip_reason = str(llm_payload.get("skip_reason", "n/a") or "n/a")
+            llm_route = str(llm_payload.get("decision_route", "n/a") or "n/a")
+            if debug_path is not None:
+                debug_payload = _load_json(debug_path)
+                debug_reason = str(debug_payload.get("reason", "n/a") or "n/a")
+                fail(
+                    "patch artifact missing: expected patch.diff or patch_parts/*.diff "
+                    f"(llm_skip_reason={llm_skip_reason}, route={llm_route}, "
+                    f"patch_debug_reason={debug_reason})"
+                )
+            else:
+                fail(
+                    "patch artifact missing: expected patch.diff or patch_parts/*.diff "
+                    f"(llm_skip_reason={llm_skip_reason}, route={llm_route}, "
+                    "patch_generation_debug.json missing)"
+                )
 
     if requirements.require_batch_calls_min > 0:
         if not llm_payload:
@@ -588,6 +686,8 @@ def _dispatch_run(
     e2e_pr_number: str,
     toggles: dict[str, bool],
     timeout_s: int,
+    gh_retries: int,
+    gh_backoff_s: int,
 ) -> tuple[dict[str, Any] | None, str]:
     since = _now_utc()
     _workflow_dispatch(
@@ -613,6 +713,8 @@ def _dispatch_run(
             event="workflow_dispatch",
             since=since,
             timeout_s=timeout_s,
+            gh_retries=gh_retries,
+            gh_backoff_s=gh_backoff_s,
         )
     except Exception as exc:  # noqa: BLE001
         return None, str(exc)
@@ -668,6 +770,8 @@ def _scenario_dispatch_command(
     spec: ScenarioSpec,
     artifacts_dir: Path,
     timeout_s: int,
+    gh_retries: int,
+    gh_backoff_s: int,
 ) -> ScenarioResult:
     print(
         f"[scenario:start] name={spec.name} mode=workflow_dispatch "
@@ -691,6 +795,8 @@ def _scenario_dispatch_command(
             "create_pr": spec.create_pr,
         },
         timeout_s=timeout_s,
+        gh_retries=gh_retries,
+        gh_backoff_s=gh_backoff_s,
     )
     if run_data is None:
         print(f"[scenario:fail] name={spec.name} reason={error}", flush=True)
@@ -704,7 +810,13 @@ def _scenario_dispatch_command(
         )
     run_id = str(run_data.get("databaseId", "n/a"))
     target_dir = artifacts_dir / spec.name / run_id
-    ok, msg = _download_artifacts(repo, run_id, target_dir)
+    ok, msg = _download_artifacts(
+        repo,
+        run_id,
+        target_dir,
+        gh_retries=gh_retries,
+        gh_backoff_s=gh_backoff_s,
+    )
     result = _scenario_from_run(
         scenario_name=spec.name,
         trigger=spec.command,
@@ -853,7 +965,7 @@ def _build_scenarios(
             enable_batch_llm=False,
             batch_force=False,
             trusted_context=True,
-            allow_dynamic_verify=False,
+            allow_dynamic_verify=True,
             apply_patch=False,
             create_pr=False,
             requirements=ScenarioRequirements(
@@ -965,6 +1077,18 @@ def main() -> int:
         default=2,
         help="Minimum LLM calls for batch scenario.",
     )
+    parser.add_argument(
+        "--gh-retries",
+        type=int,
+        default=5,
+        help="Retries for transient gh network failures.",
+    )
+    parser.add_argument(
+        "--gh-backoff-s",
+        type=int,
+        default=2,
+        help="Base backoff (seconds) for gh retries.",
+    )
     args = parser.parse_args()
 
     _ensure_gh_ready()
@@ -1009,6 +1133,8 @@ def main() -> int:
                 spec=spec,
                 artifacts_dir=artifacts_root,
                 timeout_s=args.scenario_timeout_s,
+                gh_retries=args.gh_retries,
+                gh_backoff_s=args.gh_backoff_s,
             )
             results.append(result)
     finally:
