@@ -259,6 +259,8 @@ def test_create_temp_pr_stages_marker_from_markers_dir(monkeypatch, tmp_path: Pa
     ):
         del cwd, check
         calls.append(args)
+        if args[:3] == ["git", "check-ignore", "--quiet"]:
+            return module.CmdResult(code=1, out="", err="")
         if args[:4] == ["gh", "pr", "create", "--base"]:
             return module.CmdResult(code=0, out="https://example.test/pr/42", err="")
         if args[:3] == ["gh", "pr", "view"]:
@@ -281,3 +283,25 @@ def test_create_temp_pr_stages_marker_from_markers_dir(monkeypatch, tmp_path: Pa
     assert marker.exists()
     assert marker.parent.as_posix() == "scripts/e2e/_markers"
     assert ["git", "add", "--", marker.as_posix()] in calls
+
+
+def test_assert_marker_path_not_ignored(monkeypatch) -> None:
+    module = _load_module()
+    calls: list[list[str]] = []
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del cwd, check
+        calls.append(args)
+        if args[:3] == ["git", "check-ignore", "--quiet"]:
+            return module.CmdResult(code=1, out="", err="")
+        return module.CmdResult(code=0, out="", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    module._assert_marker_path_not_ignored(Path("scripts/e2e/_markers/e2e_marker_1.txt"))  # noqa: SLF001
+    assert ["git", "check-ignore", "--quiet", "scripts/e2e/_markers/e2e_marker_1.txt"] in calls

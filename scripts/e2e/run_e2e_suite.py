@@ -947,6 +947,18 @@ def _build_marker_file_path(timestamp: int | None = None) -> Path:
     return Path("scripts/e2e/_markers") / f"e2e_marker_{stamp}.txt"
 
 
+def _assert_marker_path_not_ignored(marker_file: Path) -> None:
+    check = run_cmd(
+        ["git", "check-ignore", "--quiet", marker_file.as_posix()],
+        check=False,
+    )
+    if check.code == 0:
+        raise RuntimeError(
+            "E2E marker path is ignored by .gitignore: "
+            f"{marker_file.as_posix()}. Use a non-ignored tracked path."
+        )
+
+
 def _build_scenarios(
     *,
     require_llm_used: bool,
@@ -1050,6 +1062,7 @@ def _build_scenarios(
 
 def _create_temp_pr(*, repo: str, default_branch: str, branch: str, marker_file: Path) -> tuple[str, str]:
     marker_file.parent.mkdir(parents=True, exist_ok=True)
+    _assert_marker_path_not_ignored(marker_file)
     marker_file.write_text(
         f"RepoBrain e2e marker: {_now_utc().isoformat()}\n",
         encoding="utf-8",
