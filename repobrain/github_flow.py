@@ -681,6 +681,13 @@ def _env_true(name: str, default: bool = False) -> bool:
     return env_bool(name, default)
 
 
+def _is_dispatch_e2e_simulation() -> bool:
+    return (
+        os.environ.get("GITHUB_EVENT_NAME", "").strip() == "workflow_dispatch"
+        and bool(os.environ.get("RB_E2E_COMMAND", "").strip())
+    )
+
+
 def _env_int(name: str, default: int) -> int:
     cfg = _runtime_env_cfg()
     mapping: dict[str, int] = {
@@ -722,6 +729,9 @@ def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
         "llm_used": False,
         "llm_skip_reason": reason,
         "llm_model_used": "not used",
+        "llm_primary_model_id": "not used",
+        "llm_effective_model_id": "not used",
+        "llm_fallback_used": False,
         "llm_tier": "n/a",
         "llm_tokens_prompt": 0,
         "llm_tokens_completion": 0,
@@ -744,6 +754,11 @@ def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
         "llm_dropped_hunks_count": 0,
         "llm_dropped_snippets_count": 0,
         "llm_ratelimit_headers": {},
+        "llm_provider_http_status": None,
+        "llm_provider_error_type": "n/a",
+        "llm_primary_status": None,
+        "llm_fallback_status": None,
+        "llm_error_types": [],
         "llm_calls": [call_entry],
         "llm_model_counts": {},
         # Backward-compatible aliases used by older formatting/tests.
@@ -762,6 +777,33 @@ def _merge_embeddings_meta(target: dict[str, Any], meta: dict[str, Any]) -> None
     for key, value in meta.items():
         if key.startswith("embed_"):
             target[key] = value
+
+
+def _is_fix_intent(cmd: str, intent: str) -> bool:
+    return cmd == "fix" or intent == "patch"
+
+
+def _alternate_model_id(primary_model: str, *, model_high: str, model_low: str) -> str:
+    primary = str(primary_model or "").strip()
+    if primary.lower() == model_high.lower():
+        return model_low
+    if primary.lower() == model_low.lower():
+        return model_high
+    if "mini" in primary.lower():
+        return model_high
+    return model_low
+
+
+def _is_retryable_llm_error(exc: GitHubModelsError) -> bool:
+    status_code = int(exc.status_code or 0)
+    if status_code in {429, 500, 502, 503, 504}:
+        return True
+    return exc.reason in {"network", "rate_limited", "server_error"}
+
+
+def _is_fallback_eligible_llm_error(exc: GitHubModelsError) -> bool:
+    status_code = int(exc.status_code or 0)
+    return exc.reason in {"network", "rate_limited", "server_error", "http_error"} or status_code > 0
 
 
 def _apply_remaining_fallback(llm_meta: dict[str, Any]) -> None:
@@ -870,6 +912,9 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "budget_action": str(llm_meta.get("llm_budget_action", "n/a") or "n/a"),
         "governor_reason": str(llm_meta.get("llm_governor_reason", "n/a") or "n/a"),
         "model_id": str(llm_meta.get("llm_model_used", "not used")),
+        "primary_model_id": str(llm_meta.get("llm_primary_model_id", "not used") or "not used"),
+        "effective_model_id": str(llm_meta.get("llm_effective_model_id", "not used") or "not used"),
+        "fallback_used": bool(llm_meta.get("llm_fallback_used", False)),
         "tier": str(llm_meta.get("llm_tier", "n/a")),
         "calls_this_run": int(llm_meta.get("llm_calls_this_run", 0) or 0),
         "tokens_prompt": int(llm_meta.get("llm_tokens_prompt", 0) or 0),
@@ -884,6 +929,8 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "remaining_requests": llm_meta.get("llm_remaining_requests", "n/a"),
         "remaining_is_estimate": bool(llm_meta.get("llm_remaining_is_estimate", True)),
         "reset_time_utc_iso": llm_meta.get("llm_reset_time_utc_iso"),
+        "provider_http_status": llm_meta.get("llm_provider_http_status"),
+        "provider_error_type": str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a"),
         "calls": calls,
         "totals": {
             "calls_count": len(calls),
@@ -998,45 +1045,112 @@ def _index_zip_has_embeddings(index_path: Path) -> bool:
         return False
 
 
+def _build_embeddings_runtime_truth(
+    *,
+    embeddings_enabled: bool,
+    vectors_meta: dict[str, Any],
+    embeddings_meta: dict[str, Any],
+    retrieval_runtime: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    retrieval = dict(retrieval_runtime or {})
+    chunks_with_vectors = int(
+        retrieval.get(
+            "chunks_with_vectors",
+            vectors_meta.get("chunks_embedded", embeddings_meta.get("embed_chunks_embedded", 0)),
+        )
+        or 0
+    )
+    query_embedded = bool(retrieval.get("query_embedded", embeddings_meta.get("embed_query_embedded", False)))
+    index_vectors_loaded = bool(retrieval.get("index_vectors_loaded", chunks_with_vectors > 0))
+    index_vectors_used = bool(retrieval.get("index_vectors_used", False))
+    embedding_model = str(
+        retrieval.get("embedding_model")
+        or embeddings_meta.get("embed_model_id")
+        or vectors_meta.get("model")
+        or "n/a"
+    )
+    reason = str(
+        retrieval.get("evidence_reason")
+        or embeddings_meta.get("embed_reason")
+        or vectors_meta.get("reason")
+        or "n/a"
+    )
+    status = str(vectors_meta.get("status", "UNKNOWN") or "UNKNOWN").upper()
+
+    if not embeddings_enabled:
+        status = "DISABLED"
+        reason = "embeddings_disabled"
+    elif query_embedded and index_vectors_loaded and index_vectors_used:
+        status = "OK"
+        reason = "index_vectors_used_for_hybrid_scoring"
+    elif query_embedded and not index_vectors_loaded:
+        status = "PARTIAL"
+        reason = "query_embedded_but_no_index_vectors"
+    elif query_embedded and index_vectors_loaded and not index_vectors_used:
+        status = "PARTIAL"
+        reason = "query_embedded_but_index_vectors_not_used"
+    elif str(embeddings_meta.get("embed_reason", "")).startswith("embed_error:"):
+        status = "UNKNOWN"
+        reason = "query_embedding_error"
+    elif status not in {"OK", "PARTIAL", "DISABLED", "UNKNOWN"}:
+        status = "UNKNOWN"
+        reason = "invalid_index_embeddings_status"
+    elif reason == "n/a":
+        if index_vectors_loaded:
+            reason = "query_embedding_not_available"
+        else:
+            reason = "index_vectors_not_loaded"
+
+    return {
+        "query_embedded": query_embedded,
+        "index_vectors_loaded": index_vectors_loaded,
+        "index_vectors_used": index_vectors_used,
+        "chunks_with_vectors": chunks_with_vectors,
+        "embedding_model": embedding_model,
+        "evidence_reason": reason,
+        "status": status,
+    }
+
+
 def _build_index_embeddings_evidence_payload(
     *,
     index_path: Path,
     vectors_meta: dict[str, Any],
     embeddings_meta: dict[str, Any],
     index_vectors_used: bool,
+    embeddings_runtime: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    chunks = int(
-        vectors_meta.get(
-            "chunks_embedded",
-            embeddings_meta.get("embed_chunks_embedded", 0),
-        )
-        or 0
+    runtime_truth = _build_embeddings_runtime_truth(
+        embeddings_enabled=bool(_embeddings_enabled()),
+        vectors_meta=vectors_meta,
+        embeddings_meta=embeddings_meta,
+        retrieval_runtime=embeddings_runtime,
     )
-    query_embedded = bool(embeddings_meta.get("embed_query_embedded", False))
-    vectors_available = chunks > 0
-    status = str(vectors_meta.get("status", "UNKNOWN") or "UNKNOWN").upper()
-    reason = str(vectors_meta.get("reason", "n/a") or "n/a")
-    if index_vectors_used:
+    status = str(runtime_truth.get("status", "UNKNOWN") or "UNKNOWN").upper()
+    reason = str(runtime_truth.get("evidence_reason", "n/a") or "n/a")
+    model = str(runtime_truth.get("embedding_model", "n/a") or "n/a")
+    chunks = int(runtime_truth.get("chunks_with_vectors", 0) or 0)
+    query_embedded = bool(runtime_truth.get("query_embedded", False))
+    vectors_available = bool(runtime_truth.get("index_vectors_loaded", False))
+    vectors_used = bool(runtime_truth.get("index_vectors_used", False) or index_vectors_used)
+
+    if vectors_used:
         status = "OK"
         reason = "index_vectors_used_for_hybrid_scoring"
-    elif query_embedded and vectors_available:
+    elif query_embedded and not vectors_available:
+        status = "PARTIAL"
+        reason = "query_embedded_but_no_index_vectors"
+    elif query_embedded and vectors_available and status == "DISABLED":
         status = "PARTIAL"
         reason = "query_embedded_but_index_vectors_not_used"
-    elif query_embedded and not vectors_available:
-        status = "DISABLED"
-        reason = "query_embedded_but_index_vectors_missing"
-    elif status not in {"OK", "PARTIAL", "DISABLED", "UNKNOWN"}:
-        status = "UNKNOWN"
-        reason = "invalid_index_embeddings_status"
-    elif reason == "n/a":
-        reason = "query_embedding_not_available"
 
-    model = str(vectors_meta.get("model", "") or embeddings_meta.get("embed_model_id", "") or "n/a")
     file_present = _index_zip_has_embeddings(index_path)
     return {
         "status": status,
         "reason": reason,
-        "index_vectors_used": bool(index_vectors_used),
+        "query_embedded": query_embedded,
+        "index_vectors_loaded": vectors_available,
+        "index_vectors_used": vectors_used,
         "embeddings_file_present_in_zip": file_present,
         "model": model,
         "chunks_with_vectors": chunks,
@@ -1061,6 +1175,34 @@ def _write_patch_generation_debug(repo_root: Path, payload: dict[str, Any]) -> P
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
+
+
+def _write_llm_http_debug(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "llm_http_debug.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _build_llm_http_debug_payload(*, llm_meta: dict[str, Any], decision_route: str) -> dict[str, Any]:
+    return {
+        "intent": "patch",
+        "primary_model": str(llm_meta.get("llm_primary_model_id", "n/a") or "n/a"),
+        "fallback_model": (
+            str(llm_meta.get("llm_effective_model_id", "n/a") or "n/a")
+            if bool(llm_meta.get("llm_fallback_used", False))
+            else "n/a"
+        ),
+        "primary_status": llm_meta.get("llm_primary_status"),
+        "fallback_status": llm_meta.get("llm_fallback_status"),
+        "provider_http_status": llm_meta.get("llm_provider_http_status"),
+        "provider_error_type": str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a"),
+        "error_types": list(llm_meta.get("llm_error_types", []))
+        if isinstance(llm_meta.get("llm_error_types", []), list)
+        else [],
+        "decision_route": str(decision_route or "n/a"),
+        "llm_skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
+    }
 
 
 def _build_ai_quota_snapshot_payload(
@@ -1586,18 +1728,65 @@ def _maybe_generate_llm_text(
         if decision.budget_action != "n/a":
             governor_action = decision.budget_action
     client = GitHubModelsClient(token=token)
+    primary_model_id = model_id
+    effective_model_id = model_id
+    fallback_model_id = _alternate_model_id(model_id, model_high=model_high, model_low=model_low)
+    fallback_used = False
+    is_fix_path = _is_fix_intent(cmd, intent)
+    primary_status: int | None = None
+    fallback_status: int | None = None
+    error_types: list[str] = []
+    response = None
+    final_exc: GitHubModelsError | None = None
+
+    def _attempt_model(call_model_id: str, *, retry_count: int) -> Any:
+        failures = 0
+        while True:
+            try:
+                return client.chat(
+                    model_id=call_model_id,
+                    messages=messages,
+                    max_tokens=max_output_tokens,
+                    temperature=0.1,
+                    stream=False,
+                )
+            except GitHubModelsError as exc:
+                nonlocal primary_status, fallback_status
+                if call_model_id == primary_model_id:
+                    primary_status = exc.status_code
+                else:
+                    fallback_status = exc.status_code
+                error_types.append(str(exc.reason or "unknown"))
+                if failures >= retry_count or not _is_retryable_llm_error(exc):
+                    raise
+                failures += 1
+                # Retries are only for transient provider/network failures.
+                time.sleep(float(2 ** failures))
+
     try:
-        response = client.chat(
-            model_id=model_id,
-            messages=messages,
-            max_tokens=max_output_tokens,
-            temperature=0.1,
-            stream=False,
-        )
+        response = _attempt_model(primary_model_id, retry_count=3 if is_fix_path else 0)
     except GitHubModelsError as exc:
-        llm_meta = _llm_default_meta(f"LLM_NOT_AVAILABLE:{exc.reason}")
+        final_exc = exc
+        if is_fix_path and _is_fallback_eligible_llm_error(exc):
+            alt_model = str(fallback_model_id or "").strip()
+            if alt_model and alt_model.lower() != primary_model_id.lower():
+                fallback_used = True
+                effective_model_id = alt_model
+                try:
+                    response = _attempt_model(alt_model, retry_count=0)
+                    tier = "low" if "mini" in alt_model.lower() else "high"
+                except GitHubModelsError as fallback_exc:
+                    final_exc = fallback_exc
+
+    if response is None or final_exc is not None and not fallback_used:
+        active_error = final_exc if final_exc is not None else GitHubModelsError("unknown", reason="unknown")
+        provider_status = fallback_status if fallback_used else primary_status
+        llm_meta = _llm_default_meta(f"LLM_NOT_AVAILABLE:{active_error.reason}")
         llm_meta["llm_decision_route"] = normalized_route or "n/a"
-        llm_meta["llm_model_used"] = model_id
+        llm_meta["llm_model_used"] = effective_model_id if fallback_used else primary_model_id
+        llm_meta["llm_primary_model_id"] = primary_model_id
+        llm_meta["llm_effective_model_id"] = effective_model_id if fallback_used else primary_model_id
+        llm_meta["llm_fallback_used"] = bool(fallback_used)
         llm_meta["llm_tier"] = tier
         llm_meta["llm_budget_action"] = governor_action
         llm_meta["llm_governor_reason"] = governor_reason
@@ -1618,12 +1807,17 @@ def _maybe_generate_llm_text(
         llm_meta["llm_dropped_snippets_count"] = int(
             budgeting_stats.get("dropped_snippets_count", 0) or 0
         )
+        llm_meta["llm_provider_http_status"] = provider_status
+        llm_meta["llm_provider_error_type"] = str(active_error.reason or "unknown")
+        llm_meta["llm_primary_status"] = primary_status
+        llm_meta["llm_fallback_status"] = fallback_status
+        llm_meta["llm_error_types"] = list(dict.fromkeys(error_types))
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         llm_meta["llm_calls"] = [
             _compact_usage_call(
                 batch_id="single",
-                model_id=model_id,
+                model_id=str(llm_meta.get("llm_effective_model_id", primary_model_id)),
                 tier=tier,
                 tokens_prompt=0,
                 tokens_completion=0,
@@ -1642,6 +1836,9 @@ def _maybe_generate_llm_text(
         "llm_skip_reason": "n/a",
         "llm_decision_route": normalized_route or "n/a",
         "llm_model_used": response.model_id,
+        "llm_primary_model_id": primary_model_id,
+        "llm_effective_model_id": response.model_id,
+        "llm_fallback_used": bool(fallback_used),
         "llm_tier": tier,
         "llm_budget_action": governor_action,
         "llm_governor_reason": governor_reason,
@@ -1669,6 +1866,13 @@ def _maybe_generate_llm_text(
         "llm_dropped_hunks_count": int(budgeting_stats.get("dropped_hunks_count", 0) or 0),
         "llm_dropped_snippets_count": int(budgeting_stats.get("dropped_snippets_count", 0) or 0),
         "llm_ratelimit_headers": dict(response.ratelimit_headers),
+        "llm_provider_http_status": primary_status if fallback_used else None,
+        "llm_provider_error_type": (
+            error_types[-1] if fallback_used and error_types else "n/a"
+        ),
+        "llm_primary_status": primary_status,
+        "llm_fallback_status": fallback_status,
+        "llm_error_types": list(dict.fromkeys(error_types)),
     }
     if governor is not None:
         governor.observe_llm_signal(
@@ -2740,7 +2944,7 @@ def _selection_policy_for_candidates(
     }
 
 
-def _retrieve_candidates(
+def _retrieve_candidates_with_runtime(
     question: str,
     chunks: list[CandidateChunk],
     *,
@@ -2748,7 +2952,7 @@ def _retrieve_candidates(
     cmd: str,
     chunk_vectors_by_id: dict[str, list[float]] | None = None,
     query_vector: list[float] | None = None,
-) -> list[CandidateChunk]:
+) -> tuple[list[CandidateChunk], dict[str, Any]]:
     vectors = chunk_vectors_by_id or {}
     if vectors and query_vector:
         env_cfg = _runtime_env_cfg()
@@ -2772,11 +2976,49 @@ def _retrieve_candidates(
             vector_topk=vector_topk,
             max_per_file=2,
         )
-        return hybrid.candidates
+        return hybrid.candidates, {
+            "retrieval_mode": "hybrid",
+            "query_embedded": True,
+            "index_vectors_loaded": True,
+            "index_vectors_used": bool(hybrid.embeddings_used),
+            "chunks_with_vectors": len(vectors),
+            "evidence_reason": str(hybrid.reason or "n/a"),
+            "vector_topk_used": int(hybrid.vector_topk),
+        }
 
     if cmd == "ask":
-        return retrieve_topk(question, chunks, topk=topk)
-    return retrieve_topk_pro(question, chunks, topk=topk, task_type=cmd, max_per_file=2)
+        candidates = retrieve_topk(question, chunks, topk=topk)
+    else:
+        candidates = retrieve_topk_pro(question, chunks, topk=topk, task_type=cmd, max_per_file=2)
+    return candidates, {
+        "retrieval_mode": "lexical",
+        "query_embedded": bool(query_vector),
+        "index_vectors_loaded": bool(vectors),
+        "index_vectors_used": False,
+        "chunks_with_vectors": len(vectors),
+        "evidence_reason": "query_vector_missing" if not query_vector else "index_vectors_not_loaded",
+        "vector_topk_used": 0,
+    }
+
+
+def _retrieve_candidates(
+    question: str,
+    chunks: list[CandidateChunk],
+    *,
+    topk: int,
+    cmd: str,
+    chunk_vectors_by_id: dict[str, list[float]] | None = None,
+    query_vector: list[float] | None = None,
+) -> list[CandidateChunk]:
+    candidates, _ = _retrieve_candidates_with_runtime(
+        question,
+        chunks,
+        topk=topk,
+        cmd=cmd,
+        chunk_vectors_by_id=chunk_vectors_by_id,
+        query_vector=query_vector,
+    )
+    return candidates
 
 
 def retrieve_topk(
@@ -2960,7 +3202,7 @@ def run_qa_two_pass(
     perf_max_paths = int(getattr(cfg, "tky_perf_max_paths", 4096))
     active_provider = provider
     t0 = time.perf_counter()
-    pass1_candidates = _retrieve_candidates(
+    pass1_candidates, pass1_retrieval_runtime = _retrieve_candidates_with_runtime(
         question,
         chunks,
         topk=topk_fast,
@@ -3011,6 +3253,7 @@ def run_qa_two_pass(
 
     final_result = result1
     final_meta = dict(pass1_meta)
+    final_retrieval_runtime = dict(pass1_retrieval_runtime)
     pass_count = 1
     pass2_top_score: float | None = None
 
@@ -3033,7 +3276,7 @@ def run_qa_two_pass(
     )
     if should_second_pass:
         t0 = time.perf_counter()
-        pass2_candidates = _retrieve_candidates(
+        pass2_candidates, pass2_retrieval_runtime = _retrieve_candidates_with_runtime(
             question,
             chunks,
             topk=topk_deep,
@@ -3082,6 +3325,7 @@ def run_qa_two_pass(
         if timings_ms is not None:
             timings_ms["tky_pass2"] = round((time.perf_counter() - t0) * 1000.0, 3)
         final_meta.update(pass2_meta)
+        final_retrieval_runtime = dict(pass2_retrieval_runtime)
         pass_count = 2
 
     final_route = _canonical_route(final_result.tky.route)
@@ -3107,6 +3351,27 @@ def run_qa_two_pass(
     if pass2_top_score is not None:
         audit_extra["pass2.top_score"] = round(pass2_top_score, 6)
         audit_extra["top_score_pass2"] = round(pass2_top_score, 6)
+    query_embedded = bool(query_vector)
+    vectors_loaded = bool(chunk_vectors_by_id)
+    chunks_with_vectors = len(chunk_vectors_by_id or {})
+    runtime_reason = str(final_retrieval_runtime.get("evidence_reason", "n/a") or "n/a")
+    index_vectors_used = bool(final_retrieval_runtime.get("index_vectors_used", False))
+    if query_embedded and vectors_loaded and index_vectors_used:
+        runtime_reason = "index_vectors_used_for_hybrid_scoring"
+    elif query_embedded and not vectors_loaded:
+        runtime_reason = "query_embedded_but_no_index_vectors"
+    elif query_embedded and vectors_loaded and not index_vectors_used:
+        runtime_reason = "query_embedded_but_index_vectors_not_used"
+    embeddings_runtime = {
+        "query_embedded": query_embedded,
+        "index_vectors_loaded": bool(final_retrieval_runtime.get("index_vectors_loaded", vectors_loaded)),
+        "index_vectors_used": index_vectors_used,
+        "chunks_with_vectors": int(final_retrieval_runtime.get("chunks_with_vectors", chunks_with_vectors) or 0),
+        "embedding_model": "n/a",
+        "evidence_reason": runtime_reason,
+    }
+    audit_extra["embeddings_runtime"] = embeddings_runtime
+    audit_extra["index_vectors_used"] = bool(embeddings_runtime["index_vectors_used"])
     audit_extra["rd"] = _extract_rd_summary_from_result(final_result)
 
     if tky_mode_requested == "remote":
@@ -3239,42 +3504,9 @@ def _build_qa_markdown(
     if not query_vector:
         embeddings_meta["embed_chunks_embedded"] = chunks_embedded_count
         embeddings_meta["embed_query_embedded"] = False
-    index_vectors_available = chunks_embedded_count > 0
-    index_vectors_used = bool(query_vector) and index_vectors_available
     index_embeddings_model = str(vectors_meta.get("model", "") or "")
     index_embeddings_dim = int(vectors_meta.get("dim", 0) or 0)
-    index_embeddings_status = str(vectors_meta.get("status", "UNKNOWN") or "UNKNOWN").upper()
-    index_embeddings_reason = str(vectors_meta.get("reason", "n/a") or "n/a")
-    if index_vectors_used:
-        index_embeddings_status = "OK"
-        index_embeddings_reason = "index_vectors_used_for_hybrid_scoring"
-    elif bool(embeddings_meta.get("embed_query_embedded", False)) and index_vectors_available:
-        index_embeddings_status = "PARTIAL"
-        index_embeddings_reason = "query_embedded_but_index_vectors_not_used"
-    elif bool(embeddings_meta.get("embed_query_embedded", False)) and not index_vectors_available:
-        index_embeddings_status = "DISABLED"
-        index_embeddings_reason = "query_embedded_but_index_vectors_missing"
-    elif index_embeddings_status not in {"OK", "PARTIAL", "DISABLED", "UNKNOWN"}:
-        index_embeddings_status = "UNKNOWN"
-        index_embeddings_reason = "invalid_index_embeddings_status"
-    elif index_embeddings_reason == "n/a":
-        index_embeddings_reason = "query_embedding_not_available"
-
-    is_dispatch_e2e = (
-        os.environ.get("GITHUB_EVENT_NAME", "").strip() == "workflow_dispatch"
-        and bool(os.environ.get("RB_E2E_COMMAND", "").strip())
-    )
-    if _embeddings_enabled() and is_dispatch_e2e:
-        evidence_payload = _build_index_embeddings_evidence_payload(
-            index_path=index_path,
-            vectors_meta=vectors_meta,
-            embeddings_meta=embeddings_meta,
-            index_vectors_used=index_vectors_used,
-        )
-        evidence_path = _write_index_embeddings_evidence(resolved_repo_root, evidence_payload)
-        if audit is not None:
-            audit["index_embeddings_evidence_artifact"] = evidence_path.as_posix()
-            audit["index_embeddings_evidence"] = dict(evidence_payload)
+    is_dispatch_e2e = _is_dispatch_e2e_simulation()
     if audit is not None:
         audit["index_source"] = index_source
         add_timing(audit, "index_load_build", index_elapsed_ms)
@@ -3291,8 +3523,6 @@ def _build_qa_markdown(
         audit["tky_mode_used"] = effective_tky_mode
         audit["embed_index_model"] = index_embeddings_model or "n/a"
         audit["embed_index_dim"] = index_embeddings_dim
-        audit["embed_index_status"] = index_embeddings_status
-        audit["embed_index_reason"] = index_embeddings_reason
     print(
         "CONFIG: "
         f"loaded={bool(getattr(cfg, 'config_loaded', False))} "
@@ -3342,6 +3572,21 @@ def _build_qa_markdown(
     if "tky_engine" not in audit_summary:
         audit_summary["tky_engine"] = _provider_engine_name(provider)
     audit_summary.update(embeddings_meta)
+    retrieval_runtime = loop_audit.get("embeddings_runtime", {})
+    if not isinstance(retrieval_runtime, dict):
+        retrieval_runtime = {}
+    retrieval_runtime = dict(retrieval_runtime)
+    retrieval_runtime.setdefault("embedding_model", str(embeddings_meta.get("embed_model_id", "") or "n/a"))
+    embeddings_runtime = _build_embeddings_runtime_truth(
+        embeddings_enabled=bool(_embeddings_enabled()),
+        vectors_meta=vectors_meta,
+        embeddings_meta=embeddings_meta,
+        retrieval_runtime=retrieval_runtime,
+    )
+    index_vectors_used = bool(embeddings_runtime.get("index_vectors_used", False))
+    index_embeddings_status = str(embeddings_runtime.get("status", "UNKNOWN") or "UNKNOWN").upper()
+    index_embeddings_reason = str(embeddings_runtime.get("evidence_reason", "n/a") or "n/a")
+
     audit_summary["embed_index_model"] = index_embeddings_model or "n/a"
     audit_summary["embed_index_dim"] = index_embeddings_dim
     audit_summary["embed_index_status"] = index_embeddings_status
@@ -3349,8 +3594,21 @@ def _build_qa_markdown(
     audit_summary["index_vectors_used"] = index_vectors_used
     audit_summary["embeddings_index_status"] = index_embeddings_status
     audit_summary["embeddings_index_reason"] = index_embeddings_reason
+    audit_summary["embeddings_runtime"] = dict(embeddings_runtime)
     if is_dispatch_e2e and _embeddings_enabled():
+        evidence_payload = _build_index_embeddings_evidence_payload(
+            index_path=index_path,
+            vectors_meta=vectors_meta,
+            embeddings_meta=embeddings_meta,
+            index_vectors_used=index_vectors_used,
+            embeddings_runtime=embeddings_runtime,
+        )
+        evidence_path = _write_index_embeddings_evidence(resolved_repo_root, evidence_payload)
         audit_summary["index_embeddings_evidence_artifact"] = "artifacts/index_embeddings_evidence.json"
+        audit_summary["index_embeddings_evidence"] = dict(evidence_payload)
+        if audit is not None:
+            audit["index_embeddings_evidence_artifact"] = evidence_path.as_posix()
+            audit["index_embeddings_evidence"] = dict(evidence_payload)
     if not audit_summary.get("embed_model_id"):
         audit_summary["embed_model_id"] = _embeddings_model()
     if "embed_used" not in audit_summary:
@@ -3431,6 +3689,7 @@ def _build_qa_markdown(
         audit["index_vectors_used"] = index_vectors_used
         audit["embeddings_index_status"] = index_embeddings_status
         audit["embeddings_index_reason"] = index_embeddings_reason
+        audit["embeddings_runtime"] = dict(embeddings_runtime)
         audit["embeddings_usage_payload"] = _build_embeddings_usage_payload(embeddings_meta)
 
     t0 = time.perf_counter()
@@ -3734,6 +3993,18 @@ def _build_review_markdown(
         if llm_text:
             review["summary_text"] = llm_text
     _merge_llm_meta(audit_summary, llm_meta)
+    llm_http_debug_payload: dict[str, Any] | None = None
+    if (
+        cmd == "fix"
+        and not bool(llm_meta.get("llm_used", False))
+        and os.environ.get("GITHUB_EVENT_NAME", "").strip() == "workflow_dispatch"
+    ):
+        llm_http_debug_payload = _build_llm_http_debug_payload(
+            llm_meta=llm_meta,
+            decision_route=str(audit_summary.get("route_final", "n/a") or "n/a"),
+        )
+        llm_http_debug_path = _write_llm_http_debug(repo_root, llm_http_debug_payload)
+        audit_summary["llm_http_debug_artifact"] = llm_http_debug_path.as_posix()
     model_counts = llm_meta.get("llm_model_counts", {})
     if isinstance(model_counts, dict):
         model_counts_str = ", ".join(
@@ -3872,9 +4143,13 @@ def _build_review_markdown(
             "reason": "diff_not_found_in_engine_or_llm_output",
             "llm_used": bool(llm_meta.get("llm_used", False)),
             "model": str(llm_meta.get("llm_model_used", "n/a") or "n/a"),
+            "effective_model_id": str(llm_meta.get("llm_effective_model_id", "n/a") or "n/a"),
+            "fallback_used": bool(llm_meta.get("llm_fallback_used", False)),
             "llm_skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
             "decision_route": str(audit_summary.get("route_final", "n/a") or "n/a"),
             "governor_reason": str(llm_meta.get("llm_governor_reason", "n/a") or "n/a"),
+            "provider_http_status": llm_meta.get("llm_provider_http_status"),
+            "provider_error_type": str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a"),
             "extracted_len": len(str(patch_text or "").strip()),
             "found_fenced_diff": bool(found_fenced_diff),
             "found_raw_diff": bool(found_raw_diff),
@@ -3931,6 +4206,9 @@ def _build_review_markdown(
         if patch_debug_payload is not None:
             audit["patch_generation_debug"] = dict(patch_debug_payload)
             audit["patch_generation_debug_artifact"] = "artifacts/patch_generation_debug.json"
+        if llm_http_debug_payload is not None:
+            audit["llm_http_debug"] = dict(llm_http_debug_payload)
+            audit["llm_http_debug_artifact"] = "artifacts/llm_http_debug.json"
         _merge_llm_meta(audit, llm_meta)
         audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
     return body

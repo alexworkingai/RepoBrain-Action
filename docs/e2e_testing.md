@@ -19,7 +19,12 @@ The harness uses only `workflow_dispatch --ref <branch>` simulation (no `issue_c
    Required: `llm_usage.json`, `llm_used=true`, model/tokens/remaining/reset fields.
 3. `embeddings_warmup_dispatch`
 4. `embeddings_used_dispatch`  
-   Required: `embeddings_usage.json`, `embed_used=true`, `query_embedded=true`, remaining/reset fields, and index embeddings evidence (`index/embeddings.jsonl` in zip OR `index_embeddings_evidence.json` with status `OK|PARTIAL`).
+   Required: `embeddings_usage.json`, `embed_used=true`, `query_embedded=true`, remaining/reset fields, and runtime-truth embeddings evidence (`index_embeddings_evidence.json` with status `OK|PARTIAL`).
+   Semantics:
+   - `OK`: query embedding + loaded index vectors + vectors used in hybrid scoring.
+   - `PARTIAL`: query embedding works, but index vectors were unavailable or not used.
+   - `DISABLED`: embeddings disabled in this run.
+   - `UNKNOWN`: internal embedding error (usersafe reason is included).
 5. `fix_patch_required_dispatch`  
    Required: `patch.diff` or `patch_parts/*.diff`.
 6. `batch_llm_dispatch`  
@@ -54,6 +59,7 @@ Patch generation notes:
 
 - Fix prompts enforce diff-only output (` ```diff ... ``` ` or raw unified diff).
 - If no diff is extracted, RepoBrain writes `artifacts/patch_generation_debug.json` for usersafe diagnostics.
+- If fix LLM fails in `workflow_dispatch`, RepoBrain writes `artifacts/llm_http_debug.json` with usersafe provider diagnostics (`status/error type`, no prompt/code/secrets).
 
 ## PASS/FAIL interpretation
 

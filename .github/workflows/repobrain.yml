@@ -238,6 +238,13 @@ jobs:
           name: repobrain-patch-generation-debug
           path: artifacts/patch_generation_debug.json
           if-no-files-found: ignore
+      - name: Upload RepoBrain LLM HTTP debug artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-llm-http-debug
+          path: artifacts/llm_http_debug.json
+          if-no-files-found: ignore
       - name: Upload RepoBrain verification artifact
         if: always()
         uses: actions/upload-artifact@v4

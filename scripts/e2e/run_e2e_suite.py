@@ -427,6 +427,11 @@ def validate_artifacts(
             pass_note("llm_usage.json contains remaining_requests")
         else:
             fail("llm_usage.json is missing remaining_requests")
+    llm_http_debug_payload: dict[str, Any] = {}
+    llm_http_debug_path = _find_first(artifacts_root, "llm_http_debug.json")
+    if llm_http_debug_path is not None:
+        llm_http_debug_payload = _load_json(llm_http_debug_path)
+        notes.append("INFO: llm_http_debug.json present")
 
     embed_payload: dict[str, Any] = {}
     embed_path = _find_first(artifacts_root, "embeddings_usage.json")
@@ -522,19 +527,33 @@ def validate_artifacts(
             debug_path = _find_first(artifacts_root, "patch_generation_debug.json")
             llm_skip_reason = str(llm_payload.get("skip_reason", "n/a") or "n/a")
             llm_route = str(llm_payload.get("decision_route", "n/a") or "n/a")
+            provider_http_status = llm_http_debug_payload.get(
+                "provider_http_status",
+                llm_payload.get("provider_http_status"),
+            )
+            provider_error_type = str(
+                llm_http_debug_payload.get(
+                    "provider_error_type",
+                    llm_payload.get("provider_error_type", "n/a"),
+                )
+                or "n/a"
+            )
+            provider_diag = (
+                f", provider_http_status={provider_http_status}, provider_error_type={provider_error_type}"
+            )
             if debug_path is not None:
                 debug_payload = _load_json(debug_path)
                 debug_reason = str(debug_payload.get("reason", "n/a") or "n/a")
                 fail(
                     "patch artifact missing: expected patch.diff or patch_parts/*.diff "
                     f"(llm_skip_reason={llm_skip_reason}, route={llm_route}, "
-                    f"patch_debug_reason={debug_reason})"
+                    f"patch_debug_reason={debug_reason}{provider_diag})"
                 )
             else:
                 fail(
                     "patch artifact missing: expected patch.diff or patch_parts/*.diff "
                     f"(llm_skip_reason={llm_skip_reason}, route={llm_route}, "
-                    "patch_generation_debug.json missing)"
+                    f"patch_generation_debug.json missing{provider_diag})"
                 )
 
     if requirements.require_batch_calls_min > 0:

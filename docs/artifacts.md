@@ -90,7 +90,9 @@ When review/fix verification runs:
 - `artifacts/patch_parts/*.diff` stores per-batch patch parts when batch LLM fix mode is enabled
 - `artifacts/check_run_payload.json` is written when PR check payload is prepared
 - `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
+- `artifacts/llm_http_debug.json` is written for workflow_dispatch fix failures with usersafe provider diagnostics
 - `artifacts/embeddings_usage.json` is written when embeddings are enabled
+- `artifacts/index_embeddings_evidence.json` is written in workflow_dispatch simulation when embeddings are enabled (runtime truth)
 - `artifacts/batch_summaries.json` stores usersafe map-stage summaries for batch runs
 - `artifacts/ai_quota_snapshot.json` is always written at flow end (usersafe governor summary)
 - `artifacts/config_snapshot.json` is always written at flow end (usersafe effective RB config)
@@ -100,6 +102,8 @@ When review/fix verification runs:
 - `date_utc`
 - `llm_used`, `skip_reason`
 - `model_id`, `tier`
+- `primary_model_id`, `effective_model_id`, `fallback_used`
+- `provider_http_status`, `provider_error_type`
 - `calls_this_run`
 - `tokens_prompt`, `tokens_completion`, `tokens_total`
 - `max_output_tokens_used`
@@ -113,6 +117,23 @@ When review/fix verification runs:
 - `totals` (`calls_count`, token totals)
 - `model_counts` (model -> call count)
 - `final_remaining_requests`, `final_reset_time_utc_iso`
+
+`artifacts/llm_http_debug.json` (usersafe) includes:
+
+- `intent` (`patch`)
+- `primary_model`, `fallback_model`
+- `primary_status`, `fallback_status`
+- `provider_http_status`, `provider_error_type`
+- `error_types`
+- `decision_route`, `llm_skip_reason`
+
+`artifacts/index_embeddings_evidence.json` (usersafe) includes:
+
+- `status`: `OK|PARTIAL|DISABLED|UNKNOWN`
+- `reason` (runtime-truth reason, usersafe)
+- `query_embedded`, `index_vectors_loaded`, `index_vectors_used`
+- `chunks_with_vectors`, `model`
+- `embeddings_file_present_in_zip` (supplementary only; does not override runtime truth)
 
 `artifacts/embeddings_usage.json` (usersafe) includes:
 

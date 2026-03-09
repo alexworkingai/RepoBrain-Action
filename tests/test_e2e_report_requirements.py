@@ -142,9 +142,19 @@ def test_validate_artifacts_patch_missing_shows_debug_reason(tmp_path: Path) -> 
             "decision_route": "WAIT",
         },
     )
+    _write_json(
+        tmp_path / "llm_http_debug.json",
+        {
+            "provider_http_status": 503,
+            "provider_error_type": "server_error",
+            "decision_route": "WAIT",
+            "llm_skip_reason": "route=WAIT",
+        },
+    )
     requirements = module.ScenarioRequirements(require_patch=True)
 
     status, notes = module.validate_artifacts("fix_patch_required_dispatch", tmp_path, requirements)
 
     assert status == "FAIL"
     assert any("patch_debug_reason=diff_not_found_in_engine_or_llm_output" in note for note in notes)
+    assert any("provider_error_type=server_error" in note for note in notes)
