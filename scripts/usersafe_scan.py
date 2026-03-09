@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import re
 
@@ -52,7 +53,21 @@ def scan_paths(paths: list[Path] | None = None) -> list[str]:
 
 
 def main() -> int:
-    issues = scan_paths()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("paths", nargs="*", help="Optional files/directories to scan.")
+    args = parser.parse_args()
+    scan_list: list[Path] | None = None
+    if args.paths:
+        scan_list = []
+        for raw in args.paths:
+            path = Path(raw)
+            if path.is_dir():
+                for item in path.rglob("*"):
+                    if item.is_file():
+                        scan_list.append(item)
+            else:
+                scan_list.append(path)
+    issues = scan_paths(scan_list)
     if issues:
         for item in issues:
             print(item)
