@@ -35,6 +35,11 @@ on:
         required: false
         default: false
         type: boolean
+      batch_force:
+        description: "Force batch LLM path for workflow_dispatch run"
+        required: false
+        default: false
+        type: boolean
       trusted_context:
         description: "Enable trusted_context for workflow_dispatch run"
         required: false
@@ -122,6 +127,7 @@ jobs:
           echo "RB_LLM_PROVIDER=github_models" >> $GITHUB_ENV
           echo "RB_EMBED_ENABLED=${{ inputs.enable_embeddings && '1' || '0' }}" >> $GITHUB_ENV
           echo "RB_LLM_BATCH_ENABLE=${{ inputs.enable_batch_llm && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_LLM_BATCH_FORCE=${{ inputs.batch_force && '1' || '0' }}" >> $GITHUB_ENV
           echo "RB_TRUSTED_CONTEXT=${{ inputs.trusted_context && '1' || '0' }}" >> $GITHUB_ENV
           echo "RB_ALLOW_DYNAMIC_VERIFY=${{ inputs.allow_dynamic_verify && '1' || '0' }}" >> $GITHUB_ENV
           echo "RB_APPLY_PATCH=${{ inputs.apply_patch && '1' || '0' }}" >> $GITHUB_ENV
@@ -225,6 +231,13 @@ jobs:
           name: repobrain-patch-parts
           path: artifacts/patch_parts/*
           if-no-files-found: ignore
+      - name: Upload RepoBrain patch generation debug artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-patch-generation-debug
+          path: artifacts/patch_generation_debug.json
+          if-no-files-found: ignore
       - name: Upload RepoBrain verification artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -259,6 +272,13 @@ jobs:
         with:
           name: repobrain-embeddings-usage
           path: artifacts/embeddings_usage.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain embeddings evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-index-embeddings-evidence
+          path: artifacts/index_embeddings_evidence.json
           if-no-files-found: ignore
       - name: Upload RepoBrain AI quota snapshot artifact
         if: always()

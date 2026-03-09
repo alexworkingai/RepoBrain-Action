@@ -26,6 +26,7 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_INDEX_CACHE_RESTORED` | bool | `0` | - | Mark index cache hit from workflow. |
 | `RB_LLM_ALLOW_LOCATE` | bool | `0` | - | Allow LLM for locate command. |
 | `RB_LLM_BATCH_ENABLE` | bool | `0` | - | Enable batch map-reduce LLM mode. |
+| `RB_LLM_BATCH_FORCE` | bool | `0` | - | Force batch mode for review/fix in controlled runs. |
 | `RB_LLM_BATCH_MAX_CALLS_PER_RUN` | int | `6` | 1..100 | Batch LLM call cap per run. |
 | `RB_LLM_BATCH_REDUCE_ENABLE` | bool | `1` | - | Enable reduce step in batch mode. |
 | `RB_LLM_BATCH_REDUCE_MODEL` | str | `` | - | Optional override model for reduce step. |

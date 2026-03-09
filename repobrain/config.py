@@ -217,6 +217,7 @@ class EmbeddingsConfig:
 @dataclass(frozen=True)
 class BatchConfig:
     enabled: bool = False
+    force: bool = False
     max_calls_per_run: int = 6
     reduce_enable: bool = True
     reduce_model: str = ""
@@ -400,6 +401,7 @@ class RepoBrainConfig:
         )
         batch = BatchConfig(
             enabled=env_bool("RB_LLM_BATCH_ENABLE", False, source=env_source, warnings=warnings),
+            force=env_bool("RB_LLM_BATCH_FORCE", False, source=env_source, warnings=warnings),
             max_calls_per_run=env_int(
                 "RB_LLM_BATCH_MAX_CALLS_PER_RUN",
                 6,
@@ -744,6 +746,7 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_FIX", "int", "2000", "Fix max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_ALLOW_LOCATE", "bool", "0", "Allow LLM for locate command."),
     EnvVarSpec("RB_LLM_BATCH_ENABLE", "bool", "0", "Enable batch map-reduce LLM mode."),
+    EnvVarSpec("RB_LLM_BATCH_FORCE", "bool", "0", "Force batch mode for review/fix in controlled runs."),
     EnvVarSpec("RB_LLM_BATCH_MAX_CALLS_PER_RUN", "int", "6", "Batch LLM call cap per run.", min_value=1, max_value=100),
     EnvVarSpec("RB_LLM_BATCH_REDUCE_ENABLE", "bool", "1", "Enable reduce step in batch mode."),
     EnvVarSpec("RB_LLM_BATCH_REDUCE_MODEL", "str", "", "Optional override model for reduce step."),

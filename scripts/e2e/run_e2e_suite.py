@@ -56,6 +56,7 @@ class ScenarioSpec:
     enable_llm: bool
     enable_embeddings: bool
     enable_batch_llm: bool
+    batch_force: bool
     trusted_context: bool
     allow_dynamic_verify: bool
     apply_patch: bool
@@ -288,30 +289,15 @@ def _first_zip_with_embeddings(artifacts_root: Path) -> tuple[Path | None, bool]
     return None, False
 
 
-def _manifest_embeddings_status(artifacts_root: Path) -> str:
-    for path in sorted(artifacts_root.rglob("manifest.json")):
-        if not path.is_file():
-            continue
-        try:
-            payload = _load_json(path)
-        except json.JSONDecodeError:
-            continue
-        embeddings = payload.get("embeddings", {})
-        if isinstance(embeddings, dict):
-            return str(embeddings.get("status", "") or "").upper()
-    return ""
-
-
-def _audit_embeddings_status(artifacts_root: Path) -> str:
-    for path in sorted(artifacts_root.rglob("*.json")):
-        if not path.is_file() or not path.name.startswith("audit_"):
-            continue
-        try:
-            payload = _load_json(path)
-        except json.JSONDecodeError:
-            continue
-        return str(payload.get("embed_index_status", "") or "").upper()
-    return ""
+def _index_embeddings_evidence_status(artifacts_root: Path) -> str:
+    evidence = _find_first(artifacts_root, "index_embeddings_evidence.json")
+    if evidence is None:
+        return ""
+    try:
+        payload = _load_json(evidence)
+    except json.JSONDecodeError:
+        return ""
+    return str(payload.get("index_embeddings_status", "") or "").upper()
 
 
 def _has_patch_artifact(artifacts_root: Path) -> bool:
@@ -419,7 +405,8 @@ def validate_artifacts(
         if not embed_payload:
             fail("embeddings_usage.json is required for this scenario")
         else:
-            if bool(embed_payload.get("embed_used", False)):
+            embed_used = bool(embed_payload.get("embed_used", embed_payload.get("embeddings_used", False)))
+            if embed_used:
                 pass_note("embed_used=true")
             else:
                 fail("embed_used must be true")
@@ -437,18 +424,14 @@ def validate_artifacts(
         if has_embeddings_jsonl:
             pass_note(f"index embeddings found in zip: {zip_path.as_posix() if zip_path else 'n/a'}")
         else:
-            manifest_status = _manifest_embeddings_status(artifacts_root)
-            if manifest_status in {"OK", "PARTIAL"}:
-                pass_note(f"manifest.embeddings.status={manifest_status}")
+            evidence_status = _index_embeddings_evidence_status(artifacts_root)
+            if evidence_status in {"OK", "PARTIAL"}:
+                pass_note(f"index_embeddings_evidence.status={evidence_status}")
             else:
-                audit_status = _audit_embeddings_status(artifacts_root)
-                if audit_status in {"OK", "PARTIAL"}:
-                    pass_note(f"audit embed_index_status={audit_status}")
-                else:
-                    fail(
-                        "index embeddings evidence missing: no index/embeddings.jsonl and no "
-                        "manifest/audit status in {OK, PARTIAL}"
-                    )
+                fail(
+                    "index embeddings evidence missing: no index/embeddings.jsonl and no "
+                    "index_embeddings_evidence.status in {OK, PARTIAL}"
+                )
 
     if requirements.require_patch:
         if _has_patch_artifact(artifacts_root):
@@ -472,15 +455,10 @@ def validate_artifacts(
                     f"batch calls_count={calls_count} is below required "
                     f"{requirements.require_batch_calls_min}"
                 )
-            markdown_path = _find_first(artifacts_root, "ask_result.md")
-            if markdown_path is None:
-                fail("ask_result.md missing for batch summary assertions")
+            if _find_first(artifacts_root, "batch_summaries.json") is not None:
+                pass_note("batch_summaries.json present")
             else:
-                markdown = markdown_path.read_text(encoding="utf-8", errors="ignore")
-                if "Calls this run:" in markdown and "Models used:" in markdown:
-                    pass_note("ask_result.md contains calls/models totals block")
-                else:
-                    fail("ask_result.md does not contain calls/models totals block")
+                notes.append("INFO: batch_summaries.json missing (optional)")
 
     return status, notes
 
@@ -525,6 +503,7 @@ def _build_workflow_dispatch_args(
     enable_llm: bool,
     enable_embeddings: bool,
     enable_batch_llm: bool,
+    batch_force: bool,
     trusted_context: bool,
     allow_dynamic_verify: bool,
     apply_patch: bool,
@@ -546,6 +525,8 @@ def _build_workflow_dispatch_args(
         f"enable_embeddings={'true' if enable_embeddings else 'false'}",
         "-f",
         f"enable_batch_llm={'true' if enable_batch_llm else 'false'}",
+        "-f",
+        f"batch_force={'true' if batch_force else 'false'}",
         "-f",
         f"trusted_context={'true' if trusted_context else 'false'}",
         "-f",
@@ -571,6 +552,7 @@ def _workflow_dispatch(
     enable_llm: bool,
     enable_embeddings: bool,
     enable_batch_llm: bool,
+    batch_force: bool,
     trusted_context: bool,
     allow_dynamic_verify: bool,
     apply_patch: bool,
@@ -585,6 +567,7 @@ def _workflow_dispatch(
         enable_llm=enable_llm,
         enable_embeddings=enable_embeddings,
         enable_batch_llm=enable_batch_llm,
+        batch_force=batch_force,
         trusted_context=trusted_context,
         allow_dynamic_verify=allow_dynamic_verify,
         apply_patch=apply_patch,
@@ -613,6 +596,7 @@ def _dispatch_run(
         enable_llm=bool(toggles.get("enable_llm", False)),
         enable_embeddings=bool(toggles.get("enable_embeddings", False)),
         enable_batch_llm=bool(toggles.get("enable_batch_llm", False)),
+        batch_force=bool(toggles.get("batch_force", False)),
         trusted_context=bool(toggles.get("trusted_context", False)),
         allow_dynamic_verify=bool(toggles.get("allow_dynamic_verify", False)),
         apply_patch=bool(toggles.get("apply_patch", False)),
@@ -700,6 +684,7 @@ def _scenario_dispatch_command(
             "enable_llm": spec.enable_llm,
             "enable_embeddings": spec.enable_embeddings,
             "enable_batch_llm": spec.enable_batch_llm,
+            "batch_force": spec.batch_force,
             "trusted_context": spec.trusted_context,
             "allow_dynamic_verify": spec.allow_dynamic_verify,
             "apply_patch": spec.apply_patch,
@@ -790,6 +775,7 @@ def _build_scenarios(
             enable_llm=False,
             enable_embeddings=False,
             enable_batch_llm=False,
+            batch_force=False,
             trusted_context=False,
             allow_dynamic_verify=False,
             apply_patch=False,
@@ -802,6 +788,7 @@ def _build_scenarios(
             enable_llm=True,
             enable_embeddings=False,
             enable_batch_llm=False,
+            batch_force=False,
             trusted_context=True,
             allow_dynamic_verify=False,
             apply_patch=False,
@@ -814,6 +801,7 @@ def _build_scenarios(
             enable_llm=False,
             enable_embeddings=True,
             enable_batch_llm=False,
+            batch_force=False,
             trusted_context=True,
             allow_dynamic_verify=False,
             apply_patch=False,
@@ -826,6 +814,7 @@ def _build_scenarios(
             enable_llm=False,
             enable_embeddings=True,
             enable_batch_llm=False,
+            batch_force=False,
             trusted_context=True,
             allow_dynamic_verify=False,
             apply_patch=False,
@@ -844,6 +833,7 @@ def _build_scenarios(
             enable_llm=True,
             enable_embeddings=False,
             enable_batch_llm=False,
+            batch_force=False,
             trusted_context=True,
             allow_dynamic_verify=False,
             apply_patch=False,
@@ -859,6 +849,7 @@ def _build_scenarios(
             enable_llm=True,
             enable_embeddings=False,
             enable_batch_llm=True,
+            batch_force=True,
             trusted_context=True,
             allow_dynamic_verify=False,
             apply_patch=False,

@@ -190,10 +190,10 @@ def build_messages_for_fix(
     locators_lines = [f"- {path}" for path in changed_files[:80]]
     return _build_messages(
         system_content=(
-            "You are RepoBrain fixer. Return concise patch guidance and validation steps. "
-            "Do not expose secrets."
+            "You are RepoBrain fixer. Return ONLY a unified diff inside a ```diff fenced block. "
+            "Output ONLY the diff, no prose, no explanations. Do not expose secrets."
         ),
-        task_line="Task: propose minimal safe patch strategy.",
+        task_line="Task: produce minimal safe patch as unified diff only.",
         query=query,
         locators_lines=locators_lines,
         diff_hunks=[str(item) for item in diff_hunks],

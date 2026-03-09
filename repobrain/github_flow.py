@@ -9,6 +9,7 @@ import re
 import subprocess
 import time
 from typing import Any
+import zipfile
 
 import requests
 
@@ -53,7 +54,7 @@ from repobrain.llm.github_models_embeddings import (
     GitHubModelsEmbeddingsClient,
     GitHubModelsEmbeddingsError,
 )
-from repobrain.llm.batch_planner import plan_batches
+from repobrain.llm.batch_planner import Batch, plan_batches
 from repobrain.llm.model_selector import (
     choose_model,
     complexity_explanation,
@@ -663,6 +664,7 @@ def _env_true(name: str, default: bool = False) -> bool:
         "RB_LLM_ALLOW_LOCATE": cfg.llm.allow_locate,
         "RB_EMBED_ENABLED": cfg.embeddings.enabled,
         "RB_LLM_BATCH_ENABLE": cfg.batch.enabled,
+        "RB_LLM_BATCH_FORCE": cfg.batch.force,
         "RB_LLM_BATCH_REDUCE_ENABLE": cfg.batch.reduce_enable,
         "RB_TRUSTED_CONTEXT": cfg.workflow.trusted_context,
         "RB_ALLOW_DYNAMIC_VERIFY": cfg.workflow.allow_dynamic_verify,
@@ -979,6 +981,55 @@ def _build_embeddings_usage_payload(meta: dict[str, Any]) -> dict[str, Any]:
 
 def _write_embeddings_usage(repo_root: Path, payload: dict[str, Any]) -> Path:
     path = repo_root / "artifacts" / "embeddings_usage.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _index_zip_has_embeddings(index_path: Path) -> bool:
+    if not index_path.exists():
+        return False
+    try:
+        with zipfile.ZipFile(index_path, mode="r") as zf:
+            return "index/embeddings.jsonl" in set(zf.namelist())
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def _build_index_embeddings_evidence_payload(
+    *,
+    index_path: Path,
+    vectors_meta: dict[str, Any],
+    embeddings_meta: dict[str, Any],
+) -> dict[str, Any]:
+    chunks = int(
+        vectors_meta.get(
+            "chunks_embedded",
+            embeddings_meta.get("embed_chunks_embedded", 0),
+        )
+        or 0
+    )
+    status = str(vectors_meta.get("status", "UNKNOWN") or "UNKNOWN").upper()
+    if status not in {"OK", "PARTIAL", "DISABLED", "UNKNOWN"}:
+        status = "UNKNOWN"
+    model = str(vectors_meta.get("model", "") or embeddings_meta.get("embed_model_id", "") or "n/a")
+    return {
+        "index_has_embeddings_file": _index_zip_has_embeddings(index_path),
+        "index_embeddings_status": status,
+        "index_embeddings_model": model,
+        "index_embeddings_chunks": chunks,
+    }
+
+
+def _write_index_embeddings_evidence(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "index_embeddings_evidence.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _write_patch_generation_debug(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "patch_generation_debug.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
@@ -1682,6 +1733,14 @@ def _extract_patch_from_llm_text(text: str) -> str:
     idx = payload.find("diff --git")
     if idx >= 0:
         return payload[idx:].strip()
+    payload_stripped = payload.strip()
+    if payload_stripped.startswith("--- ") and "\n+++ " in payload_stripped:
+        return payload_stripped
+    idx_plain = payload.find("\n--- ")
+    if idx_plain >= 0:
+        candidate = payload[idx_plain + 1 :].strip()
+        if candidate.startswith("--- ") and "\n+++ " in candidate:
+            return candidate
     return ""
 
 
@@ -1761,7 +1820,54 @@ def _should_use_batch_mode_for_review(
     normalized_route = str(route or "").strip().upper()
     if normalized_route in {"WAIT", "REFUSE", "BLOCK"}:
         return False
+    if bool(_runtime_env_cfg().batch.force):
+        return True
     return normalized_route == "DEEP" or complexity_score >= 60 or changed_files_count >= 10
+
+
+def _split_batch_for_force_mode(batch: Batch) -> list[Batch]:
+    paths = list(batch.paths)
+    snippets = list(batch.snippet_ids)
+    hunks = list(batch.diff_hunks)
+
+    def split(values: list[str]) -> tuple[list[str], list[str]]:
+        if not values:
+            return [], []
+        mid = max(1, len(values) // 2)
+        return values[:mid], values[mid:]
+
+    paths_a, paths_b = split(paths)
+    snippets_a, snippets_b = split(snippets)
+    hunks_a, hunks_b = split(hunks)
+
+    if not paths_a and paths:
+        paths_a = [paths[0]]
+    if not paths_b and paths:
+        paths_b = paths[1:] or [paths[0]]
+    if not snippets_a and snippets:
+        snippets_a = [snippets[0]]
+    if not snippets_b and snippets:
+        snippets_b = snippets[1:] or [snippets[0]]
+    if not hunks_a and hunks:
+        hunks_a = [hunks[0]]
+    if not hunks_b and hunks:
+        hunks_b = hunks[1:] or [hunks[0]]
+
+    first = Batch(
+        batch_id=f"{batch.batch_id}-f1",
+        paths=paths_a or paths or ["(forced-batch)"],
+        diff_hunks=hunks_a,
+        snippet_ids=snippets_a,
+        estimated_input_tokens=max(1, int(batch.estimated_input_tokens / 2)),
+    )
+    second = Batch(
+        batch_id=f"{batch.batch_id}-f2",
+        paths=paths_b or paths_a or paths or ["(forced-batch)"],
+        diff_hunks=hunks_b,
+        snippet_ids=snippets_b,
+        estimated_input_tokens=max(1, batch.estimated_input_tokens - first.estimated_input_tokens),
+    )
+    return [first, second]
 
 
 def _run_batch_llm_review_fix(
@@ -1792,6 +1898,9 @@ def _run_batch_llm_review_fix(
         limits={"max_input_tokens": max_input_tokens},
         budgets={"max_input_tokens": max_input_tokens, "reserve_tokens": 800},
     )
+    force_batch = bool(cfg.batch.force)
+    if force_batch and len(planned) == 1:
+        planned = _split_batch_for_force_mode(planned[0])
     max_calls = max(1, int(cfg.batch.max_calls_per_run))
     model_high = str(cfg.llm.model_high or "openai/gpt-4.1")
     model_low = str(cfg.llm.model_low or "openai/gpt-4.1-mini")
@@ -3092,6 +3201,20 @@ def _build_qa_markdown(
     index_embeddings_dim = int(vectors_meta.get("dim", 0) or 0)
     index_embeddings_status = str(vectors_meta.get("status", "n/a") or "n/a")
     index_embeddings_reason = str(vectors_meta.get("reason", "n/a") or "n/a")
+    is_dispatch_e2e = (
+        os.environ.get("GITHUB_EVENT_NAME", "").strip() == "workflow_dispatch"
+        and bool(os.environ.get("RB_E2E_COMMAND", "").strip())
+    )
+    if _embeddings_enabled() and bool(embeddings_meta.get("embed_query_embedded", False)) and is_dispatch_e2e:
+        evidence_payload = _build_index_embeddings_evidence_payload(
+            index_path=index_path,
+            vectors_meta=vectors_meta,
+            embeddings_meta=embeddings_meta,
+        )
+        evidence_path = _write_index_embeddings_evidence(resolved_repo_root, evidence_payload)
+        if audit is not None:
+            audit["index_embeddings_evidence_artifact"] = evidence_path.as_posix()
+            audit["index_embeddings_evidence"] = dict(evidence_payload)
     if audit is not None:
         audit["index_source"] = index_source
         add_timing(audit, "index_load_build", index_elapsed_ms)
@@ -3163,6 +3286,8 @@ def _build_qa_markdown(
     audit_summary["embed_index_dim"] = index_embeddings_dim
     audit_summary["embed_index_status"] = index_embeddings_status
     audit_summary["embed_index_reason"] = index_embeddings_reason
+    if is_dispatch_e2e and _embeddings_enabled() and bool(embeddings_meta.get("embed_query_embedded", False)):
+        audit_summary["index_embeddings_evidence_artifact"] = "artifacts/index_embeddings_evidence.json"
     if not audit_summary.get("embed_model_id"):
         audit_summary["embed_model_id"] = _embeddings_model()
     if "embed_used" not in audit_summary:
@@ -3507,6 +3632,7 @@ def _build_review_markdown(
         "summary_text": "",
         "patch_parts": [],
     }
+    llm_text_for_patch = ""
     if use_batch_mode:
         batch_result, llm_meta = _run_batch_llm_review_fix(
             repo_root=repo_root,
@@ -3538,6 +3664,7 @@ def _build_review_markdown(
             candidates_count=len(review_candidates),
             governor=governor,
         )
+        llm_text_for_patch = llm_text or ""
         if llm_text:
             review["summary_text"] = llm_text
     _merge_llm_meta(audit_summary, llm_meta)
@@ -3621,6 +3748,8 @@ def _build_review_markdown(
         )
         if merged_batch_patch.strip():
             patch_text = merged_batch_patch
+    if not patch_text and llm_text_for_patch:
+        patch_text = _extract_patch_from_llm_text(llm_text_for_patch)
 
     patch_written = False
     patch_apply_message = "no patch generated by engine"
@@ -3631,6 +3760,7 @@ def _build_review_markdown(
         "message": patch_apply_message,
     }
     patch_pr_message = "auto-pr skipped"
+    patch_debug_payload: dict[str, Any] | None = None
     snippet = ""
     if patch_text:
         patch_path = _write_patch_artifact(repo_root, patch_text)
@@ -3667,6 +3797,15 @@ def _build_review_markdown(
                 )
             else:
                 patch_pr_message = "auto-pr skipped (patch not pushed)"
+    else:
+        patch_debug_payload = {
+            "reason": "diff_not_found_in_engine_or_llm_output",
+            "llm_used": bool(llm_meta.get("llm_used", False)),
+            "model": str(llm_meta.get("llm_model_used", "n/a") or "n/a"),
+            "output_truncated": False,
+        }
+        debug_path = _write_patch_generation_debug(repo_root, patch_debug_payload)
+        audit_summary["patch_generation_debug_artifact"] = debug_path.as_posix()
     combined_patch_message = f"{patch_apply_message}; {patch_pr_message}"
 
     body = render_patch_markdown(
@@ -3713,6 +3852,9 @@ def _build_review_markdown(
         audit["patch_parts_count"] = len(patch_parts)
         audit["patch_conflicts_detected"] = batch_patch_conflicts
         audit["patch_conflict_details"] = batch_patch_conflict_details[:20]
+        if patch_debug_payload is not None:
+            audit["patch_generation_debug"] = dict(patch_debug_payload)
+            audit["patch_generation_debug_artifact"] = "artifacts/patch_generation_debug.json"
         _merge_llm_meta(audit, llm_meta)
         audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
     return body

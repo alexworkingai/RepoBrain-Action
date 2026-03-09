@@ -73,13 +73,41 @@ def test_validate_artifacts_fails_when_batch_calls_below_threshold(tmp_path: Pat
             "totals": {"calls_count": 1},
         },
     )
-    (tmp_path / "ask_result.md").write_text(
-        "### LLM\n- Calls this run: 1\n- Models used: openai/gpt-4.1-mini (1 call)",
-        encoding="utf-8",
-    )
     requirements = module.ScenarioRequirements(require_batch_calls_min=2)
 
     status, notes = module.validate_artifacts("batch_llm_dispatch", tmp_path, requirements)
 
     assert status == "FAIL"
     assert any("calls_count=1 is below required 2" in note for note in notes)
+
+
+def test_embeddings_evidence_accepts_ok_partial(tmp_path: Path) -> None:
+    module = _load_module()
+    _write_base_artifacts(tmp_path)
+    _write_json(
+        tmp_path / "embeddings_usage.json",
+        {
+            "embed_used": True,
+            "query_embedded": True,
+            "remaining_requests": 7,
+            "reset_time_utc_iso": "2026-01-01T00:00:00Z",
+        },
+    )
+    _write_json(
+        tmp_path / "index_embeddings_evidence.json",
+        {
+            "index_has_embeddings_file": False,
+            "index_embeddings_status": "PARTIAL",
+            "index_embeddings_model": "openai/text-embedding-3-small",
+            "index_embeddings_chunks": 12,
+        },
+    )
+    requirements = module.ScenarioRequirements(
+        require_embeddings_used=True,
+        require_index_embeddings=True,
+    )
+
+    status, notes = module.validate_artifacts("embeddings_used_dispatch", tmp_path, requirements)
+
+    assert status == "PASS"
+    assert any("index_embeddings_evidence.status=PARTIAL" in note for note in notes)

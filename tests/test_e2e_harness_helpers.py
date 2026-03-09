@@ -51,6 +51,7 @@ def test_build_workflow_dispatch_args_includes_e2e_payload() -> None:
         enable_llm=False,
         enable_embeddings=False,
         enable_batch_llm=False,
+        batch_force=False,
         trusted_context=False,
         allow_dynamic_verify=False,
         apply_patch=False,
