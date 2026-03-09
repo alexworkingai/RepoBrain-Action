@@ -831,9 +831,28 @@ def _scenario_dispatch_command(
     return result
 
 
+def _status_has_tracked_deletions(status_text: str) -> bool:
+    for raw_line in status_text.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+        lower = line.lower()
+        if "deleted:" in lower:
+            return True
+        if line.startswith("??"):
+            continue
+        prefix = line[:2]
+        if "D" in prefix:
+            return True
+    return False
+
+
 def _commit_and_push(paths: list[Path], message: str, branch: str) -> None:
     print(f"[prep] checking git status before staging for: {message}", flush=True)
-    run_cmd(["git", "status", "--porcelain"], check=True)
+    pre_stage_status = run_cmd(["git", "status", "--porcelain"], check=True)
+    if _status_has_tracked_deletions(pre_stage_status.out):
+        print("[prep] detected tracked deletions, staging them via git add -A", flush=True)
+        run_cmd(["git", "add", "-A"], check=True)
 
     if paths:
         add_args = ["git", "add", "--"] + [path.as_posix() for path in paths]
@@ -853,6 +872,38 @@ def _commit_and_push(paths: list[Path], message: str, branch: str) -> None:
     print(f"[prep] committing changes: {message}", flush=True)
     run_cmd(["git", "commit", "-m", message], check=True)
     print(f"[prep] pushing branch: {branch}", flush=True)
+    run_cmd(["git", "push", "-u", "origin", branch], check=True)
+
+
+def _clean_e2e_markers(branch: str) -> None:
+    root = Path.cwd()
+    markers = sorted(root.glob("e2e_marker_*.txt"))
+    if markers:
+        print(f"[prep] cleaning {len(markers)} marker file(s) in repo root", flush=True)
+    else:
+        print("[prep] no e2e marker files found in repo root", flush=True)
+
+    for marker in markers:
+        try:
+            marker.unlink(missing_ok=True)
+            print(f"[prep] removed marker file: {marker.name}", flush=True)
+        except OSError as exc:
+            print(f"[prep] marker cleanup warning for {marker.name}: {exc}", flush=True)
+
+    run_cmd(["git", "rm", "-f", "--cached", "--", "e2e_marker_*.txt"], check=False)
+    run_cmd(["git", "add", "-A"], check=True)
+
+    status = run_cmd(["git", "status", "--porcelain"], check=True)
+    if not status.out.strip():
+        print("[prep] marker cleanup: no staged changes", flush=True)
+        return
+    if not branch.startswith("e2e/"):
+        print("[prep] marker cleanup: branch is not e2e/*, skipping cleanup commit", flush=True)
+        return
+
+    print("[prep] committing marker cleanup", flush=True)
+    run_cmd(["git", "commit", "-m", "e2e: cleanup markers"], check=True)
+    print(f"[prep] pushing marker cleanup to branch: {branch}", flush=True)
     run_cmd(["git", "push", "-u", "origin", branch], check=True)
 
 
@@ -1118,11 +1169,14 @@ def main() -> int:
             branch=branch,
             marker_file=marker_file,
         )
+        _clean_e2e_markers(branch)
         for spec in scenarios:
             if spec.name == "fix_patch_required_dispatch":
+                _clean_e2e_markers(branch)
                 print("[prep] creating fixable marker file", flush=True)
                 _prepare_fixable_marker(branch)
             if spec.name == "batch_llm_dispatch":
+                _clean_e2e_markers(branch)
                 print("[prep] creating batch marker files", flush=True)
                 _prepare_batch_markers(branch, files_count=12)
             result = _scenario_dispatch_command(

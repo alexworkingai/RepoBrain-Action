@@ -122,6 +122,76 @@ def test_commit_and_push_stages_before_commit(monkeypatch) -> None:
     assert add_idx < commit_idx < push_idx
 
 
+def test_commit_and_push_stages_deletions_with_add_all(monkeypatch) -> None:
+    module = _load_module()
+    calls: list[list[str]] = []
+    status_counter = {"value": 0}
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del cwd, check
+        calls.append(args)
+        if args == ["git", "status", "--porcelain"]:
+            status_counter["value"] += 1
+            if status_counter["value"] == 1:
+                return module.CmdResult(code=0, out=" D e2e_marker_123.txt", err="")
+            return module.CmdResult(
+                code=0,
+                out="A  scripts/e2e/marker_bad.py\nD  e2e_marker_123.txt",
+                err="",
+            )
+        return module.CmdResult(code=0, out="", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    module._commit_and_push([Path("scripts/e2e/marker_bad.py")], "e2e: marker", "test-branch")  # noqa: SLF001
+
+    add_all_idx = next(i for i, call in enumerate(calls) if call == ["git", "add", "-A"])
+    commit_idx = next(i for i, call in enumerate(calls) if call[:2] == ["git", "commit"])
+    assert add_all_idx < commit_idx
+
+
+def test_clean_e2e_markers_issues_safe_commands(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    monkeypatch.chdir(tmp_path)
+
+    marker_a = tmp_path / "e2e_marker_1.txt"
+    marker_b = tmp_path / "e2e_marker_2.txt"
+    keep_file = tmp_path / "keep.txt"
+    marker_a.write_text("marker-a", encoding="utf-8")
+    marker_b.write_text("marker-b", encoding="utf-8")
+    keep_file.write_text("keep", encoding="utf-8")
+
+    calls: list[list[str]] = []
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del cwd, check
+        calls.append(args)
+        if args == ["git", "status", "--porcelain"]:
+            return module.CmdResult(code=0, out="", err="")
+        return module.CmdResult(code=0, out="", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    module._clean_e2e_markers("e2e/test-branch")  # noqa: SLF001
+
+    assert not marker_a.exists()
+    assert not marker_b.exists()
+    assert keep_file.exists()
+    assert ["git", "rm", "-f", "--cached", "--", "e2e_marker_*.txt"] in calls
+    assert ["git", "add", "-A"] in calls
+    assert not any(call[:2] == ["git", "commit"] for call in calls)
+
+
 def test_gh_retry_on_tls_timeout(monkeypatch) -> None:
     module = _load_module()
     calls: list[list[str]] = []
