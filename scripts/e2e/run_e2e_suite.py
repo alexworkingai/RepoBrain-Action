@@ -720,9 +720,27 @@ def _scenario_dispatch_command(
 
 
 def _commit_and_push(paths: list[Path], message: str, branch: str) -> None:
-    args = ["git", "add"] + [path.as_posix() for path in paths]
-    run_cmd(args, check=True)
+    print(f"[prep] checking git status before staging for: {message}", flush=True)
+    run_cmd(["git", "status", "--porcelain"], check=True)
+
+    if paths:
+        add_args = ["git", "add", "--"] + [path.as_posix() for path in paths]
+    else:
+        add_args = ["git", "add", "-A"]
+    print(
+        f"[prep] staging {'explicit paths' if paths else 'all changes'} for commit: {message}",
+        flush=True,
+    )
+    run_cmd(add_args, check=True)
+
+    staged_status = run_cmd(["git", "status", "--porcelain"], check=True)
+    if not staged_status.out.strip():
+        print("[prep] no changes to commit, skipping commit", flush=True)
+        return
+
+    print(f"[prep] committing changes: {message}", flush=True)
     run_cmd(["git", "commit", "-m", message], check=True)
+    print(f"[prep] pushing branch: {branch}", flush=True)
     run_cmd(["git", "push", "-u", "origin", branch], check=True)
 
 

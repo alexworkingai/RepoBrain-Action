@@ -64,3 +64,59 @@ def test_build_workflow_dispatch_args_includes_e2e_payload() -> None:
     assert "e2e_command=/repobrain review" in joined
     assert "e2e_pr_number=123" in joined
     assert "e2e_ref=feature/test" in joined
+
+
+def test_commit_and_push_skips_when_no_changes(monkeypatch) -> None:
+    module = _load_module()
+    calls: list[list[str]] = []
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del cwd, check
+        calls.append(args)
+        if args == ["git", "status", "--porcelain"]:
+            return module.CmdResult(code=0, out="", err="")
+        return module.CmdResult(code=0, out="", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    module._commit_and_push([Path("scripts/e2e/marker_bad.py")], "e2e: marker", "test-branch")  # noqa: SLF001
+
+    assert any(call[:2] == ["git", "add"] for call in calls)
+    assert not any(call[:2] == ["git", "commit"] for call in calls)
+    assert not any(call[:2] == ["git", "push"] for call in calls)
+
+
+def test_commit_and_push_stages_before_commit(monkeypatch) -> None:
+    module = _load_module()
+    calls: list[list[str]] = []
+    status_counter = {"value": 0}
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del cwd, check
+        calls.append(args)
+        if args == ["git", "status", "--porcelain"]:
+            status_counter["value"] += 1
+            if status_counter["value"] == 1:
+                return module.CmdResult(code=0, out="?? scripts/e2e/marker_bad.py", err="")
+            return module.CmdResult(code=0, out="A  scripts/e2e/marker_bad.py", err="")
+        return module.CmdResult(code=0, out="", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    module._commit_and_push([Path("scripts/e2e/marker_bad.py")], "e2e: marker", "test-branch")  # noqa: SLF001
+
+    add_idx = next(i for i, call in enumerate(calls) if call[:2] == ["git", "add"])
+    commit_idx = next(i for i, call in enumerate(calls) if call[:2] == ["git", "commit"])
+    push_idx = next(i for i, call in enumerate(calls) if call[:2] == ["git", "push"])
+
+    assert add_idx < commit_idx < push_idx
