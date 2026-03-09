@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 from typing import Any
+import zipfile
 
 STRONG_SECRET_PATTERNS = (
     re.compile(r"\bghp_[A-Za-z0-9]{20,}\b"),
@@ -37,6 +38,29 @@ class ScenarioResult:
     conclusion: str = "n/a"
     notes: list[str] = field(default_factory=list)
     artifact_dir: str = "n/a"
+
+
+@dataclass(frozen=True)
+class ScenarioRequirements:
+    require_llm_used: bool = False
+    require_embeddings_used: bool = False
+    require_patch: bool = False
+    require_batch_calls_min: int = 0
+    require_index_embeddings: bool = False
+
+
+@dataclass(frozen=True)
+class ScenarioSpec:
+    name: str
+    command: str
+    enable_llm: bool
+    enable_embeddings: bool
+    enable_batch_llm: bool
+    trusted_context: bool
+    allow_dynamic_verify: bool
+    apply_patch: bool
+    create_pr: bool
+    requirements: ScenarioRequirements
 
 
 def run_cmd(args: list[str], *, cwd: Path | None = None, check: bool = True) -> CmdResult:
@@ -190,6 +214,8 @@ def _wait_for_run(
                 repo,
                 "--workflow",
                 workflow,
+                "--branch",
+                branch,
                 "--limit",
                 "20",
             ],
@@ -249,62 +275,213 @@ def _scan_for_secrets(text: str) -> bool:
     return any(pattern.search(text) for pattern in STRONG_SECRET_PATTERNS)
 
 
-def validate_artifacts(scenario: str, artifacts_root: Path) -> tuple[str, list[str]]:
+def _first_zip_with_embeddings(artifacts_root: Path) -> tuple[Path | None, bool]:
+    for zip_path in sorted(artifacts_root.rglob("*.zip")):
+        if not zip_path.is_file():
+            continue
+        try:
+            with zipfile.ZipFile(zip_path, mode="r") as zf:
+                if "index/embeddings.jsonl" in zf.namelist():
+                    return zip_path, True
+        except (OSError, zipfile.BadZipFile):
+            continue
+    return None, False
+
+
+def _manifest_embeddings_status(artifacts_root: Path) -> str:
+    for path in sorted(artifacts_root.rglob("manifest.json")):
+        if not path.is_file():
+            continue
+        try:
+            payload = _load_json(path)
+        except json.JSONDecodeError:
+            continue
+        embeddings = payload.get("embeddings", {})
+        if isinstance(embeddings, dict):
+            return str(embeddings.get("status", "") or "").upper()
+    return ""
+
+
+def _audit_embeddings_status(artifacts_root: Path) -> str:
+    for path in sorted(artifacts_root.rglob("*.json")):
+        if not path.is_file() or not path.name.startswith("audit_"):
+            continue
+        try:
+            payload = _load_json(path)
+        except json.JSONDecodeError:
+            continue
+        return str(payload.get("embed_index_status", "") or "").upper()
+    return ""
+
+
+def _has_patch_artifact(artifacts_root: Path) -> bool:
+    if _find_first(artifacts_root, "patch.diff") is not None:
+        return True
+    for diff_path in artifacts_root.rglob("*.diff"):
+        parts = {part.lower() for part in diff_path.parts}
+        if "patch_parts" in parts:
+            return True
+    return False
+
+
+def _to_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def validate_artifacts(
+    scenario: str,
+    artifacts_root: Path,
+    requirements: ScenarioRequirements,
+) -> tuple[str, list[str]]:
     notes: list[str] = []
     status = "PASS"
+
+    def fail(message: str) -> None:
+        nonlocal status
+        notes.append(f"FAIL: {message}")
+        status = "FAIL"
+
+    def pass_note(message: str) -> None:
+        notes.append(f"PASS: {message}")
+
     config_path = _find_first(artifacts_root, "config_snapshot.json")
     if config_path is None:
-        notes.append("config_snapshot.json: missing")
-        status = "FAIL"
+        fail("config_snapshot.json is missing")
     else:
         config_text = config_path.read_text(encoding="utf-8", errors="ignore")
         if _scan_for_secrets(config_text):
-            notes.append("config_snapshot.json: strong secret pattern detected")
-            status = "FAIL"
+            fail("config_snapshot.json contains secret-like pattern")
         else:
-            notes.append("config_snapshot.json: usersafe scan passed")
+            pass_note("config_snapshot.json usersafe scan passed")
 
+    llm_payload: dict[str, Any] = {}
     llm_path = _find_first(artifacts_root, "llm_usage.json")
-    if llm_path is not None:
-        payload = _load_json(llm_path)
-        llm_used = bool(payload.get("llm_used", False))
-        if llm_used:
-            model_id = str(payload.get("model_id", "") or "")
-            if not model_id or model_id == "not used":
-                notes.append("llm_usage.json: llm_used=true but model_id missing")
-                status = "FAIL"
-        if "remaining_requests" not in payload:
-            notes.append("llm_usage.json: missing remaining_requests")
-            status = "FAIL"
+    if llm_path is None:
+        notes.append("INFO: llm_usage.json missing (allowed unless required by scenario)")
     else:
-        notes.append("llm_usage.json: missing (allowed when LLM disabled)")
+        llm_payload = _load_json(llm_path)
+        if "remaining_requests" in llm_payload:
+            pass_note("llm_usage.json contains remaining_requests")
+        else:
+            fail("llm_usage.json is missing remaining_requests")
 
+    embed_payload: dict[str, Any] = {}
     embed_path = _find_first(artifacts_root, "embeddings_usage.json")
-    if embed_path is not None:
-        payload = _load_json(embed_path)
-        if bool(payload.get("embed_used", False)):
-            if "remaining_requests" not in payload:
-                notes.append("embeddings_usage.json: missing remaining_requests")
-                status = "FAIL"
-            if "reset_time_utc_iso" not in payload:
-                notes.append("embeddings_usage.json: missing reset_time_utc_iso")
-                status = "FAIL"
+    if embed_path is None:
+        notes.append("INFO: embeddings_usage.json missing (allowed unless required by scenario)")
     else:
-        notes.append("embeddings_usage.json: missing (allowed when embeddings disabled)")
+        embed_payload = _load_json(embed_path)
+        if "remaining_requests" in embed_payload:
+            pass_note("embeddings_usage.json contains remaining_requests")
+        else:
+            fail("embeddings_usage.json is missing remaining_requests")
+        if "reset_time_utc_iso" in embed_payload:
+            pass_note("embeddings_usage.json contains reset_time_utc_iso")
+        else:
+            fail("embeddings_usage.json is missing reset_time_utc_iso")
 
     ai_path = _find_first(artifacts_root, "ai_quota_snapshot.json")
     if ai_path is None:
-        notes.append("ai_quota_snapshot.json: missing")
-        status = "FAIL"
+        fail("ai_quota_snapshot.json is missing")
     else:
-        notes.append("ai_quota_snapshot.json: present")
+        pass_note("ai_quota_snapshot.json present")
 
-    if scenario == "fix":
-        patch = _find_first(artifacts_root, "patch.diff")
-        if patch is None:
-            notes.append("patch.diff: not found (can be valid if no patch generated)")
+    if requirements.require_llm_used:
+        if not llm_payload:
+            fail("llm_usage.json is required for this scenario")
         else:
-            notes.append("patch.diff: present")
+            if bool(llm_payload.get("llm_used", False)):
+                pass_note("llm_used=true")
+            else:
+                fail("llm_used must be true")
+            model_id = str(llm_payload.get("model_id", "") or "")
+            if model_id in {"openai/gpt-4.1", "openai/gpt-4.1-mini"}:
+                pass_note(f"model_id accepted: {model_id}")
+            else:
+                fail(f"model_id missing/unsupported: {model_id or '<empty>'}")
+            if "tokens_total" in llm_payload:
+                pass_note("llm_usage.json contains tokens_total")
+            else:
+                fail("llm_usage.json is missing tokens_total")
+            if "remaining_requests" in llm_payload:
+                pass_note("llm_usage.json contains remaining_requests")
+            else:
+                fail("llm_usage.json is missing remaining_requests")
+            if "reset_time_utc_iso" in llm_payload:
+                pass_note("llm_usage.json contains reset_time_utc_iso")
+            else:
+                fail("llm_usage.json is missing reset_time_utc_iso")
+
+    if requirements.require_embeddings_used:
+        if not embed_payload:
+            fail("embeddings_usage.json is required for this scenario")
+        else:
+            if bool(embed_payload.get("embed_used", False)):
+                pass_note("embed_used=true")
+            else:
+                fail("embed_used must be true")
+            if bool(embed_payload.get("query_embedded", False)):
+                pass_note("query_embedded=true")
+            else:
+                fail("query_embedded must be true")
+            if "remaining_requests" in embed_payload:
+                pass_note("embeddings remaining_requests present")
+            else:
+                fail("embeddings remaining_requests missing")
+
+    if requirements.require_index_embeddings:
+        zip_path, has_embeddings_jsonl = _first_zip_with_embeddings(artifacts_root)
+        if has_embeddings_jsonl:
+            pass_note(f"index embeddings found in zip: {zip_path.as_posix() if zip_path else 'n/a'}")
+        else:
+            manifest_status = _manifest_embeddings_status(artifacts_root)
+            if manifest_status in {"OK", "PARTIAL"}:
+                pass_note(f"manifest.embeddings.status={manifest_status}")
+            else:
+                audit_status = _audit_embeddings_status(artifacts_root)
+                if audit_status in {"OK", "PARTIAL"}:
+                    pass_note(f"audit embed_index_status={audit_status}")
+                else:
+                    fail(
+                        "index embeddings evidence missing: no index/embeddings.jsonl and no "
+                        "manifest/audit status in {OK, PARTIAL}"
+                    )
+
+    if requirements.require_patch:
+        if _has_patch_artifact(artifacts_root):
+            pass_note("patch artifact found (patch.diff or patch_parts/*.diff)")
+        else:
+            fail("patch artifact missing: expected patch.diff or patch_parts/*.diff")
+
+    if requirements.require_batch_calls_min > 0:
+        if not llm_payload:
+            fail("llm_usage.json is required for batch assertions")
+        else:
+            totals_raw = llm_payload.get("totals", {})
+            totals = totals_raw if isinstance(totals_raw, dict) else {}
+            calls_count = _to_int(totals.get("calls_count", len(llm_payload.get("calls", []))))
+            if calls_count >= requirements.require_batch_calls_min:
+                pass_note(
+                    f"batch calls_count={calls_count} (required>={requirements.require_batch_calls_min})"
+                )
+            else:
+                fail(
+                    f"batch calls_count={calls_count} is below required "
+                    f"{requirements.require_batch_calls_min}"
+                )
+            markdown_path = _find_first(artifacts_root, "ask_result.md")
+            if markdown_path is None:
+                fail("ask_result.md missing for batch summary assertions")
+            else:
+                markdown = markdown_path.read_text(encoding="utf-8", errors="ignore")
+                if "Calls this run:" in markdown and "Models used:" in markdown:
+                    pass_note("ask_result.md contains calls/models totals block")
+                else:
+                    fail("ask_result.md does not contain calls/models totals block")
+
     return status, notes
 
 
@@ -419,18 +596,58 @@ def _workflow_dispatch(
     run_cmd(args, check=True)
 
 
+def _dispatch_run(
+    *,
+    repo: str,
+    workflow: str,
+    branch: str,
+    e2e_command: str,
+    e2e_pr_number: str,
+    toggles: dict[str, bool],
+    timeout_s: int,
+) -> tuple[dict[str, Any] | None, str]:
+    since = _now_utc()
+    _workflow_dispatch(
+        workflow=workflow,
+        ref=branch,
+        enable_llm=bool(toggles.get("enable_llm", False)),
+        enable_embeddings=bool(toggles.get("enable_embeddings", False)),
+        enable_batch_llm=bool(toggles.get("enable_batch_llm", False)),
+        trusted_context=bool(toggles.get("trusted_context", False)),
+        allow_dynamic_verify=bool(toggles.get("allow_dynamic_verify", False)),
+        apply_patch=bool(toggles.get("apply_patch", False)),
+        create_pr=bool(toggles.get("create_pr", False)),
+        e2e_command=e2e_command,
+        e2e_pr_number=e2e_pr_number,
+        e2e_ref=branch,
+    )
+    try:
+        run_data = _wait_for_run(
+            repo=repo,
+            workflow=workflow,
+            branch=branch,
+            event="workflow_dispatch",
+            since=since,
+            timeout_s=timeout_s,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return None, str(exc)
+    return run_data, ""
+
+
 def _scenario_from_run(
     *,
     scenario_name: str,
     trigger: str,
     run_data: dict[str, Any],
     artifacts_root: Path,
+    requirements: ScenarioRequirements,
 ) -> ScenarioResult:
     run_id = str(run_data.get("databaseId", "n/a"))
     run_url = str(run_data.get("url", "n/a") or "n/a")
     conclusion = str(run_data.get("conclusion", "n/a") or "n/a")
     status = "PASS" if conclusion == "success" else "FAIL"
-    validation_status, notes = validate_artifacts(scenario_name, artifacts_root)
+    validation_status, notes = validate_artifacts(scenario_name, artifacts_root, requirements)
     scan_result = run_cmd(
         [sys.executable, "scripts/usersafe_scan.py", artifacts_root.as_posix()],
         check=False,
@@ -464,65 +681,51 @@ def _scenario_dispatch_command(
     workflow: str,
     branch: str,
     pr_number: str,
-    command: str,
-    scenario_name: str,
+    spec: ScenarioSpec,
     artifacts_dir: Path,
     timeout_s: int,
-    enable_llm: bool = False,
-    enable_embeddings: bool = False,
-    enable_batch_llm: bool = False,
-    trusted_context: bool = False,
-    allow_dynamic_verify: bool = False,
-    apply_patch: bool = False,
-    create_pr: bool = False,
 ) -> ScenarioResult:
     print(
-        f"[scenario:start] name={scenario_name} mode=workflow_dispatch "
-        f"command={command} branch={branch} pr={pr_number}",
+        f"[scenario:start] name={spec.name} mode=workflow_dispatch "
+        f"command={spec.command} branch={branch} pr={pr_number}",
         flush=True,
     )
-    since = _now_utc()
-    _workflow_dispatch(
+    run_data, error = _dispatch_run(
+        repo=repo,
         workflow=workflow,
-        ref=branch,
-        enable_llm=enable_llm,
-        enable_embeddings=enable_embeddings,
-        enable_batch_llm=enable_batch_llm,
-        trusted_context=trusted_context,
-        allow_dynamic_verify=allow_dynamic_verify,
-        apply_patch=apply_patch,
-        create_pr=create_pr,
-        e2e_command=command,
+        branch=branch,
+        e2e_command=spec.command,
         e2e_pr_number=pr_number,
-        e2e_ref=branch,
+        toggles={
+            "enable_llm": spec.enable_llm,
+            "enable_embeddings": spec.enable_embeddings,
+            "enable_batch_llm": spec.enable_batch_llm,
+            "trusted_context": spec.trusted_context,
+            "allow_dynamic_verify": spec.allow_dynamic_verify,
+            "apply_patch": spec.apply_patch,
+            "create_pr": spec.create_pr,
+        },
+        timeout_s=timeout_s,
     )
-    try:
-        run_data = _wait_for_run(
-            repo=repo,
-            workflow=workflow,
-            branch=branch,
-            event="workflow_dispatch",
-            since=since,
-            timeout_s=timeout_s,
-        )
-    except Exception as exc:
-        print(f"[scenario:fail] name={scenario_name} reason={exc}", flush=True)
+    if run_data is None:
+        print(f"[scenario:fail] name={spec.name} reason={error}", flush=True)
         return ScenarioResult(
-            name=scenario_name,
-            trigger=command,
+            name=spec.name,
+            trigger=spec.command,
             status="FAIL",
             conclusion="timeout",
-            notes=[str(exc)],
-            artifact_dir=(artifacts_dir / scenario_name).as_posix(),
+            notes=[error],
+            artifact_dir=(artifacts_dir / spec.name).as_posix(),
         )
     run_id = str(run_data.get("databaseId", "n/a"))
-    target_dir = artifacts_dir / scenario_name / run_id
+    target_dir = artifacts_dir / spec.name / run_id
     ok, msg = _download_artifacts(repo, run_id, target_dir)
     result = _scenario_from_run(
-        scenario_name=scenario_name,
-        trigger=command,
+        scenario_name=spec.name,
+        trigger=spec.command,
         run_data=run_data,
         artifacts_root=target_dir,
+        requirements=spec.requirements,
     )
     if not ok:
         result.notes.append(f"artifact download warning: {msg}")
@@ -531,32 +734,141 @@ def _scenario_dispatch_command(
     return result
 
 
-def _scenario_workflow_dispatch(
-    *,
-    repo: str,
-    workflow: str,
-    branch: str,
-    pr_number: str,
-    artifacts_dir: Path,
-    timeout_s: int,
-) -> ScenarioResult:
-    return _scenario_dispatch_command(
-        repo=repo,
-        workflow=workflow,
-        branch=branch,
-        pr_number=pr_number,
-        command="/repobrain ask what files changed in this PR?",
-        scenario_name="workflow_dispatch_llm_embed",
-        artifacts_dir=artifacts_dir,
-        timeout_s=timeout_s,
-        enable_llm=True,
-        enable_embeddings=True,
-        enable_batch_llm=False,
-        trusted_context=True,
-        allow_dynamic_verify=False,
-        apply_patch=False,
-        create_pr=False,
+def _commit_and_push(paths: list[Path], message: str, branch: str) -> None:
+    args = ["git", "add"] + [path.as_posix() for path in paths]
+    run_cmd(args, check=True)
+    run_cmd(["git", "commit", "-m", message], check=True)
+    run_cmd(["git", "push", "-u", "origin", branch], check=True)
+
+
+def _prepare_fixable_marker(branch: str) -> None:
+    marker = Path("scripts/e2e/marker_bad.py")
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(
+        "def add(a,b):  return a+b\n\n"
+        "def loud_name(value):\n"
+        "    temp=value.upper()\n"
+        "    return temp\n",
+        encoding="utf-8",
     )
+    _commit_and_push([marker], "e2e: add fix marker", branch)
+
+
+def _prepare_batch_markers(branch: str, files_count: int = 12) -> None:
+    root = Path("scripts/e2e/batch_markers")
+    root.mkdir(parents=True, exist_ok=True)
+    changed: list[Path] = []
+    stamp = int(time.time())
+    for idx in range(1, files_count + 1):
+        path = root / f"marker_{idx:02d}.py"
+        path.write_text(
+            f"def marker_{idx}(value):\n"
+            f"    result = value + {idx}\n"
+            f"    note = 'batch_{stamp}_{idx}'\n"
+            "    return result, note\n",
+            encoding="utf-8",
+        )
+        changed.append(path)
+    _commit_and_push(changed, "e2e: add batch marker files", branch)
+
+
+def _parse_bool_flag(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _build_scenarios(
+    *,
+    require_llm_used: bool,
+    require_embeddings_used: bool,
+    require_patch: bool,
+    require_batch_calls_min: int,
+) -> list[ScenarioSpec]:
+    return [
+        ScenarioSpec(
+            name="review_dispatch",
+            command="/repobrain review",
+            enable_llm=False,
+            enable_embeddings=False,
+            enable_batch_llm=False,
+            trusted_context=False,
+            allow_dynamic_verify=False,
+            apply_patch=False,
+            create_pr=False,
+            requirements=ScenarioRequirements(),
+        ),
+        ScenarioSpec(
+            name="llm_used_dispatch",
+            command="/repobrain ask summarize the changes in this PR and highlight risks",
+            enable_llm=True,
+            enable_embeddings=False,
+            enable_batch_llm=False,
+            trusted_context=True,
+            allow_dynamic_verify=False,
+            apply_patch=False,
+            create_pr=False,
+            requirements=ScenarioRequirements(require_llm_used=require_llm_used),
+        ),
+        ScenarioSpec(
+            name="embeddings_warmup_dispatch",
+            command="/repobrain ask warmup index embeddings",
+            enable_llm=False,
+            enable_embeddings=True,
+            enable_batch_llm=False,
+            trusted_context=True,
+            allow_dynamic_verify=False,
+            apply_patch=False,
+            create_pr=False,
+            requirements=ScenarioRequirements(),
+        ),
+        ScenarioSpec(
+            name="embeddings_used_dispatch",
+            command="/repobrain ask list key modules related to retrieval and explain their roles",
+            enable_llm=False,
+            enable_embeddings=True,
+            enable_batch_llm=False,
+            trusted_context=True,
+            allow_dynamic_verify=False,
+            apply_patch=False,
+            create_pr=False,
+            requirements=ScenarioRequirements(
+                require_embeddings_used=require_embeddings_used,
+                require_index_embeddings=require_embeddings_used,
+            ),
+        ),
+        ScenarioSpec(
+            name="fix_patch_required_dispatch",
+            command=(
+                "/repobrain fix apply ruff-style fixes and improve naming "
+                "in scripts/e2e/marker_bad.py"
+            ),
+            enable_llm=True,
+            enable_embeddings=False,
+            enable_batch_llm=False,
+            trusted_context=True,
+            allow_dynamic_verify=False,
+            apply_patch=False,
+            create_pr=False,
+            requirements=ScenarioRequirements(
+                require_llm_used=require_llm_used,
+                require_patch=require_patch,
+            ),
+        ),
+        ScenarioSpec(
+            name="batch_llm_dispatch",
+            command="/repobrain review",
+            enable_llm=True,
+            enable_embeddings=False,
+            enable_batch_llm=True,
+            trusted_context=True,
+            allow_dynamic_verify=False,
+            apply_patch=False,
+            create_pr=False,
+            requirements=ScenarioRequirements(
+                require_llm_used=require_llm_used,
+                require_batch_calls_min=max(0, require_batch_calls_min),
+            ),
+        ),
+    ]
 
 
 def _create_temp_pr(*, repo: str, default_branch: str, branch: str, marker_file: Path) -> tuple[str, str]:
@@ -620,6 +932,30 @@ def main() -> int:
         default="artifacts/e2e",
         help="Directory for downloaded artifacts and report.",
     )
+    parser.add_argument(
+        "--require-llm-used",
+        default="true",
+        choices=["true", "false"],
+        help="Require llm_used=true in llm/batch/fix scenarios.",
+    )
+    parser.add_argument(
+        "--require-embeddings-used",
+        default="true",
+        choices=["true", "false"],
+        help="Require embeddings usage in embeddings scenario.",
+    )
+    parser.add_argument(
+        "--require-patch",
+        default="true",
+        choices=["true", "false"],
+        help="Require patch artifact in fix scenario.",
+    )
+    parser.add_argument(
+        "--require-batch-calls-min",
+        type=int,
+        default=2,
+        help="Minimum LLM calls for batch scenario.",
+    )
     args = parser.parse_args()
 
     _ensure_gh_ready()
@@ -636,6 +972,12 @@ def main() -> int:
     pr_number = ""
     pr_url = ""
     results: list[ScenarioResult] = []
+    scenarios = _build_scenarios(
+        require_llm_used=_parse_bool_flag(args.require_llm_used),
+        require_embeddings_used=_parse_bool_flag(args.require_embeddings_used),
+        require_patch=_parse_bool_flag(args.require_patch),
+        require_batch_calls_min=max(0, int(args.require_batch_calls_min)),
+    )
     try:
         pr_number, pr_url = _create_temp_pr(
             repo=repo,
@@ -643,52 +985,23 @@ def main() -> int:
             branch=branch,
             marker_file=marker_file,
         )
-        results.append(
-            _scenario_dispatch_command(
+        for spec in scenarios:
+            if spec.name == "fix_patch_required_dispatch":
+                print("[prep] creating fixable marker file", flush=True)
+                _prepare_fixable_marker(branch)
+            if spec.name == "batch_llm_dispatch":
+                print("[prep] creating batch marker files", flush=True)
+                _prepare_batch_markers(branch, files_count=12)
+            result = _scenario_dispatch_command(
                 repo=repo,
                 workflow=args.workflow,
                 branch=branch,
                 pr_number=pr_number,
-                command="/repobrain review",
-                scenario_name="review",
+                spec=spec,
                 artifacts_dir=artifacts_root,
                 timeout_s=args.scenario_timeout_s,
             )
-        )
-        results.append(
-            _scenario_dispatch_command(
-                repo=repo,
-                workflow=args.workflow,
-                branch=branch,
-                pr_number=pr_number,
-                command="/repobrain fix improve naming in marker file",
-                scenario_name="fix",
-                artifacts_dir=artifacts_root,
-                timeout_s=args.scenario_timeout_s,
-            )
-        )
-        results.append(
-            _scenario_dispatch_command(
-                repo=repo,
-                workflow=args.workflow,
-                branch=branch,
-                pr_number=pr_number,
-                command="/repobrain ask what files changed in this PR?",
-                scenario_name="ask",
-                artifacts_dir=artifacts_root,
-                timeout_s=args.scenario_timeout_s,
-            )
-        )
-        results.append(
-            _scenario_workflow_dispatch(
-                repo=repo,
-                workflow=args.workflow,
-                branch=branch,
-                pr_number=pr_number,
-                artifacts_dir=artifacts_root,
-                timeout_s=args.scenario_timeout_s,
-            )
-        )
+            results.append(result)
     finally:
         if args.cleanup and pr_number:
             _cleanup_pr(pr_number, branch, repo)

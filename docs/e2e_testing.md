@@ -1,42 +1,55 @@
 # E2E Testing (Current Repo)
 
-RepoBrain E2E validation is executed locally via GitHub CLI using:
+RepoBrain E2E validation is executed locally via GitHub CLI:
 
-- `scripts/e2e/run_e2e_suite.py`
+- `python scripts/e2e/run_e2e_suite.py`
 
-## Why local gh orchestration
+The harness uses only `workflow_dispatch --ref <branch>` simulation (no `issue_comment` dependency), so scenarios run before merge.
 
-`GITHUB_TOKEN`-triggered workflows often do not re-trigger other workflows.  
-For realistic end-to-end checks, this harness uses local `gh` commands:
+## Prerequisites
 
-- create temp branch
-- open PR
-- post `/repobrain ...` comments
-- wait workflow runs
-- download artifacts
-- validate usersafe JSON outputs
+- `gh` CLI installed and authenticated (`gh auth status`)
+- permissions to create branches/PRs and run workflows
+- `models: read` permission in workflow for LLM/Embeddings scenarios
 
-## Scenarios covered
+## Strict scenarios
 
-1. `review` via issue_comment
-2. `fix` via issue_comment
-3. `ask` via issue_comment
-4. `workflow_dispatch` toggles path for LLM/Embeddings
+1. `review_dispatch`
+2. `llm_used_dispatch`  
+   Required: `llm_usage.json`, `llm_used=true`, model/tokens/remaining/reset fields.
+3. `embeddings_warmup_dispatch`
+4. `embeddings_used_dispatch`  
+   Required: `embeddings_usage.json`, `embed_used=true`, `query_embedded=true`, remaining/reset fields, and index embeddings evidence (`index/embeddings.jsonl` in zip OR embeddings status `OK|PARTIAL` in manifest/audit).
+5. `fix_patch_required_dispatch`  
+   Required: `patch.diff` or `patch_parts/*.diff`.
+6. `batch_llm_dispatch`  
+   Required: batch LLM multi-call (`calls_count >= 2` by default), plus markdown totals block.
 
-## Expected artifacts validated
+## Required artifacts validated
 
-- `config_snapshot.json`
+- `config_snapshot.json` (usersafe scan)
 - `ai_quota_snapshot.json`
-- `llm_usage.json` (if LLM used)
-- `embeddings_usage.json` (if embeddings used)
-- `verification_report.json`
-- `check_run_payload.json` (when check-run path is used)
-- `patch.diff`/`patch_parts` (fix path, optional)
-- `ask_result.md` (optional when comment is truncated)
+- `llm_usage.json` (when required by scenario)
+- `embeddings_usage.json` (when required by scenario)
+- `patch.diff` / `patch_parts/*.diff` (for patch-required scenario)
+- `ask_result.md` (for batch summary assertions)
+
+Artifacts are downloaded into:
+
+- `artifacts/e2e/<scenario>/<run_id>/`
+- final report: `artifacts/e2e/e2e_report.md`
+
+## CLI controls
+
+- `--require-llm-used true|false`
+- `--require-embeddings-used true|false`
+- `--require-patch true|false`
+- `--require-batch-calls-min <int>`
+- `--scenario-timeout-s <seconds>`
+- `--cleanup` (close PR and delete branch at the end)
 
 ## PASS/FAIL interpretation
 
-- **PASS**: run succeeded and required usersafe artifacts validated.
-- **WARN**: run succeeded but optional checks/artifact download had issues.
-- **FAIL**: workflow failed or artifact validation detected hard violations.
-
+- **PASS**: workflow succeeded and all required assertions passed.
+- **WARN**: workflow succeeded, strict assertions passed, but non-critical warnings exist (for example usersafe scan tool warning).
+- **FAIL**: workflow failed, timeout happened, or any required artifact/JSON assertion failed.
