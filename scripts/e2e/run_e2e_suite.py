@@ -942,6 +942,11 @@ def _parse_bool_flag(value: str) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _build_marker_file_path(timestamp: int | None = None) -> Path:
+    stamp = int(time.time()) if timestamp is None else int(timestamp)
+    return Path("scripts/e2e/_markers") / f"e2e_marker_{stamp}.txt"
+
+
 def _build_scenarios(
     *,
     require_llm_used: bool,
@@ -1044,12 +1049,13 @@ def _build_scenarios(
 
 
 def _create_temp_pr(*, repo: str, default_branch: str, branch: str, marker_file: Path) -> tuple[str, str]:
+    marker_file.parent.mkdir(parents=True, exist_ok=True)
     marker_file.write_text(
         f"RepoBrain e2e marker: {_now_utc().isoformat()}\n",
         encoding="utf-8",
     )
     run_cmd(["git", "checkout", "-b", branch], check=True)
-    run_cmd(["git", "add", marker_file.as_posix()], check=True)
+    run_cmd(["git", "add", "--", marker_file.as_posix()], check=True)
     run_cmd(["git", "commit", "-m", "e2e: marker"], check=True)
     run_cmd(["git", "push", "-u", "origin", branch], check=True)
     body = "Automated E2E PR for RepoBrain scenario validation."
@@ -1149,7 +1155,7 @@ def main() -> int:
     short_sha = run_cmd(["git", "rev-parse", "--short", "HEAD"], check=True).out.strip()
     branch = f"e2e/{_now_utc().strftime('%Y%m%d-%H%M%S')}-{short_sha}"
 
-    marker_file = Path(f"e2e_marker_{int(time.time())}.txt")
+    marker_file = _build_marker_file_path()
     artifacts_root = Path(args.artifacts_dir)
     artifacts_root.mkdir(parents=True, exist_ok=True)
 

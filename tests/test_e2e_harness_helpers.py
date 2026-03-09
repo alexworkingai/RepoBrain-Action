@@ -1,4 +1,5 @@
 from importlib.util import module_from_spec, spec_from_file_location
+import json
 from pathlib import Path
 import sys
 
@@ -237,3 +238,46 @@ def test_fix_scenario_toggles_include_allow_dynamic_verify() -> None:
     )
     fix_spec = next(item for item in scenarios if item.name == "fix_patch_required_dispatch")
     assert fix_spec.allow_dynamic_verify is True
+
+
+def test_build_marker_file_path_under_markers_dir() -> None:
+    module = _load_module()
+    marker = module._build_marker_file_path(12345)  # noqa: SLF001
+    assert marker.as_posix() == "scripts/e2e/_markers/e2e_marker_12345.txt"
+
+
+def test_create_temp_pr_stages_marker_from_markers_dir(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    monkeypatch.chdir(tmp_path)
+    calls: list[list[str]] = []
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del cwd, check
+        calls.append(args)
+        if args[:4] == ["gh", "pr", "create", "--base"]:
+            return module.CmdResult(code=0, out="https://example.test/pr/42", err="")
+        if args[:3] == ["gh", "pr", "view"]:
+            payload = {"number": 42, "url": "https://example.test/pr/42"}
+            return module.CmdResult(code=0, out=json.dumps(payload), err="")
+        return module.CmdResult(code=0, out="", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    marker = module._build_marker_file_path(999)  # noqa: SLF001
+    pr_number, pr_url = module._create_temp_pr(  # noqa: SLF001
+        repo="owner/repo",
+        default_branch="main",
+        branch="e2e/test",
+        marker_file=marker,
+    )
+
+    assert pr_number == "42"
+    assert pr_url == "https://example.test/pr/42"
+    assert marker.exists()
+    assert marker.parent.as_posix() == "scripts/e2e/_markers"
+    assert ["git", "add", "--", marker.as_posix()] in calls
