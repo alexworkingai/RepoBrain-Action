@@ -102,7 +102,7 @@ def _find_run(
     branch: str,
     event: str,
     since: datetime,
-) -> dict[str, Any] | None:
+) -> tuple[dict[str, Any] | None, int]:
     result = run_cmd(
         [
             "gh",
@@ -125,7 +125,8 @@ def _find_run(
     )
     data = json.loads(result.out or "[]")
     if not isinstance(data, list):
-        return None
+        return None, 0
+    run_count = len(data)
     candidates: list[dict[str, Any]] = []
     min_ts = since - timedelta(seconds=30)
     for item in data:
@@ -141,9 +142,9 @@ def _find_run(
         if dt >= min_ts:
             candidates.append(item)
     if not candidates:
-        return None
+        return None, run_count
     candidates.sort(key=lambda item: str(item.get("createdAt", "")), reverse=True)
-    return candidates[0]
+    return candidates[0], run_count
 
 
 def _wait_for_run(
@@ -153,17 +154,53 @@ def _wait_for_run(
     branch: str,
     event: str,
     since: datetime,
-    timeout_s: int = 900,
+    timeout_s: int = 480,
 ) -> dict[str, Any]:
     started = time.time()
     run_item: dict[str, Any] | None = None
+    last_heartbeat = -10
+    last_seen_count = 0
     while time.time() - started < timeout_s:
-        run_item = _find_run(repo=repo, workflow=workflow, branch=branch, event=event, since=since)
+        run_item, seen_count = _find_run(
+            repo=repo,
+            workflow=workflow,
+            branch=branch,
+            event=event,
+            since=since,
+        )
+        last_seen_count = seen_count
         if run_item is not None:
             break
-        time.sleep(5)
+        elapsed = int(time.time() - started)
+        if elapsed - last_heartbeat >= 10:
+            print(
+                f"[wait] workflow={workflow} event={event} branch={branch} elapsed={elapsed}s "
+                f"runs_seen={seen_count}",
+                flush=True,
+            )
+            last_heartbeat = elapsed
+        time.sleep(2)
     if run_item is None:
-        raise RuntimeError(f"Cannot find workflow run for event={event}, branch={branch}")
+        diagnostics = run_cmd(
+            [
+                "gh",
+                "run",
+                "list",
+                "--repo",
+                repo,
+                "--workflow",
+                workflow,
+                "--limit",
+                "20",
+            ],
+            check=False,
+        )
+        diag_text = diagnostics.out or diagnostics.err or "no diagnostics"
+        raise TimeoutError(
+            "Timed out waiting for workflow run "
+            f"(event={event}, branch={branch}, timeout_s={timeout_s}, runs_seen={last_seen_count}).\n"
+            f"Recent runs:\n{diag_text}"
+        )
     run_id = str(run_item.get("databaseId"))
     run_cmd(["gh", "run", "watch", run_id, "--repo", repo, "--interval", "10"], check=False)
     view = run_cmd(
@@ -304,11 +341,7 @@ def render_report_markdown(
     return "\n".join(lines)
 
 
-def _post_pr_comment(pr_number: str, body: str) -> None:
-    run_cmd(["gh", "pr", "comment", pr_number, "--body", body], check=True)
-
-
-def _workflow_dispatch(
+def _build_workflow_dispatch_args(
     *,
     workflow: str,
     ref: str,
@@ -319,7 +352,10 @@ def _workflow_dispatch(
     allow_dynamic_verify: bool,
     apply_patch: bool,
     create_pr: bool,
-) -> None:
+    e2e_command: str = "",
+    e2e_pr_number: str = "",
+    e2e_ref: str = "",
+) -> list[str]:
     args = [
         "gh",
         "workflow",
@@ -342,6 +378,44 @@ def _workflow_dispatch(
         "-f",
         f"create_pr={'true' if create_pr else 'false'}",
     ]
+    if e2e_command.strip():
+        args.extend(["-f", f"e2e_command={e2e_command}"])
+    if e2e_pr_number.strip():
+        args.extend(["-f", f"e2e_pr_number={e2e_pr_number}"])
+    if e2e_ref.strip():
+        args.extend(["-f", f"e2e_ref={e2e_ref}"])
+    return args
+
+
+def _workflow_dispatch(
+    *,
+    workflow: str,
+    ref: str,
+    enable_llm: bool,
+    enable_embeddings: bool,
+    enable_batch_llm: bool,
+    trusted_context: bool,
+    allow_dynamic_verify: bool,
+    apply_patch: bool,
+    create_pr: bool,
+    e2e_command: str = "",
+    e2e_pr_number: str = "",
+    e2e_ref: str = "",
+) -> None:
+    args = _build_workflow_dispatch_args(
+        workflow=workflow,
+        ref=ref,
+        enable_llm=enable_llm,
+        enable_embeddings=enable_embeddings,
+        enable_batch_llm=enable_batch_llm,
+        trusted_context=trusted_context,
+        allow_dynamic_verify=allow_dynamic_verify,
+        apply_patch=apply_patch,
+        create_pr=create_pr,
+        e2e_command=e2e_command,
+        e2e_pr_number=e2e_pr_number,
+        e2e_ref=e2e_ref,
+    )
     run_cmd(args, check=True)
 
 
@@ -384,25 +458,69 @@ def _scenario_from_run(
     )
 
 
-def _scenario_issue_comment(
+def _scenario_dispatch_command(
     *,
     repo: str,
     workflow: str,
     branch: str,
     pr_number: str,
-    body: str,
+    command: str,
     scenario_name: str,
     artifacts_dir: Path,
+    timeout_s: int,
+    enable_llm: bool = False,
+    enable_embeddings: bool = False,
+    enable_batch_llm: bool = False,
+    trusted_context: bool = False,
+    allow_dynamic_verify: bool = False,
+    apply_patch: bool = False,
+    create_pr: bool = False,
 ) -> ScenarioResult:
+    print(
+        f"[scenario:start] name={scenario_name} mode=workflow_dispatch "
+        f"command={command} branch={branch} pr={pr_number}",
+        flush=True,
+    )
     since = _now_utc()
-    _post_pr_comment(pr_number, body)
-    run_data = _wait_for_run(repo=repo, workflow=workflow, branch=branch, event="issue_comment", since=since)
+    _workflow_dispatch(
+        workflow=workflow,
+        ref=branch,
+        enable_llm=enable_llm,
+        enable_embeddings=enable_embeddings,
+        enable_batch_llm=enable_batch_llm,
+        trusted_context=trusted_context,
+        allow_dynamic_verify=allow_dynamic_verify,
+        apply_patch=apply_patch,
+        create_pr=create_pr,
+        e2e_command=command,
+        e2e_pr_number=pr_number,
+        e2e_ref=branch,
+    )
+    try:
+        run_data = _wait_for_run(
+            repo=repo,
+            workflow=workflow,
+            branch=branch,
+            event="workflow_dispatch",
+            since=since,
+            timeout_s=timeout_s,
+        )
+    except Exception as exc:
+        print(f"[scenario:fail] name={scenario_name} reason={exc}", flush=True)
+        return ScenarioResult(
+            name=scenario_name,
+            trigger=command,
+            status="FAIL",
+            conclusion="timeout",
+            notes=[str(exc)],
+            artifact_dir=(artifacts_dir / scenario_name).as_posix(),
+        )
     run_id = str(run_data.get("databaseId", "n/a"))
     target_dir = artifacts_dir / scenario_name / run_id
     ok, msg = _download_artifacts(repo, run_id, target_dir)
     result = _scenario_from_run(
         scenario_name=scenario_name,
-        trigger=body,
+        trigger=command,
         run_data=run_data,
         artifacts_root=target_dir,
     )
@@ -418,12 +536,19 @@ def _scenario_workflow_dispatch(
     repo: str,
     workflow: str,
     branch: str,
+    pr_number: str,
     artifacts_dir: Path,
+    timeout_s: int,
 ) -> ScenarioResult:
-    since = _now_utc()
-    _workflow_dispatch(
+    return _scenario_dispatch_command(
+        repo=repo,
         workflow=workflow,
-        ref=branch,
+        branch=branch,
+        pr_number=pr_number,
+        command="/repobrain ask what files changed in this PR?",
+        scenario_name="workflow_dispatch_llm_embed",
+        artifacts_dir=artifacts_dir,
+        timeout_s=timeout_s,
         enable_llm=True,
         enable_embeddings=True,
         enable_batch_llm=False,
@@ -432,21 +557,6 @@ def _scenario_workflow_dispatch(
         apply_patch=False,
         create_pr=False,
     )
-    run_data = _wait_for_run(repo=repo, workflow=workflow, branch=branch, event="workflow_dispatch", since=since)
-    run_id = str(run_data.get("databaseId", "n/a"))
-    target_dir = artifacts_dir / "workflow_dispatch_llm_embed" / run_id
-    ok, msg = _download_artifacts(repo, run_id, target_dir)
-    result = _scenario_from_run(
-        scenario_name="workflow_dispatch_llm_embed",
-        trigger="workflow_dispatch toggles",
-        run_data=run_data,
-        artifacts_root=target_dir,
-    )
-    if not ok:
-        result.notes.append(f"artifact download warning: {msg}")
-        if result.status == "PASS":
-            result.status = "WARN"
-    return result
 
 
 def _create_temp_pr(*, repo: str, default_branch: str, branch: str, marker_file: Path) -> tuple[str, str]:
@@ -500,6 +610,12 @@ def main() -> int:
     parser.add_argument("--cleanup", action="store_true", help="Close PR and delete branch after run.")
     parser.add_argument("--workflow", default="repobrain.yml", help="Workflow filename to monitor.")
     parser.add_argument(
+        "--scenario-timeout-s",
+        type=int,
+        default=480,
+        help="Maximum wait time for each scenario run.",
+    )
+    parser.add_argument(
         "--artifacts-dir",
         default="artifacts/e2e",
         help="Directory for downloaded artifacts and report.",
@@ -528,36 +644,39 @@ def main() -> int:
             marker_file=marker_file,
         )
         results.append(
-            _scenario_issue_comment(
+            _scenario_dispatch_command(
                 repo=repo,
                 workflow=args.workflow,
                 branch=branch,
                 pr_number=pr_number,
-                body="/repobrain review",
+                command="/repobrain review",
                 scenario_name="review",
                 artifacts_dir=artifacts_root,
+                timeout_s=args.scenario_timeout_s,
             )
         )
         results.append(
-            _scenario_issue_comment(
+            _scenario_dispatch_command(
                 repo=repo,
                 workflow=args.workflow,
                 branch=branch,
                 pr_number=pr_number,
-                body="/repobrain fix improve naming in marker file",
+                command="/repobrain fix improve naming in marker file",
                 scenario_name="fix",
                 artifacts_dir=artifacts_root,
+                timeout_s=args.scenario_timeout_s,
             )
         )
         results.append(
-            _scenario_issue_comment(
+            _scenario_dispatch_command(
                 repo=repo,
                 workflow=args.workflow,
                 branch=branch,
                 pr_number=pr_number,
-                body="/repobrain ask what files changed in this PR?",
+                command="/repobrain ask what files changed in this PR?",
                 scenario_name="ask",
                 artifacts_dir=artifacts_root,
+                timeout_s=args.scenario_timeout_s,
             )
         )
         results.append(
@@ -565,7 +684,9 @@ def main() -> int:
                 repo=repo,
                 workflow=args.workflow,
                 branch=branch,
+                pr_number=pr_number,
                 artifacts_dir=artifacts_root,
+                timeout_s=args.scenario_timeout_s,
             )
         )
     finally:

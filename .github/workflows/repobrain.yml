@@ -55,6 +55,21 @@ on:
         required: false
         default: false
         type: boolean
+      e2e_command:
+        description: "E2E simulated /repobrain command for workflow_dispatch"
+        required: false
+        default: ""
+        type: string
+      e2e_pr_number:
+        description: "E2E PR number for workflow_dispatch simulation"
+        required: false
+        default: ""
+        type: string
+      e2e_ref:
+        description: "E2E source ref (informational)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -111,6 +126,9 @@ jobs:
           echo "RB_ALLOW_DYNAMIC_VERIFY=${{ inputs.allow_dynamic_verify && '1' || '0' }}" >> $GITHUB_ENV
           echo "RB_APPLY_PATCH=${{ inputs.apply_patch && '1' || '0' }}" >> $GITHUB_ENV
           echo "RB_CREATE_PR=${{ inputs.create_pr && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_E2E_COMMAND=${{ inputs.e2e_command }}" >> $GITHUB_ENV
+          echo "RB_E2E_PR_NUMBER=${{ inputs.e2e_pr_number }}" >> $GITHUB_ENV
+          echo "RB_E2E_REF=${{ inputs.e2e_ref }}" >> $GITHUB_ENV
       - uses: ./. 
         env:
           RB_INDEX_CACHE_RESTORED: ${{ steps.index_cache.outputs.cache-hit == 'true' && '1' || '' }}

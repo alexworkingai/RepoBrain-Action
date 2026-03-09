@@ -41,3 +41,25 @@ def test_report_writer_contains_table() -> None:
     assert "| Scenario | Trigger | Result | Conclusion | Run |" in md
     assert "RepoBrain E2E Report" in md
     assert "**PASS**" in md
+
+
+def test_build_workflow_dispatch_args_includes_e2e_payload() -> None:
+    module = _load_module()
+    args = module._build_workflow_dispatch_args(  # noqa: SLF001
+        workflow="repobrain.yml",
+        ref="feature/test",
+        enable_llm=False,
+        enable_embeddings=False,
+        enable_batch_llm=False,
+        trusted_context=False,
+        allow_dynamic_verify=False,
+        apply_patch=False,
+        create_pr=False,
+        e2e_command="/repobrain review",
+        e2e_pr_number="123",
+        e2e_ref="feature/test",
+    )
+    joined = " ".join(args)
+    assert "e2e_command=/repobrain review" in joined
+    assert "e2e_pr_number=123" in joined
+    assert "e2e_ref=feature/test" in joined

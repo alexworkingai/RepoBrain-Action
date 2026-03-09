@@ -516,6 +516,97 @@ def _build_github_context_seed(
     }
 
 
+def _safe_parse_pr_number(value: str) -> int | None:
+    try:
+        return parse_issue_number(value)
+    except ValueError:
+        print("E2E dispatch simulation ignored invalid RB_E2E_PR_NUMBER")
+        return None
+
+
+def _build_dispatch_pr_payload(*, repo: str, pr_number: int | None) -> dict[str, Any]:
+    if not repo or pr_number is None:
+        return {}
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if not token:
+        print("E2E dispatch simulation: missing GITHUB_TOKEN, PR context fetch skipped")
+        return {
+            "issue": {"number": pr_number, "pull_request": {}},
+            "pull_request": {},
+            "files": [],
+            "changed_files": [],
+            "diff_hunks": [],
+        }
+
+    client = GitHubClient(repo=repo, token=token)
+    pull_payload = client.get_pull(pr_number)
+    files_payload = client.get_pull_files(pr_number)
+    base_raw = pull_payload.get("base", {}) if isinstance(pull_payload, dict) else {}
+    head_raw = pull_payload.get("head", {}) if isinstance(pull_payload, dict) else {}
+    base = base_raw if isinstance(base_raw, dict) else {}
+    head = head_raw if isinstance(head_raw, dict) else {}
+
+    files: list[dict[str, str]] = []
+    changed_files: list[str] = []
+    diff_hunks: list[str] = []
+    for item in files_payload:
+        if not isinstance(item, dict):
+            continue
+        filename = str(item.get("filename", "") or "").strip()
+        if filename:
+            files.append({"filename": filename})
+            changed_files.append(filename)
+        patch = item.get("patch")
+        if isinstance(patch, str):
+            patch_clean = patch.strip()
+            if patch_clean:
+                diff_hunks.append(patch_clean)
+
+    return {
+        "issue": {
+            "number": pr_number,
+            "pull_request": {"url": f"https://api.github.com/repos/{repo}/pulls/{pr_number}"},
+        },
+        "pull_request": {
+            "base": {"sha": str(base.get("sha", "") or ""), "ref": str(base.get("ref", "") or "")},
+            "head": {"sha": str(head.get("sha", "") or ""), "ref": str(head.get("ref", "") or "")},
+        },
+        "files": files,
+        "changed_files": sorted(set(changed_files)),
+        "diff_hunks": diff_hunks,
+    }
+
+
+def _resolve_workflow_dispatch_simulation(
+    *,
+    repo: str,
+    source_text: str,
+    resolved_issue_number: int | None,
+    event_ctx: EventContext,
+    event_payload: dict[str, Any],
+) -> tuple[str, int | None, EventContext, dict[str, Any]]:
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "").strip()
+    simulated_command = os.environ.get("RB_E2E_COMMAND", "").strip()
+    if event_name != "workflow_dispatch" or not simulated_command:
+        return source_text, resolved_issue_number, event_ctx, event_payload
+
+    pr_from_env = _safe_parse_pr_number(os.environ.get("RB_E2E_PR_NUMBER", ""))
+    resolved_issue = resolved_issue_number if resolved_issue_number is not None else pr_from_env
+    simulated_event_ctx = EventContext(
+        comment_text=simulated_command,
+        issue_number=resolved_issue,
+        comment_id=None,
+        comment_user_login="",
+        is_pull_request=resolved_issue is not None,
+    )
+    simulated_payload = _build_dispatch_pr_payload(repo=repo, pr_number=resolved_issue)
+    print(
+        "Workflow dispatch simulation enabled: "
+        f"command={simulated_command} pr={resolved_issue if resolved_issue is not None else 'n/a'}"
+    )
+    return simulated_command, resolved_issue, simulated_event_ctx, simulated_payload
+
+
 def _build_verification_context_seed(
     *,
     time_budget_s: int = 30,
@@ -3808,10 +3899,20 @@ def run_github_flow(
     """Run RepoBrain GitHub flow in dry-run or post mode."""
     env_cfg = RepoBrainConfig.from_env()
     _set_runtime_env_cfg(env_cfg)
+    repo_name = extract_repo_from_env()
+    sha_value = extract_sha_from_env()
+    run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
     event_ctx = extract_event_context_from_event(event_path)
     event_payload = _load_event_payload(event_path)
     source_text = (comment_text or "").strip() or event_ctx.comment_text.strip()
     resolved_issue_number = issue_number if issue_number is not None else event_ctx.issue_number
+    source_text, resolved_issue_number, event_ctx, event_payload = _resolve_workflow_dispatch_simulation(
+        repo=repo_name,
+        source_text=source_text,
+        resolved_issue_number=resolved_issue_number,
+        event_ctx=event_ctx,
+        event_payload=event_payload,
+    )
     github_context_seed = _build_github_context_seed(
         payload=event_payload,
         event_ctx=event_ctx,
@@ -3819,9 +3920,6 @@ def run_github_flow(
     )
     verification_context_seed = _build_verification_context_seed(time_budget_s=30, env_cfg=env_cfg)
     mode_label = "DRY_RUN" if dry_run else "POST_MODE"
-    repo_name = extract_repo_from_env()
-    sha_value = extract_sha_from_env()
-    run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
     audit = build_audit_base(
         {
             "repo": repo_name,
