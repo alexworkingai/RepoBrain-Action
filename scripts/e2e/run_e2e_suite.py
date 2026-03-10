@@ -560,6 +560,74 @@ def _to_int(value: Any) -> int:
         return 0
 
 
+def _to_optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _fix_provider_context(artifacts_root: Path) -> dict[str, Any]:
+    llm_usage_path = _find_first(artifacts_root, "llm_usage.json")
+    llm_debug_path = _find_first(artifacts_root, "llm_http_debug.json")
+    llm_usage = _load_json(llm_usage_path) if llm_usage_path is not None else {}
+    llm_debug = _load_json(llm_debug_path) if llm_debug_path is not None else {}
+
+    provider_http_status = (
+        llm_debug.get("provider_http_status")
+        if isinstance(llm_debug, dict) and "provider_http_status" in llm_debug
+        else llm_usage.get("provider_http_status")
+    )
+    provider_error_type = str(
+        (
+            llm_debug.get("provider_error_type")
+            if isinstance(llm_debug, dict) and "provider_error_type" in llm_debug
+            else llm_usage.get("provider_error_type", "n/a")
+        )
+        or "n/a"
+    )
+    effective_model_id = str(
+        (
+            llm_usage.get("effective_model_id")
+            if isinstance(llm_usage, dict) and llm_usage.get("effective_model_id")
+            else llm_debug.get("fallback_model")
+        )
+        or "n/a"
+    )
+    fallback_used = bool(
+        llm_usage.get("fallback_used", False)
+        if isinstance(llm_usage, dict)
+        else False
+    )
+    llm_used = bool(llm_usage.get("llm_used", False)) if isinstance(llm_usage, dict) else False
+    llm_skip_reason = str(llm_usage.get("skip_reason", "n/a") or "n/a") if isinstance(llm_usage, dict) else "n/a"
+
+    rate_limited = (
+        _to_optional_int(provider_http_status) == 429
+        or provider_error_type.strip().lower() == "rate_limited"
+    )
+    return {
+        "provider_http_status": provider_http_status,
+        "provider_error_type": provider_error_type,
+        "effective_model_id": effective_model_id,
+        "fallback_used": fallback_used,
+        "llm_used": llm_used,
+        "llm_skip_reason": llm_skip_reason,
+        "rate_limited": rate_limited,
+    }
+
+
+def _extract_llm_remaining_requests(artifacts_root: Path) -> int | None:
+    llm_usage_path = _find_first(artifacts_root, "llm_usage.json")
+    if llm_usage_path is None:
+        return None
+    try:
+        payload = _load_json(llm_usage_path)
+    except json.JSONDecodeError:
+        return None
+    return _to_optional_int(payload.get("remaining_requests"))
+
+
 def validate_artifacts(
     scenario: str,
     artifacts_root: Path,
@@ -948,6 +1016,18 @@ def _scenario_from_run(
             status = "WARN"
     if validation_status == "FAIL":
         status = "FAIL_PRODUCT"
+    if scenario_name == "fix_patch_required_dispatch":
+        fix_ctx = _fix_provider_context(artifacts_root)
+        if status == "FAIL_PRODUCT" and bool(fix_ctx.get("rate_limited", False)):
+            status = "FAIL_INFRA"
+            notes.append("classified as FAIL_INFRA due to provider rate limit (429)")
+            notes.append(
+                "fix_provider_context: "
+                f"status={fix_ctx.get('provider_http_status')}, "
+                f"error_type={fix_ctx.get('provider_error_type')}, "
+                f"effective_model_id={fix_ctx.get('effective_model_id')}, "
+                f"fallback_used={fix_ctx.get('fallback_used')}"
+            )
     return ScenarioResult(
         name=scenario_name,
         trigger=trigger,
@@ -1226,6 +1306,25 @@ def _build_scenarios(
             requirements=ScenarioRequirements(),
         ),
         ScenarioSpec(
+            name="fix_patch_required_dispatch",
+            command=(
+                "/repobrain fix apply ruff-style fixes and improve naming "
+                "in scripts/e2e/marker_bad.py"
+            ),
+            enable_llm=True,
+            enable_embeddings=False,
+            enable_batch_llm=False,
+            batch_force=False,
+            trusted_context=True,
+            allow_dynamic_verify=True,
+            apply_patch=False,
+            create_pr=False,
+            requirements=ScenarioRequirements(
+                require_llm_used=require_llm_used,
+                require_patch=require_patch,
+            ),
+        ),
+        ScenarioSpec(
             name="llm_used_dispatch",
             command="/repobrain ask summarize the changes in this PR and highlight risks",
             enable_llm=True,
@@ -1265,25 +1364,6 @@ def _build_scenarios(
             requirements=ScenarioRequirements(
                 require_embeddings_used=require_embeddings_used,
                 require_index_embeddings=require_embeddings_used,
-            ),
-        ),
-        ScenarioSpec(
-            name="fix_patch_required_dispatch",
-            command=(
-                "/repobrain fix apply ruff-style fixes and improve naming "
-                "in scripts/e2e/marker_bad.py"
-            ),
-            enable_llm=True,
-            enable_embeddings=False,
-            enable_batch_llm=False,
-            batch_force=False,
-            trusted_context=True,
-            allow_dynamic_verify=True,
-            apply_patch=False,
-            create_pr=False,
-            requirements=ScenarioRequirements(
-                require_llm_used=require_llm_used,
-                require_patch=require_patch,
             ),
         ),
         ScenarioSpec(
@@ -1416,6 +1496,12 @@ def main() -> int:
         default=2,
         help="Base backoff (seconds) for gh run download retries.",
     )
+    parser.add_argument(
+        "--reserve-fix-quota",
+        default="true",
+        choices=["true", "false"],
+        help="Reserve low remaining quota by skipping batch scenario after fix (harness-only).",
+    )
     args = parser.parse_args()
 
     _ensure_gh_ready()
@@ -1432,6 +1518,8 @@ def main() -> int:
     pr_number = ""
     pr_url = ""
     results: list[ScenarioResult] = []
+    reserve_fix_quota = _parse_bool_flag(args.reserve_fix_quota)
+    fix_remaining_requests: int | None = None
     scenarios = _build_scenarios(
         require_llm_used=_parse_bool_flag(args.require_llm_used),
         require_embeddings_used=_parse_bool_flag(args.require_embeddings_used),
@@ -1452,6 +1540,24 @@ def main() -> int:
                 print("[prep] creating fixable marker file", flush=True)
                 _prepare_fixable_marker(branch)
             if spec.name == "batch_llm_dispatch":
+                if reserve_fix_quota and fix_remaining_requests is not None and fix_remaining_requests <= 2:
+                    results.append(
+                        ScenarioResult(
+                            name=spec.name,
+                            trigger=spec.command,
+                            status="WARN",
+                            conclusion="skipped",
+                            notes=[
+                                "batch scenario skipped to reserve quota after fix scenario",
+                                (
+                                    "reserve_fix_quota=true and "
+                                    f"fix_remaining_requests={fix_remaining_requests}"
+                                ),
+                            ],
+                            artifact_dir=(artifacts_root / spec.name).as_posix(),
+                        )
+                    )
+                    continue
                 _clean_e2e_markers(branch)
                 print("[prep] creating batch marker files", flush=True)
                 _prepare_batch_markers(branch, files_count=12)
@@ -1469,6 +1575,8 @@ def main() -> int:
                 artifact_download_backoff_s=args.artifact_download_backoff_s,
             )
             results.append(result)
+            if spec.name == "fix_patch_required_dispatch":
+                fix_remaining_requests = _extract_llm_remaining_requests(Path(result.artifact_dir))
     finally:
         if args.cleanup and pr_number:
             _cleanup_pr(pr_number, branch, repo)

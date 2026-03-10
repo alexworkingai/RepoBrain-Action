@@ -15,18 +15,19 @@ The harness uses only `workflow_dispatch --ref <branch>` simulation (no `issue_c
 ## Strict scenarios
 
 1. `review_dispatch`
-2. `llm_used_dispatch`  
+2. `fix_patch_required_dispatch`  
+   Required: `patch.diff` or `patch_parts/*.diff`.
+   This scenario runs early because patch generation is quota-sensitive.
+3. `llm_used_dispatch`  
    Required: `llm_usage.json`, `llm_used=true`, model/tokens/remaining/reset fields.
-3. `embeddings_warmup_dispatch`
-4. `embeddings_used_dispatch`  
+4. `embeddings_warmup_dispatch`
+5. `embeddings_used_dispatch`  
    Required: `embeddings_usage.json`, `embed_used=true`, `query_embedded=true`, remaining/reset fields, and runtime-truth embeddings evidence (`index_embeddings_evidence.json` with status `OK|PARTIAL`).
    Semantics:
    - `OK`: query embedding + loaded index vectors + vectors used in hybrid scoring.
    - `PARTIAL`: query embedding works, but index vectors were unavailable or not used.
    - `DISABLED`: embeddings disabled in this run.
    - `UNKNOWN`: internal embedding error (usersafe reason is included).
-5. `fix_patch_required_dispatch`  
-   Required: `patch.diff` or `patch_parts/*.diff`.
 6. `batch_llm_dispatch`  
    Required: batch LLM multi-call (`calls_count >= 2` by default), plus markdown totals block.
 
@@ -52,6 +53,7 @@ Artifacts are downloaded into:
 - `--require-patch true|false`
 - `--require-batch-calls-min <int>`
 - `--scenario-timeout-s <seconds>`
+- `--reserve-fix-quota true|false` (default `true`; harness may skip batch with `WARN` when remaining quota after fix is very low)
 - `--cleanup` (close PR and delete branch at the end)
 - workflow_dispatch toggle `batch_force=true` enables forced batch path for E2E-only validation.
 
@@ -67,6 +69,11 @@ Patch generation notes:
 - **WARN**: strict checks passed, but non-critical transport/diagnostic warnings exist.
 - **FAIL_PRODUCT**: product behavior failed (artifacts downloaded and strict assertions failed).
 - **FAIL_INFRA**: infrastructure/transport failure (for example artifact download/network issues) prevented reliable product verdict.
+
+Fix scenario special classification:
+
+- Provider rate-limited errors (`provider_http_status=429` or `provider_error_type=rate_limited`) are classified as **FAIL_INFRA**.
+- **FAIL_PRODUCT** for fix is only used when model path is available but patch output/extraction still fails.
 
 Artifact transport fallback diagnostics:
 

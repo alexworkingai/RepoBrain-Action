@@ -3994,9 +3994,13 @@ def _build_review_markdown(
             review["summary_text"] = llm_text
     _merge_llm_meta(audit_summary, llm_meta)
     llm_http_debug_payload: dict[str, Any] | None = None
+    provider_http_status = llm_meta.get("llm_provider_http_status")
+    provider_error_type = str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a")
+    provider_error_present = provider_http_status is not None or provider_error_type not in {"n/a", ""}
     if (
         cmd == "fix"
         and not bool(llm_meta.get("llm_used", False))
+        and provider_error_present
         and os.environ.get("GITHUB_EVENT_NAME", "").strip() == "workflow_dispatch"
     ):
         llm_http_debug_payload = _build_llm_http_debug_payload(

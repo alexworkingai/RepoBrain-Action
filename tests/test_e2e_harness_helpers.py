@@ -455,3 +455,128 @@ def test_fix_scenario_warn_with_run_view_log_when_upload_likely(monkeypatch, tmp
     assert any("run_view_path=tmp/run_view.json" in note for note in result.notes)
     assert any("run_log_path=tmp/run_log.txt" in note for note in result.notes)
     assert any("artifact upload likely succeeded" in note for note in result.notes)
+
+
+def test_fix_scenario_rate_limited_classified_as_infra(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    artifacts_root = tmp_path / "fix429"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    (artifacts_root / "config_snapshot.json").write_text('{"config":{"safe":true}}', encoding="utf-8")
+    (artifacts_root / "ai_quota_snapshot.json").write_text('{"governor":{"ok":true}}', encoding="utf-8")
+    (artifacts_root / "llm_usage.json").write_text(
+        json.dumps(
+            {
+                "llm_used": False,
+                "skip_reason": "LLM_NOT_AVAILABLE:rate_limited",
+                "decision_route": "FAST",
+                "provider_http_status": 429,
+                "provider_error_type": "rate_limited",
+                "effective_model_id": "openai/gpt-4.1-mini",
+                "fallback_used": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts_root / "llm_http_debug.json").write_text(
+        json.dumps(
+            {
+                "provider_http_status": 429,
+                "provider_error_type": "rate_limited",
+                "fallback_model": "openai/gpt-4.1-mini",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts_root / "patch_generation_debug.json").write_text(
+        '{"reason":"diff_not_found_in_engine_or_llm_output"}',
+        encoding="utf-8",
+    )
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del args, cwd, check
+        return module.CmdResult(code=0, out="ok", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    result = module._scenario_from_run(  # noqa: SLF001
+        scenario_name="fix_patch_required_dispatch",
+        trigger="/repobrain fix",
+        run_data={"databaseId": "1", "url": "https://example.test/run/1", "conclusion": "success"},
+        artifacts_root=artifacts_root,
+        requirements=module.ScenarioRequirements(require_patch=True),
+    )
+
+    assert result.status == "FAIL_INFRA"
+    assert any("classified as FAIL_INFRA due to provider rate limit (429)" in note for note in result.notes)
+    assert any("effective_model_id=openai/gpt-4.1-mini" in note for note in result.notes)
+
+
+def test_fix_scenario_llm_used_but_no_patch_is_product_fail(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    artifacts_root = tmp_path / "fix-product-fail"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    (artifacts_root / "config_snapshot.json").write_text('{"config":{"safe":true}}', encoding="utf-8")
+    (artifacts_root / "ai_quota_snapshot.json").write_text('{"governor":{"ok":true}}', encoding="utf-8")
+    (artifacts_root / "llm_usage.json").write_text(
+        json.dumps(
+            {
+                "llm_used": True,
+                "skip_reason": "n/a",
+                "decision_route": "FAST",
+                "provider_http_status": None,
+                "provider_error_type": "n/a",
+                "effective_model_id": "openai/gpt-4.1",
+                "fallback_used": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts_root / "patch_generation_debug.json").write_text(
+        '{"reason":"diff_not_found_in_engine_or_llm_output"}',
+        encoding="utf-8",
+    )
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del args, cwd, check
+        return module.CmdResult(code=0, out="ok", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    result = module._scenario_from_run(  # noqa: SLF001
+        scenario_name="fix_patch_required_dispatch",
+        trigger="/repobrain fix",
+        run_data={"databaseId": "2", "url": "https://example.test/run/2", "conclusion": "success"},
+        artifacts_root=artifacts_root,
+        requirements=module.ScenarioRequirements(require_patch=True),
+    )
+
+    assert result.status == "FAIL_PRODUCT"
+
+
+def test_scenario_order_places_fix_before_batch() -> None:
+    module = _load_module()
+    scenarios = module._build_scenarios(  # noqa: SLF001
+        require_llm_used=True,
+        require_embeddings_used=True,
+        require_patch=True,
+        require_batch_calls_min=2,
+    )
+    names = [item.name for item in scenarios]
+    assert names == [
+        "review_dispatch",
+        "fix_patch_required_dispatch",
+        "llm_used_dispatch",
+        "embeddings_warmup_dispatch",
+        "embeddings_used_dispatch",
+        "batch_llm_dispatch",
+    ]
