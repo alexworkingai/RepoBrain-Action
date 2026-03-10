@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
+import random
 import re
 import subprocess
 import sys
@@ -26,6 +27,23 @@ TRANSIENT_GH_ERROR_MARKERS = (
     "temporary failure",
     "eof",
     "connection reset",
+)
+
+ARTIFACT_LOG_EVIDENCE_MARKERS = (
+    "artifacts/patch.diff",
+    "artifacts/patch_parts",
+    "artifacts/patch_generation_debug.json",
+    "artifacts/llm_usage.json",
+    "artifacts/ai_quota_snapshot.json",
+)
+
+RUN_ARTIFACT_EVIDENCE_NAMES = (
+    "repobrain-patch",
+    "repobrain-patch-parts",
+    "repobrain-patch-generation-debug",
+    "repobrain-llm-usage",
+    "repobrain-verification",
+    "repobrain-ai-quota-snapshot",
 )
 
 
@@ -318,20 +336,171 @@ def _download_artifacts(
     run_id: str,
     out_dir: Path,
     *,
-    gh_retries: int,
-    gh_backoff_s: int,
+    retries: int,
+    backoff_s: int,
 ) -> tuple[bool, str]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    result, attempts_used = _run_gh_cmd_with_retries(
-        ["gh", "run", "download", run_id, "--repo", repo, "--dir", str(out_dir)],
+    attempts_total = max(1, int(retries))
+    base_backoff = max(1.0, float(backoff_s))
+    last_result = CmdResult(code=1, out="", err="artifact download failed")
+    attempts_used = 0
+
+    for attempt in range(1, attempts_total + 1):
+        attempts_used = attempt
+        result = run_cmd(
+            ["gh", "run", "download", run_id, "--repo", repo, "--dir", str(out_dir)],
+            check=False,
+        )
+        last_result = result
+        if result.code == 0:
+            return True, f"ok (attempts={attempt})"
+
+        if attempt >= attempts_total or not _is_transient_gh_error(result):
+            break
+
+        backoff = min(32.0, base_backoff * float(2 ** (attempt - 1)))
+        jitter = random.uniform(0.0, min(2.0, backoff * 0.25))
+        delay = backoff + jitter
+        err_text = result.err or result.out or "artifact download transient failure"
+        print(
+            f"[artifact-retry] WARN run_id={run_id} attempt={attempt}/{attempts_total} "
+            f"error={err_text} retry_in={delay:.2f}s",
+            flush=True,
+        )
+        time.sleep(delay)
+
+    err = last_result.err or last_result.out or "artifact download failed"
+    return False, f"{err} (attempts={attempts_used})"
+
+
+def _extract_log_markers(log_text: str) -> list[str]:
+    blob = str(log_text or "").lower()
+    markers: list[str] = []
+    for marker in ARTIFACT_LOG_EVIDENCE_MARKERS:
+        if marker.lower() in blob:
+            markers.append(marker)
+    return markers
+
+
+def _list_run_artifact_names(
+    *,
+    repo: str,
+    run_id: str,
+    gh_retries: int,
+    gh_backoff_s: int,
+) -> tuple[list[str], str]:
+    endpoint = f"repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100"
+    result, _ = _run_gh_cmd_with_retries(
+        ["gh", "api", endpoint],
         retries=gh_retries,
         backoff_s=gh_backoff_s,
         check=False,
     )
     if result.code != 0:
-        err = result.err or result.out or "artifact download failed"
-        return False, f"{err} (attempts={attempts_used})"
-    return True, "ok"
+        return [], result.err or result.out or "artifact list unavailable"
+    try:
+        payload = json.loads(result.out or "{}")
+    except json.JSONDecodeError:
+        return [], "artifact list decode failed"
+    artifacts_raw = payload.get("artifacts", []) if isinstance(payload, dict) else []
+    if not isinstance(artifacts_raw, list):
+        return [], "artifact list payload invalid"
+    names: list[str] = []
+    for item in artifacts_raw:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).strip()
+        if name:
+            names.append(name)
+    return names, "ok"
+
+
+def _collect_run_fallback_diagnostics(
+    *,
+    repo: str,
+    run_id: str,
+    out_dir: Path,
+    gh_retries: int,
+    gh_backoff_s: int,
+) -> dict[str, Any]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    notes: list[str] = []
+    run_view_path = out_dir / "run_view.json"
+    run_log_path = out_dir / "run_log.txt"
+    view_data: dict[str, Any] = {}
+    log_markers: list[str] = []
+    artifact_names: list[str] = []
+
+    view_result, _ = _run_gh_cmd_with_retries(
+        [
+            "gh",
+            "run",
+            "view",
+            run_id,
+            "--repo",
+            repo,
+            "--json",
+            "conclusion,status,createdAt,updatedAt,jobs,url,databaseId",
+        ],
+        retries=gh_retries,
+        backoff_s=gh_backoff_s,
+        check=False,
+    )
+    if view_result.code == 0:
+        try:
+            view_raw = json.loads(view_result.out or "{}")
+            view_data = view_raw if isinstance(view_raw, dict) else {}
+        except json.JSONDecodeError:
+            notes.append("run_view decode failed")
+        run_view_path.write_text(
+            json.dumps(view_data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    else:
+        notes.append(f"run_view unavailable: {view_result.err or view_result.out or 'unknown'}")
+
+    log_result, _ = _run_gh_cmd_with_retries(
+        ["gh", "run", "view", run_id, "--repo", repo, "--log"],
+        retries=gh_retries,
+        backoff_s=gh_backoff_s,
+        check=False,
+    )
+    if log_result.code == 0:
+        log_text = log_result.out or ""
+        run_log_path.write_text(log_text, encoding="utf-8")
+        log_markers = _extract_log_markers(log_text)
+    else:
+        notes.append(f"run_log unavailable: {log_result.err or log_result.out or 'unknown'}")
+
+    artifact_names, artifact_name_msg = _list_run_artifact_names(
+        repo=repo,
+        run_id=run_id,
+        gh_retries=gh_retries,
+        gh_backoff_s=gh_backoff_s,
+    )
+    if artifact_names:
+        (out_dir / "run_artifacts.json").write_text(
+            json.dumps({"artifact_names": artifact_names}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    elif artifact_name_msg != "ok":
+        notes.append(f"run_artifact_names unavailable: {artifact_name_msg}")
+
+    evidence_name_hits = [
+        name for name in artifact_names if any(token in name for token in RUN_ARTIFACT_EVIDENCE_NAMES)
+    ]
+    upload_likely = bool(log_markers or evidence_name_hits)
+
+    return {
+        "run_view_path": run_view_path.as_posix() if run_view_path.exists() else "n/a",
+        "run_log_path": run_log_path.as_posix() if run_log_path.exists() else "n/a",
+        "run_view": view_data,
+        "log_markers": log_markers,
+        "artifact_names": artifact_names,
+        "artifact_evidence_hits": evidence_name_hits,
+        "upload_likely": upload_likely,
+        "notes": notes,
+    }
 
 
 def _find_first(root: Path, filename: str) -> Path | None:
@@ -587,11 +756,22 @@ def render_report_markdown(
     results: list[ScenarioResult],
 ) -> str:
     lines: list[str] = []
+    counts = {
+        "PASS": sum(1 for item in results if item.status == "PASS"),
+        "WARN": sum(1 for item in results if item.status == "WARN"),
+        "FAIL_PRODUCT": sum(1 for item in results if item.status == "FAIL_PRODUCT"),
+        "FAIL_INFRA": sum(1 for item in results if item.status == "FAIL_INFRA"),
+    }
     lines.append("# RepoBrain E2E Report")
     lines.append("")
     lines.append(f"- Repo: `{repo}`")
     lines.append(f"- PR: {pr_url}")
     lines.append(f"- Generated at: {_now_utc().isoformat()}")
+    lines.append(
+        "- Summary: "
+        f"PASS={counts['PASS']}, WARN={counts['WARN']}, "
+        f"FAIL_PRODUCT={counts['FAIL_PRODUCT']}, FAIL_INFRA={counts['FAIL_INFRA']}"
+    )
     lines.append("")
     lines.append("| Scenario | Trigger | Result | Conclusion | Run |")
     lines.append("| --- | --- | --- | --- | --- |")
@@ -751,7 +931,7 @@ def _scenario_from_run(
     run_id = str(run_data.get("databaseId", "n/a"))
     run_url = str(run_data.get("url", "n/a") or "n/a")
     conclusion = str(run_data.get("conclusion", "n/a") or "n/a")
-    status = "PASS" if conclusion == "success" else "FAIL"
+    status = "PASS" if conclusion == "success" else "FAIL_PRODUCT"
     validation_status, notes = validate_artifacts(scenario_name, artifacts_root, requirements)
     scan_result = run_cmd(
         [sys.executable, "scripts/usersafe_scan.py", artifacts_root.as_posix()],
@@ -767,7 +947,7 @@ def _scenario_from_run(
         if status == "PASS":
             status = "WARN"
     if validation_status == "FAIL":
-        status = "FAIL"
+        status = "FAIL_PRODUCT"
     return ScenarioResult(
         name=scenario_name,
         trigger=trigger,
@@ -791,6 +971,8 @@ def _scenario_dispatch_command(
     timeout_s: int,
     gh_retries: int,
     gh_backoff_s: int,
+    artifact_download_retries: int,
+    artifact_download_backoff_s: int,
 ) -> ScenarioResult:
     print(
         f"[scenario:start] name={spec.name} mode=workflow_dispatch "
@@ -822,7 +1004,7 @@ def _scenario_dispatch_command(
         return ScenarioResult(
             name=spec.name,
             trigger=spec.command,
-            status="FAIL",
+            status="FAIL_INFRA",
             conclusion="timeout",
             notes=[error],
             artifact_dir=(artifacts_dir / spec.name).as_posix(),
@@ -833,9 +1015,57 @@ def _scenario_dispatch_command(
         repo,
         run_id,
         target_dir,
-        gh_retries=gh_retries,
-        gh_backoff_s=gh_backoff_s,
+        retries=artifact_download_retries,
+        backoff_s=artifact_download_backoff_s,
     )
+    if not ok:
+        fallback = _collect_run_fallback_diagnostics(
+            repo=repo,
+            run_id=run_id,
+            out_dir=target_dir,
+            gh_retries=gh_retries,
+            gh_backoff_s=gh_backoff_s,
+        )
+        conclusion = str(run_data.get("conclusion", "n/a") or "n/a")
+        run_status = str(run_data.get("status", "n/a") or "n/a")
+        notes = [
+            f"artifact_transport_failure=true ({msg})",
+            f"run_status={run_status}",
+            f"run_conclusion={conclusion}",
+            f"run_view_path={fallback.get('run_view_path', 'n/a')}",
+            f"run_log_path={fallback.get('run_log_path', 'n/a')}",
+        ]
+        fallback_notes = fallback.get("notes", [])
+        if isinstance(fallback_notes, list):
+            notes.extend(str(item) for item in fallback_notes if str(item).strip())
+
+        log_markers = fallback.get("log_markers", [])
+        if isinstance(log_markers, list) and log_markers:
+            notes.append(f"log_evidence_markers={','.join(str(item) for item in log_markers)}")
+        artifact_hits = fallback.get("artifact_evidence_hits", [])
+        if isinstance(artifact_hits, list) and artifact_hits:
+            notes.append(f"artifact_name_hits={','.join(str(item) for item in artifact_hits)}")
+
+        if bool(fallback.get("upload_likely", False)) and conclusion == "success":
+            notes.append("artifact upload likely succeeded, local download failed")
+            status = "WARN"
+        else:
+            notes.append(
+                "artifact download failed and no definitive product evidence could be inferred"
+            )
+            status = "FAIL_INFRA"
+
+        return ScenarioResult(
+            name=spec.name,
+            trigger=spec.command,
+            status=status,
+            run_id=run_id,
+            run_url=str(run_data.get("url", "n/a") or "n/a"),
+            conclusion=conclusion,
+            notes=notes,
+            artifact_dir=target_dir.as_posix(),
+        )
+
     result = _scenario_from_run(
         scenario_name=spec.name,
         trigger=spec.command,
@@ -843,10 +1073,6 @@ def _scenario_dispatch_command(
         artifacts_root=target_dir,
         requirements=spec.requirements,
     )
-    if not ok:
-        result.notes.append(f"artifact download warning: {msg}")
-        if result.status == "PASS":
-            result.status = "WARN"
     return result
 
 
@@ -1178,6 +1404,18 @@ def main() -> int:
         default=2,
         help="Base backoff (seconds) for gh retries.",
     )
+    parser.add_argument(
+        "--artifact-download-retries",
+        type=int,
+        default=8,
+        help="Retries for gh run download artifact transport errors.",
+    )
+    parser.add_argument(
+        "--artifact-download-backoff-s",
+        type=int,
+        default=2,
+        help="Base backoff (seconds) for gh run download retries.",
+    )
     args = parser.parse_args()
 
     _ensure_gh_ready()
@@ -1227,6 +1465,8 @@ def main() -> int:
                 timeout_s=args.scenario_timeout_s,
                 gh_retries=args.gh_retries,
                 gh_backoff_s=args.gh_backoff_s,
+                artifact_download_retries=args.artifact_download_retries,
+                artifact_download_backoff_s=args.artifact_download_backoff_s,
             )
             results.append(result)
     finally:
@@ -1237,7 +1477,7 @@ def main() -> int:
     report_path = artifacts_root / "e2e_report.md"
     report_path.write_text(report, encoding="utf-8")
     print(f"E2E report: {report_path.as_posix()}")
-    has_fail = any(item.status == "FAIL" for item in results)
+    has_fail = any(item.status in {"FAIL_PRODUCT", "FAIL_INFRA"} for item in results)
     return 1 if has_fail else 0
 
 

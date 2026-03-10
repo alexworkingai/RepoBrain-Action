@@ -64,5 +64,14 @@ Patch generation notes:
 ## PASS/FAIL interpretation
 
 - **PASS**: workflow succeeded and all required assertions passed.
-- **WARN**: workflow succeeded, strict assertions passed, but non-critical warnings exist (for example usersafe scan tool warning).
-- **FAIL**: workflow failed, timeout happened, or any required artifact/JSON assertion failed.
+- **WARN**: strict checks passed, but non-critical transport/diagnostic warnings exist.
+- **FAIL_PRODUCT**: product behavior failed (artifacts downloaded and strict assertions failed).
+- **FAIL_INFRA**: infrastructure/transport failure (for example artifact download/network issues) prevented reliable product verdict.
+
+Artifact transport fallback diagnostics:
+
+- On download failure, the harness stores:
+  - `run_view.json`
+  - `run_log.txt`
+- It scans logs and run artifact metadata for evidence of upload steps.
+- If uploads likely succeeded but local download failed, the scenario is downgraded to `WARN` instead of product failure.

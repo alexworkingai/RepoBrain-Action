@@ -305,3 +305,153 @@ def test_assert_marker_path_not_ignored(monkeypatch) -> None:
 
     module._assert_marker_path_not_ignored(Path("scripts/e2e/_markers/e2e_marker_1.txt"))  # noqa: SLF001
     assert ["git", "check-ignore", "--quiet", "scripts/e2e/_markers/e2e_marker_1.txt"] in calls
+
+
+def test_download_artifacts_transient_then_success(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    responses = [
+        module.CmdResult(code=1, out="", err="TLS handshake timeout"),
+        module.CmdResult(code=0, out="ok", err=""),
+    ]
+    sleeps: list[float] = []
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del args, cwd, check
+        return responses.pop(0)
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+    monkeypatch.setattr(module.random, "uniform", lambda _a, _b: 0.0)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: sleeps.append(float(seconds)))
+
+    ok, msg = module._download_artifacts(  # noqa: SLF001
+        "owner/repo",
+        "123",
+        tmp_path / "artifacts",
+        retries=3,
+        backoff_s=2,
+    )
+
+    assert ok is True
+    assert "attempts=2" in msg
+    assert sleeps == [2.0]
+
+
+def test_scenario_classified_infra_when_download_totally_fails(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+
+    monkeypatch.setattr(
+        module,
+        "_dispatch_run",
+        lambda **_kwargs: (
+            {"databaseId": "321", "url": "https://example.test/run/321", "conclusion": "success"},
+            "",
+        ),
+    )
+    monkeypatch.setattr(module, "_download_artifacts", lambda *args, **kwargs: (False, "network down"))  # noqa: ANN001
+    monkeypatch.setattr(
+        module,
+        "_collect_run_fallback_diagnostics",
+        lambda **_kwargs: {
+            "run_view_path": "tmp/run_view.json",
+            "run_log_path": "tmp/run_log.txt",
+            "log_markers": [],
+            "artifact_evidence_hits": [],
+            "upload_likely": False,
+            "notes": [],
+        },
+    )
+
+    spec = module.ScenarioSpec(
+        name="fix_patch_required_dispatch",
+        command="/repobrain fix quick change",
+        enable_llm=True,
+        enable_embeddings=False,
+        enable_batch_llm=False,
+        batch_force=False,
+        trusted_context=True,
+        allow_dynamic_verify=True,
+        apply_patch=False,
+        create_pr=False,
+        requirements=module.ScenarioRequirements(require_patch=True),
+    )
+
+    result = module._scenario_dispatch_command(  # noqa: SLF001
+        repo="owner/repo",
+        workflow="repobrain.yml",
+        branch="e2e/test",
+        pr_number="12",
+        spec=spec,
+        artifacts_dir=tmp_path,
+        timeout_s=60,
+        gh_retries=2,
+        gh_backoff_s=1,
+        artifact_download_retries=3,
+        artifact_download_backoff_s=1,
+    )
+
+    assert result.status == "FAIL_INFRA"
+    assert any("artifact_transport_failure=true" in note for note in result.notes)
+
+
+def test_fix_scenario_warn_with_run_view_log_when_upload_likely(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+
+    monkeypatch.setattr(
+        module,
+        "_dispatch_run",
+        lambda **_kwargs: (
+            {"databaseId": "654", "url": "https://example.test/run/654", "conclusion": "success"},
+            "",
+        ),
+    )
+    monkeypatch.setattr(module, "_download_artifacts", lambda *args, **kwargs: (False, "TLS timeout"))  # noqa: ANN001
+    monkeypatch.setattr(
+        module,
+        "_collect_run_fallback_diagnostics",
+        lambda **_kwargs: {
+            "run_view_path": "tmp/run_view.json",
+            "run_log_path": "tmp/run_log.txt",
+            "log_markers": ["artifacts/patch.diff"],
+            "artifact_evidence_hits": ["repobrain-patch"],
+            "upload_likely": True,
+            "notes": [],
+        },
+    )
+
+    spec = module.ScenarioSpec(
+        name="fix_patch_required_dispatch",
+        command="/repobrain fix quick change",
+        enable_llm=True,
+        enable_embeddings=False,
+        enable_batch_llm=False,
+        batch_force=False,
+        trusted_context=True,
+        allow_dynamic_verify=True,
+        apply_patch=False,
+        create_pr=False,
+        requirements=module.ScenarioRequirements(require_patch=True),
+    )
+
+    result = module._scenario_dispatch_command(  # noqa: SLF001
+        repo="owner/repo",
+        workflow="repobrain.yml",
+        branch="e2e/test",
+        pr_number="12",
+        spec=spec,
+        artifacts_dir=tmp_path,
+        timeout_s=60,
+        gh_retries=2,
+        gh_backoff_s=1,
+        artifact_download_retries=3,
+        artifact_download_backoff_s=1,
+    )
+
+    assert result.status == "WARN"
+    assert any("run_view_path=tmp/run_view.json" in note for note in result.notes)
+    assert any("run_log_path=tmp/run_log.txt" in note for note in result.notes)
+    assert any("artifact upload likely succeeded" in note for note in result.notes)
