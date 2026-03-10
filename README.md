@@ -25,6 +25,7 @@ Environment reference:
 * See `docs/env_reference.md` (generated from `repobrain/config.py`).
 * Changelog: `CHANGELOG.md`
 * Migration guide: `MIGRATION.md`
+* Post-merge validation: `docs/post_merge_validation.md`
 
 GitHub Actions note:
 
@@ -302,3 +303,6 @@ Release versioning:
   * `git push origin v0.1.0`
 * Consumers can pin the action version:
   * `uses: OWNER/REPO@v0.1.0`
+* Release mechanics/checklists:
+  * `docs/release_final_checklist.md`
+  * `docs/release_merge_plan.md`
