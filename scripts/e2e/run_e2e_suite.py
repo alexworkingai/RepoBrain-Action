@@ -73,6 +73,7 @@ class ScenarioRequirements:
     require_patch: bool = False
     require_batch_calls_min: int = 0
     require_index_embeddings: bool = False
+    require_tkya_reason_lines: bool = False
 
 
 @dataclass(frozen=True)
@@ -553,6 +554,39 @@ def _has_patch_artifact(artifacts_root: Path) -> bool:
     return False
 
 
+def _load_markdown_for_tkya_reason(artifacts_root: Path) -> tuple[str, str]:
+    preferred = (
+        "ask_result.md",
+        "review_result.md",
+        "patch_result.md",
+        "result.md",
+    )
+    for name in preferred:
+        path = _find_first(artifacts_root, name)
+        if path is not None:
+            return path.as_posix(), path.read_text(encoding="utf-8", errors="ignore")
+
+    check_payload = _find_first(artifacts_root, "check_run_payload.json")
+    if check_payload is not None:
+        payload = _load_json(check_payload)
+        output_raw = payload.get("output", {})
+        output = output_raw if isinstance(output_raw, dict) else {}
+        summary = str(output.get("summary", "") or "").strip()
+        text = str(output.get("text", "") or "").strip()
+        parts = [value for value in (summary, text) if value]
+        if parts:
+            return check_payload.as_posix(), "\n".join(parts)
+
+    for path in sorted(artifacts_root.rglob("*.md")):
+        if not path.is_file():
+            continue
+        if path.name.lower() == "e2e_report.md":
+            continue
+        return path.as_posix(), path.read_text(encoding="utf-8", errors="ignore")
+
+    return "", ""
+
+
 def _to_int(value: Any) -> int:
     try:
         return int(value)
@@ -779,6 +813,30 @@ def validate_artifacts(
                 "index embeddings evidence missing/invalid: expected "
                 "index_embeddings_evidence.status in {OK, PARTIAL}"
             )
+
+    if requirements.require_tkya_reason_lines:
+        markdown_source, markdown_text = _load_markdown_for_tkya_reason(artifacts_root)
+        if not markdown_text.strip():
+            fail("markdown artifact for TKYA reason lines is missing")
+        else:
+            pass_note(f"markdown source for TKYA reason checks: {markdown_source}")
+            if "TKYA LLM decision:" in markdown_text:
+                pass_note("TKYA LLM decision line present")
+            else:
+                fail("missing `TKYA LLM decision:` line in markdown output")
+
+            if "Reason:" in markdown_text:
+                pass_note("TKYA short reason line present")
+            else:
+                fail("missing `Reason:` line for TKYA LLM decision")
+
+            execution_mode = str(llm_payload.get("execution_mode", "") or "")
+            llm_used = bool(llm_payload.get("llm_used", False))
+            if execution_mode == "retrieval_plus_llm" and not llm_used:
+                if "Runtime override:" in markdown_text:
+                    pass_note("runtime override line present when LLM was semantically desired")
+                else:
+                    fail("missing `Runtime override:` line when execution_mode=retrieval_plus_llm and llm_used=false")
 
     if requirements.require_patch:
         if _has_patch_artifact(artifacts_root):
@@ -1353,7 +1411,7 @@ def _build_scenarios(
             allow_dynamic_verify=False,
             apply_patch=False,
             create_pr=False,
-            requirements=ScenarioRequirements(),
+            requirements=ScenarioRequirements(require_tkya_reason_lines=True),
         ),
         ScenarioSpec(
             name="fix_patch_required_dispatch",
@@ -1372,6 +1430,7 @@ def _build_scenarios(
             requirements=ScenarioRequirements(
                 require_llm_used=require_llm_used,
                 require_patch=require_patch,
+                require_tkya_reason_lines=True,
             ),
         ),
         ScenarioSpec(
@@ -1385,7 +1444,10 @@ def _build_scenarios(
             allow_dynamic_verify=False,
             apply_patch=False,
             create_pr=False,
-            requirements=ScenarioRequirements(require_llm_used=require_llm_used),
+            requirements=ScenarioRequirements(
+                require_llm_used=require_llm_used,
+                require_tkya_reason_lines=True,
+            ),
         ),
         ScenarioSpec(
             name="embeddings_warmup_dispatch",
@@ -1398,7 +1460,7 @@ def _build_scenarios(
             allow_dynamic_verify=False,
             apply_patch=False,
             create_pr=False,
-            requirements=ScenarioRequirements(),
+            requirements=ScenarioRequirements(require_tkya_reason_lines=True),
         ),
         ScenarioSpec(
             name="embeddings_used_dispatch",
@@ -1414,6 +1476,7 @@ def _build_scenarios(
             requirements=ScenarioRequirements(
                 require_embeddings_used=require_embeddings_used,
                 require_index_embeddings=require_embeddings_used,
+                require_tkya_reason_lines=True,
             ),
         ),
         ScenarioSpec(
@@ -1430,6 +1493,7 @@ def _build_scenarios(
             requirements=ScenarioRequirements(
                 require_llm_used=require_llm_used,
                 require_batch_calls_min=max(0, require_batch_calls_min),
+                require_tkya_reason_lines=True,
             ),
         ),
     ]

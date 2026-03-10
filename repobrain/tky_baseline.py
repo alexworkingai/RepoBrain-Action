@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .execution_mode import decide_semantic_execution
 from .tky_provider import CandidateChunk, TKYProvider, TKYResult
 
 
@@ -74,12 +75,50 @@ class BaselineTKYProvider(TKYProvider):
                 per_file_counts[candidate.file_path] = file_count + 1
                 used_files.add(candidate.file_path)
 
+        selected_ids_list = [c.chunk_id for c in selected]
+        selected_file_count = len({item.file_path for item in selected if item.file_path})
+        github_ctx = limits.get("github_context", {})
+        is_pr_context = False
+        if isinstance(github_ctx, dict):
+            is_pr_context = bool(github_ctx.get("is_pr", False)) or bool(
+                isinstance(github_ctx.get("changed_files"), list) and github_ctx.get("changed_files")
+            )
+        verification_ctx = limits.get("verification_context", {})
+        verification_pending = False
+        verification_failed = False
+        if isinstance(verification_ctx, dict):
+            checks = verification_ctx.get("checks", [])
+            if isinstance(checks, list):
+                for item in checks:
+                    if not isinstance(item, dict):
+                        continue
+                    status = str(item.get("status", "")).strip().upper()
+                    if status in {"PENDING", "NOT_RUN", "IN_PROGRESS"}:
+                        verification_pending = True
+                    if status in {"FAIL", "FAILURE", "ERROR"}:
+                        verification_failed = True
+        semantic = decide_semantic_execution(
+            task_type=task_type,
+            route="DEEP" if route_hint == "DEEP" else "FAST",
+            selected_count=len(selected_ids_list),
+            selected_files=selected_file_count,
+            top_score=float(top_score),
+            score_gap=float(top_score - sorted_candidates[1].score if len(sorted_candidates) > 1 else top_score),
+            is_pr_context=is_pr_context,
+            verification_pending=verification_pending,
+            verification_failed=verification_failed,
+            request_intent=str(limits.get("intent", "analysis") or "analysis"),
+        )
         return TKYResult(
-            selected_chunk_ids=[c.chunk_id for c in selected],
+            selected_chunk_ids=selected_ids_list,
             route="DEEP" if route_hint == "DEEP" else "FAST",
             compression_stats={
                 "retrieved": len(candidates),
                 "selected": len(selected),
             },
             rationale="Adaptive selection based on score thresholds.",
+            execution_mode=semantic.execution_mode,
+            llm_intent=semantic.llm_intent,
+            llm_decision_reason_short=semantic.reason_short,
+            llm_decision_reason_code=semantic.reason_code,
         )

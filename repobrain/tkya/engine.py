@@ -8,6 +8,7 @@ import sys
 from types import ModuleType
 from typing import Any, Literal
 
+from repobrain.execution_mode import decide_semantic_execution
 from repobrain.topocore_lite import TopoCoreLite
 from repobrain.tky_engine import EngineDecision, EngineRequest, EngineSecurity, TKYEngine
 
@@ -181,17 +182,54 @@ class OriginalEngineAdapter(TKYEngine):
                 ),
                 rationale="CoreLocked: blocked by original security policy.",
                 stable_tokens=[],
+                execution_mode="refuse",
+                llm_intent="none",
+                llm_decision_reason_short="LLM not used: request refused by security policy.",
+                llm_decision_reason_code="ROUTE_REFUSE_OR_BLOCK",
             )
 
         compression_stats = dict(lite_decision.compression_stats)
         compression_stats["backend"] = "original"
+        mapped_route = self._map_route(req, lite_decision.route, response)
+        top_score = float(compression_stats.get("top_score", 0.0) or 0.0)
+        second_score = float(compression_stats.get("second_score", 0.0) or 0.0)
+        selected_ids = set(lite_decision.selected_chunk_ids)
+        selected_files = len(
+            {
+                str(item.file_path).strip()
+                for item in req.candidates
+                if item.chunk_id in selected_ids and str(item.file_path or "").strip()
+            }
+        )
+        semantic = decide_semantic_execution(
+            task_type=req.task_type,
+            route=mapped_route,
+            selected_count=len(lite_decision.selected_chunk_ids),
+            selected_files=selected_files,
+            top_score=top_score,
+            score_gap=top_score - second_score,
+            is_pr_context=bool(
+                isinstance(req.policy.get("github_context"), dict)
+                and (
+                    bool(req.policy["github_context"].get("is_pr", False))
+                    or bool(req.policy["github_context"].get("changed_files", []))
+                )
+            ),
+            verification_pending=False,
+            verification_failed=False,
+            request_intent=str(req.policy.get("intent", "analysis") or "analysis"),
+        )
         return EngineDecision(
-            route=self._map_route(req, lite_decision.route, response),
+            route=mapped_route,
             selected_chunk_ids=list(lite_decision.selected_chunk_ids),
             compression_stats=compression_stats,
             security=lite_decision.security,
             rationale="CoreLocked: original TKYA adapter active.",
             stable_tokens=list(lite_decision.stable_tokens),
+            execution_mode=semantic.execution_mode,
+            llm_intent=semantic.llm_intent,
+            llm_decision_reason_short=semantic.reason_short,
+            llm_decision_reason_code=semantic.reason_code,
         )
 
 

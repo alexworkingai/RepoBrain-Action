@@ -195,6 +195,9 @@ GitHub Models LLM (optional):
 * Strict gating (safe default):
   * LLM is never called for routes `WAIT`/`REFUSE`/`BLOCK`
   * `locate` skips LLM by default; opt-in via `RB_LLM_ALLOW_LOCATE=1`
+* Semantic coupling:
+  * TKYA sets `execution_mode` (`retrieval_only|retrieval_plus_llm|verification_first|refuse`) and short reason fields.
+  * Reports always show `TKYA LLM decision` + `Reason`; when runtime blocks desired LLM usage, report adds `Runtime override`.
 * Reports include LLM diagnostics:
   * model id
   * token usage (`prompt/completion/total`, reported or estimated)

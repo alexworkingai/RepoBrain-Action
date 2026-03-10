@@ -24,6 +24,7 @@ from repobrain.commands import parse_command
 from repobrain.config import RepoBrainConfig, env_bool, env_int, load_config
 from repobrain import __version__ as REPOBRAIN_VERSION
 from repobrain.evidence import EvidenceItem
+from repobrain.execution_mode import coerce_execution_decision
 from repobrain.formatting import format_refusal_comment, format_verify_comment
 from repobrain.github_publisher import (
     build_check_run_payload,
@@ -715,7 +716,14 @@ def _llm_enabled() -> bool:
     return provider == "github_models"
 
 
-def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
+def _llm_default_meta(
+    reason: str = "not used",
+    *,
+    execution_mode: str = "retrieval_only",
+    llm_intent: str = "none",
+    llm_decision_reason_short: str = "LLM not used: direct answer available from retrieved evidence.",
+    llm_decision_reason_code: str = "DEFAULT_RETRIEVAL_ONLY",
+) -> dict[str, Any]:
     call_entry = {
         "batch_id": "single",
         "model_id": "not used",
@@ -734,6 +742,11 @@ def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
     return {
         "llm_used": False,
         "llm_skip_reason": reason,
+        "execution_mode": execution_mode,
+        "llm_intent": llm_intent,
+        "llm_decision_reason_short": llm_decision_reason_short,
+        "llm_decision_reason_code": llm_decision_reason_code,
+        "llm_runtime_override_reason": "n/a",
         "llm_model_used": "not used",
         "llm_primary_model_id": "not used",
         "llm_effective_model_id": "not used",
@@ -775,7 +788,7 @@ def _llm_default_meta(reason: str = "not used") -> dict[str, Any]:
 
 def _merge_llm_meta(target: dict[str, Any], llm_meta: dict[str, Any]) -> None:
     for key, value in llm_meta.items():
-        if key.startswith("llm_"):
+        if key.startswith("llm_") or key == "execution_mode":
             target[key] = value
 
 
@@ -913,6 +926,22 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
     return {
         "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "llm_used": bool(llm_meta.get("llm_used", False)),
+        "execution_mode": str(llm_meta.get("execution_mode", "retrieval_only") or "retrieval_only"),
+        "llm_intent": str(llm_meta.get("llm_intent", "none") or "none"),
+        "llm_decision_reason_short": str(
+            llm_meta.get(
+                "llm_decision_reason_short",
+                "LLM not used: direct answer available from retrieved evidence.",
+            )
+            or "LLM not used: direct answer available from retrieved evidence."
+        ),
+        "llm_decision_reason_code": str(
+            llm_meta.get("llm_decision_reason_code", "DEFAULT_RETRIEVAL_ONLY")
+            or "DEFAULT_RETRIEVAL_ONLY"
+        ),
+        "llm_runtime_override_reason": str(
+            llm_meta.get("llm_runtime_override_reason", "n/a") or "n/a"
+        ),
         "skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
         "decision_route": str(llm_meta.get("llm_decision_route", "n/a") or "n/a"),
         "budget_action": str(llm_meta.get("llm_budget_action", "n/a") or "n/a"),
@@ -1214,6 +1243,22 @@ def _build_llm_http_debug_payload(*, llm_meta: dict[str, Any], decision_route: s
         if isinstance(llm_meta.get("llm_error_types", []), list)
         else [],
         "decision_route": str(decision_route or "n/a"),
+        "execution_mode": str(llm_meta.get("execution_mode", "retrieval_only") or "retrieval_only"),
+        "llm_intent": str(llm_meta.get("llm_intent", "none") or "none"),
+        "llm_decision_reason_short": str(
+            llm_meta.get(
+                "llm_decision_reason_short",
+                "LLM not used: direct answer available from retrieved evidence.",
+            )
+            or "LLM not used: direct answer available from retrieved evidence."
+        ),
+        "llm_decision_reason_code": str(
+            llm_meta.get("llm_decision_reason_code", "DEFAULT_RETRIEVAL_ONLY")
+            or "DEFAULT_RETRIEVAL_ONLY"
+        ),
+        "llm_runtime_override_reason": str(
+            llm_meta.get("llm_runtime_override_reason", "n/a") or "n/a"
+        ),
         "llm_skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
         "estimated_input_tokens": int(llm_meta.get("llm_input_budget_used_est", 0) or 0),
         "max_output_tokens_used": int(llm_meta.get("llm_max_output_tokens_used", 0) or 0),
@@ -1572,6 +1617,10 @@ def _maybe_generate_llm_text(
     intent: str,
     query: str,
     route: str,
+    execution_mode: str | None = None,
+    llm_intent_decision: str | None = None,
+    llm_decision_reason_short: str | None = None,
+    llm_decision_reason_code: str | None = None,
     github_context: dict[str, Any],
     locators: list[EvidenceItem],
     candidates_count: int,
@@ -1583,21 +1632,79 @@ def _maybe_generate_llm_text(
     governor: AIBudgetGovernor | None = None,
 ) -> tuple[str | None, dict[str, Any]]:
     normalized_route = str(route or "").strip().upper()
-    if normalized_route in {"WAIT", "REFUSE", "BLOCK"}:
-        llm_meta = _llm_default_meta(f"route={normalized_route}")
+    legacy_semantic_default = (
+        execution_mode is None
+        and llm_intent_decision is None
+        and llm_decision_reason_short is None
+        and llm_decision_reason_code is None
+    )
+    legacy_route_block_reason = ""
+    if legacy_semantic_default:
+        if normalized_route == "WAIT":
+            execution_mode = "verification_first"
+            llm_intent_decision = "none"
+            llm_decision_reason_short = "LLM not used: verification required before answer."
+            llm_decision_reason_code = "route_wait"
+            legacy_route_block_reason = "route=WAIT"
+        elif normalized_route in {"REFUSE", "BLOCK"}:
+            execution_mode = "refuse"
+            llm_intent_decision = "none"
+            llm_decision_reason_short = "LLM not used: request refused by security policy."
+            llm_decision_reason_code = "route_refuse" if normalized_route == "REFUSE" else "route_block"
+            legacy_route_block_reason = f"route={normalized_route}"
+        else:
+            # Backward compatibility for direct helper callers/tests: non-blocking routes
+            # default to legacy "try LLM" behavior unless explicit semantic mode was provided.
+            execution_mode = "retrieval_plus_llm"
+
+    semantic = coerce_execution_decision(
+        route=normalized_route or "FAST",
+        execution_mode=execution_mode,
+        llm_intent=llm_intent_decision,
+        reason_short=llm_decision_reason_short,
+        reason_code=llm_decision_reason_code,
+    )
+    normalized_execution_mode = semantic.execution_mode
+    normalized_llm_intent = semantic.llm_intent
+    decision_reason_short = semantic.reason_short
+    decision_reason_code = semantic.reason_code
+
+    if normalized_execution_mode != "retrieval_plus_llm":
+        skip_reason = f"execution_mode={normalized_execution_mode}"
+        if legacy_route_block_reason:
+            skip_reason = legacy_route_block_reason
+        llm_meta = _llm_default_meta(
+            skip_reason,
+            execution_mode=normalized_execution_mode,
+            llm_intent=normalized_llm_intent,
+            llm_decision_reason_short=decision_reason_short,
+            llm_decision_reason_code=decision_reason_code,
+        )
         llm_meta["llm_decision_route"] = normalized_route
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
     if cmd == "locate" and not _env_true("RB_LLM_ALLOW_LOCATE", default=False):
-        llm_meta = _llm_default_meta("locate_disabled")
+        llm_meta = _llm_default_meta(
+            "locate_disabled",
+            execution_mode=normalized_execution_mode,
+            llm_intent=normalized_llm_intent,
+            llm_decision_reason_short=decision_reason_short,
+            llm_decision_reason_code=decision_reason_code,
+        )
         llm_meta["llm_decision_route"] = normalized_route or "n/a"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
-    llm_meta = _llm_default_meta("disabled")
+    llm_meta = _llm_default_meta(
+        "disabled",
+        execution_mode=normalized_execution_mode,
+        llm_intent=normalized_llm_intent,
+        llm_decision_reason_short=decision_reason_short,
+        llm_decision_reason_code=decision_reason_code,
+    )
     llm_meta["llm_decision_route"] = normalized_route or "n/a"
     if not _llm_enabled():
         _apply_remaining_fallback(llm_meta)
@@ -1608,14 +1715,21 @@ def _maybe_generate_llm_text(
     if not token:
         token = os.getenv("GITHUB_TOKEN", "").strip()
     if not token:
-        llm_meta = _llm_default_meta("missing_github_token")
+        llm_meta = _llm_default_meta(
+            "missing_github_token",
+            execution_mode=normalized_execution_mode,
+            llm_intent=normalized_llm_intent,
+            llm_decision_reason_short=decision_reason_short,
+            llm_decision_reason_code=decision_reason_code,
+        )
         llm_meta["llm_decision_route"] = normalized_route or "n/a"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, llm_meta
 
     cfg = _runtime_env_cfg()
-    is_patch_request = _is_fix_intent(cmd, intent)
+    effective_intent = normalized_llm_intent if normalized_llm_intent != "none" else intent
+    is_patch_request = _is_fix_intent(cmd, effective_intent)
     max_input_tokens = int(cfg.llm.max_input_tokens_patch if is_patch_request else cfg.llm.max_input_tokens)
     model_high = str(cfg.llm.model_high or "openai/gpt-4.1")
     model_low = str(cfg.llm.model_low or "openai/gpt-4.1-mini")
@@ -1623,7 +1737,7 @@ def _maybe_generate_llm_text(
     complexity_limits = {"query_length": len(query or "")}
     complexity_score = score_complexity(
         task_type=cmd,
-        intent=intent,
+        intent=effective_intent,
         route=normalized_route,
         github_context=github_context,
         candidates=[None] * max(0, int(candidates_count)),
@@ -1638,13 +1752,13 @@ def _maybe_generate_llm_text(
             tier = "low" if "mini" in model_id.lower() else "high"
     max_output_tokens = compute_output_token_budget(
         task_type=cmd,
-        intent=intent,
+        intent=effective_intent,
         complexity_score=complexity_score,
         cfg=cfg,
     )
     explanation = complexity_explanation(
         task_type=cmd,
-        intent=intent,
+        intent=effective_intent,
         route=normalized_route,
         changed_files_count=len(github_context.get("changed_files", []))
         if isinstance(github_context.get("changed_files", []), list)
@@ -1697,12 +1811,18 @@ def _maybe_generate_llm_text(
         decision = governor.can_call_llm(
             next_call_cost_est=next_call_cost_est,
             tier=tier,
-            intent=intent,
+            intent=effective_intent,
         )
         governor_action = decision.budget_action
         governor_reason = decision.reason
         if not decision.allow:
-            llm_meta = _llm_default_meta(f"budget:{decision.reason}")
+            llm_meta = _llm_default_meta(
+                f"budget:{decision.reason}",
+                execution_mode=normalized_execution_mode,
+                llm_intent=normalized_llm_intent,
+                llm_decision_reason_short=decision_reason_short,
+                llm_decision_reason_code=decision_reason_code,
+            )
             llm_meta["llm_decision_route"] = normalized_route or "n/a"
             llm_meta["llm_model_used"] = model_id
             llm_meta["llm_tier"] = tier
@@ -1763,7 +1883,7 @@ def _maybe_generate_llm_text(
     effective_model_id = model_id
     fallback_model_id = _alternate_model_id(model_id, model_high=model_high, model_low=model_low)
     fallback_used = False
-    is_fix_path = _is_fix_intent(cmd, intent)
+    is_fix_path = _is_fix_intent(cmd, effective_intent)
     primary_status: int | None = None
     fallback_status: int | None = None
     error_types: list[str] = []
@@ -1812,7 +1932,13 @@ def _maybe_generate_llm_text(
     if response is None or final_exc is not None and not fallback_used:
         active_error = final_exc if final_exc is not None else GitHubModelsError("unknown", reason="unknown")
         provider_status = fallback_status if fallback_used else primary_status
-        llm_meta = _llm_default_meta(f"LLM_NOT_AVAILABLE:{active_error.reason}")
+        llm_meta = _llm_default_meta(
+            f"LLM_NOT_AVAILABLE:{active_error.reason}",
+            execution_mode=normalized_execution_mode,
+            llm_intent=normalized_llm_intent,
+            llm_decision_reason_short=decision_reason_short,
+            llm_decision_reason_code=decision_reason_code,
+        )
         llm_meta["llm_decision_route"] = normalized_route or "n/a"
         llm_meta["llm_model_used"] = effective_model_id if fallback_used else primary_model_id
         llm_meta["llm_primary_model_id"] = primary_model_id
@@ -1874,6 +2000,11 @@ def _maybe_generate_llm_text(
     llm_meta = {
         "llm_used": True,
         "llm_skip_reason": "n/a",
+        "execution_mode": normalized_execution_mode,
+        "llm_intent": normalized_llm_intent,
+        "llm_decision_reason_short": decision_reason_short,
+        "llm_decision_reason_code": decision_reason_code,
+        "llm_runtime_override_reason": "n/a",
         "llm_decision_route": normalized_route or "n/a",
         "llm_model_used": response.model_id,
         "llm_primary_model_id": primary_model_id,
@@ -2289,6 +2420,10 @@ def _run_batch_llm_review_fix(
     intent: str,
     query: str,
     route: str,
+    execution_mode: str | None = None,
+    llm_intent_decision: str | None = None,
+    llm_decision_reason_short: str | None = None,
+    llm_decision_reason_code: str | None = None,
     github_context: dict[str, Any],
     selected_chunks: list[CandidateChunk],
     locators: list[EvidenceItem],
@@ -2296,10 +2431,65 @@ def _run_batch_llm_review_fix(
     force_patch_batch: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     route_norm = str(route or "").strip().upper()
+    legacy_semantic_default = (
+        execution_mode is None
+        and llm_intent_decision is None
+        and llm_decision_reason_short is None
+        and llm_decision_reason_code is None
+    )
+    legacy_route_block_reason = ""
+    if legacy_semantic_default:
+        if route_norm == "WAIT":
+            execution_mode = "verification_first"
+            llm_intent_decision = "none"
+            llm_decision_reason_short = "LLM not used: verification required before answer."
+            llm_decision_reason_code = "route_wait"
+            legacy_route_block_reason = "route=WAIT"
+        elif route_norm in {"REFUSE", "BLOCK"}:
+            execution_mode = "refuse"
+            llm_intent_decision = "none"
+            llm_decision_reason_short = "LLM not used: request refused by security policy."
+            llm_decision_reason_code = "route_refuse" if route_norm == "REFUSE" else "route_block"
+            legacy_route_block_reason = f"route={route_norm}"
+        else:
+            execution_mode = "retrieval_plus_llm"
+
+    semantic = coerce_execution_decision(
+        route=route_norm or "FAST",
+        execution_mode=execution_mode,
+        llm_intent=llm_intent_decision,
+        reason_short=llm_decision_reason_short,
+        reason_code=llm_decision_reason_code,
+    )
+    execution_mode_norm = semantic.execution_mode
+    llm_intent_norm = semantic.llm_intent
+    llm_reason_short = semantic.reason_short
+    llm_reason_code = semantic.reason_code
+    if execution_mode_norm != "retrieval_plus_llm":
+        skip_reason = f"execution_mode={execution_mode_norm}"
+        if legacy_route_block_reason:
+            skip_reason = legacy_route_block_reason
+        llm_meta = _llm_default_meta(
+            skip_reason,
+            execution_mode=execution_mode_norm,
+            llm_intent=llm_intent_norm,
+            llm_decision_reason_short=llm_reason_short,
+            llm_decision_reason_code=llm_reason_code,
+        )
+        llm_meta["llm_decision_route"] = route_norm or "n/a"
+        llm_meta["llm_request_mode"] = "patch" if _is_fix_intent(cmd, intent) else "normal"
+        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, llm_meta
+
     is_patch_mode = _is_fix_intent(cmd, intent)
     llm_disabled = not _llm_enabled()
     if llm_disabled:
-        llm_meta = _llm_default_meta("disabled")
+        llm_meta = _llm_default_meta(
+            "disabled",
+            execution_mode=execution_mode_norm,
+            llm_intent=llm_intent_norm,
+            llm_decision_reason_short=llm_reason_short,
+            llm_decision_reason_code=llm_reason_code,
+        )
         llm_meta["llm_decision_route"] = route_norm or "n/a"
         llm_meta["llm_request_mode"] = "patch" if is_patch_mode else "normal"
         llm_meta["llm_patch_batch_mode"] = bool(is_patch_mode)
@@ -2363,7 +2553,13 @@ def _run_batch_llm_review_fix(
         pre_batch_action = bootstrap_decision.budget_action
         pre_batch_reason = bootstrap_decision.reason
         if not bootstrap_decision.allow:
-            llm_meta = _llm_default_meta(f"budget:{bootstrap_decision.reason}")
+            llm_meta = _llm_default_meta(
+                f"budget:{bootstrap_decision.reason}",
+                execution_mode=execution_mode_norm,
+                llm_intent=llm_intent_norm,
+                llm_decision_reason_short=llm_reason_short,
+                llm_decision_reason_code=llm_reason_code,
+            )
             llm_meta["llm_decision_route"] = route_norm or "n/a"
             llm_meta["llm_budget_action"] = bootstrap_decision.budget_action
             llm_meta["llm_governor_reason"] = bootstrap_decision.reason
@@ -2389,7 +2585,13 @@ def _run_batch_llm_review_fix(
 
     batches = planned[:max_calls]
     if not batches:
-        llm_meta = _llm_default_meta("no_batches")
+        llm_meta = _llm_default_meta(
+            "no_batches",
+            execution_mode=execution_mode_norm,
+            llm_intent=llm_intent_norm,
+            llm_decision_reason_short=llm_reason_short,
+            llm_decision_reason_code=llm_reason_code,
+        )
         llm_meta["llm_decision_route"] = route_norm or "n/a"
         llm_meta["llm_request_mode"] = "patch" if is_patch_mode else "normal"
         llm_meta["llm_patch_batch_mode"] = bool(is_patch_mode)
@@ -2453,6 +2655,10 @@ def _run_batch_llm_review_fix(
             intent=intent,
             query=batch_query,
             route=route_norm,
+            execution_mode=execution_mode_norm,
+            llm_intent_decision=llm_intent_norm,
+            llm_decision_reason_short=llm_reason_short,
+            llm_decision_reason_code=llm_reason_code,
             github_context=batch_context,
             locators=batch_locators,
             candidates_count=max(1, len(batch.snippet_ids)),
@@ -2572,6 +2778,10 @@ def _run_batch_llm_review_fix(
             intent=intent,
             query=query,
             route=route_norm,
+            execution_mode=execution_mode_norm,
+            llm_intent_decision=llm_intent_norm,
+            llm_decision_reason_short=llm_reason_short,
+            llm_decision_reason_code=llm_reason_code,
             github_context=github_context,
             locators=[],
             candidates_count=len(summaries),
@@ -2638,6 +2848,11 @@ def _run_batch_llm_review_fix(
     llm_meta = {
         "llm_used": any_used,
         "llm_skip_reason": "n/a" if any_used else "batch_calls_failed",
+        "execution_mode": execution_mode_norm,
+        "llm_intent": llm_intent_norm,
+        "llm_decision_reason_short": llm_reason_short,
+        "llm_decision_reason_code": llm_reason_code,
+        "llm_runtime_override_reason": "n/a",
         "llm_decision_route": route_norm or "n/a",
         "llm_model_used": next(iter(model_counts.keys()), overall_model),
         "llm_tier": "high" if any("gpt-4.1" in key and "mini" not in key for key in model_counts) else "low",
@@ -2958,6 +3173,10 @@ def _build_refuse_answer_result(question: str, reason: str) -> AnswerResult:
         route="REFUSE",
         compression_stats={"retrieved": 0, "selected": 0},
         rationale=reason,
+        execution_mode="refuse",
+        llm_intent="none",
+        llm_decision_reason_short="LLM not used: request refused by security policy.",
+        llm_decision_reason_code="ROUTE_REFUSE_OR_BLOCK",
     )
     answer = (
         f"Question: {question}\n"
@@ -2969,7 +3188,15 @@ def _build_refuse_answer_result(question: str, reason: str) -> AnswerResult:
         answer_text=answer,
         evidence=[],
         tky=tky,
-        audit_summary={"retrieved": 0, "selected": 0, "route": "REFUSE"},
+        audit_summary={
+            "retrieved": 0,
+            "selected": 0,
+            "route": "REFUSE",
+            "execution_mode": "refuse",
+            "llm_intent": "none",
+            "llm_decision_reason_short": "LLM not used: request refused by security policy.",
+            "llm_decision_reason_code": "ROUTE_REFUSE_OR_BLOCK",
+        },
         next_steps="Open evidence links and verify logic",
     )
 
@@ -2980,6 +3207,10 @@ def _build_wait_answer_result(question: str, reason: str) -> AnswerResult:
         route="WAIT",
         compression_stats={"retrieved": 0, "selected": 0},
         rationale=reason,
+        execution_mode="verification_first",
+        llm_intent="none",
+        llm_decision_reason_short="LLM not used: verification required before answer.",
+        llm_decision_reason_code="ROUTE_WAIT_VERIFICATION",
     )
     answer = (
         f"Question: {question}\n"
@@ -2992,7 +3223,15 @@ def _build_wait_answer_result(question: str, reason: str) -> AnswerResult:
         answer_text=answer,
         evidence=[],
         tky=tky,
-        audit_summary={"retrieved": 0, "selected": 0, "route": "WAIT"},
+        audit_summary={
+            "retrieved": 0,
+            "selected": 0,
+            "route": "WAIT",
+            "execution_mode": "verification_first",
+            "llm_intent": "none",
+            "llm_decision_reason_short": "LLM not used: verification required before answer.",
+            "llm_decision_reason_code": "ROUTE_WAIT_VERIFICATION",
+        },
         next_steps="Verification is pending. Re-run after checks complete.",
     )
 
@@ -3006,6 +3245,43 @@ def _canonical_route(route: str) -> str:
     if normalized in {"PENDING", "VERIFY_PENDING"}:
         return "WAIT"
     return "FAST"
+
+
+def _execution_from_tky_result(tky: TKYResult) -> dict[str, str]:
+    execution = coerce_execution_decision(
+        route=tky.route,
+        execution_mode=getattr(tky, "execution_mode", None),
+        llm_intent=getattr(tky, "llm_intent", None),
+        reason_short=getattr(tky, "llm_decision_reason_short", None),
+        reason_code=getattr(tky, "llm_decision_reason_code", None),
+    )
+    return {
+        "execution_mode": execution.execution_mode,
+        "llm_intent": execution.llm_intent,
+        "llm_decision_reason_short": execution.reason_short,
+        "llm_decision_reason_code": execution.reason_code,
+    }
+
+
+def _runtime_override_reason_from_skip(skip_reason: str) -> str:
+    reason = str(skip_reason or "n/a")
+    lowered = reason.lower()
+    if reason in {"n/a", ""}:
+        return "n/a"
+    if lowered == "disabled":
+        return "LLM blocked: disabled by runtime policy."
+    if lowered == "missing_github_token":
+        return "LLM blocked: missing GitHub token."
+    if lowered == "locate_disabled":
+        return "LLM blocked: locate mode is disabled by runtime policy."
+    if lowered.startswith("budget:"):
+        return f"LLM blocked: {reason[7:]}"
+    if lowered.startswith("llm_not_available:"):
+        provider_reason = reason.split(":", 1)[1]
+        return f"LLM blocked: provider unavailable ({provider_reason})."
+    if lowered.startswith("execution_mode="):
+        return "n/a"
+    return f"LLM blocked: {reason}."
 
 
 def question_from_command(cmd: str, query: str) -> str:
@@ -3566,6 +3842,7 @@ def run_qa_two_pass(
         "route_final": final_route,
         "top_score": round(pass2_top_score if pass2_top_score is not None else pass1_top_score, 6),
     }
+    audit_extra.update(_execution_from_tky_result(final_result.tky))
     if pass2_top_score is not None:
         audit_extra["pass2.top_score"] = round(pass2_top_score, 6)
         audit_extra["top_score_pass2"] = round(pass2_top_score, 6)
@@ -3786,6 +4063,8 @@ def _build_qa_markdown(
     )
     compression_stats = result.tky.compression_stats if isinstance(result.tky.compression_stats, dict) else {}
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
+    execution_fields = _execution_from_tky_result(result.tky)
+    audit_summary.update(execution_fields)
     audit_summary["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
     if "tky_engine" not in audit_summary:
         audit_summary["tky_engine"] = _provider_engine_name(provider)
@@ -3850,6 +4129,17 @@ def _build_qa_markdown(
         intent="analysis",
         query=question,
         route=str(audit_summary.get("route_final", result.tky.route)),
+        execution_mode=str(audit_summary.get("execution_mode", "retrieval_only")),
+        llm_intent_decision=str(audit_summary.get("llm_intent", "none")),
+        llm_decision_reason_short=str(
+            audit_summary.get(
+                "llm_decision_reason_short",
+                "LLM not used: direct answer available from retrieved evidence.",
+            )
+        ),
+        llm_decision_reason_code=str(
+            audit_summary.get("llm_decision_reason_code", "DEFAULT_RETRIEVAL_ONLY")
+        ),
         github_context=dict(github_context_seed or {}),
         locators=evidence_out,
         candidates_count=int(audit_summary.get("retrieved", len(evidence_out)) or 0),
@@ -3858,6 +4148,13 @@ def _build_qa_markdown(
     if llm_text and cmd in {"ask", "explain"}:
         answer_text_out = llm_text
     _merge_llm_meta(audit_summary, llm_meta)
+    desired_llm = str(audit_summary.get("execution_mode", "retrieval_only")) == "retrieval_plus_llm"
+    if desired_llm and not bool(llm_meta.get("llm_used", False)):
+        override_reason = _runtime_override_reason_from_skip(str(llm_meta.get("llm_skip_reason", "n/a")))
+    else:
+        override_reason = "n/a"
+    audit_summary["llm_runtime_override_reason"] = override_reason
+    llm_meta["llm_runtime_override_reason"] = override_reason
 
     if audit is not None:
         audit["route_final"] = str(audit_summary.get("route_final", result.tky.route))
@@ -4136,6 +4433,7 @@ def _build_review_markdown(
         "verification_pending_count": 0,
         "verification_overall": str(verification_report.get("overall", "NOT_RUN")),
     }
+    audit_summary.update(_execution_from_tky_result(tky_result.tky))
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
     changed_files = list(dict.fromkeys(str(item.get("filename", "")).strip() for item in files if item.get("filename")))
     if changed_files:
@@ -4151,6 +4449,19 @@ def _build_review_markdown(
     ]
     llm_intent = "patch" if cmd == "fix" else "review"
     llm_route = str(audit_summary.get("route_final", "REVIEW"))
+    execution_mode = str(audit_summary.get("execution_mode", "retrieval_only"))
+    llm_decision_intent = str(audit_summary.get("llm_intent", llm_intent) or llm_intent)
+    llm_decision_reason_short = str(
+        audit_summary.get(
+            "llm_decision_reason_short",
+            "LLM not used: direct answer available from retrieved evidence.",
+        )
+        or "LLM not used: direct answer available from retrieved evidence."
+    )
+    llm_decision_reason_code = str(
+        audit_summary.get("llm_decision_reason_code", "DEFAULT_RETRIEVAL_ONLY")
+        or "DEFAULT_RETRIEVAL_ONLY"
+    )
     llm_context = dict(github_context_seed or {})
     llm_complexity = score_complexity(
         task_type=cmd,
@@ -4206,6 +4517,10 @@ def _build_review_markdown(
             intent=llm_intent,
             query=query or question,
             route=llm_route,
+            execution_mode=execution_mode,
+            llm_intent_decision=llm_decision_intent,
+            llm_decision_reason_short=llm_decision_reason_short,
+            llm_decision_reason_code=llm_decision_reason_code,
             github_context=llm_context,
             selected_chunks=review_candidates,
             locators=review_locators,
@@ -4226,6 +4541,10 @@ def _build_review_markdown(
             intent=llm_intent,
             query=query or question,
             route=llm_route,
+            execution_mode=execution_mode,
+            llm_intent_decision=llm_decision_intent,
+            llm_decision_reason_short=llm_decision_reason_short,
+            llm_decision_reason_code=llm_decision_reason_code,
             github_context=llm_context,
             locators=review_locators,
             candidates_count=len(review_candidates),
@@ -4247,6 +4566,10 @@ def _build_review_markdown(
                 intent=llm_intent,
                 query=query or question,
                 route=llm_route,
+                execution_mode=execution_mode,
+                llm_intent_decision=llm_decision_intent,
+                llm_decision_reason_short=llm_decision_reason_short,
+                llm_decision_reason_code=llm_decision_reason_code,
                 github_context=llm_context,
                 selected_chunks=review_candidates,
                 locators=review_locators,
@@ -4303,6 +4626,13 @@ def _build_review_markdown(
             or 0
         )
     _merge_llm_meta(audit_summary, llm_meta)
+    desired_llm = str(audit_summary.get("execution_mode", "retrieval_only")) == "retrieval_plus_llm"
+    if desired_llm and not bool(llm_meta.get("llm_used", False)):
+        override_reason = _runtime_override_reason_from_skip(str(llm_meta.get("llm_skip_reason", "n/a")))
+    else:
+        override_reason = "n/a"
+    audit_summary["llm_runtime_override_reason"] = override_reason
+    llm_meta["llm_runtime_override_reason"] = override_reason
     llm_http_debug_payload: dict[str, Any] | None = None
     provider_http_status = llm_meta.get("llm_provider_http_status")
     provider_error_type = str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a")

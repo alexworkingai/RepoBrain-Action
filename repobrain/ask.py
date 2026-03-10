@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .evidence import EvidenceItem, build_evidence
+from .execution_mode import coerce_execution_decision
 from .tky_baseline import BaselineTKYProvider
 from .tky_local import LocalTKYProvider
 from .tky_provider import CandidateChunk, TKYProvider, TKYResult
@@ -62,6 +63,23 @@ def answer_question(
     # `candidates` are expected to arrive from retrieval with score populated.
     # `text` may be None (e.g., privacy-preserving index package without stored text).
     tky_result = provider.compress_context(question=question, candidates=candidates, limits=limits)
+    execution = coerce_execution_decision(
+        route=tky_result.route,
+        execution_mode=tky_result.execution_mode,
+        llm_intent=tky_result.llm_intent,
+        reason_short=tky_result.llm_decision_reason_short,
+        reason_code=tky_result.llm_decision_reason_code,
+    )
+    tky_result = TKYResult(
+        selected_chunk_ids=tky_result.selected_chunk_ids,
+        route=tky_result.route,
+        compression_stats=dict(tky_result.compression_stats),
+        rationale=tky_result.rationale,
+        execution_mode=execution.execution_mode,
+        llm_intent=execution.llm_intent,
+        llm_decision_reason_short=execution.reason_short,
+        llm_decision_reason_code=execution.reason_code,
+    )
     evidence = build_evidence(
         candidates=candidates,
         selected_chunk_ids=tky_result.selected_chunk_ids,
@@ -79,6 +97,10 @@ def answer_question(
         "retrieved": len(candidates),
         "selected": len(tky_result.selected_chunk_ids),
         "route": tky_result.route,
+        "execution_mode": tky_result.execution_mode,
+        "llm_intent": tky_result.llm_intent,
+        "llm_decision_reason_short": tky_result.llm_decision_reason_short,
+        "llm_decision_reason_code": tky_result.llm_decision_reason_code,
     }
     return AnswerResult(
         answer_text=answer,

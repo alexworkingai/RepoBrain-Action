@@ -103,6 +103,11 @@ When review/fix verification runs:
 
 - `date_utc`
 - `llm_used`, `skip_reason`
+- `execution_mode`
+- `llm_intent`
+- `llm_decision_reason_short`
+- `llm_decision_reason_code`
+- `llm_runtime_override_reason`
 - `model_id`, `tier`
 - `primary_model_id`, `effective_model_id`, `fallback_used`
 - `provider_http_status`, `provider_error_type`

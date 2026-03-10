@@ -117,7 +117,22 @@ def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "schema_version": "1.0",
-        "decision": {"route": decision.route, "reason": decision.rationale},
+        "decision": {
+            "route": decision.route,
+            "reason": decision.rationale,
+            "execution_mode": getattr(decision, "execution_mode", "retrieval_only"),
+            "llm_intent": getattr(decision, "llm_intent", "none"),
+            "llm_decision_reason_short": getattr(
+                decision,
+                "llm_decision_reason_short",
+                "LLM not used: direct answer available from retrieved evidence.",
+            ),
+            "llm_decision_reason_code": getattr(
+                decision,
+                "llm_decision_reason_code",
+                "DEFAULT_RETRIEVAL_ONLY",
+            ),
+        },
         "selection": {"selected_chunk_ids": decision.selected_chunk_ids},
         "compression_stats": dict(decision.compression_stats),
         "security": {

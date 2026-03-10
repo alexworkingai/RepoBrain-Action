@@ -45,6 +45,10 @@ class EngineDecision:
     security: EngineSecurity
     rationale: str
     stable_tokens: list[str]
+    execution_mode: str = "retrieval_only"
+    llm_intent: str = "none"
+    llm_decision_reason_short: str = "LLM not used: direct answer available from retrieved evidence."
+    llm_decision_reason_code: str = "DEFAULT_RETRIEVAL_ONLY"
 
 
 class TKYEngine(Protocol):
