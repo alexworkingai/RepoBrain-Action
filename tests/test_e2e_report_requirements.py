@@ -140,6 +140,11 @@ def test_validate_artifacts_patch_missing_shows_debug_reason(tmp_path: Path) -> 
             "reason": "diff_not_found_in_engine_or_llm_output",
             "llm_skip_reason": "route=WAIT",
             "decision_route": "WAIT",
+            "compacted": True,
+            "patch_batch_mode": True,
+            "patch_batch_count": 3,
+            "estimated_input_tokens": 3000,
+            "max_output_tokens_used": 900,
         },
     )
     _write_json(
@@ -158,3 +163,4 @@ def test_validate_artifacts_patch_missing_shows_debug_reason(tmp_path: Path) -> 
     assert status == "FAIL"
     assert any("patch_debug_reason=diff_not_found_in_engine_or_llm_output" in note for note in notes)
     assert any("provider_error_type=server_error" in note for note in notes)
+    assert any("compacted=True" in note and "patch_batch_mode=True" in note for note in notes)

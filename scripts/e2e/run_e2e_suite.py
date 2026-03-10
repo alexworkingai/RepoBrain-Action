@@ -570,22 +570,26 @@ def _to_optional_int(value: Any) -> int | None:
 def _fix_provider_context(artifacts_root: Path) -> dict[str, Any]:
     llm_usage_path = _find_first(artifacts_root, "llm_usage.json")
     llm_debug_path = _find_first(artifacts_root, "llm_http_debug.json")
+    patch_debug_path = _find_first(artifacts_root, "patch_generation_debug.json")
     llm_usage = _load_json(llm_usage_path) if llm_usage_path is not None else {}
     llm_debug = _load_json(llm_debug_path) if llm_debug_path is not None else {}
+    patch_debug = _load_json(patch_debug_path) if patch_debug_path is not None else {}
 
     provider_http_status = (
         llm_debug.get("provider_http_status")
         if isinstance(llm_debug, dict) and "provider_http_status" in llm_debug
         else llm_usage.get("provider_http_status")
     )
-    provider_error_type = str(
-        (
-            llm_debug.get("provider_error_type")
-            if isinstance(llm_debug, dict) and "provider_error_type" in llm_debug
-            else llm_usage.get("provider_error_type", "n/a")
-        )
-        or "n/a"
+    if provider_http_status is None:
+        provider_http_status = patch_debug.get("provider_http_status")
+    provider_error_type_raw = (
+        llm_debug.get("provider_error_type")
+        if isinstance(llm_debug, dict) and "provider_error_type" in llm_debug
+        else llm_usage.get("provider_error_type", "n/a")
     )
+    if str(provider_error_type_raw or "").strip() in {"", "n/a"}:
+        provider_error_type_raw = patch_debug.get("provider_error_type", provider_error_type_raw)
+    provider_error_type = str(provider_error_type_raw or "n/a")
     effective_model_id = str(
         (
             llm_usage.get("effective_model_id")
@@ -614,6 +618,23 @@ def _fix_provider_context(artifacts_root: Path) -> dict[str, Any]:
         "llm_used": llm_used,
         "llm_skip_reason": llm_skip_reason,
         "rate_limited": rate_limited,
+        "estimated_input_tokens": patch_debug.get(
+            "estimated_input_tokens",
+            llm_usage.get("input_budget_used_est"),
+        ),
+        "max_output_tokens_used": patch_debug.get(
+            "max_output_tokens_used",
+            llm_usage.get("max_output_tokens_used"),
+        ),
+        "patch_batch_mode": patch_debug.get(
+            "patch_batch_mode",
+            llm_usage.get("patch_batch_mode"),
+        ),
+        "patch_batch_count": patch_debug.get(
+            "patch_batch_count",
+            llm_usage.get("patch_batch_count"),
+        ),
+        "compacted": patch_debug.get("compacted", llm_usage.get("compacted")),
     }
 
 
@@ -781,6 +802,14 @@ def validate_artifacts(
             if debug_path is not None:
                 debug_payload = _load_json(debug_path)
                 debug_reason = str(debug_payload.get("reason", "n/a") or "n/a")
+                notes.append(
+                    "INFO: patch debug "
+                    f"compacted={debug_payload.get('compacted', 'n/a')}, "
+                    f"patch_batch_mode={debug_payload.get('patch_batch_mode', 'n/a')}, "
+                    f"patch_batch_count={debug_payload.get('patch_batch_count', 'n/a')}, "
+                    f"estimated_input_tokens={debug_payload.get('estimated_input_tokens', 'n/a')}, "
+                    f"max_output_tokens_used={debug_payload.get('max_output_tokens_used', 'n/a')}"
+                )
                 fail(
                     "patch artifact missing: expected patch.diff or patch_parts/*.diff "
                     f"(llm_skip_reason={llm_skip_reason}, route={llm_route}, "
@@ -1021,13 +1050,22 @@ def _scenario_from_run(
         if status == "FAIL_PRODUCT" and bool(fix_ctx.get("rate_limited", False)):
             status = "FAIL_INFRA"
             notes.append("classified as FAIL_INFRA due to provider rate limit (429)")
+        if status == "FAIL_PRODUCT" and _to_optional_int(fix_ctx.get("provider_http_status")) == 413:
             notes.append(
-                "fix_provider_context: "
-                f"status={fix_ctx.get('provider_http_status')}, "
-                f"error_type={fix_ctx.get('provider_error_type')}, "
-                f"effective_model_id={fix_ctx.get('effective_model_id')}, "
-                f"fallback_used={fix_ctx.get('fallback_used')}"
+                "classified as FAIL_PRODUCT: patch payload still too large after compaction/batching"
             )
+        notes.append(
+            "fix_provider_context: "
+            f"status={fix_ctx.get('provider_http_status')}, "
+            f"error_type={fix_ctx.get('provider_error_type')}, "
+            f"effective_model_id={fix_ctx.get('effective_model_id')}, "
+            f"fallback_used={fix_ctx.get('fallback_used')}, "
+            f"compacted={fix_ctx.get('compacted')}, "
+            f"patch_batch_mode={fix_ctx.get('patch_batch_mode')}, "
+            f"patch_batch_count={fix_ctx.get('patch_batch_count')}, "
+            f"estimated_input_tokens={fix_ctx.get('estimated_input_tokens')}, "
+            f"max_output_tokens_used={fix_ctx.get('max_output_tokens_used')}"
+        )
     return ScenarioResult(
         name=scenario_name,
         trigger=trigger,

@@ -666,6 +666,8 @@ def _env_true(name: str, default: bool = False) -> bool:
         "RB_LLM_BATCH_ENABLE": cfg.batch.enabled,
         "RB_LLM_BATCH_FORCE": cfg.batch.force,
         "RB_LLM_BATCH_REDUCE_ENABLE": cfg.batch.reduce_enable,
+        "RB_LLM_PATCH_BATCH_ENABLE": cfg.batch.patch_enable,
+        "RB_LLM_PATCH_BATCH_FORCE": cfg.batch.patch_force,
         "RB_TRUSTED_CONTEXT": cfg.workflow.trusted_context,
         "RB_ALLOW_DYNAMIC_VERIFY": cfg.workflow.allow_dynamic_verify,
         "RB_APPLY_PATCH": cfg.workflow.apply_patch,
@@ -693,7 +695,11 @@ def _env_int(name: str, default: int) -> int:
     mapping: dict[str, int] = {
         "RB_VERIFY_TIME_BUDGET_S": cfg.workflow.verify_time_budget_s,
         "RB_LLM_MAX_INPUT_TOKENS": cfg.llm.max_input_tokens,
+        "RB_LLM_MAX_INPUT_TOKENS_PATCH": cfg.llm.max_input_tokens_patch,
+        "RB_LLM_MAX_OUTPUT_TOKENS_PATCH": cfg.llm.max_output_tokens_patch,
         "RB_LLM_BATCH_MAX_CALLS_PER_RUN": cfg.batch.max_calls_per_run,
+        "RB_LLM_PATCH_BATCH_MAX_CALLS": cfg.batch.patch_max_calls,
+        "RB_LLM_PATCH_MAX_HUNKS_PER_CALL": cfg.batch.patch_max_hunks_per_call,
         "RB_RETRIEVAL_VECTOR_TOPK": cfg.embeddings.vector_topk,
     }
     if name in mapping:
@@ -931,6 +937,12 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "reset_time_utc_iso": llm_meta.get("llm_reset_time_utc_iso"),
         "provider_http_status": llm_meta.get("llm_provider_http_status"),
         "provider_error_type": str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a"),
+        "request_mode": str(llm_meta.get("llm_request_mode", "n/a") or "n/a"),
+        "patch_batch_mode": bool(llm_meta.get("llm_patch_batch_mode", False)),
+        "patch_batch_count": int(llm_meta.get("llm_patch_batch_count", 0) or 0),
+        "compacted": bool(llm_meta.get("llm_compacted", False)),
+        "attempted_compaction": bool(llm_meta.get("llm_attempted_compaction", False)),
+        "attempted_patch_batch": bool(llm_meta.get("llm_attempted_patch_batch", False)),
         "calls": calls,
         "totals": {
             "calls_count": len(calls),
@@ -1187,6 +1199,7 @@ def _write_llm_http_debug(repo_root: Path, payload: dict[str, Any]) -> Path:
 def _build_llm_http_debug_payload(*, llm_meta: dict[str, Any], decision_route: str) -> dict[str, Any]:
     return {
         "intent": "patch",
+        "request_mode": str(llm_meta.get("llm_request_mode", "patch") or "patch"),
         "primary_model": str(llm_meta.get("llm_primary_model_id", "n/a") or "n/a"),
         "fallback_model": (
             str(llm_meta.get("llm_effective_model_id", "n/a") or "n/a")
@@ -1202,6 +1215,16 @@ def _build_llm_http_debug_payload(*, llm_meta: dict[str, Any], decision_route: s
         else [],
         "decision_route": str(decision_route or "n/a"),
         "llm_skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
+        "estimated_input_tokens": int(llm_meta.get("llm_input_budget_used_est", 0) or 0),
+        "max_output_tokens_used": int(llm_meta.get("llm_max_output_tokens_used", 0) or 0),
+        "patch_batch_mode": bool(llm_meta.get("llm_patch_batch_mode", False)),
+        "patch_batch_count": int(llm_meta.get("llm_patch_batch_count", 0) or 0),
+        "compacted": bool(llm_meta.get("llm_compacted", False)),
+        "dropped_locators_count": int(llm_meta.get("llm_dropped_locators_count", 0) or 0),
+        "dropped_hunks_count": int(llm_meta.get("llm_dropped_hunks_count", 0) or 0),
+        "dropped_snippets_count": int(llm_meta.get("llm_dropped_snippets_count", 0) or 0),
+        "attempted_compaction": bool(llm_meta.get("llm_attempted_compaction", False)),
+        "attempted_patch_batch": bool(llm_meta.get("llm_attempted_patch_batch", False)),
     }
 
 
@@ -1592,7 +1615,8 @@ def _maybe_generate_llm_text(
         return None, llm_meta
 
     cfg = _runtime_env_cfg()
-    max_input_tokens = int(cfg.llm.max_input_tokens)
+    is_patch_request = _is_fix_intent(cmd, intent)
+    max_input_tokens = int(cfg.llm.max_input_tokens_patch if is_patch_request else cfg.llm.max_input_tokens)
     model_high = str(cfg.llm.model_high or "openai/gpt-4.1")
     model_low = str(cfg.llm.model_low or "openai/gpt-4.1-mini")
 
@@ -1640,13 +1664,14 @@ def _maybe_generate_llm_text(
         budgeting_stats = dict(prebuilt_budget_stats or {})
     else:
         budgeting_stats: dict[str, Any]
-        if intent == "patch" or cmd == "fix":
+        if is_patch_request:
             messages, budgeting_stats = build_messages_for_fix(
                 query=query,
                 changed_files=changed_files,
                 diff_hunks=diff_hunks,
                 max_input_tokens=max_input_tokens,
                 selected_snippets=selected_snippets,
+                max_hunks=int(cfg.batch.patch_max_hunks_per_call),
             )
         elif cmd == "review":
             messages, budgeting_stats = build_messages_for_review(
@@ -1687,6 +1712,12 @@ def _maybe_generate_llm_text(
             llm_meta["llm_complexity_explanation"] = explanation
             llm_meta["llm_calls_this_run"] = 0
             llm_meta["llm_max_output_tokens_used"] = max_output_tokens
+            llm_meta["llm_request_mode"] = "patch" if is_patch_request else "normal"
+            llm_meta["llm_patch_batch_mode"] = False
+            llm_meta["llm_patch_batch_count"] = 0
+            llm_meta["llm_compacted"] = bool(is_patch_request)
+            llm_meta["llm_attempted_compaction"] = bool(is_patch_request)
+            llm_meta["llm_attempted_patch_batch"] = False
             llm_meta["llm_input_budget_limit"] = int(budgeting_stats.get("input_budget_limit", 0) or 0)
             llm_meta["llm_input_budget_used_est"] = int(
                 budgeting_stats.get("input_budget_used_est", 0) or 0
@@ -1808,10 +1839,19 @@ def _maybe_generate_llm_text(
             budgeting_stats.get("dropped_snippets_count", 0) or 0
         )
         llm_meta["llm_provider_http_status"] = provider_status
-        llm_meta["llm_provider_error_type"] = str(active_error.reason or "unknown")
+        provider_error_type = str(active_error.reason or "unknown")
+        if int(provider_status or 0) == 413 and provider_error_type in {"http_error", "unknown"}:
+            provider_error_type = "payload_too_large"
+        llm_meta["llm_provider_error_type"] = provider_error_type
         llm_meta["llm_primary_status"] = primary_status
         llm_meta["llm_fallback_status"] = fallback_status
         llm_meta["llm_error_types"] = list(dict.fromkeys(error_types))
+        llm_meta["llm_request_mode"] = "patch" if is_patch_request else "normal"
+        llm_meta["llm_patch_batch_mode"] = False
+        llm_meta["llm_patch_batch_count"] = 0
+        llm_meta["llm_compacted"] = bool(is_patch_request)
+        llm_meta["llm_attempted_compaction"] = bool(is_patch_request)
+        llm_meta["llm_attempted_patch_batch"] = False
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         llm_meta["llm_calls"] = [
@@ -1860,6 +1900,12 @@ def _maybe_generate_llm_text(
         "llm_complexity_explanation": explanation,
         "llm_calls_this_run": 1,
         "llm_max_output_tokens_used": max_output_tokens,
+        "llm_request_mode": "patch" if is_patch_request else "normal",
+        "llm_patch_batch_mode": False,
+        "llm_patch_batch_count": 0,
+        "llm_compacted": bool(is_patch_request),
+        "llm_attempted_compaction": bool(is_patch_request),
+        "llm_attempted_patch_batch": False,
         "llm_input_budget_limit": int(budgeting_stats.get("input_budget_limit", 0) or 0),
         "llm_input_budget_used_est": int(budgeting_stats.get("input_budget_used_est", 0) or 0),
         "llm_dropped_locators_count": int(budgeting_stats.get("dropped_locators_count", 0) or 0),
@@ -1964,27 +2010,34 @@ def _sanitize_batch_text(text: str, *, max_lines: int = 8) -> list[str]:
     return lines
 
 
-def _extract_patch_from_llm_text_with_flags(text: str) -> tuple[str, bool, bool]:
+def _extract_patch_candidate(text: str) -> tuple[str, bool, bool, bool]:
     payload = str(text or "")
+    if payload.strip().upper() == "NO_PATCH":
+        return "", False, False, True
     fence_match = re.search(r"```diff\s*(.*?)```", payload, flags=re.DOTALL | re.IGNORECASE)
     if fence_match:
-        return fence_match.group(1).strip(), True, False
+        return fence_match.group(1).strip(), True, False, False
     idx = payload.find("diff --git")
     if idx >= 0:
-        return payload[idx:].strip(), False, True
+        return payload[idx:].strip(), False, True, False
     payload_stripped = payload.strip()
     if payload_stripped.startswith("--- ") and "\n+++ " in payload_stripped:
-        return payload_stripped, False, True
+        return payload_stripped, False, True, False
     idx_plain = payload.find("\n--- ")
     if idx_plain >= 0:
         candidate = payload[idx_plain + 1 :].strip()
         if candidate.startswith("--- ") and "\n+++ " in candidate:
-            return candidate, False, True
-    return "", False, False
+            return candidate, False, True, False
+    return "", False, False, False
+
+
+def _extract_patch_from_llm_text_with_flags(text: str) -> tuple[str, bool, bool]:
+    patch, fenced, raw, _ = _extract_patch_candidate(text)
+    return patch, fenced, raw
 
 
 def _extract_patch_from_llm_text(text: str) -> str:
-    patch_text, _, _ = _extract_patch_from_llm_text_with_flags(text)
+    patch_text, _, _, _ = _extract_patch_candidate(text)
     return patch_text
 
 
@@ -2056,17 +2109,46 @@ def _should_use_batch_mode_for_review(
     route: str,
     complexity_score: int,
     changed_files_count: int,
+    diff_hunks_count: int = 0,
+    estimated_patch_input_tokens: int = 0,
 ) -> bool:
-    if not _env_true("RB_LLM_BATCH_ENABLE", default=False):
-        return False
     if cmd not in {"review", "fix"}:
         return False
     normalized_route = str(route or "").strip().upper()
     if normalized_route in {"WAIT", "REFUSE", "BLOCK"}:
         return False
-    if bool(_runtime_env_cfg().batch.force):
+    cfg = _runtime_env_cfg()
+    if cmd == "fix":
+        if not bool(cfg.batch.patch_enable):
+            return False
+        if bool(cfg.batch.patch_force):
+            return True
+        if int(changed_files_count) > 1:
+            return True
+        if int(diff_hunks_count) > max(1, int(cfg.batch.patch_max_hunks_per_call)):
+            return True
+        if int(estimated_patch_input_tokens) > max(256, int(cfg.llm.max_input_tokens_patch)):
+            return True
+        return False
+
+    if not bool(cfg.batch.enabled):
+        return False
+    if bool(cfg.batch.force):
         return True
     return normalized_route == "DEEP" or complexity_score >= 60 or changed_files_count >= 10
+
+
+def _should_retry_patch_batch_after_single_call(
+    *,
+    cmd: str,
+    llm_meta: dict[str, Any],
+) -> bool:
+    if cmd != "fix":
+        return False
+    cfg = _runtime_env_cfg()
+    if not bool(cfg.batch.patch_enable):
+        return False
+    return _int_or_zero(llm_meta.get("llm_provider_http_status", 0)) == 413
 
 
 def _split_batch_for_force_mode(batch: Batch) -> list[Batch]:
@@ -2114,6 +2196,30 @@ def _split_batch_for_force_mode(batch: Batch) -> list[Batch]:
     return [first, second]
 
 
+def _split_batch_by_hunk_cap(batch: Batch, *, max_hunks_per_call: int) -> list[Batch]:
+    max_hunks = max(1, int(max_hunks_per_call))
+    if len(batch.diff_hunks) <= max_hunks:
+        return [batch]
+
+    chunks: list[Batch] = []
+    hunks = list(batch.diff_hunks)
+    total_hunks = max(1, len(hunks))
+    for start in range(0, len(hunks), max_hunks):
+        grouped = hunks[start : start + max_hunks]
+        ratio = len(grouped) / total_hunks
+        estimated_tokens = max(1, int(batch.estimated_input_tokens * ratio))
+        chunks.append(
+            Batch(
+                batch_id=f"{batch.batch_id}-h{len(chunks) + 1}",
+                paths=list(batch.paths),
+                diff_hunks=list(grouped),
+                snippet_ids=list(batch.snippet_ids),
+                estimated_input_tokens=estimated_tokens,
+            )
+        )
+    return chunks
+
+
 def _run_batch_llm_review_fix(
     *,
     repo_root: Path,
@@ -2125,28 +2231,52 @@ def _run_batch_llm_review_fix(
     selected_chunks: list[CandidateChunk],
     locators: list[EvidenceItem],
     governor: AIBudgetGovernor | None = None,
+    force_patch_batch: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     route_norm = str(route or "").strip().upper()
+    is_patch_mode = _is_fix_intent(cmd, intent)
     llm_disabled = not _llm_enabled()
     if llm_disabled:
         llm_meta = _llm_default_meta("disabled")
         llm_meta["llm_decision_route"] = route_norm or "n/a"
+        llm_meta["llm_request_mode"] = "patch" if is_patch_mode else "normal"
+        llm_meta["llm_patch_batch_mode"] = bool(is_patch_mode)
+        llm_meta["llm_patch_batch_count"] = 0
+        llm_meta["llm_compacted"] = bool(is_patch_mode)
+        llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
+        llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
         return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, llm_meta
 
     cfg = _runtime_env_cfg()
-    max_input_tokens = int(cfg.llm.max_input_tokens)
+    max_input_tokens = int(cfg.llm.max_input_tokens_patch if is_patch_mode else cfg.llm.max_input_tokens)
+    reserve_tokens = 600 if is_patch_mode else 800
     planned = plan_batches(
         task_type=cmd,
         intent=intent,
         github_context=github_context,
         selected_chunks=selected_chunks,
         limits={"max_input_tokens": max_input_tokens},
-        budgets={"max_input_tokens": max_input_tokens, "reserve_tokens": 800},
+        budgets={"max_input_tokens": max_input_tokens, "reserve_tokens": reserve_tokens},
     )
-    force_batch = bool(cfg.batch.force)
+    force_batch = bool(cfg.batch.patch_force if is_patch_mode else cfg.batch.force)
+    if force_patch_batch and is_patch_mode:
+        force_batch = True
     if force_batch and len(planned) == 1:
         planned = _split_batch_for_force_mode(planned[0])
-    max_calls = max(1, int(cfg.batch.max_calls_per_run))
+    if is_patch_mode:
+        max_calls = max(1, min(int(cfg.batch.max_calls_per_run), int(cfg.batch.patch_max_calls)))
+    else:
+        max_calls = max(1, int(cfg.batch.max_calls_per_run))
+    if is_patch_mode:
+        split_planned: list[Batch] = []
+        for batch in planned:
+            split_planned.extend(
+                _split_batch_by_hunk_cap(
+                    batch,
+                    max_hunks_per_call=int(cfg.batch.patch_max_hunks_per_call),
+                )
+            )
+        planned = split_planned
     model_high = str(cfg.llm.model_high or "openai/gpt-4.1")
     model_low = str(cfg.llm.model_low or "openai/gpt-4.1-mini")
     overall_score = score_complexity(
@@ -2175,6 +2305,12 @@ def _run_batch_llm_review_fix(
             llm_meta["llm_decision_route"] = route_norm or "n/a"
             llm_meta["llm_budget_action"] = bootstrap_decision.budget_action
             llm_meta["llm_governor_reason"] = bootstrap_decision.reason
+            llm_meta["llm_request_mode"] = "patch" if is_patch_mode else "normal"
+            llm_meta["llm_patch_batch_mode"] = bool(is_patch_mode)
+            llm_meta["llm_patch_batch_count"] = 0
+            llm_meta["llm_compacted"] = bool(is_patch_mode)
+            llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
+            llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
             return {
                 "batch_used": False,
                 "summaries": [],
@@ -2193,6 +2329,12 @@ def _run_batch_llm_review_fix(
     if not batches:
         llm_meta = _llm_default_meta("no_batches")
         llm_meta["llm_decision_route"] = route_norm or "n/a"
+        llm_meta["llm_request_mode"] = "patch" if is_patch_mode else "normal"
+        llm_meta["llm_patch_batch_mode"] = bool(is_patch_mode)
+        llm_meta["llm_patch_batch_count"] = 0
+        llm_meta["llm_compacted"] = bool(is_patch_mode)
+        llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
+        llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
         return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, llm_meta
 
     calls: list[dict[str, Any]] = []
@@ -2312,10 +2454,12 @@ def _run_batch_llm_review_fix(
         )
         findings.extend(summary_lines[:4])
         if cmd == "fix":
-            patch = _extract_patch_from_llm_text(text or "")
+            patch, _, _, no_patch = _extract_patch_candidate(text or "")
             if patch and _is_unified_diff(patch):
                 patch_parts.append({"batch_id": batch.batch_id, "patch": patch})
                 _write_patch_part(repo_root, batch.batch_id, patch)
+            elif no_patch:
+                findings.append(f"batch={batch.batch_id} returned NO_PATCH")
 
     reduce_text: str | None = None
     if reduce_enable and len(summaries) > 1 and any_used:
@@ -2449,6 +2593,12 @@ def _run_batch_llm_review_fix(
         ),
         "llm_calls_this_run": len(calls),
         "llm_max_output_tokens_used": max_output_tokens_max,
+        "llm_request_mode": "patch" if is_patch_mode else "normal",
+        "llm_patch_batch_mode": bool(is_patch_mode),
+        "llm_patch_batch_count": len(batches) if is_patch_mode else 0,
+        "llm_compacted": bool(is_patch_mode),
+        "llm_attempted_compaction": bool(is_patch_mode),
+        "llm_attempted_patch_batch": bool(is_patch_mode),
         "llm_input_budget_limit": prompt_limit_total,
         "llm_input_budget_used_est": prompt_used_total,
         "llm_dropped_locators_count": dropped_locators,
@@ -3942,11 +4092,32 @@ def _build_review_markdown(
         candidates=[None] * max(0, len(review_candidates)),
         limits={"query_length": len(query or question)},
     )
+    patch_budget_stats: dict[str, Any] = {}
+    patch_estimated_input_tokens = 0
+    diff_hunks_raw = llm_context.get("diff_hunks", [])
+    diff_hunks = [str(item) for item in diff_hunks_raw if str(item).strip()] if isinstance(diff_hunks_raw, list) else []
+    if cmd == "fix":
+        patch_snippets = [
+            str(item.chunk_id)
+            for item in review_candidates[:80]
+            if str(getattr(item, "chunk_id", "")).strip()
+        ]
+        _, patch_budget_stats = build_messages_for_fix(
+            query=query or question,
+            changed_files=changed_files,
+            diff_hunks=diff_hunks,
+            max_input_tokens=int(cfg.llm.max_input_tokens_patch),
+            selected_snippets=patch_snippets,
+            max_hunks=int(cfg.batch.patch_max_hunks_per_call),
+        )
+        patch_estimated_input_tokens = int(patch_budget_stats.get("input_budget_used_est", 0) or 0)
     use_batch_mode = _should_use_batch_mode_for_review(
         cmd=cmd,
         route=llm_route,
         complexity_score=llm_complexity,
         changed_files_count=len(changed_files),
+        diff_hunks_count=len(diff_hunks),
+        estimated_patch_input_tokens=patch_estimated_input_tokens,
     )
     batch_result: dict[str, Any] = {
         "batch_used": False,
@@ -3969,6 +4140,7 @@ def _build_review_markdown(
             selected_chunks=review_candidates,
             locators=review_locators,
             governor=governor,
+            force_patch_batch=False,
         )
         if str(batch_result.get("summary_text", "")).strip():
             review["summary_text"] = str(batch_result.get("summary_text", "")).strip()
@@ -3992,6 +4164,74 @@ def _build_review_markdown(
         llm_text_for_patch = llm_text or ""
         if llm_text:
             review["summary_text"] = llm_text
+        should_retry_patch_batch = _should_retry_patch_batch_after_single_call(
+            cmd=cmd,
+            llm_meta=llm_meta,
+        )
+        if should_retry_patch_batch:
+            llm_meta["llm_attempted_compaction"] = True
+            llm_meta["llm_attempted_patch_batch"] = True
+            batch_result, retried_meta = _run_batch_llm_review_fix(
+                repo_root=repo_root,
+                cmd=cmd,
+                intent=llm_intent,
+                query=query or question,
+                route=llm_route,
+                github_context=llm_context,
+                selected_chunks=review_candidates,
+                locators=review_locators,
+                governor=governor,
+                force_patch_batch=True,
+            )
+            use_batch_mode = True
+            llm_meta = retried_meta
+            if str(batch_result.get("summary_text", "")).strip():
+                review["summary_text"] = str(batch_result.get("summary_text", "")).strip()
+            batch_findings = batch_result.get("findings", [])
+            if isinstance(batch_findings, list) and batch_findings:
+                notes_raw = review.get("notes", [])
+                notes = [str(item) for item in notes_raw if str(item).strip()] if isinstance(notes_raw, list) else []
+                notes.extend(str(item) for item in batch_findings[:8] if str(item).strip())
+                review["notes"] = list(dict.fromkeys(notes))
+    if cmd == "fix":
+        llm_meta.setdefault("llm_request_mode", "patch")
+        llm_meta["llm_compacted"] = True
+        llm_meta["llm_attempted_compaction"] = True
+        llm_meta["llm_patch_batch_mode"] = bool(batch_result.get("batch_used", False))
+        llm_meta["llm_patch_batch_count"] = int(batch_result.get("executed_batches", 0) or 0)
+        llm_meta["llm_attempted_patch_batch"] = bool(
+            batch_result.get("batch_used", False)
+            or _int_or_zero(llm_meta.get("llm_provider_http_status", 0)) == 413
+        )
+        if not _int_or_zero(llm_meta.get("llm_input_budget_used_est", 0)):
+            llm_meta["llm_input_budget_used_est"] = int(
+                patch_budget_stats.get("input_budget_used_est", 0) or 0
+            )
+        if not _int_or_zero(llm_meta.get("llm_input_budget_limit", 0)):
+            llm_meta["llm_input_budget_limit"] = int(
+                patch_budget_stats.get("input_budget_limit", cfg.llm.max_input_tokens_patch) or 0
+            )
+        llm_meta["llm_dropped_locators_count"] = int(
+            llm_meta.get(
+                "llm_dropped_locators_count",
+                patch_budget_stats.get("dropped_locators_count", 0),
+            )
+            or 0
+        )
+        llm_meta["llm_dropped_hunks_count"] = int(
+            llm_meta.get(
+                "llm_dropped_hunks_count",
+                patch_budget_stats.get("dropped_hunks_count", 0),
+            )
+            or 0
+        )
+        llm_meta["llm_dropped_snippets_count"] = int(
+            llm_meta.get(
+                "llm_dropped_snippets_count",
+                patch_budget_stats.get("dropped_snippets_count", 0),
+            )
+            or 0
+        )
     _merge_llm_meta(audit_summary, llm_meta)
     llm_http_debug_payload: dict[str, Any] | None = None
     provider_http_status = llm_meta.get("llm_provider_http_status")
@@ -4091,8 +4331,9 @@ def _build_review_markdown(
             patch_text = merged_batch_patch
     found_fenced_diff = False
     found_raw_diff = False
+    no_patch_response = False
     if not patch_text and llm_text_for_patch:
-        patch_text, found_fenced_diff, found_raw_diff = _extract_patch_from_llm_text_with_flags(
+        patch_text, found_fenced_diff, found_raw_diff, no_patch_response = _extract_patch_candidate(
             llm_text_for_patch
         )
 
@@ -4143,8 +4384,17 @@ def _build_review_markdown(
             else:
                 patch_pr_message = "auto-pr skipped (patch not pushed)"
     else:
+        provider_http_status = llm_meta.get("llm_provider_http_status")
+        provider_error_type = str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a")
+        if _int_or_zero(provider_http_status) == 413:
+            provider_error_type = "payload_too_large"
         patch_debug_payload = {
-            "reason": "diff_not_found_in_engine_or_llm_output",
+            "reason": (
+                "llm_returned_no_patch"
+                if no_patch_response
+                else "diff_not_found_in_engine_or_llm_output"
+            ),
+            "request_mode": "patch",
             "llm_used": bool(llm_meta.get("llm_used", False)),
             "model": str(llm_meta.get("llm_model_used", "n/a") or "n/a"),
             "effective_model_id": str(llm_meta.get("llm_effective_model_id", "n/a") or "n/a"),
@@ -4152,11 +4402,21 @@ def _build_review_markdown(
             "llm_skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
             "decision_route": str(audit_summary.get("route_final", "n/a") or "n/a"),
             "governor_reason": str(llm_meta.get("llm_governor_reason", "n/a") or "n/a"),
-            "provider_http_status": llm_meta.get("llm_provider_http_status"),
-            "provider_error_type": str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a"),
+            "provider_http_status": provider_http_status,
+            "provider_error_type": provider_error_type,
             "extracted_len": len(str(patch_text or "").strip()),
             "found_fenced_diff": bool(found_fenced_diff),
             "found_raw_diff": bool(found_raw_diff),
+            "estimated_input_tokens": int(llm_meta.get("llm_input_budget_used_est", 0) or 0),
+            "max_output_tokens_used": int(llm_meta.get("llm_max_output_tokens_used", 0) or 0),
+            "patch_batch_mode": bool(llm_meta.get("llm_patch_batch_mode", False)),
+            "patch_batch_count": int(llm_meta.get("llm_patch_batch_count", 0) or 0),
+            "compacted": bool(llm_meta.get("llm_compacted", False)),
+            "dropped_locators_count": int(llm_meta.get("llm_dropped_locators_count", 0) or 0),
+            "dropped_hunks_count": int(llm_meta.get("llm_dropped_hunks_count", 0) or 0),
+            "dropped_snippets_count": int(llm_meta.get("llm_dropped_snippets_count", 0) or 0),
+            "attempted_compaction": bool(llm_meta.get("llm_attempted_compaction", False)),
+            "attempted_patch_batch": bool(llm_meta.get("llm_attempted_patch_batch", False)),
             "output_truncated": False,
         }
         debug_path = _write_patch_generation_debug(repo_root, patch_debug_payload)

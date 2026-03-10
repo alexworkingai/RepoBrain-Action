@@ -79,13 +79,15 @@ def compute_output_token_budget(
     ask_cap = max(200, int(llm_cfg.max_output_tokens_ask))
     review_cap = max(200, int(llm_cfg.max_output_tokens_review))
     fix_cap = max(200, int(llm_cfg.max_output_tokens_fix))
+    patch_cap = max(64, int(llm_cfg.max_output_tokens_patch))
 
     normalized_task = str(task_type or "").strip().lower()
     normalized_intent = str(intent or "").strip().lower()
 
     if normalized_intent == "patch" or normalized_task == "fix":
-        adaptive = _scaled_budget(complexity_score, low=1200, high=2400)
-        return min(adaptive, fix_cap, global_cap)
+        # Patch path uses a stricter dedicated cap to reduce provider payload pressure.
+        _ = complexity_score
+        return min(patch_cap, fix_cap, global_cap)
     if normalized_task == "review":
         adaptive = _scaled_budget(complexity_score, low=800, high=1600)
         return min(adaptive, review_cap, global_cap)

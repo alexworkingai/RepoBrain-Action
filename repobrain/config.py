@@ -197,10 +197,12 @@ class LLMConfig:
     model_high: str = "openai/gpt-4.1"
     model_low: str = "openai/gpt-4.1-mini"
     max_input_tokens: int = 7600
+    max_input_tokens_patch: int = 3200
     max_output_tokens_global: int = 2000
     max_output_tokens_ask: int = 1000
     max_output_tokens_review: int = 1400
     max_output_tokens_fix: int = 2000
+    max_output_tokens_patch: int = 900
     allow_locate: bool = False
 
 
@@ -221,6 +223,10 @@ class BatchConfig:
     max_calls_per_run: int = 6
     reduce_enable: bool = True
     reduce_model: str = ""
+    patch_enable: bool = True
+    patch_force: bool = False
+    patch_max_calls: int = 4
+    patch_max_hunks_per_call: int = 4
 
 
 @dataclass(frozen=True)
@@ -325,6 +331,14 @@ class RepoBrainConfig:
                 max_value=64_000,
                 warnings=warnings,
             ),
+            max_input_tokens_patch=env_int(
+                "RB_LLM_MAX_INPUT_TOKENS_PATCH",
+                3200,
+                source=env_source,
+                min_value=256,
+                max_value=64_000,
+                warnings=warnings,
+            ),
             max_output_tokens_global=env_int(
                 "RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL",
                 2000,
@@ -354,6 +368,14 @@ class RepoBrainConfig:
                 2000,
                 source=env_source,
                 min_value=200,
+                max_value=16_000,
+                warnings=warnings,
+            ),
+            max_output_tokens_patch=env_int(
+                "RB_LLM_MAX_OUTPUT_TOKENS_PATCH",
+                900,
+                source=env_source,
+                min_value=64,
                 max_value=16_000,
                 warnings=warnings,
             ),
@@ -417,6 +439,34 @@ class RepoBrainConfig:
                 warnings=warnings,
             ),
             reduce_model=env_str("RB_LLM_BATCH_REDUCE_MODEL", "", source=env_source),
+            patch_enable=env_bool(
+                "RB_LLM_PATCH_BATCH_ENABLE",
+                True,
+                source=env_source,
+                warnings=warnings,
+            ),
+            patch_force=env_bool(
+                "RB_LLM_PATCH_BATCH_FORCE",
+                False,
+                source=env_source,
+                warnings=warnings,
+            ),
+            patch_max_calls=env_int(
+                "RB_LLM_PATCH_BATCH_MAX_CALLS",
+                4,
+                source=env_source,
+                min_value=1,
+                max_value=32,
+                warnings=warnings,
+            ),
+            patch_max_hunks_per_call=env_int(
+                "RB_LLM_PATCH_MAX_HUNKS_PER_CALL",
+                4,
+                source=env_source,
+                min_value=1,
+                max_value=64,
+                warnings=warnings,
+            ),
         )
         governor = GovernorConfig(
             stop_at_remaining=env_bool(
@@ -740,16 +790,22 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec("RB_LLM_MODEL_HIGH", "str", "openai/gpt-4.1", "High-tier model id."),
     EnvVarSpec("RB_LLM_MODEL_LOW", "str", "openai/gpt-4.1-mini", "Low-tier model id."),
     EnvVarSpec("RB_LLM_MAX_INPUT_TOKENS", "int", "7600", "Prompt input token budget.", min_value=256, max_value=64000),
+    EnvVarSpec("RB_LLM_MAX_INPUT_TOKENS_PATCH", "int", "3200", "Patch prompt input token budget.", min_value=256, max_value=64000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL", "int", "2000", "Global max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_ASK", "int", "1000", "Ask max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_REVIEW", "int", "1400", "Review max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_FIX", "int", "2000", "Fix max output tokens.", min_value=200, max_value=16000),
+    EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_PATCH", "int", "900", "Patch max output tokens.", min_value=64, max_value=16000),
     EnvVarSpec("RB_LLM_ALLOW_LOCATE", "bool", "0", "Allow LLM for locate command."),
     EnvVarSpec("RB_LLM_BATCH_ENABLE", "bool", "0", "Enable batch map-reduce LLM mode."),
     EnvVarSpec("RB_LLM_BATCH_FORCE", "bool", "0", "Force batch mode for review/fix in controlled runs."),
     EnvVarSpec("RB_LLM_BATCH_MAX_CALLS_PER_RUN", "int", "6", "Batch LLM call cap per run.", min_value=1, max_value=100),
     EnvVarSpec("RB_LLM_BATCH_REDUCE_ENABLE", "bool", "1", "Enable reduce step in batch mode."),
     EnvVarSpec("RB_LLM_BATCH_REDUCE_MODEL", "str", "", "Optional override model for reduce step."),
+    EnvVarSpec("RB_LLM_PATCH_BATCH_ENABLE", "bool", "1", "Enable patch-specific LLM batching."),
+    EnvVarSpec("RB_LLM_PATCH_BATCH_FORCE", "bool", "0", "Force patch batching in fix mode."),
+    EnvVarSpec("RB_LLM_PATCH_BATCH_MAX_CALLS", "int", "4", "Patch batch call cap per run.", min_value=1, max_value=32),
+    EnvVarSpec("RB_LLM_PATCH_MAX_HUNKS_PER_CALL", "int", "4", "Patch max diff hunks per LLM call.", min_value=1, max_value=64),
     EnvVarSpec("RB_EMBED_ENABLED", "bool", "0", "Enable embeddings pipeline."),
     EnvVarSpec("RB_EMBED_MODEL", "str", "openai/text-embedding-3-small", "Embeddings model id."),
     EnvVarSpec("RB_EMBED_BATCH_SIZE", "int", "64", "Embeddings batch size.", min_value=1, max_value=1024),

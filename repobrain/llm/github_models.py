@@ -175,11 +175,12 @@ class GitHubModelsClient:
             raise GitHubModelsError("GitHub Models request failed", reason="network") from exc
 
         status_code = int(getattr(response, "status_code", 0) or 0)
-        if status_code in {401, 403, 404, 429} or status_code >= 500:
+        if status_code in {401, 403, 404, 413, 429} or status_code >= 500:
             reason = {
                 401: "unauthorized",
                 403: "forbidden",
                 404: "not_found",
+                413: "payload_too_large",
                 429: "rate_limited",
             }.get(status_code, "server_error" if status_code >= 500 else "http_error")
             raise GitHubModelsError(

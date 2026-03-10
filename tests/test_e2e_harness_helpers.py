@@ -516,6 +516,73 @@ def test_fix_scenario_rate_limited_classified_as_infra(monkeypatch, tmp_path: Pa
     assert any("effective_model_id=openai/gpt-4.1-mini" in note for note in result.notes)
 
 
+def test_fix_scenario_payload_too_large_stays_product_fail(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    artifacts_root = tmp_path / "fix413"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    (artifacts_root / "config_snapshot.json").write_text('{"config":{"safe":true}}', encoding="utf-8")
+    (artifacts_root / "ai_quota_snapshot.json").write_text('{"governor":{"ok":true}}', encoding="utf-8")
+    (artifacts_root / "llm_usage.json").write_text(
+        json.dumps(
+            {
+                "llm_used": False,
+                "skip_reason": "LLM_NOT_AVAILABLE:payload_too_large",
+                "decision_route": "FAST",
+                "provider_http_status": 413,
+                "provider_error_type": "payload_too_large",
+                "effective_model_id": "openai/gpt-4.1-mini",
+                "fallback_used": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts_root / "llm_http_debug.json").write_text(
+        json.dumps(
+            {
+                "provider_http_status": 413,
+                "provider_error_type": "payload_too_large",
+                "fallback_model": "openai/gpt-4.1-mini",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (artifacts_root / "patch_generation_debug.json").write_text(
+        json.dumps(
+            {
+                "reason": "diff_not_found_in_engine_or_llm_output",
+                "compacted": True,
+                "patch_batch_mode": True,
+                "patch_batch_count": 4,
+                "estimated_input_tokens": 3600,
+                "max_output_tokens_used": 900,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_run_cmd(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        check: bool = True,
+    ):
+        del args, cwd, check
+        return module.CmdResult(code=0, out="ok", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    result = module._scenario_from_run(  # noqa: SLF001
+        scenario_name="fix_patch_required_dispatch",
+        trigger="/repobrain fix",
+        run_data={"databaseId": "12", "url": "https://example.test/run/12", "conclusion": "success"},
+        artifacts_root=artifacts_root,
+        requirements=module.ScenarioRequirements(require_patch=True),
+    )
+
+    assert result.status == "FAIL_PRODUCT"
+    assert any("patch payload still too large after compaction/batching" in note for note in result.notes)
+
+
 def test_fix_scenario_llm_used_but_no_patch_is_product_fail(monkeypatch, tmp_path: Path) -> None:
     module = _load_module()
     artifacts_root = tmp_path / "fix-product-fail"

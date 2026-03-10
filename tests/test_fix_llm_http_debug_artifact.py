@@ -68,4 +68,4 @@ def test_fix_llm_http_debug_payload_written_when_both_models_fail(
     assert data["provider_error_type"] == "server_error"
     serialized = json.dumps(data, ensure_ascii=False).lower()
     assert "authorization" not in serialized
-    assert "token" not in serialized
+    assert "test-token" not in serialized

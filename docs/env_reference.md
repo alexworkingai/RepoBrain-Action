@@ -32,12 +32,18 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_LLM_BATCH_REDUCE_MODEL` | str | `` | - | Optional override model for reduce step. |
 | `RB_LLM_ENABLED` | bool | `0` | - | Enable LLM layer. |
 | `RB_LLM_MAX_INPUT_TOKENS` | int | `7600` | 256..64000 | Prompt input token budget. |
+| `RB_LLM_MAX_INPUT_TOKENS_PATCH` | int | `3200` | 256..64000 | Patch prompt input token budget. |
 | `RB_LLM_MAX_OUTPUT_TOKENS_ASK` | int | `1000` | 200..16000 | Ask max output tokens. |
 | `RB_LLM_MAX_OUTPUT_TOKENS_FIX` | int | `2000` | 200..16000 | Fix max output tokens. |
 | `RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL` | int | `2000` | 200..16000 | Global max output tokens. |
+| `RB_LLM_MAX_OUTPUT_TOKENS_PATCH` | int | `900` | 64..16000 | Patch max output tokens. |
 | `RB_LLM_MAX_OUTPUT_TOKENS_REVIEW` | int | `1400` | 200..16000 | Review max output tokens. |
 | `RB_LLM_MODEL_HIGH` | str | `openai/gpt-4.1` | - | High-tier model id. |
 | `RB_LLM_MODEL_LOW` | str | `openai/gpt-4.1-mini` | - | Low-tier model id. |
+| `RB_LLM_PATCH_BATCH_ENABLE` | bool | `1` | - | Enable patch-specific LLM batching. |
+| `RB_LLM_PATCH_BATCH_FORCE` | bool | `0` | - | Force patch batching in fix mode. |
+| `RB_LLM_PATCH_BATCH_MAX_CALLS` | int | `4` | 1..32 | Patch batch call cap per run. |
+| `RB_LLM_PATCH_MAX_HUNKS_PER_CALL` | int | `4` | 1..64 | Patch max diff hunks per LLM call. |
 | `RB_LLM_PROVIDER` | str | `` | - | LLM provider name (github_models). |
 | `RB_REQUIRE_VERIFY_FOR_PATCH` | bool | `0` | - | Require verification pass for patch success. |
 | `RB_RETRIEVAL_VECTOR_TOPK` | int | `30` | 1..500 | Vector candidate top-k. |

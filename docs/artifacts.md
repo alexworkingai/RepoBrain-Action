@@ -121,11 +121,26 @@ When review/fix verification runs:
 `artifacts/llm_http_debug.json` (usersafe) includes:
 
 - `intent` (`patch`)
+- `request_mode` (`patch`)
 - `primary_model`, `fallback_model`
 - `primary_status`, `fallback_status`
 - `provider_http_status`, `provider_error_type`
 - `error_types`
 - `decision_route`, `llm_skip_reason`
+- `estimated_input_tokens`, `max_output_tokens_used`
+- `patch_batch_mode`, `patch_batch_count`
+- `compacted`, `dropped_locators_count`, `dropped_hunks_count`, `dropped_snippets_count`
+- `attempted_compaction`, `attempted_patch_batch`
+
+`artifacts/patch_generation_debug.json` (usersafe) includes patch extraction diagnostics:
+
+- `reason` (`llm_returned_no_patch` / `diff_not_found_in_engine_or_llm_output` / etc.)
+- `request_mode` (`patch`)
+- `provider_http_status`, `provider_error_type`
+- `estimated_input_tokens`, `max_output_tokens_used`
+- `patch_batch_mode`, `patch_batch_count`
+- `compacted`, `attempted_compaction`, `attempted_patch_batch`
+- `found_fenced_diff`, `found_raw_diff`, `extracted_len`
 
 `artifacts/index_embeddings_evidence.json` (usersafe) includes:
 
