@@ -2010,34 +2010,96 @@ def _sanitize_batch_text(text: str, *, max_lines: int = 8) -> list[str]:
     return lines
 
 
-def _extract_patch_candidate(text: str) -> tuple[str, bool, bool, bool]:
+def _normalize_patch_output(text: str) -> str:
     payload = str(text or "")
-    if payload.strip().upper() == "NO_PATCH":
-        return "", False, False, True
-    fence_match = re.search(r"```diff\s*(.*?)```", payload, flags=re.DOTALL | re.IGNORECASE)
-    if fence_match:
-        return fence_match.group(1).strip(), True, False, False
+    payload = payload.replace("\r\n", "\n").replace("\r", "\n")
+    return payload.strip()
+
+
+def _extract_json_envelope_patch(text: str) -> tuple[str, bool]:
+    candidates = [_normalize_patch_output(text)]
+    for match in re.finditer(r"```json\s*(.*?)```", candidates[0], flags=re.DOTALL | re.IGNORECASE):
+        candidates.append(_normalize_patch_output(match.group(1)))
+    for raw in candidates:
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        result = str(payload.get("result", "") or "").strip().lower()
+        if result == "patch":
+            diff = payload.get("diff")
+            if isinstance(diff, str) and diff.strip():
+                return _normalize_patch_output(diff), True
+            continue
+        if result in {"no_patch", "nopatch"}:
+            return "", True
+    return "", False
+
+
+def _extract_patch_candidate(
+    text: str,
+) -> tuple[str, bool, bool, bool, bool, str, int]:
+    payload = _normalize_patch_output(text)
+    response_chars = len(payload)
+
+    fence_matches = list(re.finditer(r"```diff\s*(.*?)```", payload, flags=re.DOTALL | re.IGNORECASE))
+    has_diff_fence = bool(fence_matches)
+    for match in fence_matches:
+        candidate = _normalize_patch_output(match.group(1))
+        if _is_unified_diff(candidate):
+            return candidate, True, False, False, False, "diff_fence", response_chars
+
+    has_raw_diff = False
     idx = payload.find("diff --git")
     if idx >= 0:
-        return payload[idx:].strip(), False, True, False
-    payload_stripped = payload.strip()
+        candidate = _normalize_patch_output(payload[idx:])
+        has_raw_diff = True
+        if _is_unified_diff(candidate):
+            return candidate, False, True, False, False, "raw_diff", response_chars
+    payload_stripped = payload
     if payload_stripped.startswith("--- ") and "\n+++ " in payload_stripped:
-        return payload_stripped, False, True, False
+        has_raw_diff = True
+        if _is_unified_diff(payload_stripped):
+            return payload_stripped, False, True, False, False, "raw_diff", response_chars
     idx_plain = payload.find("\n--- ")
     if idx_plain >= 0:
-        candidate = payload[idx_plain + 1 :].strip()
+        candidate = _normalize_patch_output(payload[idx_plain + 1 :])
         if candidate.startswith("--- ") and "\n+++ " in candidate:
-            return candidate, False, True, False
-    return "", False, False, False
+            has_raw_diff = True
+            if _is_unified_diff(candidate):
+                return candidate, False, True, False, False, "raw_diff", response_chars
+
+    json_diff, has_json_envelope = _extract_json_envelope_patch(payload)
+    if json_diff and _is_unified_diff(json_diff):
+        return json_diff, False, False, True, False, "json_envelope", response_chars
+
+    has_no_patch = payload.strip().upper() == "NO_PATCH"
+    if not has_no_patch:
+        try:
+            envelope = json.loads(payload)
+        except json.JSONDecodeError:
+            envelope = None
+        if isinstance(envelope, dict):
+            result = str(envelope.get("result", "") or "").strip().lower()
+            has_no_patch = result in {"no_patch", "nopatch"}
+            has_json_envelope = has_json_envelope or "result" in envelope
+    if has_no_patch:
+        return "", has_diff_fence, has_raw_diff, has_json_envelope, True, "no_patch", response_chars
+
+    return "", has_diff_fence, has_raw_diff, has_json_envelope, False, "none", response_chars
 
 
 def _extract_patch_from_llm_text_with_flags(text: str) -> tuple[str, bool, bool]:
-    patch, fenced, raw, _ = _extract_patch_candidate(text)
+    patch, fenced, raw, *_ = _extract_patch_candidate(text)
     return patch, fenced, raw
 
 
 def _extract_patch_from_llm_text(text: str) -> str:
-    patch_text, _, _, _ = _extract_patch_candidate(text)
+    patch_text, *_ = _extract_patch_candidate(text)
     return patch_text
 
 
@@ -2341,6 +2403,7 @@ def _run_batch_llm_review_fix(
     summaries: list[dict[str, Any]] = []
     findings: list[str] = []
     patch_parts: list[dict[str, Any]] = []
+    no_patch_count = 0
     last_remaining: Any = None
     last_reset: str | None = None
     llm_ratelimit_headers: dict[str, str] = {}
@@ -2454,11 +2517,14 @@ def _run_batch_llm_review_fix(
         )
         findings.extend(summary_lines[:4])
         if cmd == "fix":
-            patch, _, _, no_patch = _extract_patch_candidate(text or "")
+            patch_info = _extract_patch_candidate(text or "")
+            patch = patch_info[0]
+            no_patch = bool(patch_info[4])
             if patch and _is_unified_diff(patch):
                 patch_parts.append({"batch_id": batch.batch_id, "patch": patch})
                 _write_patch_part(repo_root, batch.batch_id, patch)
             elif no_patch:
+                no_patch_count += 1
                 findings.append(f"batch={batch.batch_id} returned NO_PATCH")
 
     reduce_text: str | None = None
@@ -2618,6 +2684,8 @@ def _run_batch_llm_review_fix(
         "findings": dedup_findings,
         "summary_text": final_summary,
         "patch_parts": patch_parts,
+        "no_patch_batches_count": no_patch_count,
+        "no_patch_returned": no_patch_count > 0 and not patch_parts,
     }, llm_meta
 
 
@@ -4127,6 +4195,8 @@ def _build_review_markdown(
         "findings": [],
         "summary_text": "",
         "patch_parts": [],
+        "no_patch_batches_count": 0,
+        "no_patch_returned": False,
     }
     llm_text_for_patch = ""
     if use_batch_mode:
@@ -4331,11 +4401,23 @@ def _build_review_markdown(
             patch_text = merged_batch_patch
     found_fenced_diff = False
     found_raw_diff = False
+    found_json_envelope = False
     no_patch_response = False
+    extraction_path_used = "none"
+    response_chars = 0
     if not patch_text and llm_text_for_patch:
-        patch_text, found_fenced_diff, found_raw_diff, no_patch_response = _extract_patch_candidate(
-            llm_text_for_patch
-        )
+        (
+            patch_text,
+            found_fenced_diff,
+            found_raw_diff,
+            found_json_envelope,
+            no_patch_response,
+            extraction_path_used,
+            response_chars,
+        ) = _extract_patch_candidate(llm_text_for_patch)
+    if not patch_text and not no_patch_response and bool(batch_result.get("no_patch_returned", False)):
+        no_patch_response = True
+        extraction_path_used = "batch_no_patch"
 
     patch_written = False
     patch_apply_message = "no patch generated by engine"
@@ -4389,11 +4471,7 @@ def _build_review_markdown(
         if _int_or_zero(provider_http_status) == 413:
             provider_error_type = "payload_too_large"
         patch_debug_payload = {
-            "reason": (
-                "llm_returned_no_patch"
-                if no_patch_response
-                else "diff_not_found_in_engine_or_llm_output"
-            ),
+            "reason": "no_patch_returned" if no_patch_response else "extractor_failed",
             "request_mode": "patch",
             "llm_used": bool(llm_meta.get("llm_used", False)),
             "model": str(llm_meta.get("llm_model_used", "n/a") or "n/a"),
@@ -4407,6 +4485,16 @@ def _build_review_markdown(
             "extracted_len": len(str(patch_text or "").strip()),
             "found_fenced_diff": bool(found_fenced_diff),
             "found_raw_diff": bool(found_raw_diff),
+            "has_json_envelope": bool(found_json_envelope),
+            "has_no_patch": bool(no_patch_response),
+            "extraction_path_used": str(extraction_path_used or "none"),
+            "response_chars": int(response_chars),
+            "raw_output_shape": {
+                "has_diff_fence": bool(found_fenced_diff),
+                "has_raw_diff": bool(found_raw_diff),
+                "has_json_envelope": bool(found_json_envelope),
+                "has_no_patch": bool(no_patch_response),
+            },
             "estimated_input_tokens": int(llm_meta.get("llm_input_budget_used_est", 0) or 0),
             "max_output_tokens_used": int(llm_meta.get("llm_max_output_tokens_used", 0) or 0),
             "patch_batch_mode": bool(llm_meta.get("llm_patch_batch_mode", False)),

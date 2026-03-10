@@ -134,13 +134,19 @@ When review/fix verification runs:
 
 `artifacts/patch_generation_debug.json` (usersafe) includes patch extraction diagnostics:
 
-- `reason` (`llm_returned_no_patch` / `diff_not_found_in_engine_or_llm_output` / etc.)
+- `reason` (`no_patch_returned` / `extractor_failed` / etc.)
 - `request_mode` (`patch`)
 - `provider_http_status`, `provider_error_type`
 - `estimated_input_tokens`, `max_output_tokens_used`
 - `patch_batch_mode`, `patch_batch_count`
 - `compacted`, `attempted_compaction`, `attempted_patch_batch`
-- `found_fenced_diff`, `found_raw_diff`, `extracted_len`
+- `found_fenced_diff`, `found_raw_diff`, `has_json_envelope`, `has_no_patch`
+- `raw_output_shape`:
+  - `has_diff_fence`
+  - `has_raw_diff`
+  - `has_json_envelope`
+  - `has_no_patch`
+- `extraction_path_used`, `response_chars`, `extracted_len`
 
 `artifacts/index_embeddings_evidence.json` (usersafe) includes:
 

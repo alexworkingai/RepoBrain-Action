@@ -59,8 +59,11 @@ Artifacts are downloaded into:
 
 Patch generation notes:
 
-- Fix prompts enforce diff-only output (` ```diff ... ``` ` or raw unified diff).
-- If no safe patch is possible, LLM may return `NO_PATCH` (treated separately from provider/network failure).
+- Fix prompts enforce strict patch contract:
+  - primary: ` ```diff ... ``` `
+  - fallback: raw unified diff
+  - provider-compat fallback: JSON envelope `{"result":"patch","diff":"..."}` or `{"result":"no_patch"}`
+  - explicit no-change outcome: `NO_PATCH`
 - If no diff is extracted, RepoBrain writes `artifacts/patch_generation_debug.json` for usersafe diagnostics.
 - If fix LLM fails in `workflow_dispatch`, RepoBrain writes `artifacts/llm_http_debug.json` with usersafe provider diagnostics (`status/error type`, no prompt/code/secrets).
 - Strict report diagnostics for fix include: `compacted`, `patch_batch_mode`, `patch_batch_count`, `estimated_input_tokens`, `max_output_tokens_used`.
@@ -76,6 +79,7 @@ Fix scenario special classification:
 
 - Provider rate-limited errors (`provider_http_status=429` or `provider_error_type=rate_limited`) are classified as **FAIL_INFRA**.
 - Provider payload-too-large after retries/batching (`provider_http_status=413`) remains **FAIL_PRODUCT** with explicit compaction/batching diagnostics.
+- If model explicitly returns `NO_PATCH` (`patch_generation_debug.reason=no_patch_returned`), scenario is classified as **WARN** (model chose no safe patch).
 - **FAIL_PRODUCT** for fix is only used when model path is available but patch output/extraction still fails.
 
 Artifact transport fallback diagnostics:

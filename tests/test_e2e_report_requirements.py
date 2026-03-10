@@ -164,3 +164,96 @@ def test_validate_artifacts_patch_missing_shows_debug_reason(tmp_path: Path) -> 
     assert any("patch_debug_reason=diff_not_found_in_engine_or_llm_output" in note for note in notes)
     assert any("provider_error_type=server_error" in note for note in notes)
     assert any("compacted=True" in note and "patch_batch_mode=True" in note for note in notes)
+
+
+def test_fix_no_patch_returned_is_warn(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    _write_base_artifacts(tmp_path)
+    _write_json(
+        tmp_path / "llm_usage.json",
+        {
+            "llm_used": True,
+            "model_id": "openai/gpt-4.1-mini",
+            "skip_reason": "n/a",
+            "decision_route": "FAST",
+            "tokens_total": 120,
+            "remaining_requests": 9,
+            "reset_time_utc_iso": "2026-01-01T00:00:00Z",
+            "provider_http_status": None,
+            "provider_error_type": "n/a",
+        },
+    )
+    _write_json(
+        tmp_path / "patch_generation_debug.json",
+        {
+            "reason": "no_patch_returned",
+            "extraction_path_used": "no_patch",
+            "compacted": True,
+            "patch_batch_mode": True,
+            "patch_batch_count": 2,
+            "estimated_input_tokens": 1100,
+            "max_output_tokens_used": 900,
+        },
+    )
+
+    def fake_run_cmd(args: list[str], *, cwd: Path | None = None, check: bool = True):  # noqa: ANN001
+        del args, cwd, check
+        return module.CmdResult(code=0, out="ok", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    result = module._scenario_from_run(  # noqa: SLF001
+        scenario_name="fix_patch_required_dispatch",
+        trigger="/repobrain fix",
+        run_data={"databaseId": "10", "url": "https://example/run/10", "conclusion": "success"},
+        artifacts_root=tmp_path,
+        requirements=module.ScenarioRequirements(require_patch=True),
+    )
+    assert result.status == "WARN"
+    assert any("model chose NO_PATCH" in note for note in result.notes)
+
+
+def test_fix_extractor_failed_is_fail_product(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    _write_base_artifacts(tmp_path)
+    _write_json(
+        tmp_path / "llm_usage.json",
+        {
+            "llm_used": True,
+            "model_id": "openai/gpt-4.1-mini",
+            "skip_reason": "n/a",
+            "decision_route": "FAST",
+            "tokens_total": 140,
+            "remaining_requests": 8,
+            "reset_time_utc_iso": "2026-01-01T00:00:00Z",
+            "provider_http_status": None,
+            "provider_error_type": "n/a",
+        },
+    )
+    _write_json(
+        tmp_path / "patch_generation_debug.json",
+        {
+            "reason": "extractor_failed",
+            "extraction_path_used": "none",
+            "compacted": True,
+            "patch_batch_mode": True,
+            "patch_batch_count": 3,
+            "estimated_input_tokens": 2500,
+            "max_output_tokens_used": 900,
+        },
+    )
+
+    def fake_run_cmd(args: list[str], *, cwd: Path | None = None, check: bool = True):  # noqa: ANN001
+        del args, cwd, check
+        return module.CmdResult(code=0, out="ok", err="")
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    result = module._scenario_from_run(  # noqa: SLF001
+        scenario_name="fix_patch_required_dispatch",
+        trigger="/repobrain fix",
+        run_data={"databaseId": "11", "url": "https://example/run/11", "conclusion": "success"},
+        artifacts_root=tmp_path,
+        requirements=module.ScenarioRequirements(require_patch=True),
+    )
+    assert result.status == "FAIL_PRODUCT"

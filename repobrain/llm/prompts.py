@@ -152,13 +152,21 @@ def _build_patch_messages(
         [
             "Task: produce a minimal safe patch for the requested files.",
             f"Fix instruction: {sanitized_query or 'n/a'}",
-            "Output contract: output ONLY unified diff or exactly NO_PATCH.",
-            "No prose. No explanations. No secrets.",
+            "Response format (strict, in this exact priority):",
+            "1) ```diff ...unified diff... ```",
+            "2) NO_PATCH",
+            "Fallback only if provider requires JSON envelope:",
+            '{"result":"patch","diff":"..."} or {"result":"no_patch"}',
+            "No prose before/after diff. No explanations. No secrets.",
         ]
     )
     system_content = (
-        "You are RepoBrain fixer. Return ONLY unified diff text. "
-        "If no safe patch is possible, output exactly: NO_PATCH."
+        "You are RepoBrain fixer. Return ONLY one of: "
+        "(A) a single ```diff fenced unified diff block, "
+        "(B) exactly NO_PATCH, "
+        "(C) strict JSON envelope {\"result\":\"patch\",\"diff\":\"...\"} or {\"result\":\"no_patch\"} "
+        "only if diff fence cannot be returned by provider. "
+        "Do not include prose."
     )
 
     used_tokens = estimate_tokens(system_content) + estimate_tokens(intro)

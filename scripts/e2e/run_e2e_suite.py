@@ -618,6 +618,8 @@ def _fix_provider_context(artifacts_root: Path) -> dict[str, Any]:
         "llm_used": llm_used,
         "llm_skip_reason": llm_skip_reason,
         "rate_limited": rate_limited,
+        "patch_debug_reason": str(patch_debug.get("reason", "n/a") or "n/a"),
+        "extraction_path_used": str(patch_debug.get("extraction_path_used", "n/a") or "n/a"),
         "estimated_input_tokens": patch_debug.get(
             "estimated_input_tokens",
             llm_usage.get("input_budget_used_est"),
@@ -1047,6 +1049,7 @@ def _scenario_from_run(
         status = "FAIL_PRODUCT"
     if scenario_name == "fix_patch_required_dispatch":
         fix_ctx = _fix_provider_context(artifacts_root)
+        patch_debug_reason = str(fix_ctx.get("patch_debug_reason", "n/a") or "n/a")
         if status == "FAIL_PRODUCT" and bool(fix_ctx.get("rate_limited", False)):
             status = "FAIL_INFRA"
             notes.append("classified as FAIL_INFRA due to provider rate limit (429)")
@@ -1054,12 +1057,21 @@ def _scenario_from_run(
             notes.append(
                 "classified as FAIL_PRODUCT: patch payload still too large after compaction/batching"
             )
+        if (
+            status == "FAIL_PRODUCT"
+            and bool(fix_ctx.get("llm_used", False))
+            and patch_debug_reason == "no_patch_returned"
+        ):
+            status = "WARN"
+            notes.append("model chose NO_PATCH (classified as WARN)")
         notes.append(
             "fix_provider_context: "
             f"status={fix_ctx.get('provider_http_status')}, "
             f"error_type={fix_ctx.get('provider_error_type')}, "
             f"effective_model_id={fix_ctx.get('effective_model_id')}, "
             f"fallback_used={fix_ctx.get('fallback_used')}, "
+            f"patch_debug_reason={fix_ctx.get('patch_debug_reason')}, "
+            f"extraction_path_used={fix_ctx.get('extraction_path_used')}, "
             f"compacted={fix_ctx.get('compacted')}, "
             f"patch_batch_mode={fix_ctx.get('patch_batch_mode')}, "
             f"patch_batch_count={fix_ctx.get('patch_batch_count')}, "
