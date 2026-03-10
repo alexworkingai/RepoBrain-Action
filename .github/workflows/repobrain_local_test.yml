@@ -2,6 +2,22 @@
 
 on:
   workflow_dispatch:
+    inputs:
+      tkya_backend:
+        description: "TKYA backend for local test: lite|v5|original"
+        required: false
+        default: "lite"
+        type: string
+      tkya_strict_original:
+        description: "Fail if original backend is requested but vendor file is missing"
+        required: false
+        default: "false"
+        type: string
+      tkya_strict_v5:
+        description: "Fail if v5 backend is requested but vendor file is missing"
+        required: false
+        default: "false"
+        type: string
 
 permissions:
   contents: read
@@ -11,7 +27,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.
+      - uses: ./. 
+        env:
+          RB_TKYA_BACKEND: ${{ github.event.inputs.tkya_backend || 'lite' }}
+          RB_TKYA_ALLOW_REMOTE: "0"
+          RB_TKYA_STRICT_ORIGINAL: ${{ github.event.inputs.tkya_strict_original || 'false' }}
+          RB_TKYA_STRICT_V5: ${{ github.event.inputs.tkya_strict_v5 || 'false' }}
         with:
           dry_run: "true"
           comment_text: "/repobrain ask Где реализована логика TKYProvider?"

@@ -25,3 +25,8 @@ artifacts/
 *.zip
 *.json
 *.egg-info/
+/e2e_marker_*.txt
+
+# Proprietary TKYA vendor cores (do not commit by default)
+repobrain/tkya/vendor/TopoCore_TCX_v2-CAS.py
+repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py

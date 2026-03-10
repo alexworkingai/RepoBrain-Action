@@ -47,6 +47,18 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "selected": 0,
         "top_score_pass1": None,
         "top_score_pass2": None,
+        "rd": {
+            "rd_used": False,
+            "rd_status": "n/a",
+            "rd_template_id": "n/a",
+            "rd_intent_hash": "n/a",
+            "rd_policy_hash": "n/a",
+            "rd_has_signature": False,
+            "rd_has_attestation": False,
+            "rd_error_count": 0,
+            "rd_warning_count": 0,
+            "rd_record_hash": "n/a",
+        },
     }
 
 
@@ -138,6 +150,50 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
             normalized["tky_remote_status"] = int(remote_status)
         except (TypeError, ValueError):
             normalized["tky_remote_status"] = None
+
+    rd_raw = normalized.get("rd", {})
+    rd_payload: dict[str, Any] = dict(rd_raw) if isinstance(rd_raw, dict) else {}
+
+    def _clean_str(key: str, default: str = "n/a") -> str:
+        value = rd_payload.get(key, default)
+        text = str(value).strip() if value is not None else ""
+        return text or default
+
+    def _clean_bool(key: str, default: bool = False) -> bool:
+        value = rd_payload.get(key, default)
+        return bool(value)
+
+    def _clean_int(key: str, default: int = 0) -> int:
+        value = rd_payload.get(key, default)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    allowed_status = {
+        "n/a",
+        "disabled",
+        "ok",
+        "blocked_validation",
+        "unavailable",
+        "error",
+    }
+    rd_status = _clean_str("rd_status", "n/a").lower()
+    if rd_status not in allowed_status:
+        rd_status = "n/a"
+
+    normalized["rd"] = {
+        "rd_used": _clean_bool("rd_used", False),
+        "rd_status": rd_status,
+        "rd_template_id": _clean_str("rd_template_id", "n/a"),
+        "rd_intent_hash": _clean_str("rd_intent_hash", "n/a"),
+        "rd_policy_hash": _clean_str("rd_policy_hash", "n/a"),
+        "rd_has_signature": _clean_bool("rd_has_signature", False),
+        "rd_has_attestation": _clean_bool("rd_has_attestation", False),
+        "rd_error_count": _clean_int("rd_error_count", 0),
+        "rd_warning_count": _clean_int("rd_warning_count", 0),
+        "rd_record_hash": _clean_str("rd_record_hash", "n/a"),
+    }
 
     timings = normalized.get("timings_ms", {})
     if isinstance(timings, dict):

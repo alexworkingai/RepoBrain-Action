@@ -101,10 +101,18 @@ def main() -> int:
         mode_used = "baseline"
         fallback_reason_code = exc.fallback_reason_code or "REMOTE_NETWORK"
         remote_error_class = exc.error_class or "unknown"
+    local_engine = ""
+    if mode_used == "local":
+        local_engine = str(res.tky.compression_stats.get("tky_engine_local", "") or "").strip()
+    tky_engine_label = (
+        local_engine
+        if local_engine
+        else ("topocore_lite" if mode_used == "local" else mode_used)
+    )
     audit_summary = dict(res.audit_summary)
     audit_summary.update(
         {
-            "tky_engine": "topocore_lite" if mode_used == "local" else mode_used,
+            "tky_engine": tky_engine_label,
             "tky_mode_requested": mode_requested,
             "tky_mode_used": mode_used,
             "remote_used": mode_used == "remote",

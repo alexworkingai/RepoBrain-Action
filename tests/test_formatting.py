@@ -22,6 +22,7 @@ def test_format_github_comment_has_required_sections() -> None:
     assert "Next steps" in text
     assert "Audit summary" in text
     assert "score=0.9000" in text
+    assert "RD: n/a" in text
 
 
 def test_format_github_comment_locate_omits_answer_section() -> None:
@@ -59,3 +60,16 @@ def test_format_github_comment_shows_remote_url_missing_hint() -> None:
     )
 
     assert "Remote skipped: remote_url missing" in text
+
+
+def test_format_github_comment_shows_rd_status_from_nested_summary() -> None:
+    text = format_github_comment(
+        "Answer body",
+        [],
+        {
+            "tky_engine": "topocore_v5",
+            "rd": {"rd_used": True, "rd_status": "ok"},
+        },
+        "Open evidence links and verify logic",
+    )
+    assert "RD: ok" in text

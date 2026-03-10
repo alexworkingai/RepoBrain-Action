@@ -9,7 +9,7 @@ from typing import Any
 
 import orjson
 
-from .topocore_lite import TopoCoreLite
+from .tkya.engine import get_engine
 from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
 
 PRIVACY_FORBIDDEN_KEYS = {"text", "snippet", "content"}
@@ -44,7 +44,7 @@ def verify_signature(
 
 
 def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Build stub response via TopoCoreLite engine from a privacy-safe payload."""
+    """Build stub response via selected TKYA engine from a privacy-safe payload."""
     candidates = payload.get("candidates", [])
     if not isinstance(candidates, list):
         candidates = []
@@ -88,6 +88,12 @@ def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     query_signature = query.get("signature", [])
     if not isinstance(query_signature, list):
         query_signature = []
+    github_context = payload.get("github_context", {})
+    if not isinstance(github_context, dict):
+        github_context = {}
+    verification_context = payload.get("verification_context", {})
+    if not isinstance(verification_context, dict):
+        verification_context = {}
 
     req = EngineRequest(
         task_type=task_type,  # type: ignore[arg-type]
@@ -97,9 +103,17 @@ def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         candidates=engine_candidates,
         limits={**(limits if isinstance(limits, dict) else {}), "max_sources": max_sources},
-        policy={"corelocked": True},
+        policy={
+            "corelocked": True,
+            "github_context": github_context,
+            "verification_context": verification_context,
+            "runtime": {
+                "mode": "stub",
+                "network_allowed": os.environ.get("RB_TKYA_ALLOW_REMOTE", "").strip() == "1",
+            },
+        },
     )
-    decision = TopoCoreLite().decide(req)
+    decision = get_engine().decide(req)
 
     return {
         "schema_version": "1.0",

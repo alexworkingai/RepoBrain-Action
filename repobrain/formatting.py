@@ -33,8 +33,14 @@ def _build_tky_status_line(audit_summary: dict[str, object]) -> str:
         return f"TKY: fallback baseline ({fallback_code})"
     if mode_used == "fallback_baseline":
         return "TKY: fallback baseline (fallback)"
+    if engine == "topocore_v5":
+        return "TKY: topocore_v5"
     if engine == "topocore_lite":
         return "TKY: topocore_lite"
+    if engine == "topocore_original":
+        return "TKY: topocore_original"
+    if engine == "topocore_local":
+        return "TKY: topocore_local"
     if engine == "baseline":
         return "TKY: baseline"
     if mode_used == "remote" and remote_used:
@@ -56,6 +62,22 @@ def _build_remote_skip_hint(audit_summary: dict[str, object]) -> str | None:
             "(set it via workflow input or tky.remote_url for stub tests)."
         )
     return None
+
+
+def _build_rd_status_line(audit_summary: dict[str, object]) -> str:
+    raw = audit_summary.get("rd", {})
+    if isinstance(raw, dict):
+        rd_status = str(raw.get("rd_status", "n/a") or "n/a").strip().lower()
+        rd_used = bool(raw.get("rd_used", False))
+    else:
+        rd_status = str(audit_summary.get("rd_status", "n/a") or "n/a").strip().lower()
+        rd_used = bool(audit_summary.get("rd_used", False))
+
+    if rd_status in {"ok", "blocked_validation", "disabled", "error", "unavailable"}:
+        return f"RD: {rd_status}"
+    if rd_used:
+        return "RD: active"
+    return "RD: n/a"
 
 
 def _format_evidence_lines(
@@ -96,6 +118,7 @@ def format_github_comment(
             "",
             "### 🧾 Audit summary",
             f"- {_build_tky_status_line(audit_summary)}",
+            f"- {_build_rd_status_line(audit_summary)}",
             *([f"- {remote_hint}"] if remote_hint else []),
             *_format_audit_summary(audit_summary),
             "",
@@ -119,6 +142,7 @@ def format_github_comment(
             "",
             "### 🧾 Audit summary",
             f"- {_build_tky_status_line(audit_summary)}",
+            f"- {_build_rd_status_line(audit_summary)}",
             *([f"- {remote_hint}"] if remote_hint else []),
             *_format_audit_summary(audit_summary),
             "",
