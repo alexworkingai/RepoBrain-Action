@@ -20,9 +20,65 @@ on:
         required: false
         default: ""
         type: string
+      enable_llm:
+        description: "Enable LLM path for workflow_dispatch run"
+        required: false
+        default: false
+        type: boolean
+      enable_embeddings:
+        description: "Enable embeddings path for workflow_dispatch run"
+        required: false
+        default: false
+        type: boolean
+      enable_batch_llm:
+        description: "Enable batch LLM path for workflow_dispatch run"
+        required: false
+        default: false
+        type: boolean
+      batch_force:
+        description: "Force batch LLM path for workflow_dispatch run"
+        required: false
+        default: false
+        type: boolean
+      trusted_context:
+        description: "Enable trusted_context for workflow_dispatch run"
+        required: false
+        default: false
+        type: boolean
+      allow_dynamic_verify:
+        description: "Enable dynamic verification for workflow_dispatch run"
+        required: false
+        default: false
+        type: boolean
+      apply_patch:
+        description: "Enable patch apply for workflow_dispatch run"
+        required: false
+        default: false
+        type: boolean
+      create_pr:
+        description: "Enable PR creation for workflow_dispatch run"
+        required: false
+        default: false
+        type: boolean
+      e2e_command:
+        description: "E2E simulated /repobrain command for workflow_dispatch"
+        required: false
+        default: ""
+        type: string
+      e2e_pr_number:
+        description: "E2E PR number for workflow_dispatch simulation"
+        required: false
+        default: ""
+        type: string
+      e2e_ref:
+        description: "E2E source ref (informational)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
+  models: read
   checks: read
   statuses: read
   actions: read
@@ -33,6 +89,15 @@ jobs:
   repobrain:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/repobrain')
+    env:
+      RB_TRUSTED_CONTEXT: "0"
+      RB_ALLOW_DYNAMIC_VERIFY: "0"
+      RB_APPLY_PATCH: "0"
+      RB_CREATE_PR: "0"
+      RB_LLM_ENABLED: "0"
+      RB_LLM_PROVIDER: ""
+      RB_LLM_BATCH_ENABLE: "0"
+      RB_EMBED_ENABLED: "0"
     steps:
       - uses: actions/github-script@v7
         id: ack
@@ -55,9 +120,53 @@ jobs:
           key: repobrain-index-main-${{ github.sha }}
           restore-keys: |
             repobrain-index-main-
+      - name: Apply workflow_dispatch toggles
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "RB_LLM_ENABLED=${{ inputs.enable_llm && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_LLM_PROVIDER=github_models" >> $GITHUB_ENV
+          echo "RB_EMBED_ENABLED=${{ inputs.enable_embeddings && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_LLM_BATCH_ENABLE=${{ inputs.enable_batch_llm && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_LLM_BATCH_FORCE=${{ inputs.batch_force && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_TRUSTED_CONTEXT=${{ inputs.trusted_context && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_ALLOW_DYNAMIC_VERIFY=${{ inputs.allow_dynamic_verify && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_APPLY_PATCH=${{ inputs.apply_patch && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_CREATE_PR=${{ inputs.create_pr && '1' || '0' }}" >> $GITHUB_ENV
+          echo "RB_E2E_COMMAND=${{ inputs.e2e_command }}" >> $GITHUB_ENV
+          echo "RB_E2E_PR_NUMBER=${{ inputs.e2e_pr_number }}" >> $GITHUB_ENV
+          echo "RB_E2E_REF=${{ inputs.e2e_ref }}" >> $GITHUB_ENV
       - uses: ./. 
         env:
           RB_INDEX_CACHE_RESTORED: ${{ steps.index_cache.outputs.cache-hit == 'true' && '1' || '' }}
+          RB_REQUIRE_VERIFY_FOR_PATCH: "0"
+          RB_FAIL_ON_NOT_RUN: "0"
+          RB_LLM_MODEL_HIGH: "openai/gpt-4.1"
+          RB_LLM_MODEL_LOW: "openai/gpt-4.1-mini"
+          RB_LLM_MAX_INPUT_TOKENS: "7600"
+          RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL: "2000"
+          RB_LLM_MAX_OUTPUT_TOKENS_ASK: "1000"
+          RB_LLM_MAX_OUTPUT_TOKENS_REVIEW: "1400"
+          RB_LLM_MAX_OUTPUT_TOKENS_FIX: "2000"
+          RB_LLM_ALLOW_LOCATE: "0"
+          RB_LLM_BATCH_MAX_CALLS_PER_RUN: "6"
+          RB_LLM_BATCH_REDUCE_ENABLE: "1"
+          RB_LLM_BATCH_REDUCE_MODEL: ""
+          RB_EMBED_MODEL: "openai/text-embedding-3-small"
+          RB_EMBED_BATCH_SIZE: "64"
+          RB_RETRIEVAL_VECTOR_TOPK: "30"
+          RB_RETRIEVAL_W_LEX: "0.55"
+          RB_RETRIEVAL_W_VEC: "0.45"
+          RB_AI_STOP_AT_REMAINING: "1"
+          RB_AI_MIN_REMAINING_BUFFER: "2"
+          RB_AI_MAX_LLM_CALLS_PER_RUN: "6"
+          RB_AI_MAX_EMBED_CALLS_PER_RUN: "10"
+          RB_AI_DISABLE_REDUCE_WHEN_REMAINING_LT: "3"
+          RB_AI_SWITCH_TO_MINI_WHEN_REMAINING_LT: "5"
+          RB_AI_DISABLE_EMBED_WHEN_REMAINING_LT: "3"
+          RB_AI_ESTIMATE_MODE_CONSERVATIVE: "1"
+          RB_AI_MAX_TOKENS_PER_RUN_LLM: "12000"
+          RB_AI_MAX_TOKENS_PER_RUN_EMBED: "200000"
+          RB_AI_TIME_BUDGET_S: "240"
         with:
           # remote_url intentionally not set here; use repobrain_remote_stub_test.yml for stub remote tests.
           tky_mode: "auto"
@@ -93,4 +202,102 @@ jobs:
         with:
           name: repobrain-audit
           path: artifacts/audit/*.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain index package artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-index-package
+          path: artifacts/index-package.zip
+          if-no-files-found: ignore
+      - name: Upload RepoBrain ask markdown artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-ask-result
+          path: artifacts/ask_result.md
+          if-no-files-found: ignore
+      - name: Upload RepoBrain patch artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-patch
+          path: artifacts/patch.diff
+          if-no-files-found: ignore
+      - name: Upload RepoBrain patch parts artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-patch-parts
+          path: artifacts/patch_parts/*
+          if-no-files-found: ignore
+      - name: Upload RepoBrain patch generation debug artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-patch-generation-debug
+          path: artifacts/patch_generation_debug.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain LLM HTTP debug artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-llm-http-debug
+          path: artifacts/llm_http_debug.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain verification artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-verification
+          path: artifacts/verification_report.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain batch summaries artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-batch-summaries
+          path: artifacts/batch_summaries.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain check-run payload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-check-run-payload
+          path: artifacts/check_run_payload.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain LLM usage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-llm-usage
+          path: artifacts/llm_usage.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain embeddings usage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-embeddings-usage
+          path: artifacts/embeddings_usage.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain embeddings evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-index-embeddings-evidence
+          path: artifacts/index_embeddings_evidence.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain AI quota snapshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-ai-quota-snapshot
+          path: artifacts/ai_quota_snapshot.json
+          if-no-files-found: ignore
+      - name: Upload RepoBrain config snapshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-config-snapshot
+          path: artifacts/config_snapshot.json
           if-no-files-found: ignore

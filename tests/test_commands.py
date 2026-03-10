@@ -18,3 +18,11 @@ def test_parse_incomplete_returns_help() -> None:
 
 def test_parse_review_without_text() -> None:
     assert parse_command("/repobrain review") == {"cmd": "review", "query": ""}
+
+
+def test_parse_fix_with_optional_text() -> None:
+    assert parse_command("/repobrain fix") == {"cmd": "fix", "query": ""}
+    assert parse_command("/repobrain fix tighten null checks") == {
+        "cmd": "fix",
+        "query": "tighten null checks",
+    }

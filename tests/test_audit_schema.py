@@ -33,10 +33,22 @@ def test_audit_schema_has_core_fields_and_no_raw_content_keys() -> None:
     assert "route_final" in audit
     assert "tky_mode_used" in audit
     assert "index_source" in audit
+    assert "rd" in audit
     assert audit["tky_mode_used"] in {"baseline", "remote", "local", "fallback_baseline", "n/a"}
     assert audit["tky_fallback_reason"] in {"n/a", "remote_error"}
     assert audit["tky_remote_status"] is None or isinstance(audit["tky_remote_status"], int)
     assert audit["index_source"] in {"cache_hit", "artifact_present", "rebuilt", "n/a"}
+    rd = audit["rd"]
+    assert isinstance(rd, dict)
+    assert rd["rd_status"] in {
+        "n/a",
+        "disabled",
+        "ok",
+        "blocked_validation",
+        "unavailable",
+        "error",
+    }
+    assert isinstance(rd["rd_used"], bool)
     timings = audit["timings_ms"]
     assert isinstance(timings, dict)
     assert timings
@@ -66,3 +78,6 @@ def test_audit_tky_fields_are_na_for_verify_dry_run() -> None:
     assert audit["tky_fallback_reason"] == "n/a"
     assert audit["tky_remote_status"] is None
     assert audit["index_source"] == "n/a"
+    rd = audit["rd"]
+    assert isinstance(rd, dict)
+    assert rd["rd_status"] == "n/a"

@@ -1,0 +1,47 @@
+name: Canary V5 Wiring
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    env:
+      RB_TKYA_BACKEND: "v5"
+      RB_TKYA_ALLOW_REMOTE: "0"
+      RB_TKYA_STRICT: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check .
+      - name: Guard env reference is up to date
+        run: python scripts/check_env_reference_up_to_date.py
+      - name: Guard usersafe outputs
+        run: python scripts/usersafe_scan.py
+      - name: Guard TKYA contract
+        run: python scripts/check_tkya_contract_guard.py
+      - name: Detect v5 vendor file
+        id: v5_vendor
+        run: |
+          if [ -f "repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py" ]; then
+            echo "present=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=0" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Tests (full suite when v5 exists)
+        if: steps.v5_vendor.outputs.present == '1'
+        run: pytest -q
+      - name: Tests (wiring fallback when v5 missing)
+        if: steps.v5_vendor.outputs.present != '1'
+        run: |
+          pytest -q tests/test_smoke.py tests/test_tkya_engine.py

@@ -15,12 +15,16 @@ def parse_command(text: str) -> dict[str, str]:
         return {"cmd": "help", "query": ""}
 
     cmd = parts[1].lower()
-    supported = {"help", "ask", "locate", "explain", "review", "verify"}
+    supported = {"help", "ask", "locate", "explain", "review", "verify", "fix"}
     if cmd not in supported:
         return {"cmd": "help", "query": ""}
 
     if cmd in {"help", "review", "verify"}:
         return {"cmd": cmd, "query": ""}
+    if cmd == "fix":
+        if len(parts) >= 3:
+            return {"cmd": "fix", "query": parts[2].strip()}
+        return {"cmd": "fix", "query": ""}
 
     if len(parts) < 3 or not parts[2].strip():
         return {"cmd": "help", "query": ""}
