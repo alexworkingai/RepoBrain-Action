@@ -146,6 +146,9 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     )
     runtime_override = str(audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a")
     model_id = str(audit_summary.get("llm_model_used", "not used") or "not used")
+    preferred_model_id = str(audit_summary.get("llm_preferred_model_id", "n/a") or "n/a")
+    selection_reason = str(audit_summary.get("llm_model_selection_reason", "n/a") or "n/a")
+    downgrade_reason = str(audit_summary.get("llm_model_downgrade_reason", "n/a") or "n/a")
     prompt = _int(audit_summary.get("llm_tokens_prompt", 0))
     completion = _int(audit_summary.get("llm_tokens_completion", 0))
     total = _int(audit_summary.get("llm_tokens_total", 0))
@@ -177,7 +180,9 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     lines.extend(
         [
             "- LLM used: yes" if llm_used else f"- LLM used: no ({skip_reason})",
+            f"- Preferred model: `{preferred_model_id}`",
             f"- LLM model used: `{model_id}`",
+            f"- Model selection reason: {selection_reason}",
             (
                 f"- Tokens used: prompt={prompt} completion={completion} total={total} "
                 f"({'estimate' if usage_estimated else 'reported'})"
@@ -193,6 +198,8 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
             ),
         ]
     )
+    if downgrade_reason != "n/a":
+        lines.append(f"- Model downgrade reason: {downgrade_reason}")
     if budget_action != "n/a":
         lines.append(f"- AI Budget action: {budget_action}")
     return lines
@@ -391,17 +398,47 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     audit_summary.get("llm_runtime_override_reason", "n/a"),
                     "Higher-priority runtime policy that overrode semantic LLM decision.",
                 ),
+                (
+                    "Security scope",
+                    audit_summary.get("security_scope", "n/a"),
+                    "Security zone applied by orchestration policy.",
+                ),
+                (
+                    "Security outcome",
+                    audit_summary.get("security_outcome", "n/a"),
+                    "Result of security policy evaluation.",
+                ),
+                (
+                    "Security reason code",
+                    audit_summary.get("security_reason_code", "n/a"),
+                    "Machine-readable security policy reason.",
+                ),
             ],
         ),
         (
             "C. LLM",
             [
                 ("LLM used", bool(audit_summary.get("llm_used", False)), "Whether LLM generation was executed."),
+                (
+                    "Preferred model",
+                    audit_summary.get("llm_preferred_model_id", "n/a"),
+                    "Model selected by complexity policy before governor/runtime adjustments.",
+                ),
                 ("Model", audit_summary.get("llm_model_used", "n/a"), "Effective LLM model id."),
                 (
                     "Models used",
                     _llm_models_used_summary(audit_summary),
                     "Per-model call distribution for this run.",
+                ),
+                (
+                    "Model selection reason",
+                    audit_summary.get("llm_model_selection_reason", "n/a"),
+                    "Why this model tier was selected.",
+                ),
+                (
+                    "Model downgrade reason",
+                    audit_summary.get("llm_model_downgrade_reason", "n/a"),
+                    "Runtime/governor reason for downgrade from preferred model.",
                 ),
                 ("Tokens total", _int(audit_summary.get("llm_tokens_total", 0)), "LLM token usage for this run."),
                 (
@@ -457,6 +494,21 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     "PR changed files",
                     pr_files,
                     "Count of changed files from PR metadata (if available).",
+                ),
+                (
+                    "Review confirmed findings",
+                    _int(audit_summary.get("review_confirmed_findings_count", 0)),
+                    "Count of findings with evidence-backed validation.",
+                ),
+                (
+                    "Review possible signals",
+                    _int(audit_summary.get("review_possible_signals_count", 0)),
+                    "Count of downgraded heuristic signals without strong evidence.",
+                ),
+                (
+                    "Patch validation",
+                    audit_summary.get("patch_validation_result", "n/a"),
+                    "Patch validation classification before publication.",
                 ),
             ],
         ),
@@ -768,6 +820,15 @@ def render_review_markdown(
     notes = review.get("notes", [])
     if not isinstance(notes, list):
         notes = []
+    confirmed_findings = review.get("confirmed_findings", [])
+    if not isinstance(confirmed_findings, list):
+        confirmed_findings = []
+    possible_signals = review.get("possible_signals", [])
+    if not isinstance(possible_signals, list):
+        possible_signals = []
+    recommendations = review.get("recommendations", review.get("suggested_tests", []))
+    if not isinstance(recommendations, list):
+        recommendations = []
     summary_text = str(review.get("summary_text", "No summary available.")).strip()
     risk_level = str(review.get("risk_level", "low") or "low").upper()
     sections = [
@@ -779,9 +840,19 @@ def render_review_markdown(
         *(files_block[:10] if files_block else ["- No changed files detected."]),
         *([f"- +{len(files_block) - 10} more"] if len(files_block) > 10 else []),
         "",
-        "### ⚠️ Findings",
-        *([f"- {item}" for item in risks] if risks else ["- No high-risk findings detected."]),
+        "### ⚠️ Confirmed findings",
+        *(
+            [f"- {item}" for item in confirmed_findings]
+            if confirmed_findings
+            else ([f"- {item}" for item in risks] if risks else ["- No confirmed high-risk findings detected."])
+        ),
+        "",
+        "### 🟡 Possible signals",
+        *([f"- {item}" for item in possible_signals] if possible_signals else ["- No weak signals."]),
         *([f"- Note: {item}" for item in notes[:5]] if notes else []),
+        "",
+        "### ✅ Recommendations",
+        *([f"- {item}" for item in recommendations[:8]] if recommendations else ["- Run standard CI checks before merge."]),
         "",
         *_verification_report_lines(verification_report),
         "",
@@ -818,6 +889,7 @@ def render_patch_markdown(
         "",
         "### 📦 Patch artifact",
         "- Full patch is saved to `artifacts/patch.diff`." if patch_written else "- No patch generated.",
+        f"- Patch validation: `{str(audit_summary.get('patch_validation_result', 'n/a') or 'n/a')}`",
         f"- Apply status: {patch_apply_message}",
         "",
         "### 🧩 Patch snippet",

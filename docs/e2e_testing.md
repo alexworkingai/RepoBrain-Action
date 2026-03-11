@@ -62,7 +62,15 @@ Diagnostic UX checks:
   - `PR metadata used`
   - `Answer grounding mode`
   - `PR changed files`
+- diagnostics should include calibrated security fields:
+  - `Security scope`
+  - `Security outcome`
+  - `Security reason code`
 - when PR metadata is used for ask/explain, changed file list should appear before generic retrieval explanation text.
+- for review/fix diagnostics, validation fields should be present:
+  - `Review confirmed findings`
+  - `Review possible signals`
+  - `Patch validation`
 
 Artifacts are downloaded into:
 
