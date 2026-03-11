@@ -204,6 +204,9 @@ class LLMConfig:
     max_output_tokens_fix: int = 2000
     max_output_tokens_patch: int = 900
     allow_locate: bool = False
+    enable_issue_comment: bool = True
+    enable_pr_comments: bool = True
+    enable_issue_only: bool = False
 
 
 @dataclass(frozen=True)
@@ -380,6 +383,24 @@ class RepoBrainConfig:
                 warnings=warnings,
             ),
             allow_locate=env_bool("RB_LLM_ALLOW_LOCATE", False, source=env_source, warnings=warnings),
+            enable_issue_comment=env_bool(
+                "RB_LLM_ENABLE_ISSUE_COMMENT",
+                True,
+                source=env_source,
+                warnings=warnings,
+            ),
+            enable_pr_comments=env_bool(
+                "RB_LLM_ENABLE_PR_COMMENTS",
+                True,
+                source=env_source,
+                warnings=warnings,
+            ),
+            enable_issue_only=env_bool(
+                "RB_LLM_ENABLE_ISSUE_ONLY",
+                False,
+                source=env_source,
+                warnings=warnings,
+            ),
         )
         embeddings = EmbeddingsConfig(
             enabled=env_bool("RB_EMBED_ENABLED", False, source=env_source, warnings=warnings),
@@ -797,6 +818,9 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_FIX", "int", "2000", "Fix max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_PATCH", "int", "900", "Patch max output tokens.", min_value=64, max_value=16000),
     EnvVarSpec("RB_LLM_ALLOW_LOCATE", "bool", "0", "Allow LLM for locate command."),
+    EnvVarSpec("RB_LLM_ENABLE_ISSUE_COMMENT", "bool", "1", "Allow LLM for issue_comment event path."),
+    EnvVarSpec("RB_LLM_ENABLE_PR_COMMENTS", "bool", "1", "Allow LLM for issue_comment on PR discussions."),
+    EnvVarSpec("RB_LLM_ENABLE_ISSUE_ONLY", "bool", "0", "Allow LLM for issue_comment on non-PR issues."),
     EnvVarSpec("RB_LLM_BATCH_ENABLE", "bool", "0", "Enable batch map-reduce LLM mode."),
     EnvVarSpec("RB_LLM_BATCH_FORCE", "bool", "0", "Force batch mode for review/fix in controlled runs."),
     EnvVarSpec("RB_LLM_BATCH_MAX_CALLS_PER_RUN", "int", "6", "Batch LLM call cap per run.", min_value=1, max_value=100),

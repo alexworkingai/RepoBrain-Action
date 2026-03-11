@@ -198,6 +198,15 @@ GitHub Models LLM (optional):
 * Semantic coupling:
   * TKYA sets `execution_mode` (`retrieval_only|retrieval_plus_llm|verification_first|refuse`) and short reason fields.
   * Reports always show `TKYA LLM decision` + `Reason`; when runtime blocks desired LLM usage, report adds `Runtime override`.
+* Main `issue_comment` policy (governed):
+  * LLM can run on real `issue_comment` path only when semantic mode is `retrieval_plus_llm` and runtime policy allows it.
+  * Policy flags:
+    * `RB_LLM_ENABLE_ISSUE_COMMENT=1`
+    * `RB_LLM_ENABLE_PR_COMMENTS=1`
+    * `RB_LLM_ENABLE_ISSUE_ONLY=0` (conservative default for non-PR issues)
+  * Manual verification target after merge:
+    * In PR discussion run `/repobrain ask what files changed in this PR?`
+    * Expect `TKYA LLM decision: used`, non-empty `Reason`, no `Runtime override` disabled message, and visible model/tokens.
 * Reports include LLM diagnostics:
   * model id
   * token usage (`prompt/completion/total`, reported or estimated)

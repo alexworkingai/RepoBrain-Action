@@ -94,8 +94,11 @@ jobs:
       RB_ALLOW_DYNAMIC_VERIFY: "0"
       RB_APPLY_PATCH: "0"
       RB_CREATE_PR: "0"
-      RB_LLM_ENABLED: "0"
-      RB_LLM_PROVIDER: ""
+      RB_LLM_ENABLED: "1"
+      RB_LLM_PROVIDER: "github_models"
+      RB_LLM_ENABLE_ISSUE_COMMENT: "1"
+      RB_LLM_ENABLE_PR_COMMENTS: "1"
+      RB_LLM_ENABLE_ISSUE_ONLY: "0"
       RB_LLM_BATCH_ENABLE: "0"
       RB_EMBED_ENABLED: "0"
     steps:

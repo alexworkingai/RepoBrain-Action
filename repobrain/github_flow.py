@@ -708,12 +708,72 @@ def _env_int(name: str, default: int) -> int:
     return env_int(name, default)
 
 
-def _llm_enabled() -> bool:
+def _llm_runtime_policy(
+    github_context: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
     cfg = _runtime_env_cfg()
     if not bool(cfg.llm.enabled):
-        return False
+        return False, "disabled"
     provider = str(cfg.llm.provider or "").strip().lower()
-    return provider == "github_models"
+    if provider != "github_models":
+        return False, "disabled"
+
+    context = github_context if isinstance(github_context, dict) else {}
+    event_name = str(
+        context.get("event_name") or os.environ.get("GITHUB_EVENT_NAME", "")
+    ).strip().lower()
+    is_pr_context = bool(
+        context.get("is_pr")
+        or context.get("pr_number")
+        or context.get("pull_request")
+    )
+
+    if event_name == "issue_comment":
+        if not bool(cfg.llm.enable_issue_comment):
+            return False, "issue_comment_policy_disabled"
+        if is_pr_context:
+            if not bool(cfg.llm.enable_pr_comments):
+                return False, "pr_comment_policy_disabled"
+        elif not bool(cfg.llm.enable_issue_only):
+            return False, "issue_only_policy_disabled"
+
+    return True, "n/a"
+
+
+def _llm_policy_context_fields(github_context: dict[str, Any] | None = None) -> dict[str, Any]:
+    cfg = _runtime_env_cfg()
+    context = github_context if isinstance(github_context, dict) else {}
+    event_name = str(
+        context.get("event_name") or os.environ.get("GITHUB_EVENT_NAME", "")
+    ).strip().lower()
+    is_pr_context = bool(
+        context.get("is_pr")
+        or context.get("pr_number")
+        or context.get("pull_request")
+    )
+    return {
+        "llm_policy_event_name": event_name or "n/a",
+        "llm_policy_is_pr_context": bool(is_pr_context),
+        "llm_policy_issue_comment_enabled": bool(cfg.llm.enable_issue_comment),
+        "llm_policy_pr_comments_enabled": bool(cfg.llm.enable_pr_comments),
+        "llm_policy_issue_only_enabled": bool(cfg.llm.enable_issue_only),
+    }
+
+
+def _attach_llm_policy_fields(
+    llm_meta: dict[str, Any],
+    *,
+    github_context: dict[str, Any] | None,
+    allowed: bool,
+) -> dict[str, Any]:
+    llm_meta.update(_llm_policy_context_fields(github_context))
+    llm_meta["llm_policy_allowed"] = bool(allowed)
+    return llm_meta
+
+
+def _llm_enabled(github_context: dict[str, Any] | None = None) -> bool:
+    allowed, _ = _llm_runtime_policy(github_context)
+    return bool(allowed)
 
 
 def _llm_default_meta(
@@ -942,6 +1002,18 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "llm_runtime_override_reason": str(
             llm_meta.get("llm_runtime_override_reason", "n/a") or "n/a"
         ),
+        "policy_event_name": str(llm_meta.get("llm_policy_event_name", "n/a") or "n/a"),
+        "policy_is_pr_context": bool(llm_meta.get("llm_policy_is_pr_context", False)),
+        "policy_issue_comment_enabled": bool(
+            llm_meta.get("llm_policy_issue_comment_enabled", True)
+        ),
+        "policy_pr_comments_enabled": bool(
+            llm_meta.get("llm_policy_pr_comments_enabled", True)
+        ),
+        "policy_issue_only_enabled": bool(
+            llm_meta.get("llm_policy_issue_only_enabled", False)
+        ),
+        "policy_allowed": bool(llm_meta.get("llm_policy_allowed", True)),
         "skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
         "decision_route": str(llm_meta.get("llm_decision_route", "n/a") or "n/a"),
         "budget_action": str(llm_meta.get("llm_budget_action", "n/a") or "n/a"),
@@ -1260,6 +1332,8 @@ def _build_llm_http_debug_payload(*, llm_meta: dict[str, Any], decision_route: s
             llm_meta.get("llm_runtime_override_reason", "n/a") or "n/a"
         ),
         "llm_skip_reason": str(llm_meta.get("llm_skip_reason", "n/a") or "n/a"),
+        "policy_event_name": str(llm_meta.get("llm_policy_event_name", "n/a") or "n/a"),
+        "policy_allowed": bool(llm_meta.get("llm_policy_allowed", True)),
         "estimated_input_tokens": int(llm_meta.get("llm_input_budget_used_est", 0) or 0),
         "max_output_tokens_used": int(llm_meta.get("llm_max_output_tokens_used", 0) or 0),
         "patch_batch_mode": bool(llm_meta.get("llm_patch_batch_mode", False)),
@@ -1303,6 +1377,20 @@ def _build_ai_quota_snapshot_payload(
         "llm": {
             "calls_count": int(llm_totals.get("calls_count", 0) or 0),
             "tokens_total": int(llm_totals.get("tokens_total_total", 0) or 0),
+            "execution_mode": str(llm_usage.get("execution_mode", "retrieval_only") or "retrieval_only"),
+            "llm_intent": str(llm_usage.get("llm_intent", "none") or "none"),
+            "llm_decision_reason_short": str(
+                llm_usage.get(
+                    "llm_decision_reason_short",
+                    "LLM not used: direct answer available from retrieved evidence.",
+                )
+                or "LLM not used: direct answer available from retrieved evidence."
+            ),
+            "llm_runtime_override_reason": str(
+                llm_usage.get("llm_runtime_override_reason", "n/a") or "n/a"
+            ),
+            "policy_event_name": str(llm_usage.get("policy_event_name", "n/a") or "n/a"),
+            "policy_allowed": bool(llm_usage.get("policy_allowed", True)),
             "last_remaining": llm_usage.get(
                 "final_remaining_requests",
                 llm_usage.get("remaining_requests", "n/a"),
@@ -1683,7 +1771,11 @@ def _maybe_generate_llm_text(
         llm_meta["llm_decision_route"] = normalized_route
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
-        return None, llm_meta
+        return None, _attach_llm_policy_fields(
+            llm_meta,
+            github_context=github_context,
+            allowed=False,
+        )
 
     if cmd == "locate" and not _env_true("RB_LLM_ALLOW_LOCATE", default=False):
         llm_meta = _llm_default_meta(
@@ -1696,7 +1788,11 @@ def _maybe_generate_llm_text(
         llm_meta["llm_decision_route"] = normalized_route or "n/a"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
-        return None, llm_meta
+        return None, _attach_llm_policy_fields(
+            llm_meta,
+            github_context=github_context,
+            allowed=False,
+        )
 
     llm_meta = _llm_default_meta(
         "disabled",
@@ -1706,10 +1802,17 @@ def _maybe_generate_llm_text(
         llm_decision_reason_code=decision_reason_code,
     )
     llm_meta["llm_decision_route"] = normalized_route or "n/a"
-    if not _llm_enabled():
+    llm_allowed_by_policy, llm_policy_reason = _llm_runtime_policy(github_context)
+    if not llm_allowed_by_policy:
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
-        return None, llm_meta
+        llm_meta["llm_skip_reason"] = str(llm_policy_reason or "disabled")
+        llm_meta["llm_reason"] = str(llm_policy_reason or "disabled")
+        return None, _attach_llm_policy_fields(
+            llm_meta,
+            github_context=github_context,
+            allowed=False,
+        )
 
     token = str(_runtime_env_cfg().workflow.github_token or "").strip()
     if not token:
@@ -1725,7 +1828,11 @@ def _maybe_generate_llm_text(
         llm_meta["llm_decision_route"] = normalized_route or "n/a"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
-        return None, llm_meta
+        return None, _attach_llm_policy_fields(
+            llm_meta,
+            github_context=github_context,
+            allowed=False,
+        )
 
     cfg = _runtime_env_cfg()
     effective_intent = normalized_llm_intent if normalized_llm_intent != "none" else intent
@@ -1872,7 +1979,11 @@ def _maybe_generate_llm_text(
                 )
             ]
             llm_meta["llm_model_counts"] = _build_model_counts(llm_meta["llm_calls"])
-            return None, llm_meta
+            return None, _attach_llm_policy_fields(
+                llm_meta,
+                github_context=github_context,
+                allowed=True,
+            )
         if decision.switch_to_mini and "mini" not in model_id.lower():
             model_id = model_low
             tier = "low"
@@ -1995,7 +2106,11 @@ def _maybe_generate_llm_text(
             )
         ]
         llm_meta["llm_model_counts"] = _build_model_counts(llm_meta["llm_calls"])
-        return None, llm_meta
+        return None, _attach_llm_policy_fields(
+            llm_meta,
+            github_context=github_context,
+            allowed=True,
+        )
 
     llm_meta = {
         "llm_used": True,
@@ -2088,7 +2203,14 @@ def _maybe_generate_llm_text(
         )
     ]
     llm_meta["llm_model_counts"] = _build_model_counts(llm_meta["llm_calls"])
-    return response.text.strip() or None, llm_meta
+    return (
+        response.text.strip() or None,
+        _attach_llm_policy_fields(
+            llm_meta,
+            github_context=github_context,
+            allowed=True,
+        ),
+    )
 
 
 def _extract_patch_from_stats(compression_stats: dict[str, Any]) -> str:
@@ -2478,13 +2600,18 @@ def _run_batch_llm_review_fix(
         )
         llm_meta["llm_decision_route"] = route_norm or "n/a"
         llm_meta["llm_request_mode"] = "patch" if _is_fix_intent(cmd, intent) else "normal"
-        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, llm_meta
+        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _attach_llm_policy_fields(
+            llm_meta,
+            github_context=github_context,
+            allowed=False,
+        )
 
     is_patch_mode = _is_fix_intent(cmd, intent)
-    llm_disabled = not _llm_enabled()
+    llm_allowed_by_policy, llm_policy_reason = _llm_runtime_policy(github_context)
+    llm_disabled = not llm_allowed_by_policy
     if llm_disabled:
         llm_meta = _llm_default_meta(
-            "disabled",
+            str(llm_policy_reason or "disabled"),
             execution_mode=execution_mode_norm,
             llm_intent=llm_intent_norm,
             llm_decision_reason_short=llm_reason_short,
@@ -2497,7 +2624,11 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_compacted"] = bool(is_patch_mode)
         llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
         llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
-        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, llm_meta
+        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _attach_llm_policy_fields(
+            llm_meta,
+            github_context=github_context,
+            allowed=False,
+        )
 
     cfg = _runtime_env_cfg()
     max_input_tokens = int(cfg.llm.max_input_tokens_patch if is_patch_mode else cfg.llm.max_input_tokens)
@@ -2574,7 +2705,11 @@ def _run_batch_llm_review_fix(
                 "summaries": [],
                 "findings": [],
                 "patch_parts": [],
-            }, llm_meta
+            }, _attach_llm_policy_fields(
+                llm_meta,
+                github_context=github_context,
+                allowed=True,
+            )
         if bootstrap_decision.switch_to_mini:
             overall_model = model_low
             overall_tier = "low"
@@ -2599,7 +2734,11 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_compacted"] = bool(is_patch_mode)
         llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
         llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
-        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, llm_meta
+        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _attach_llm_policy_fields(
+            llm_meta,
+            github_context=github_context,
+            allowed=True,
+        )
 
     calls: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
@@ -2901,7 +3040,11 @@ def _run_batch_llm_review_fix(
         "patch_parts": patch_parts,
         "no_patch_batches_count": no_patch_count,
         "no_patch_returned": no_patch_count > 0 and not patch_parts,
-    }, llm_meta
+    }, _attach_llm_policy_fields(
+        llm_meta,
+        github_context=github_context,
+        allowed=True,
+    )
 
 
 def _maybe_apply_patch(
@@ -3274,6 +3417,12 @@ def _runtime_override_reason_from_skip(skip_reason: str) -> str:
         return "LLM blocked: missing GitHub token."
     if lowered == "locate_disabled":
         return "LLM blocked: locate mode is disabled by runtime policy."
+    if lowered == "issue_comment_policy_disabled":
+        return "LLM blocked: issue_comment policy disabled."
+    if lowered == "pr_comment_policy_disabled":
+        return "LLM blocked: PR comment LLM policy disabled."
+    if lowered == "issue_only_policy_disabled":
+        return "LLM blocked: non-PR issue LLM policy disabled."
     if lowered.startswith("budget:"):
         return f"LLM blocked: {reason[7:]}"
     if lowered.startswith("llm_not_available:"):

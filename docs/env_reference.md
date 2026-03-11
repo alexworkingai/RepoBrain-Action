@@ -31,6 +31,9 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_LLM_BATCH_REDUCE_ENABLE` | bool | `1` | - | Enable reduce step in batch mode. |
 | `RB_LLM_BATCH_REDUCE_MODEL` | str | `` | - | Optional override model for reduce step. |
 | `RB_LLM_ENABLED` | bool | `0` | - | Enable LLM layer. |
+| `RB_LLM_ENABLE_ISSUE_COMMENT` | bool | `1` | - | Allow LLM for issue_comment event path. |
+| `RB_LLM_ENABLE_ISSUE_ONLY` | bool | `0` | - | Allow LLM for issue_comment on non-PR issues. |
+| `RB_LLM_ENABLE_PR_COMMENTS` | bool | `1` | - | Allow LLM for issue_comment on PR discussions. |
 | `RB_LLM_MAX_INPUT_TOKENS` | int | `7600` | 256..64000 | Prompt input token budget. |
 | `RB_LLM_MAX_INPUT_TOKENS_PATCH` | int | `3200` | 256..64000 | Patch prompt input token budget. |
 | `RB_LLM_MAX_OUTPUT_TOKENS_ASK` | int | `1000` | 200..16000 | Ask max output tokens. |

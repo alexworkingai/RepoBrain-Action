@@ -108,6 +108,12 @@ When review/fix verification runs:
 - `llm_decision_reason_short`
 - `llm_decision_reason_code`
 - `llm_runtime_override_reason`
+- `policy_event_name`
+- `policy_is_pr_context`
+- `policy_issue_comment_enabled`
+- `policy_pr_comments_enabled`
+- `policy_issue_only_enabled`
+- `policy_allowed`
 - `model_id`, `tier`
 - `primary_model_id`, `effective_model_id`, `fallback_used`
 - `provider_http_status`, `provider_error_type`
