@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 from typing import Any
@@ -21,6 +21,13 @@ def _route(audit_summary: dict[str, Any]) -> str:
     return route or "FAST"
 
 
+def _int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _evidence_lines(
     evidence: list[EvidenceItem],
     *,
@@ -36,24 +43,43 @@ def _evidence_lines(
     ]
 
 
-def _verification_lines(audit_summary: dict[str, Any]) -> list[str]:
-    passed = int(audit_summary.get("verification_pass_count", 0) or 0)
-    failed = int(audit_summary.get("verification_fail_count", 0) or 0)
-    pending = int(audit_summary.get("verification_pending_count", 0) or 0)
-    not_run = int(audit_summary.get("verification_not_run_count", 0) or 0)
+def _verification_status(audit_summary: dict[str, Any]) -> str:
+    raw_overall = str(audit_summary.get("verification_overall", "") or "").strip().upper()
+    passed = _int(audit_summary.get("verification_pass_count", 0))
+    failed = _int(audit_summary.get("verification_fail_count", 0))
+    pending = _int(audit_summary.get("verification_pending_count", 0))
+    not_run = _int(audit_summary.get("verification_not_run_count", 0))
 
+    if raw_overall in {"PASS", "FAIL", "WARN", "NOT_RUN"}:
+        if raw_overall == "FAIL":
+            return "WARN"
+        return raw_overall
     if failed > 0 or pending > 0:
-        status = "WARN"
-    elif passed > 0 and not_run == 0:
-        status = "PASS"
-    else:
-        status = "NOT_RUN"
+        return "WARN"
+    if passed > 0 and not_run == 0:
+        return "PASS"
+    return "NOT_RUN"
+
+
+def _verification_lines(audit_summary: dict[str, Any]) -> list[str]:
+    passed = _int(audit_summary.get("verification_pass_count", 0))
+    failed = _int(audit_summary.get("verification_fail_count", 0))
+    pending = _int(audit_summary.get("verification_pending_count", 0))
+    not_run = _int(audit_summary.get("verification_not_run_count", 0))
+    status = _verification_status(audit_summary)
 
     lines = [
         "### 🔎 Verification",
         f"- Status: **{status}**",
-        f"- PASS: {passed}, WARN: {failed + pending}, NOT_RUN: {not_run}",
     ]
+
+    if status == "NOT_RUN" and passed == 0 and failed == 0 and pending == 0 and not_run == 0:
+        lines.append("- checks were not run.")
+        lines.append("- Counters: n/a")
+        return lines
+
+    warn_count = failed + pending
+    lines.append(f"- PASS: {passed}, WARN: {warn_count}, NOT_RUN: {not_run}")
     if status == "NOT_RUN" or not_run > 0:
         lines.append("- checks were not run.")
     return lines
@@ -81,6 +107,31 @@ def _verification_report_lines(verification_report: dict[str, Any]) -> list[str]
     return lines
 
 
+def _llm_models_used_summary(audit_summary: dict[str, Any]) -> str:
+    if not bool(audit_summary.get("llm_used", False)):
+        return "n/a"
+
+    as_text = str(audit_summary.get("llm_models_used", "") or "").strip()
+    if as_text and as_text.lower() != "n/a":
+        return as_text
+
+    model_counts_raw = audit_summary.get("llm_model_counts", {})
+    if isinstance(model_counts_raw, dict) and model_counts_raw:
+        parts = [
+            f"{model} ({_int(count, 0)} call{'s' if _int(count, 0) != 1 else ''})"
+            for model, count in sorted(model_counts_raw.items(), key=lambda item: str(item[0]))
+            if str(model).strip()
+        ]
+        if parts:
+            return ", ".join(parts)
+
+    model_id = str(audit_summary.get("llm_model_used", "") or "").strip()
+    calls = max(1, _int(audit_summary.get("llm_calls_this_run", 1), 1))
+    if model_id and model_id.lower() not in {"n/a", "not used"}:
+        return f"{model_id} ({calls} call{'s' if calls != 1 else ''})"
+    return "n/a"
+
+
 def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     llm_used = bool(audit_summary.get("llm_used", False))
     skip_reason = str(audit_summary.get("llm_skip_reason", "n/a") or "n/a")
@@ -95,9 +146,9 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     )
     runtime_override = str(audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a")
     model_id = str(audit_summary.get("llm_model_used", "not used") or "not used")
-    prompt = int(audit_summary.get("llm_tokens_prompt", 0) or 0)
-    completion = int(audit_summary.get("llm_tokens_completion", 0) or 0)
-    total = int(audit_summary.get("llm_tokens_total", 0) or 0)
+    prompt = _int(audit_summary.get("llm_tokens_prompt", 0))
+    completion = _int(audit_summary.get("llm_tokens_completion", 0))
+    total = _int(audit_summary.get("llm_tokens_total", 0))
     usage_estimated = bool(audit_summary.get("llm_usage_estimated", False))
     remaining = audit_summary.get(
         "llm_remaining_requests",
@@ -108,36 +159,43 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     )
     reset_raw = audit_summary.get("llm_reset_time_utc_iso", audit_summary.get("llm_rate_limit_reset", None))
     reset_value = str(reset_raw) if reset_raw not in {None, ""} else "n/a"
-    input_budget_used = int(audit_summary.get("llm_input_budget_used_est", 0) or 0)
-    input_budget_limit = int(audit_summary.get("llm_input_budget_limit", 0) or 0)
-    dropped_locators = int(audit_summary.get("llm_dropped_locators_count", 0) or 0)
-    dropped_hunks = int(audit_summary.get("llm_dropped_hunks_count", 0) or 0)
-    dropped_snippets = int(audit_summary.get("llm_dropped_snippets_count", 0) or 0)
-    calls_count = int(audit_summary.get("llm_calls_this_run", 0) or 0)
-    models_used = str(audit_summary.get("llm_models_used", "n/a") or "n/a")
+    input_budget_used = _int(audit_summary.get("llm_input_budget_used_est", 0))
+    input_budget_limit = _int(audit_summary.get("llm_input_budget_limit", 0))
+    dropped_locators = _int(audit_summary.get("llm_dropped_locators_count", 0))
+    dropped_hunks = _int(audit_summary.get("llm_dropped_hunks_count", 0))
+    dropped_snippets = _int(audit_summary.get("llm_dropped_snippets_count", 0))
+    calls_count = _int(audit_summary.get("llm_calls_this_run", 0))
+    models_used = _llm_models_used_summary(audit_summary)
     budget_action = str(audit_summary.get("llm_budget_action", "n/a") or "n/a")
-    return [
+    lines = [
         "### 🤖 LLM",
         f"- TKYA LLM decision: {tkya_decision}",
         f"- Reason: {decision_reason}",
-        *([f"- Runtime override: {runtime_override}"] if runtime_override != "n/a" else []),
-        "- LLM used: yes" if llm_used else f"- LLM used: no ({skip_reason})",
-        f"- LLM model used: `{model_id}`",
-        (
-            f"- Tokens used: prompt={prompt} completion={completion} total={total} "
-            f"({'estimate' if usage_estimated else 'reported'})"
-        ),
-        f"- Requests remaining today: {remaining}{' (estimated)' if remaining_is_estimate else ''}",
-        f"- Reset time UTC: {reset_value}",
-        f"- Calls this run: {calls_count}",
-        f"- Models used: {models_used}",
-        f"- Prompt budget: used~{input_budget_used} / limit={input_budget_limit}",
-        (
-            "- Dropped context items: "
-            f"locators={dropped_locators}, hunks={dropped_hunks}, snippets={dropped_snippets}"
-        ),
-        *([f"- AI Budget action: {budget_action}"] if budget_action != "n/a" else []),
     ]
+    if runtime_override != "n/a":
+        lines.append(f"- Runtime override: {runtime_override}")
+    lines.extend(
+        [
+            "- LLM used: yes" if llm_used else f"- LLM used: no ({skip_reason})",
+            f"- LLM model used: `{model_id}`",
+            (
+                f"- Tokens used: prompt={prompt} completion={completion} total={total} "
+                f"({'estimate' if usage_estimated else 'reported'})"
+            ),
+            f"- Requests remaining today: {remaining}{' (estimated)' if remaining_is_estimate else ''}",
+            f"- Reset time UTC: {reset_value}",
+            f"- Calls this run: {calls_count}",
+            f"- Models used: {models_used}",
+            f"- Prompt budget: used~{input_budget_used} / limit={input_budget_limit}",
+            (
+                "- Dropped context items: "
+                f"locators={dropped_locators}, hunks={dropped_hunks}, snippets={dropped_snippets}"
+            ),
+        ]
+    )
+    if budget_action != "n/a":
+        lines.append(f"- AI Budget action: {budget_action}")
+    return lines
 
 
 def _embeddings_lines(audit_summary: dict[str, Any]) -> list[str]:
@@ -145,18 +203,18 @@ def _embeddings_lines(audit_summary: dict[str, Any]) -> list[str]:
     embed_reason = str(audit_summary.get("embed_reason", "n/a") or "n/a")
     model_id = str(audit_summary.get("embed_model_id", "not used") or "not used")
     index_model = str(audit_summary.get("embed_index_model", "n/a") or "n/a")
-    index_dim = int(audit_summary.get("embed_index_dim", 0) or 0)
-    tokens_prompt = int(audit_summary.get("embed_tokens_prompt", 0) or 0)
-    tokens_total = int(audit_summary.get("embed_tokens_total", 0) or 0)
+    index_dim = _int(audit_summary.get("embed_index_dim", 0))
+    tokens_prompt = _int(audit_summary.get("embed_tokens_prompt", 0))
+    tokens_total = _int(audit_summary.get("embed_tokens_total", 0))
     usage_estimated = bool(audit_summary.get("embed_usage_estimated", True))
     remaining = audit_summary.get("embed_remaining_requests", "n/a")
     remaining_is_estimate = bool(audit_summary.get("embed_remaining_is_estimate", True))
     reset_raw = audit_summary.get("embed_reset_time_utc_iso")
     reset_value = str(reset_raw) if reset_raw not in {None, ""} else "n/a"
-    chunks_embedded = int(audit_summary.get("embed_chunks_embedded", 0) or 0)
+    chunks_embedded = _int(audit_summary.get("embed_chunks_embedded", 0))
     query_embedded = bool(audit_summary.get("embed_query_embedded", False))
     budget_action = str(audit_summary.get("embed_budget_action", "n/a") or "n/a")
-    return [
+    lines = [
         "### Embeddings",
         "- Embeddings used: yes" if embed_used else f"- Embeddings used: no ({embed_reason})",
         f"- Embeddings model: `{model_id}`",
@@ -168,13 +226,15 @@ def _embeddings_lines(audit_summary: dict[str, Any]) -> list[str]:
         ),
         f"- Requests remaining today: {remaining}{' (estimated)' if remaining_is_estimate else ''}",
         f"- Reset time UTC: {reset_value}",
-        *([f"- AI Budget action: {budget_action}"] if budget_action != "n/a" else []),
     ]
+    if budget_action != "n/a":
+        lines.append(f"- AI Budget action: {budget_action}")
+    return lines
 
 
 def _mode_lines(audit_summary: dict[str, Any]) -> list[str]:
     route = _route(audit_summary)
-    pass_count = int(audit_summary.get("pass_count", 1) or 1)
+    pass_count = _int(audit_summary.get("pass_count", 1), 1)
     lines = [f"- Route/Mode: `{route}`", f"- Passes: `{pass_count}`"]
     if route == "DEEP" or pass_count > 1:
         lines.append("- Deep retrieval pass was used.")
@@ -197,32 +257,299 @@ def _touched_files_lines(audit_summary: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _audit_kv_lines(audit_summary: dict[str, Any]) -> list[str]:
-    lines: list[str] = []
-    for key in sorted(audit_summary):
-        value = audit_summary[key]
-        if isinstance(value, list):
-            lines.append(f"- {key}: list[{len(value)}]")
-            continue
-        if isinstance(value, dict):
-            lines.append(f"- {key}: dict[{len(value)}]")
-            continue
-        lines.append(f"- {key}: {value}")
-    return lines
+def _tkya_mode_label(audit_summary: dict[str, Any]) -> str:
+    raw = str(audit_summary.get("tky_engine", "n/a") or "n/a").strip().lower()
+    if raw in {"baseline", "baseline-policy"}:
+        return "baseline-policy"
+    if raw in {"topocore_lite", "local"}:
+        return "topocore_lite"
+    if raw in {"remote"}:
+        return "remote"
+    if raw in {"n/a", ""}:
+        return "n/a"
+    return raw
 
 
 def _version_backend_lines(audit_summary: dict[str, Any]) -> list[str]:
     version = str(audit_summary.get("repobrain_version", "") or "").strip()
-    backend = str(
-        audit_summary.get(
-            "tkya_backend",
-            audit_summary.get("tky_engine", ""),
+    backend = str(audit_summary.get("tkya_backend", "") or "").strip()
+    mode = _tkya_mode_label(audit_summary)
+    lines: list[str] = []
+    if version:
+        lines.append(f"- RepoBrain version: `{version}`")
+    if backend:
+        lines.append(f"- TKYA backend: `{backend}`")
+    if mode and mode != "n/a":
+        lines.append(f"- TKYA mode: `{mode}`")
+    return lines
+
+
+def _diag_state(value: Any, parameter: str) -> str:
+    if value is None:
+        return "undefined"
+    if isinstance(value, bool):
+        key = parameter.lower()
+        if key.endswith("used") or key.endswith("enabled") or key.endswith("allowed"):
+            return "meaningful" if value else "disabled"
+        return "meaningful"
+    if isinstance(value, (list, tuple, set, dict)):
+        return "meaningful" if len(value) > 0 else "disabled"
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if not normalized:
+            return "undefined"
+        if normalized in {"n/a", "none", "null", "<missing>", "not used", "unknown"}:
+            return "undefined"
+        if normalized in {"disabled", "off", "false"}:
+            return "disabled"
+        return "meaningful"
+    return "meaningful"
+
+
+def _diag_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if value is None:
+        return "n/a"
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    if isinstance(value, (list, tuple, set)):
+        return f"list[{len(value)}]"
+    if isinstance(value, dict):
+        return f"dict[{len(value)}]"
+    text = str(value).strip()
+    return text or "n/a"
+
+
+def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tuple[str, Any, str]]]]:
+    pr_files = _int(audit_summary.get("pr_changed_files_count", 0))
+    if not pr_files:
+        touched = audit_summary.get("touched_files", [])
+        if isinstance(touched, list):
+            pr_files = len([item for item in touched if str(item).strip()])
+
+    return [
+        (
+            "A. Decision summary",
+            [
+                ("Route", _route(audit_summary), "Final TKYA route used for this response."),
+                (
+                    "Execution mode",
+                    audit_summary.get("execution_mode", "retrieval_only"),
+                    "Semantic decision: retrieval-only vs retrieval+LLM/verification/refuse.",
+                ),
+                ("LLM intent", audit_summary.get("llm_intent", "none"), "TKYA-selected LLM intent."),
+                (
+                    "Decision reason code",
+                    audit_summary.get("llm_decision_reason_code", "n/a"),
+                    "Machine-readable reason for semantic execution choice.",
+                ),
+                (
+                    "Answer grounding mode",
+                    audit_summary.get("answer_grounding_mode", "retrieval"),
+                    "Primary grounding source for the answer.",
+                ),
+                (
+                    "PR metadata used",
+                    bool(audit_summary.get("pr_metadata_used", False)),
+                    "PR changed-files metadata participated in grounding.",
+                ),
+            ],
+        ),
+        (
+            "B. Runtime / Policy",
+            [
+                ("TKYA backend", audit_summary.get("tkya_backend", "n/a"), "Active TKYA backend selection."),
+                ("TKYA mode", _tkya_mode_label(audit_summary), "Active TKYA engine mode."),
+                (
+                    "TKY mode requested",
+                    audit_summary.get("tky_mode_requested", "n/a"),
+                    "Requested provider mode from runtime input.",
+                ),
+                (
+                    "TKY mode used",
+                    audit_summary.get("tky_mode_used", "n/a"),
+                    "Effective provider mode after policy checks.",
+                ),
+                (
+                    "Remote skipped reason",
+                    audit_summary.get("remote_skipped_reason", "n/a"),
+                    "Why remote TKY was skipped, if applicable.",
+                ),
+                (
+                    "Remote fallback reason",
+                    audit_summary.get("tky_fallback_reason", "n/a"),
+                    "Fallback reason when remote provider fails at runtime.",
+                ),
+                (
+                    "Remote fallback code",
+                    audit_summary.get("fallback_reason_code", "n/a"),
+                    "Machine-readable fallback code for remote provider path.",
+                ),
+                (
+                    "Runtime override",
+                    audit_summary.get("llm_runtime_override_reason", "n/a"),
+                    "Higher-priority runtime policy that overrode semantic LLM decision.",
+                ),
+            ],
+        ),
+        (
+            "C. LLM",
+            [
+                ("LLM used", bool(audit_summary.get("llm_used", False)), "Whether LLM generation was executed."),
+                ("Model", audit_summary.get("llm_model_used", "n/a"), "Effective LLM model id."),
+                (
+                    "Models used",
+                    _llm_models_used_summary(audit_summary),
+                    "Per-model call distribution for this run.",
+                ),
+                ("Tokens total", _int(audit_summary.get("llm_tokens_total", 0)), "LLM token usage for this run."),
+                (
+                    "Requests remaining",
+                    audit_summary.get("llm_remaining_requests", "n/a"),
+                    "Provider quota remaining after the run.",
+                ),
+                (
+                    "Rate-limit reset",
+                    audit_summary.get("llm_reset_time_utc_iso", "n/a"),
+                    "Provider quota reset timestamp (UTC).",
+                ),
+            ],
+        ),
+        (
+            "D. Embeddings",
+            [
+                (
+                    "Embeddings used",
+                    bool(audit_summary.get("embed_used", False)),
+                    "Whether query/vector embedding path was used.",
+                ),
+                (
+                    "Embeddings model",
+                    audit_summary.get("embed_model_id", "n/a"),
+                    "Effective embedding model id.",
+                ),
+                (
+                    "Query embedded",
+                    bool(audit_summary.get("embed_query_embedded", False)),
+                    "Whether query vector was generated.",
+                ),
+                (
+                    "Index embeddings status",
+                    audit_summary.get("embed_index_status", audit_summary.get("embeddings_index_status", "n/a")),
+                    "Runtime truth for index vector availability/usage.",
+                ),
+                (
+                    "Chunks with vectors",
+                    _int(audit_summary.get("embed_chunks_embedded", 0)),
+                    "Number of indexed chunks that had vectors.",
+                ),
+            ],
+        ),
+        (
+            "E. Retrieval / Evidence",
+            [
+                ("Retrieved candidates", _int(audit_summary.get("retrieved", 0)), "Candidates retrieved before selection."),
+                ("Selected evidence", _int(audit_summary.get("selected", 0)), "Evidence items selected for response."),
+                ("Retrieval passes", _int(audit_summary.get("pass_count", 1), 1), "Number of retrieval passes executed."),
+                ("Top score", audit_summary.get("top_score", "n/a"), "Highest retrieval score observed."),
+                (
+                    "PR changed files",
+                    pr_files,
+                    "Count of changed files from PR metadata (if available).",
+                ),
+            ],
+        ),
+        (
+            "F. Verification",
+            [
+                (
+                    "Verification status",
+                    _verification_status(audit_summary),
+                    "Outcome from verification runner/check summary.",
+                ),
+                ("PASS checks", _int(audit_summary.get("verification_pass_count", 0)), "Checks completed successfully."),
+                ("WARN checks", _int(audit_summary.get("verification_fail_count", 0)) + _int(audit_summary.get("verification_pending_count", 0)), "Checks failed or still pending."),
+                ("NOT_RUN checks", _int(audit_summary.get("verification_not_run_count", 0)), "Checks intentionally or contextually not run."),
+            ],
+        ),
+        (
+            "G. Provider / Quota",
+            [
+                (
+                    "Provider HTTP status",
+                    audit_summary.get("llm_provider_http_status", "n/a"),
+                    "Provider HTTP status for latest LLM call.",
+                ),
+                (
+                    "Provider error type",
+                    audit_summary.get("llm_provider_error_type", "n/a"),
+                    "Normalized provider/network error class.",
+                ),
+                (
+                    "Fallback used",
+                    bool(audit_summary.get("llm_fallback_used", False)),
+                    "Whether fallback model path was used.",
+                ),
+                (
+                    "Budget action",
+                    audit_summary.get("llm_budget_action", "n/a"),
+                    "Governor action that constrained this run.",
+                ),
+                (
+                    "Governor reason",
+                    audit_summary.get("llm_governor_reason", "n/a"),
+                    "Why governor allowed/blocked/adjusted calls.",
+                ),
+            ],
+        ),
+    ]
+
+
+def _render_diagnostic_table(audit_summary: dict[str, Any]) -> list[str]:
+    lines: list[str] = ["### 🧾 Diagnostic report"]
+    undefined_rows: list[tuple[str, str, str, str]] = []
+
+    for group_name, rows in _diagnostic_groups(audit_summary):
+        meaningful: list[tuple[str, str, str]] = []
+        for parameter, value, meaning in rows:
+            state = _diag_state(value, parameter)
+            value_text = _diag_value(value)
+            if state == "meaningful":
+                meaningful.append((parameter, value_text, meaning))
+            else:
+                undefined_rows.append((parameter, value_text, meaning, state))
+
+        if not meaningful:
+            continue
+        meaningful.sort(key=lambda item: item[0].lower())
+        lines.extend(
+            [
+                "",
+                f"#### {group_name}",
+                "| Parameter | Value | Meaning / Risk |",
+                "| --- | --- | --- |",
+            ]
         )
-        or ""
-    ).strip()
-    if not version or not backend:
-        return []
-    return [f"- RepoBrain version: `{version}`, TKYA backend: `{backend}`"]
+        for parameter, value_text, meaning in meaningful:
+            lines.append(f"| {parameter} | `{value_text}` | {meaning} |")
+
+    if undefined_rows:
+        undefined_rows.sort(key=lambda item: item[0].lower())
+        lines.extend(
+            [
+                "",
+                "#### Undefined / disabled diagnostics",
+                "| Parameter | Value | Meaning / Risk |",
+                "| --- | --- | --- |",
+            ]
+        )
+        for parameter, value_text, meaning, state in undefined_rows[:24]:
+            lines.append(f"| {parameter} | `{value_text}` | {state}: {meaning} |")
+        if len(undefined_rows) > 24:
+            lines.append(f"| +{len(undefined_rows) - 24} more | `...` | omitted for compactness |")
+
+    return lines
 
 
 def enforce_comment_limit(
@@ -242,6 +569,10 @@ def enforce_comment_limit(
         ]
     )
     return "\n".join(kept), True
+
+
+def render_diagnostic_summary_markdown(audit_summary: dict[str, Any]) -> str:
+    return "\n".join(_render_diagnostic_table(audit_summary))
 
 
 def render_answer_markdown(
@@ -270,7 +601,7 @@ def render_answer_markdown(
             [
                 "Top locations found for the query:",
                 "",
-                "### 📌 Evidence",
+                "### 📊 Evidence",
                 *evidence_block,
                 "",
                 *_verification_lines(audit_summary),
@@ -288,7 +619,7 @@ def render_answer_markdown(
             [
                 answer_text.strip() or "No answer generated.",
                 "",
-                "### 📌 Evidence (What I used)",
+                "### 📊 Evidence (What I used)",
                 *evidence_block,
                 *_touched_files_lines(audit_summary),
                 "",
@@ -310,11 +641,12 @@ def render_answer_markdown(
         [
             "",
             "### 🧾 Audit summary",
-            f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
-            f"- selected: {int(audit_summary.get('selected', 0) or 0)}",
+            f"- retrieved: {_int(audit_summary.get('retrieved', 0))}",
+            f"- selected: {_int(audit_summary.get('selected', 0))}",
             f"- top_score: {audit_summary.get('top_score', 'n/a')}",
             *_version_backend_lines(audit_summary),
-            *_audit_kv_lines(audit_summary),
+            "",
+            *_render_diagnostic_table(audit_summary),
             "",
             _audit_note(),
         ]
@@ -345,9 +677,11 @@ def render_wait_markdown(
             "- Passes: `1`",
             "",
             "### 🧾 Audit summary",
-            f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
-            f"- selected: {int(audit_summary.get('selected', 0) or 0)}",
+            f"- retrieved: {_int(audit_summary.get('retrieved', 0))}",
+            f"- selected: {_int(audit_summary.get('selected', 0))}",
             *_version_backend_lines(audit_summary),
+            "",
+            *_render_diagnostic_table(audit_summary),
             "",
             _audit_note(),
         ]
@@ -381,9 +715,11 @@ def render_refuse_markdown(
             "",
             "### 🧾 Audit summary",
             f"- route: {_route(audit_summary)}",
-            f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
-            f"- selected: {int(audit_summary.get('selected', 0) or 0)}",
+            f"- retrieved: {_int(audit_summary.get('retrieved', 0))}",
+            f"- selected: {_int(audit_summary.get('selected', 0))}",
             *_version_backend_lines(audit_summary),
+            "",
+            *_render_diagnostic_table(audit_summary),
             "",
             _audit_note(),
         ]
@@ -406,9 +742,11 @@ def render_error_markdown(
             "",
             "### 🧾 Audit summary",
             f"- route: {_route(audit_summary)}",
-            f"- retrieved: {int(audit_summary.get('retrieved', 0) or 0)}",
-            f"- selected: {int(audit_summary.get('selected', 0) or 0)}",
+            f"- retrieved: {_int(audit_summary.get('retrieved', 0))}",
+            f"- selected: {_int(audit_summary.get('selected', 0))}",
             *_version_backend_lines(audit_summary),
+            "",
+            *_render_diagnostic_table(audit_summary),
             "",
             _audit_note(),
         ]
@@ -456,7 +794,8 @@ def render_review_markdown(
         "",
         "### 🧾 Audit summary",
         *_version_backend_lines(audit_summary),
-        *_audit_kv_lines(audit_summary),
+        "",
+        *_render_diagnostic_table(audit_summary),
         "",
         _audit_note(),
     ]
@@ -494,7 +833,8 @@ def render_patch_markdown(
         "",
         "### 🧾 Audit summary",
         *_version_backend_lines(audit_summary),
-        *_audit_kv_lines(audit_summary),
+        "",
+        *_render_diagnostic_table(audit_summary),
         "",
         _audit_note(),
     ]

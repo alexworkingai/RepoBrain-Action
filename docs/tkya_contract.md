@@ -153,11 +153,11 @@ Precedence rules:
   - remote failure + fail-open true => fallback baseline
   - remote failure + fail-open false => exit code `2` with short message
 
-### Original TKYA backend loading
+### Legacy/original backend loading (internal compatibility)
 - `repobrain/tkya/engine.py::get_engine`
   - default: `lite`
   - `RB_TKYA_BACKEND=v5` loads `TopoCore_TCX_v5-Advance_CAS+Git.py` with `importlib`
-  - `RB_TKYA_BACKEND=original` loads legacy `TopoCore_TCX_v2-CAS.py` with `importlib`
+  - `RB_TKYA_BACKEND=original` loads a legacy vendor adapter via `importlib` (internal compatibility path)
   - missing/broken vendor file:
     - fallback to lite by default
     - strict fail when `RB_TKYA_STRICT_V5=1` for v5
@@ -183,8 +183,16 @@ Precedence rules:
 - Ask reads chunks, retrieves top-k, calls TKY provider, emits usersafe markdown:
   - route-aware headers (`Answer/Needs verification/Refused/Blocked`)
   - file locators only (no raw code snippets)
+  - grouped diagnostics table (compact, usersafe)
+  - TKYA backend/mode rendered consistently:
+    - `TKYA backend` (e.g. `v5`)
+    - `TKYA mode` (e.g. `topocore_lite`, `baseline-policy`, `remote`)
   - verification summary (`PASS/WARN/NOT_RUN`)
   - deep-pass marker for 2-pass retrieval
+  - PR-aware grounding diagnostics when PR metadata is available:
+    - `pr_changed_files_count`
+    - `pr_metadata_used`
+    - `answer_grounding_mode` (`pr_metadata|retrieval|hybrid`)
 - If rendered markdown is oversized, output is truncated for comment safety and full body is written to `artifacts/ask_result.md`.
 
 ## Existing Env/Config Knobs
@@ -196,18 +204,16 @@ Precedence rules:
 - `RB_INDEX_CACHE_RESTORED`
 
 ### TKYA backend env
-- `RB_TKYA_BACKEND=lite|v2|v5|original`
-  - `v2` is alias for `original`
+- `RB_TKYA_BACKEND=lite|v5|original`
+  - active documented backend is `v5` (`lite` remains safe fallback)
   - default behavior: if backend is not explicitly set and v5 vendor file exists, loader prefers `v5`; otherwise `lite`
+  - legacy alias values may still be normalized internally for backward compatibility
 - `RB_TKYA_ALLOW_REMOTE=0|1` (default guarded as disabled)
 - `RB_TKYA_STRICT=0|1` (common strict mode for vendor initialization)
 - `RB_TKYA_STRICT_V5=0|1`
 - `RB_TKYA_V5_PATH` (optional override path)
 - `RB_TKYA_V5_CANARY_PERCENT=0..100` (optional canary rollout gate for `v5`)
 - `RB_TKYA_CANARY_KEY` (optional stable canary bucket key)
-- `RB_TKYA_ENABLE_V2_SHIM=0|1` (optional compatibility shim for selected v2 adapters)
-- `RB_TKYA_V2_SHIM_PATH` (optional override path for v2 shim source)
-- `RB_TKYA_V2_SHIM_STRICT=0|1` (optional strict init for v2 shim)
 - `RB_TKYA_STRICT_ORIGINAL=0|1`
 - `RB_TKYA_ORIGINAL_PATH` (optional override path)
 

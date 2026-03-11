@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from repobrain.evidence import EvidenceItem
 from repobrain.output_md import (
@@ -33,7 +33,7 @@ def test_render_answer_markdown_fast() -> None:
         command="ask",
     )
     assert "### ✅ Answer" in text
-    assert "### 📌 Evidence" in text
+    assert "### 📊 Evidence" in text
     assert "Route/Mode: `FAST`" in text
 
 

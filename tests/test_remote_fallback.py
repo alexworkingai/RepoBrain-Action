@@ -57,9 +57,9 @@ def test_remote_error_falls_back_to_baseline_and_records_audit(monkeypatch, caps
     output = capsys.readouterr().out
 
     assert status == "DRY_RUN_OK"
-    assert "tky_mode_requested" in output
-    assert "tky_mode_used" in output
+    assert "TKY mode requested" in output
+    assert "TKY mode used" in output
     assert "baseline" in output
-    assert "tky_fallback_reason" in output
+    assert "Remote fallback reason" in output
     assert "remote_error" in output
-    assert "fallback_reason_code" in output
+    assert "Remote fallback code" in output
