@@ -6,6 +6,12 @@ RepoBrain E2E validation is executed locally via GitHub CLI:
 
 The harness uses only `workflow_dispatch --ref <branch>` simulation (no `issue_comment` dependency), so scenarios run before merge.
 
+Production note:
+
+- Main `issue_comment` path now uses governed LLM policy.
+- LLM is allowed only when TKYA selects `execution_mode=retrieval_plus_llm` and runtime policy/governor permits it.
+- Reports still show semantic reason plus runtime override when blocked.
+
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (`gh auth status`)

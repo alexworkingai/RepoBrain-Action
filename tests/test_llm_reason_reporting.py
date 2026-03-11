@@ -51,3 +51,32 @@ def test_runtime_override_is_rendered_when_tkya_wanted_llm_but_runtime_blocked()
     assert "TKYA LLM decision: used" in md
     assert "Reason: LLM used: multi-source synthesis required after retrieval." in md
     assert "Runtime override: LLM blocked: disabled by runtime policy." in md
+
+
+def test_issue_comment_used_path_still_prints_tkya_reason() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer text",
+        evidence=[],
+        audit_summary={
+            "route_final": "DEEP",
+            "pass_count": 2,
+            "retrieved": 12,
+            "selected": 4,
+            "llm_used": True,
+            "llm_skip_reason": "n/a",
+            "llm_model_used": "openai/gpt-4.1-mini",
+            "llm_tokens_prompt": 120,
+            "llm_tokens_completion": 50,
+            "llm_tokens_total": 170,
+            "llm_remaining_requests": 15,
+            "execution_mode": "retrieval_plus_llm",
+            "llm_decision_reason_short": "LLM used: multi-source synthesis required after deep retrieval.",
+            "llm_decision_reason_code": "MULTI_SOURCE_SYNTHESIS_REQUIRED",
+        },
+        next_steps="Validate evidence",
+        command="ask",
+    )
+
+    assert "TKYA LLM decision: used" in md
+    assert "Reason: LLM used: multi-source synthesis required after deep retrieval." in md
+    assert "LLM used: yes" in md
