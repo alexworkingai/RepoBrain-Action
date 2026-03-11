@@ -257,3 +257,62 @@ def test_fix_extractor_failed_is_fail_product(monkeypatch, tmp_path: Path) -> No
         requirements=module.ScenarioRequirements(require_patch=True),
     )
     assert result.status == "FAIL_PRODUCT"
+
+
+def test_validate_artifacts_requires_tkya_reason_lines(tmp_path: Path) -> None:
+    module = _load_module()
+    _write_base_artifacts(tmp_path)
+    _write_json(
+        tmp_path / "llm_usage.json",
+        {
+            "llm_used": False,
+            "execution_mode": "retrieval_only",
+            "llm_decision_reason_short": "LLM not used: direct answer available from retrieved evidence.",
+            "tokens_total": 0,
+            "remaining_requests": 10,
+            "reset_time_utc_iso": None,
+        },
+    )
+    (tmp_path / "ask_result.md").write_text(
+        "### ✅ Answer\n"
+        "### 🤖 LLM\n"
+        "- TKYA LLM decision: not used\n"
+        "- Reason: LLM not used: direct answer available from retrieved evidence.\n",
+        encoding="utf-8",
+    )
+    requirements = module.ScenarioRequirements(require_tkya_reason_lines=True)
+
+    status, notes = module.validate_artifacts("llm_used_dispatch", tmp_path, requirements)
+
+    assert status == "PASS"
+    assert any("TKYA LLM decision line present" in note for note in notes)
+    assert any("TKYA short reason line present" in note for note in notes)
+
+
+def test_validate_artifacts_requires_runtime_override_when_llm_was_desired(tmp_path: Path) -> None:
+    module = _load_module()
+    _write_base_artifacts(tmp_path)
+    _write_json(
+        tmp_path / "llm_usage.json",
+        {
+            "llm_used": False,
+            "execution_mode": "retrieval_plus_llm",
+            "llm_decision_reason_short": "LLM used: multi-source synthesis required after retrieval.",
+            "tokens_total": 0,
+            "remaining_requests": 10,
+            "reset_time_utc_iso": None,
+        },
+    )
+    (tmp_path / "ask_result.md").write_text(
+        "### ✅ Answer\n"
+        "### 🤖 LLM\n"
+        "- TKYA LLM decision: used\n"
+        "- Reason: LLM used: multi-source synthesis required after retrieval.\n",
+        encoding="utf-8",
+    )
+    requirements = module.ScenarioRequirements(require_tkya_reason_lines=True)
+
+    status, notes = module.validate_artifacts("llm_used_dispatch", tmp_path, requirements)
+
+    assert status == "FAIL"
+    assert any("missing `Runtime override:` line" in note for note in notes)

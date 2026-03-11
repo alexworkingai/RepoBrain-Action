@@ -84,6 +84,16 @@ def _verification_report_lines(verification_report: dict[str, Any]) -> list[str]
 def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     llm_used = bool(audit_summary.get("llm_used", False))
     skip_reason = str(audit_summary.get("llm_skip_reason", "n/a") or "n/a")
+    execution_mode = str(audit_summary.get("execution_mode", "retrieval_only") or "retrieval_only")
+    tkya_decision = "used" if execution_mode == "retrieval_plus_llm" else "not used"
+    decision_reason = str(
+        audit_summary.get(
+            "llm_decision_reason_short",
+            "LLM not used: direct answer available from retrieved evidence.",
+        )
+        or "LLM not used: direct answer available from retrieved evidence."
+    )
+    runtime_override = str(audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a")
     model_id = str(audit_summary.get("llm_model_used", "not used") or "not used")
     prompt = int(audit_summary.get("llm_tokens_prompt", 0) or 0)
     completion = int(audit_summary.get("llm_tokens_completion", 0) or 0)
@@ -108,6 +118,9 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     budget_action = str(audit_summary.get("llm_budget_action", "n/a") or "n/a")
     return [
         "### 🤖 LLM",
+        f"- TKYA LLM decision: {tkya_decision}",
+        f"- Reason: {decision_reason}",
+        *([f"- Runtime override: {runtime_override}"] if runtime_override != "n/a" else []),
         "- LLM used: yes" if llm_used else f"- LLM used: no ({skip_reason})",
         f"- LLM model used: `{model_id}`",
         (

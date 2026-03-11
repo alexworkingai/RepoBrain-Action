@@ -75,6 +75,10 @@ Defined in `repobrain/tky_provider.py`:
 - `route: str` (supported set: `FAST`, `DEEP`, `WAIT`, `REFUSE`, `BLOCK`, `REVIEW`)
 - `compression_stats: dict[str, Any]`
 - `rationale: str`
+- `execution_mode: str` (`retrieval_only|retrieval_plus_llm|verification_first|refuse`)
+- `llm_intent: str` (`none|explain|summarize|review|patch`)
+- `llm_decision_reason_short: str` (short usersafe reason for LLM use/skip)
+- `llm_decision_reason_code: str` (machine-readable reason code)
 
 ### Engine-level contract (local TKYA engine)
 Defined in `repobrain/tky_engine.py` and used by `repobrain/tky_local.py`:
@@ -101,6 +105,10 @@ Policy keys used by TopoCore v5 wiring:
 - `security: EngineSecurity`
 - `rationale: str`
 - `stable_tokens: list[str]`
+- `execution_mode: str` (`retrieval_only|retrieval_plus_llm|verification_first|refuse`)
+- `llm_intent: str` (`none|explain|summarize|review|patch`)
+- `llm_decision_reason_short: str` (short usersafe reason)
+- `llm_decision_reason_code: str` (machine-readable reason code)
 
 Route compatibility contract:
 
@@ -110,6 +118,22 @@ Route compatibility contract:
 - `REFUSE` -> caller should safely refuse request
 - `BLOCK` -> caller should block request by policy
 - `REVIEW` -> caller should use review-style rendering and checks summary
+
+Execution mode compatibility contract:
+
+- `execution_mode=retrieval_only` -> caller should not invoke LLM.
+- `execution_mode=retrieval_plus_llm` -> caller should attempt LLM synthesis unless blocked by runtime policy/budget.
+- `execution_mode=verification_first` -> caller should not invoke LLM before verification state is resolved.
+- `execution_mode=refuse` -> caller should short-circuit to refusal/blocked response.
+
+Precedence rules:
+
+- Safety and route hard-stops always win: `WAIT/REFUSE/BLOCK` imply non-LLM execution.
+- Runtime constraints can override semantic LLM intent:
+  - disabled config, missing token, governor budget, provider outage.
+- When runtime overrides semantic LLM intent, caller must keep:
+  - `llm_decision_reason_short` (semantic reason from TKYA)
+  - `llm_runtime_override_reason` (separate runtime reason in audit/report).
 
 ## Expected Exceptions / Error Handling
 

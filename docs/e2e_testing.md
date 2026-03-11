@@ -41,6 +41,14 @@ The harness uses only `workflow_dispatch --ref <branch>` simulation (no `issue_c
 - `patch.diff` / `patch_parts/*.diff` (for patch-required scenario)
 - `batch_summaries.json` (optional but expected for batch diagnostics)
 
+Markdown reason checks (strict):
+
+- For scenarios producing answer/review markdown, harness validates these lines:
+  - `TKYA LLM decision: ...`
+  - `Reason: ...`
+- If `llm_usage.execution_mode == retrieval_plus_llm` and `llm_used == false`, markdown must also include:
+  - `Runtime override: ...`
+
 Artifacts are downloaded into:
 
 - `artifacts/e2e/<scenario>/<run_id>/`

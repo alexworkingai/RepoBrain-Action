@@ -7,6 +7,7 @@ from typing import Any
 import orjson
 import requests
 
+from .execution_mode import coerce_execution_decision, decide_semantic_execution
 from .hmac_auth import make_nonce, make_ts, sign_body
 from .signatures import build_query_signature
 from .tky_contract import build_remote_request, validate_privacy
@@ -58,7 +59,15 @@ def _parse_retry_after_seconds(value: str | None) -> float | None:
     return max(0.0, seconds)
 
 
-def parse_remote_response(data: dict[str, Any]) -> TKYResult:
+def parse_remote_response(
+    data: dict[str, Any],
+    *,
+    task_type: str = "ask",
+    request_intent: str = "analysis",
+    is_pr_context: bool = False,
+    verification_pending: bool = False,
+    verification_failed: bool = False,
+) -> TKYResult:
     """Parse both legacy flat and new nested response contracts."""
     decision = data.get("decision", {})
     if not isinstance(decision, dict):
@@ -85,11 +94,61 @@ def parse_remote_response(data: dict[str, Any]) -> TKYResult:
     if rationale is None:
         rationale = decision.get("reason")
 
+    top_score = 0.0
+    try:
+        top_score = float(compression_stats.get("top_score", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        top_score = 0.0
+    second_score = 0.0
+    try:
+        second_score = float(compression_stats.get("second_score", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        second_score = 0.0
+    score_gap = top_score - second_score
+
+    execution_mode_raw = data.get("execution_mode")
+    if execution_mode_raw is None:
+        execution_mode_raw = decision.get("execution_mode")
+    llm_intent_raw = data.get("llm_intent")
+    if llm_intent_raw is None:
+        llm_intent_raw = decision.get("llm_intent")
+    reason_short_raw = data.get("llm_decision_reason_short")
+    if reason_short_raw is None:
+        reason_short_raw = decision.get("llm_decision_reason_short")
+    reason_code_raw = data.get("llm_decision_reason_code")
+    if reason_code_raw is None:
+        reason_code_raw = decision.get("llm_decision_reason_code")
+    if execution_mode_raw is None:
+        semantic = decide_semantic_execution(
+            task_type=task_type,
+            route=str(route or "FAST"),
+            selected_count=len(selected_chunk_ids),
+            selected_files=0,
+            top_score=top_score,
+            score_gap=score_gap,
+            is_pr_context=is_pr_context,
+            verification_pending=verification_pending,
+            verification_failed=verification_failed,
+            request_intent=request_intent,
+        )
+    else:
+        semantic = coerce_execution_decision(
+            route=str(route or "FAST"),
+            execution_mode=str(execution_mode_raw) if execution_mode_raw is not None else None,
+            llm_intent=str(llm_intent_raw) if llm_intent_raw is not None else None,
+            reason_short=str(reason_short_raw) if reason_short_raw is not None else None,
+            reason_code=str(reason_code_raw) if reason_code_raw is not None else None,
+        )
+
     return TKYResult(
         selected_chunk_ids=[str(item) for item in selected_chunk_ids],
         route=str(route or "FAST"),
         compression_stats=dict(compression_stats),
         rationale=str(rationale or "Remote TKY decision."),
+        execution_mode=semantic.execution_mode,
+        llm_intent=semantic.llm_intent,
+        llm_decision_reason_short=semantic.reason_short,
+        llm_decision_reason_code=semantic.reason_code,
     )
 
 
@@ -179,6 +238,24 @@ class RemoteTKYProvider(TKYProvider):
         repo_ctx = dict(limits.get("repo_ctx", {}))
         policy = dict(limits.get("policy", {}))
         privacy_mode = str(limits.get("privacy_mode", "signatures_only"))
+        github_context = policy.get("github_context", {})
+        if not isinstance(github_context, dict):
+            github_context = {}
+        verification_context = policy.get("verification_context", {})
+        if not isinstance(verification_context, dict):
+            verification_context = {}
+        verification_checks = verification_context.get("checks", [])
+        verification_pending = False
+        verification_failed = False
+        if isinstance(verification_checks, list):
+            for item in verification_checks:
+                if not isinstance(item, dict):
+                    continue
+                status = str(item.get("status", "")).strip().upper()
+                if status in {"PENDING", "NOT_RUN", "IN_PROGRESS"}:
+                    verification_pending = True
+                if status in {"FAIL", "FAILURE", "ERROR"}:
+                    verification_failed = True
 
         try:
             payload = build_remote_request(
@@ -420,7 +497,18 @@ class RemoteTKYProvider(TKYProvider):
                 error_class=None,
                 fallback_reason_code=None,
             )
-            return parse_remote_response(data)
+            return parse_remote_response(
+                data,
+                task_type=task_type,
+                request_intent=str(policy.get("intent", "analysis") or "analysis"),
+                is_pr_context=bool(github_context.get("is_pr", False))
+                or bool(
+                    isinstance(github_context.get("changed_files"), list)
+                    and github_context.get("changed_files")
+                ),
+                verification_pending=verification_pending,
+                verification_failed=verification_failed,
+            )
 
         diagnostics = self._diag(
             ok=False,

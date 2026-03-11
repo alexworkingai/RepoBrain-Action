@@ -36,6 +36,10 @@ class TKYResult:
     route: str
     compression_stats: dict[str, Any]
     rationale: str
+    execution_mode: str = "retrieval_only"
+    llm_intent: str = "none"
+    llm_decision_reason_short: str = "LLM not used: direct answer available from retrieved evidence."
+    llm_decision_reason_code: str = "DEFAULT_RETRIEVAL_ONLY"
 
 
 class TKYProvider(Protocol):

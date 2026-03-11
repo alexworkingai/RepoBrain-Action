@@ -8,6 +8,7 @@ import shutil
 import sys
 from typing import Any
 
+from .execution_mode import coerce_execution_decision
 from .signatures import build_query_signature
 from .tkya.engine import describe_engine_instance, get_engine
 from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
@@ -192,6 +193,13 @@ class LocalTKYProvider(TKYProvider):
             policy=_build_policy(limits),
         )
         decision = engine.decide(req)
+        execution = coerce_execution_decision(
+            route=decision.route,
+            execution_mode=getattr(decision, "execution_mode", None),
+            llm_intent=getattr(decision, "llm_intent", None),
+            reason_short=getattr(decision, "llm_decision_reason_short", None),
+            reason_code=getattr(decision, "llm_decision_reason_code", None),
+        )
         compression_stats = dict(decision.compression_stats)
         compression_stats.setdefault("tky_engine_local", describe_engine_instance(engine))
         return TKYResult(
@@ -199,4 +207,8 @@ class LocalTKYProvider(TKYProvider):
             route=decision.route,
             compression_stats=compression_stats,
             rationale=decision.rationale,
+            execution_mode=execution.execution_mode,
+            llm_intent=execution.llm_intent,
+            llm_decision_reason_short=execution.reason_short,
+            llm_decision_reason_code=execution.reason_code,
         )

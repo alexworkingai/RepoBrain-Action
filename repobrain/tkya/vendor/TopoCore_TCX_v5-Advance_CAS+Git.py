@@ -37,6 +37,11 @@ except Exception:  # pragma: no cover
     _detect_security_external = None
 
 try:
+    from repobrain.execution_mode import decide_semantic_execution as _decide_execution_external
+except Exception:  # pragma: no cover
+    _decide_execution_external = None
+
+try:
     from repobrain.rd_blockchain import InMemoryChainAdapter
     from repobrain.rd_orchestration import run_rd_pipeline
 except Exception:  # pragma: no cover
@@ -89,6 +94,10 @@ except Exception:  # pragma: no cover
         security: EngineSecurity
         rationale: str
         stable_tokens: list[str]
+        execution_mode: str = "retrieval_only"
+        llm_intent: str = "none"
+        llm_decision_reason_short: str = "LLM not used: direct answer available from retrieved evidence."
+        llm_decision_reason_code: str = "DEFAULT_RETRIEVAL_ONLY"
 
 
 _SECURITY_MARKERS = (
@@ -133,6 +142,61 @@ def _to_int(v: Any, default: int) -> int:
 
 def _clip(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, x))
+
+
+def _semantic_execution(
+    *,
+    task_type: str,
+    route: str,
+    selected_count: int,
+    selected_files: int,
+    top_score: float,
+    score_gap: float,
+    is_pr_context: bool,
+    verification_pending: bool,
+    verification_failed: bool,
+    request_intent: str = "analysis",
+) -> dict[str, str]:
+    if _decide_execution_external is not None:
+        decision = _decide_execution_external(
+            task_type=task_type,
+            route=route,
+            selected_count=selected_count,
+            selected_files=selected_files,
+            top_score=top_score,
+            score_gap=score_gap,
+            is_pr_context=is_pr_context,
+            verification_pending=verification_pending,
+            verification_failed=verification_failed,
+            request_intent=request_intent,
+        )
+        return {
+            "execution_mode": decision.execution_mode,
+            "llm_intent": decision.llm_intent,
+            "llm_decision_reason_short": decision.reason_short,
+            "llm_decision_reason_code": decision.reason_code,
+        }
+    route_norm = str(route or "").strip().upper()
+    if route_norm in {"REFUSE", "BLOCK"}:
+        return {
+            "execution_mode": "refuse",
+            "llm_intent": "none",
+            "llm_decision_reason_short": "LLM not used: request refused by security policy.",
+            "llm_decision_reason_code": "ROUTE_REFUSE_OR_BLOCK",
+        }
+    if route_norm == "WAIT":
+        return {
+            "execution_mode": "verification_first",
+            "llm_intent": "none",
+            "llm_decision_reason_short": "LLM not used: verification required before answer.",
+            "llm_decision_reason_code": "ROUTE_WAIT_VERIFICATION",
+        }
+    return {
+        "execution_mode": "retrieval_only",
+        "llm_intent": "none",
+        "llm_decision_reason_short": "LLM not used: direct answer available from retrieved evidence.",
+        "llm_decision_reason_code": "DEFAULT_RETRIEVAL_ONLY",
+    }
 
 
 def _tokens(text: str) -> list[str]:
@@ -1605,6 +1669,10 @@ class TopoCoreTCXv5AdvanceCASGit:
                 security=sec,
                 rationale="CoreLocked v5: blocked by security policy.",
                 stable_tokens=[],
+                execution_mode="refuse",
+                llm_intent="none",
+                llm_decision_reason_short="LLM not used: request refused by security policy.",
+                llm_decision_reason_code="ROUTE_REFUSE_OR_BLOCK",
             )
 
         max_candidates = max(
@@ -1692,6 +1760,13 @@ class TopoCoreTCXv5AdvanceCASGit:
 
         max_sources = max(1, _to_int(limits.get("max_sources"), 8))
         selected_ids = [candidate.chunk_id for candidate, _ in ranked[:max_sources]]
+        selected_files = len(
+            {
+                str(candidate.file_path).strip()
+                for candidate, _score in ranked[:max_sources]
+                if str(candidate.file_path or "").strip()
+            }
+        )
         verification = self.verifier.plan(task=task, policy=policy, morse=morse)
         compat = self.v2_compat.enrich(policy=policy, limits=limits)
         trace = self._build_hash_only_trace(
@@ -1724,6 +1799,19 @@ class TopoCoreTCXv5AdvanceCASGit:
             str(rd_summary.get("rd_stable_token", "")),
         }
         stable = sorted(token for token in stable_tokens_raw if token)[:12]
+        second_score = float(ranked_scores[1]) if len(ranked_scores) > 1 else 0.0
+        semantic = _semantic_execution(
+            task_type=task,
+            route=route,
+            selected_count=len(selected_ids),
+            selected_files=selected_files,
+            top_score=top_score,
+            score_gap=top_score - second_score,
+            is_pr_context=bool(github_context.is_pr),
+            verification_pending=int(verification.get("pending_count", 0)) > 0,
+            verification_failed=int(verification.get("fail_count", 0)) > 0,
+            request_intent=str(policy.get("intent", "analysis") or "analysis"),
+        )
         return EngineDecision(
             route=route,
             selected_chunk_ids=selected_ids,
@@ -1808,6 +1896,10 @@ class TopoCoreTCXv5AdvanceCASGit:
                 f"RD={rd_summary.get('rd_status', 'disabled')}."
             ),
             stable_tokens=stable,
+            execution_mode=str(semantic["execution_mode"]),
+            llm_intent=str(semantic["llm_intent"]),
+            llm_decision_reason_short=str(semantic["llm_decision_reason_short"]),
+            llm_decision_reason_code=str(semantic["llm_decision_reason_code"]),
         )
 
     def run_topological_calculation(self, payload: dict[str, Any]) -> dict[str, Any]:

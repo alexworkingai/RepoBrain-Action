@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from .execution_mode import decide_semantic_execution
 from .security import detect_injection_or_exfiltration
 from .tky_engine import (
     EngineCandidate,
@@ -50,6 +51,10 @@ class TopoCoreLite(TKYEngine):
                 security=security,
                 rationale="CoreLocked: blocked by security policy.",
                 stable_tokens=[],
+                execution_mode="refuse",
+                llm_intent="none",
+                llm_decision_reason_short="LLM not used: request refused by security policy.",
+                llm_decision_reason_code="ROUTE_REFUSE_OR_BLOCK",
             )
 
         ranked = sorted(req.candidates, key=lambda c: c.score_local, reverse=True)
@@ -67,6 +72,36 @@ class TopoCoreLite(TKYEngine):
 
         selected_ids = self._select_candidates(ranked, req.limits, top_score=top_score)
         stable_tokens = self._stable_tokens(req.query.signature, selected_ids)
+        selected_id_set = set(selected_ids)
+        selected_candidates = [candidate for candidate in ranked if candidate.chunk_id in selected_id_set]
+        selected_files = len(
+            {
+                str(candidate.file_path).strip()
+                for candidate in selected_candidates
+                if str(candidate.file_path or "").strip()
+            }
+        )
+        github_ctx = req.policy.get("github_context", {})
+        is_pr_context = False
+        if isinstance(github_ctx, dict):
+            if bool(github_ctx.get("is_pr", False)):
+                is_pr_context = True
+            changed_files = github_ctx.get("changed_files", [])
+            if isinstance(changed_files, list) and changed_files:
+                is_pr_context = True
+        verification_pending, verification_failed = self._verification_needs_gate(req.policy)
+        semantic = decide_semantic_execution(
+            task_type=req.task_type,
+            route=route,
+            selected_count=len(selected_ids),
+            selected_files=max(0, selected_files),
+            top_score=top_score,
+            score_gap=gap,
+            is_pr_context=is_pr_context,
+            verification_pending=verification_pending,
+            verification_failed=verification_failed,
+            request_intent=str(req.policy.get("intent", "analysis") or "analysis"),
+        )
 
         rationale = {
             "FAST": "CoreLocked: high-confidence structural match.",
@@ -91,7 +126,33 @@ class TopoCoreLite(TKYEngine):
             security=security,
             rationale=rationale,
             stable_tokens=stable_tokens,
+            execution_mode=semantic.execution_mode,
+            llm_intent=semantic.llm_intent,
+            llm_decision_reason_short=semantic.reason_short,
+            llm_decision_reason_code=semantic.reason_code,
         )
+
+    def _verification_needs_gate(self, policy: dict[str, Any]) -> tuple[bool, bool]:
+        verification = policy.get("verification_context", {})
+        if not isinstance(verification, dict):
+            return False, False
+        checks = verification.get("checks", [])
+        pending = False
+        failed = False
+        if isinstance(checks, list):
+            for item in checks:
+                if not isinstance(item, dict):
+                    continue
+                status = str(item.get("status", "")).strip().upper()
+                if status in {"PENDING", "NOT_RUN", "IN_PROGRESS"}:
+                    pending = True
+                if status in {"FAIL", "FAILURE", "ERROR"}:
+                    failed = True
+        if bool(verification.get("verification_pending", False)):
+            pending = True
+        if bool(verification.get("verification_failed", False)):
+            failed = True
+        return pending, failed
 
     def _select_candidates(
         self,
