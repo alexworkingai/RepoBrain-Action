@@ -22,11 +22,15 @@ def score_complexity(
     candidate_count = len(candidates or [])
 
     if normalized_intent == "patch":
-        score += 30
+        score += 35
     if normalized_task == "review":
-        score += 25
+        score += 35
+    if normalized_task == "fix":
+        score += 30
     if normalized_route == "DEEP":
         score += 25
+        if normalized_task in {"ask", "explain"}:
+            score += 10
 
     changed_files_raw = ctx.get("changed_files", [])
     changed_files = changed_files_raw if isinstance(changed_files_raw, list) else []
@@ -53,12 +57,59 @@ def choose_model(
     *,
     model_high: str = "openai/gpt-4.1",
     model_low: str = "openai/gpt-4.1-mini",
+    task_type: str = "",
+    intent: str = "",
+    route: str = "",
+    execution_mode: str = "",
+    llm_intent: str = "",
+    synthesis_required: bool = False,
 ) -> tuple[str, str]:
     """Choose model id and tier from complexity score."""
+    task_norm = str(task_type or "").strip().lower()
+    intent_norm = str(intent or "").strip().lower()
+    route_norm = str(route or "").strip().upper()
+    mode_norm = str(execution_mode or "").strip().lower()
+    llm_intent_norm = str(llm_intent or "").strip().lower()
+
+    if intent_norm == "patch" or llm_intent_norm == "patch":
+        return model_high, "high"
+    if task_norm in {"review", "fix"} or llm_intent_norm == "review":
+        return model_high, "high"
+    if mode_norm == "retrieval_plus_llm" and route_norm == "DEEP" and synthesis_required:
+        return model_high, "high"
+
     bounded = max(0, min(100, int(score)))
     if bounded >= 35:
         return model_high, "high"
     return model_low, "low"
+
+
+def model_selection_reason(
+    *,
+    score: int,
+    task_type: str,
+    intent: str,
+    route: str,
+    execution_mode: str,
+    llm_intent: str,
+    synthesis_required: bool,
+) -> str:
+    task_norm = str(task_type or "").strip().lower()
+    intent_norm = str(intent or "").strip().lower()
+    route_norm = str(route or "").strip().upper()
+    mode_norm = str(execution_mode or "").strip().lower()
+    llm_intent_norm = str(llm_intent or "").strip().lower()
+    bounded = max(0, min(100, int(score)))
+
+    if intent_norm == "patch" or llm_intent_norm == "patch":
+        return "complexity_policy: patch intent prefers openai/gpt-4.1"
+    if task_norm in {"review", "fix"} or llm_intent_norm == "review":
+        return "complexity_policy: review/fix path prefers openai/gpt-4.1"
+    if mode_norm == "retrieval_plus_llm" and route_norm == "DEEP" and synthesis_required:
+        return "complexity_policy: DEEP multi-source synthesis prefers openai/gpt-4.1"
+    if bounded >= 35:
+        return "complexity_policy: score>=35 selects openai/gpt-4.1"
+    return "complexity_policy: lightweight request allows openai/gpt-4.1-mini"
 
 
 def _scaled_budget(score: int, low: int, high: int) -> int:

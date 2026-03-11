@@ -92,6 +92,8 @@ When review/fix verification runs:
 - `artifacts/patch_parts/*.diff` stores per-batch patch parts when batch LLM fix mode is enabled
 - `artifacts/check_run_payload.json` is written when PR check payload is prepared
 - `artifacts/diagnostic_summary.md` stores grouped usersafe diagnostics for answer/review/fix comments
+- `artifacts/review_validation.json` stores evidence-backed review validation output (confirmed findings vs possible signals)
+- `artifacts/patch_validation.json` stores patch grounding validation result before publication
 - `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
 - `artifacts/llm_http_debug.json` is written for workflow_dispatch fix failures with usersafe provider diagnostics
 - `artifacts/embeddings_usage.json` is written when embeddings are enabled
@@ -120,6 +122,7 @@ When review/fix verification runs:
 - `policy_issue_only_enabled`
 - `policy_allowed`
 - `model_id`, `tier`
+- `preferred_model_id`, `model_selection_reason`, `model_downgrade_reason`
 - `primary_model_id`, `effective_model_id`, `fallback_used`
 - `provider_http_status`, `provider_error_type`
 - `calls_this_run`
@@ -165,6 +168,23 @@ When review/fix verification runs:
   - `has_json_envelope`
   - `has_no_patch`
 - `extraction_path_used`, `response_chars`, `extracted_len`
+
+`artifacts/review_validation.json` (usersafe) includes:
+
+- `risk_level`
+- `confirmed_findings`
+- `possible_signals`
+- `validation.confirmed_findings_count`
+- `validation.possible_signals_count`
+
+`artifacts/patch_validation.json` (usersafe) includes:
+
+- `status` (`valid_patch|no_patch|patch_validation_failed|provider_failed`)
+- `reason_code`, `reason_short`
+- `valid`
+- `touched_files`
+- `placeholder_detected`
+- `grounded`
 
 `artifacts/index_embeddings_evidence.json` (usersafe) includes:
 

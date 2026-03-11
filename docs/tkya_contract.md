@@ -135,6 +135,27 @@ Precedence rules:
   - `llm_decision_reason_short` (semantic reason from TKYA)
   - `llm_runtime_override_reason` (separate runtime reason in audit/report).
 
+## Orchestration Layer (Outside TKYA v5)
+
+Sprint-level quality policy is implemented around TKYA without changing TKYA vendor internals:
+
+- Security calibration:
+  - `protected_zone` -> hard block/refuse (TKYA internals, hidden prompts, protected files/secrets).
+  - `repo_analysis` -> allow normal repository/PR analysis unless exfiltration intent is explicit.
+- PR grounding:
+  - PR changed-files metadata is treated as authoritative context for ask/review/fix in PR flows.
+  - `answer_grounding_mode` tracks `pr_metadata|retrieval|hybrid`.
+- Review validation:
+  - severe findings are kept as confirmed only when evidence-backed.
+  - weak unsupported signals are downgraded to possible signals.
+- Patch validation:
+  - patch output is validated before publish (`valid_patch|no_patch|patch_validation_failed|provider_failed`).
+  - placeholder/unrelated patches are suppressed.
+- Model policy:
+  - review/fix/patch and complex DEEP synthesis prefer `openai/gpt-4.1`;
+  - lighter calls may use `openai/gpt-4.1-mini`;
+  - budget governor may downgrade with explicit reason.
+
 ## Expected Exceptions / Error Handling
 
 ### Remote TKY

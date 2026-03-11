@@ -58,6 +58,7 @@ Usersafe Ask output:
 * Ask/Explain/Locate comments use route-aware templates (`Answer`, `Needs verification`, `Refused`, `Blocked`).
 * Comments include only file locators and usersafe diagnostics (no raw source snippets, no env/token dumps).
 * Diagnostics are grouped for readability (Decision, Runtime/Policy, LLM, Embeddings, Retrieval, Verification, Provider/Quota) with full detail preserved in artifacts.
+* In PR context, changed-files metadata is authoritative grounding and appears before retrieval-only evidence when relevant.
 * If rendered output is too large, RepoBrain truncates the comment and writes full markdown to `artifacts/ask_result.md`.
 
 Retrieval quality / privacy:
@@ -80,6 +81,9 @@ Retrieval quality / privacy:
 Security:
 
 * RepoBrain does not index common secret files, large files, or binary files.
+* Security orchestration is calibrated into:
+  * protected-zone hard guard (`TKYA` internals, hidden prompts, protected files/secrets) -> hard block/refuse
+  * general repo-analysis guard (ask/review/fix over repo/PR metadata) -> allowed unless explicit exfiltration intent is detected
 * Prompt-injection / exfiltration-like requests are blocked with a safe refusal response.
 * Trace data is hash/signature-based; raw text is not stored by default.
 
@@ -188,8 +192,9 @@ GitHub Models LLM (optional):
 * RepoBrain uses GitHub Models endpoint with `GITHUB_TOKEN`:
   * `https://models.github.ai/inference/chat/completions`
 * Model selection is deterministic:
-  * complex tasks -> `openai/gpt-4.1` (high tier)
+  * review/fix/patch and complex DEEP synthesis -> `openai/gpt-4.1` (high tier)
   * simple tasks -> `openai/gpt-4.1-mini` (low tier)
+  * governor can downgrade to mini when remaining budget is low (reported explicitly)
 * Strict gating (safe default):
   * LLM is never called for routes `WAIT`/`REFUSE`/`BLOCK`
   * `locate` skips LLM by default; opt-in via `RB_LLM_ALLOW_LOCATE=1`
@@ -206,6 +211,7 @@ GitHub Models LLM (optional):
     * In PR discussion run `/repobrain ask what files changed in this PR?`
     * Expect `TKYA LLM decision: used`, non-empty `Reason`, no `Runtime override` disabled message, and visible model/tokens.
 * Reports include LLM diagnostics:
+  * preferred model, effective model, model selection reason, downgrade reason
   * model id
   * token usage (`prompt/completion/total`, reported or estimated)
   * remaining requests / reset time (from `x-ratelimit-*` headers when available)
@@ -280,6 +286,10 @@ PR Review Pro:
 
 * Review output includes file links pinned to PR head SHA and risk-level scoring (low/medium/high).
 * Patch-based heuristics detect conflict markers, TODO/FIXME, possible secret leakage, and workflow risk signals.
+* Review findings are split into:
+  * confirmed findings (evidence-backed)
+  * possible signals (heuristic indicators downgraded when evidence is weak)
+* Fix patch output is validated before publication (`valid_patch|no_patch|patch_validation_failed|provider_failed`); placeholder or unrelated patches are suppressed.
 * Patch text is analyzed at runtime only and is not stored in audit artifacts.
 
 2-minute setup:

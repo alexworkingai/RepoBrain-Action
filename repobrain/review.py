@@ -94,6 +94,7 @@ def build_pr_review(
     paths: list[str] = []
     risks: list[str] = []
     notes: list[str] = []
+    risk_items: list[dict[str, object]] = []
     risk_score = 0
     high_signal = False
 
@@ -118,13 +119,37 @@ def build_pr_review(
 
         path_lower = path.lower()
         if path_lower.startswith(".github/workflows/"):
-            risks.append("CI/CD changed: verify workflows")
+            risk_message = "CI/CD changed: verify workflows"
+            risks.append(risk_message)
+            risk_items.append(
+                {
+                    "message": risk_message,
+                    "severity": "medium",
+                    "evidence": [{"kind": "file_path", "path": path, "source": "path_rule"}],
+                }
+            )
             risk_score += 2
         if path_lower == "pyproject.toml" or path_lower.startswith("requirements"):
-            risks.append("Dependencies changed: verify install and tests")
+            risk_message = "Dependencies changed: verify install and tests"
+            risks.append(risk_message)
+            risk_items.append(
+                {
+                    "message": risk_message,
+                    "severity": "medium",
+                    "evidence": [{"kind": "file_path", "path": path, "source": "path_rule"}],
+                }
+            )
             risk_score += 2
         if any(token in path_lower for token in ("auth", "security", "crypto")):
-            risks.append("Security-sensitive area changed")
+            risk_message = "Security-sensitive area changed"
+            risks.append(risk_message)
+            risk_items.append(
+                {
+                    "message": risk_message,
+                    "severity": "high",
+                    "evidence": [{"kind": "file_path", "path": path, "source": "path_rule"}],
+                }
+            )
             risk_score += 2
         if path_lower.startswith("tests/"):
             notes.append("Tests updated: check that coverage remains meaningful")
@@ -135,6 +160,19 @@ def build_pr_review(
         if isinstance(patch, str) and patch:
             patch_risks, patch_notes, patch_score, patch_high = _scan_patch_for_signals(patch)
             risks.extend(patch_risks)
+            for risk_message in patch_risks:
+                severity = (
+                    "high"
+                    if ("Merge conflict markers" in risk_message or "secret leakage" in risk_message.lower())
+                    else "medium"
+                )
+                risk_items.append(
+                    {
+                        "message": risk_message,
+                        "severity": severity,
+                        "evidence": [{"kind": "patch", "path": path, "source": "patch_scan"}],
+                    }
+                )
             notes.extend(patch_notes)
             risk_score += patch_score
             high_signal = high_signal or patch_high
@@ -192,6 +230,7 @@ def build_pr_review(
         "files_changed": files_changed,
         "files_block": files_block,
         "risks": risks,
+        "risk_items": risk_items,
         "risk_level": risk_level,
         "suggested_tests": suggested_tests,
         "notes": notes,
