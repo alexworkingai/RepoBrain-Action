@@ -301,14 +301,20 @@ class RepoBrainConfig:
         env_source = source or os.environ
         warnings: list[str] = []
 
+        backend_raw = env_str("RB_TKYA_BACKEND", "lite", source=env_source).strip().lower()
+        if backend_raw == "v2":
+            warnings.append("RB_TKYA_BACKEND=v2 is deprecated; normalized to 'original'.")
+            tkya_backend = "original"
+        elif backend_raw in {"lite", "v5", "original"}:
+            tkya_backend = backend_raw
+        else:
+            warnings.append(
+                f"Invalid RB_TKYA_BACKEND='{backend_raw}' -> fallback to default 'lite'."
+            )
+            tkya_backend = "lite"
+
         tkya = TKYAConfig(
-            backend=env_enum(
-                "RB_TKYA_BACKEND",
-                "lite",
-                ("lite", "v2", "v5", "original"),
-                source=env_source,
-                warnings=warnings,
-            ),
+            backend=tkya_backend,
             allow_remote=env_bool("RB_TKYA_ALLOW_REMOTE", False, source=env_source, warnings=warnings),
             strict=env_bool("RB_TKYA_STRICT", False, source=env_source, warnings=warnings),
             strict_v5=env_bool("RB_TKYA_STRICT_V5", False, source=env_source, warnings=warnings),
@@ -799,7 +805,13 @@ def load_config(root: Path, source: Mapping[str, str] | None = None) -> RepoBrai
 
 
 RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
-    EnvVarSpec("RB_TKYA_BACKEND", "enum", "lite", "TKYA backend selection.", ("lite", "v2", "v5", "original")),
+    EnvVarSpec(
+        "RB_TKYA_BACKEND",
+        "enum",
+        "lite",
+        "TKYA backend selection (active: lite or v5; legacy aliases are normalized internally).",
+        ("lite", "v5", "original"),
+    ),
     EnvVarSpec("RB_TKYA_ALLOW_REMOTE", "bool", "0", "Allow remote/network operations in TKYA."),
     EnvVarSpec("RB_TKYA_STRICT", "bool", "0", "Strict TKYA load mode."),
     EnvVarSpec("RB_TKYA_STRICT_V5", "bool", "0", "Strict v5 vendor load mode."),

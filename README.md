@@ -56,7 +56,8 @@ Index cache / prebuild:
 Usersafe Ask output:
 
 * Ask/Explain/Locate comments use route-aware templates (`Answer`, `Needs verification`, `Refused`, `Blocked`).
-* Comments include only file locators and audit metadata (no raw source snippets, no env/token dumps).
+* Comments include only file locators and usersafe diagnostics (no raw source snippets, no env/token dumps).
+* Diagnostics are grouped for readability (Decision, Runtime/Policy, LLM, Embeddings, Retrieval, Verification, Provider/Quota) with full detail preserved in artifacts.
 * If rendered output is too large, RepoBrain truncates the comment and writes full markdown to `artifacts/ask_result.md`.
 
 Retrieval quality / privacy:
@@ -128,7 +129,8 @@ Local TKYA backend options:
 
 * Safe default remains `RB_TKYA_BACKEND=lite`.
 * Advanced local core: set `RB_TKYA_BACKEND=v5` and use `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`.
-* Legacy/proprietary backend remains optional via `RB_TKYA_BACKEND=original` with `repobrain/tkya/vendor/TopoCore_TCX_v2-CAS.py`.
+* Active documented backend path is v5; `lite` stays as safe fallback.
+* `RB_TKYA_BACKEND=original` is retained for internal legacy-compatibility only and is not part of the recommended production setup.
 * Remote/network path is disabled by default for local vendor backends: `RB_TKYA_ALLOW_REMOTE=0`.
 * Strict startup flags:
   * `RB_TKYA_STRICT_V5=1` for v5
@@ -137,10 +139,6 @@ Local TKYA backend options:
 * Optional canary rollout for v5 backend:
   * `RB_TKYA_V5_CANARY_PERCENT=0..100`
   * `RB_TKYA_CANARY_KEY=<stable-bucket-key>`
-* Optional v2 compatibility shim for targeted adapters:
-  * `RB_TKYA_ENABLE_V2_SHIM=1`
-  * `RB_TKYA_V2_SHIM_PATH=/path/to/TopoCore_TCX_v2-CAS.py`
-  * `RB_TKYA_V2_SHIM_STRICT=1`
 * v5 trace is hash-only and versioned (`trace_schema_version=1.1`, policy `1.x`).
 * Detailed permanent architecture doc: `docs/topocore_v5_architecture.md`.
 

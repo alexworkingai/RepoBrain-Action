@@ -240,9 +240,12 @@ def build_messages_for_ask(
     *,
     query: str,
     locators: list[EvidenceItem],
+    pr_changed_files: list[str] | None = None,
     max_input_tokens: int,
     selected_snippets: list[str] | None = None,
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    pr_lines = [f"- PR changed: {path}" for path in (pr_changed_files or []) if str(path).strip()]
+    locator_lines = pr_lines[:40] + _locator_lines(locators)
     return _build_messages(
         system_content=(
             "You are RepoBrain assistant. Use only provided metadata and snippets. "
@@ -250,7 +253,7 @@ def build_messages_for_ask(
         ),
         task_line="Task: answer repository question with evidence references.",
         query=query,
-        locators_lines=_locator_lines(locators),
+        locators_lines=locator_lines,
         diff_hunks=[],
         selected_snippets=[str(item) for item in (selected_snippets or [])],
         max_input_tokens=max_input_tokens,

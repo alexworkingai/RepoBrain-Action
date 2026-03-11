@@ -27,6 +27,7 @@ def test_render_answer_markdown_includes_llm_metadata() -> None:
             "llm_tokens_completion": 44,
             "llm_tokens_total": 144,
             "llm_usage_estimated": False,
+            "llm_calls_this_run": 1,
             "llm_remaining_requests": 33,
             "llm_remaining_is_estimate": False,
             "llm_reset_time_utc_iso": "2026-03-05T23:59:59Z",
@@ -47,4 +48,4 @@ def test_render_answer_markdown_includes_llm_metadata() -> None:
     assert "Requests remaining today: 33" in md
     assert "Reset time UTC: 2026-03-05T23:59:59Z" in md
     assert "Prompt budget: used~800 / limit=1200" in md
-
+    assert "Models used: openai/gpt-4.1 (1 call)" in md

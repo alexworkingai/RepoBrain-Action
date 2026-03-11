@@ -55,6 +55,15 @@ Markdown reason checks (strict):
 - If `llm_usage.execution_mode == retrieval_plus_llm` and `llm_used == false`, markdown must also include:
   - `Runtime override: ...`
 
+Diagnostic UX checks:
+
+- answer/review/fix markdown should include grouped diagnostics table sections.
+- diagnostics should include PR grounding fields when PR context is present:
+  - `PR metadata used`
+  - `Answer grounding mode`
+  - `PR changed files`
+- when PR metadata is used for ask/explain, changed file list should appear before generic retrieval explanation text.
+
 Artifacts are downloaded into:
 
 - `artifacts/e2e/<scenario>/<run_id>/`

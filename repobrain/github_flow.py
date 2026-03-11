@@ -35,6 +35,7 @@ from repobrain.github_publisher import (
 from repobrain.index_store import build_index, load_index, load_index_embeddings
 from repobrain.output_md import (
     enforce_comment_limit,
+    render_diagnostic_summary_markdown,
     render_answer_markdown,
     render_error_markdown,
     render_patch_markdown,
@@ -658,6 +659,13 @@ def _write_ask_result_markdown(repo_root: Path, markdown: str) -> Path:
     return path
 
 
+def _write_diagnostic_summary_markdown(repo_root: Path, markdown: str) -> Path:
+    path = repo_root / "artifacts" / "diagnostic_summary.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(markdown, encoding="utf-8")
+    return path
+
+
 def _env_true(name: str, default: bool = False) -> bool:
     cfg = _runtime_env_cfg()
     mapping: dict[str, bool] = {
@@ -987,6 +995,11 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "llm_used": bool(llm_meta.get("llm_used", False)),
         "execution_mode": str(llm_meta.get("execution_mode", "retrieval_only") or "retrieval_only"),
+        "answer_grounding_mode": str(
+            llm_meta.get("answer_grounding_mode", "n/a") or "n/a"
+        ),
+        "pr_changed_files_count": int(llm_meta.get("pr_changed_files_count", 0) or 0),
+        "pr_metadata_used": bool(llm_meta.get("pr_metadata_used", False)),
         "llm_intent": str(llm_meta.get("llm_intent", "none") or "none"),
         "llm_decision_reason_short": str(
             llm_meta.get(
@@ -1906,6 +1919,7 @@ def _maybe_generate_llm_text(
             messages, budgeting_stats = build_messages_for_ask(
                 query=query,
                 locators=locators,
+                pr_changed_files=changed_files,
                 max_input_tokens=max_input_tokens,
                 selected_snippets=selected_snippets,
             )
@@ -4105,6 +4119,144 @@ def _build_explain_answer(evidence: list[EvidenceItem], question: str) -> str:
     return "\n".join(lines)
 
 
+def _collect_pr_changed_files_from_context(github_context: dict[str, Any] | None) -> list[str]:
+    if not isinstance(github_context, dict):
+        return []
+    raw = github_context.get("changed_files", [])
+    if not isinstance(raw, list):
+        return []
+    files = [str(item).strip() for item in raw if str(item).strip()]
+    return sorted(set(files))
+
+
+def _enrich_github_context_with_pr_metadata(
+    *,
+    github_context_seed: dict[str, Any] | None,
+) -> dict[str, Any]:
+    context = dict(github_context_seed or {})
+    changed_files = _collect_pr_changed_files_from_context(context)
+    pr_number = _parse_optional_int(context.get("pr_number"))
+    is_pr = bool(context.get("is_pr", False) or pr_number is not None)
+    context["is_pr"] = is_pr
+
+    needs_files = is_pr and not changed_files
+    needs_head_base = is_pr and (
+        not str(context.get("head_sha", "") or "").strip()
+        or not str(context.get("base_sha", "") or "").strip()
+    )
+    if not (needs_files or needs_head_base):
+        return context
+
+    repo = extract_repo_from_env()
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if not repo or not token or pr_number is None:
+        return context
+
+    client = GitHubClient(repo=repo, token=token)
+    if needs_files:
+        files_payload = client.get_pull_files(pr_number)
+        files: list[str] = []
+        diff_hunks: list[str] = []
+        for item in files_payload:
+            if not isinstance(item, dict):
+                continue
+            filename = str(item.get("filename", "") or "").strip()
+            if filename:
+                files.append(filename)
+            patch = item.get("patch")
+            if isinstance(patch, str):
+                patch_clean = patch.strip()
+                if patch_clean:
+                    diff_hunks.append(patch_clean)
+        if files:
+            context["changed_files"] = sorted(set(files))
+        existing_hunks = context.get("diff_hunks")
+        has_hunks = isinstance(existing_hunks, list) and any(str(item).strip() for item in existing_hunks)
+        if diff_hunks and not has_hunks:
+            context["diff_hunks"] = diff_hunks
+
+    if needs_head_base:
+        pull_payload = client.get_pull(pr_number)
+        head_raw = pull_payload.get("head", {}) if isinstance(pull_payload, dict) else {}
+        base_raw = pull_payload.get("base", {}) if isinstance(pull_payload, dict) else {}
+        head = head_raw if isinstance(head_raw, dict) else {}
+        base = base_raw if isinstance(base_raw, dict) else {}
+        if not str(context.get("head_sha", "") or "").strip():
+            context["head_sha"] = str(head.get("sha", "") or "")
+        if not str(context.get("base_sha", "") or "").strip():
+            context["base_sha"] = str(base.get("sha", "") or "")
+        if not str(context.get("head_ref", "") or "").strip():
+            context["head_ref"] = str(head.get("ref", "") or "")
+        if not str(context.get("base_ref", "") or "").strip():
+            context["base_ref"] = str(base.get("ref", "") or "")
+
+    return context
+
+
+def _should_use_pr_metadata_grounding(
+    *,
+    cmd: str,
+    question: str,
+    github_context: dict[str, Any] | None,
+    execution_mode: str,
+    llm_intent: str,
+) -> bool:
+    if cmd not in {"ask", "explain"}:
+        return False
+    changed_files = _collect_pr_changed_files_from_context(github_context)
+    if not changed_files:
+        return False
+    if not isinstance(github_context, dict) or not bool(github_context.get("is_pr", False)):
+        return False
+
+    intent_norm = str(llm_intent or "").strip().lower()
+    mode_norm = str(execution_mode or "").strip().lower()
+    if intent_norm in {"summarize", "review", "explain"}:
+        return True
+    if mode_norm == "retrieval_plus_llm":
+        return True
+
+    question_norm = str(question or "").strip().lower()
+    semantic_markers = (
+        "pr",
+        "pull request",
+        "diff",
+        "change",
+        "changed",
+        "file",
+        "files",
+        "измен",
+        "файл",
+        "пул",
+    )
+    return any(marker in question_norm for marker in semantic_markers)
+
+
+def _prepend_pr_metadata_to_answer(
+    *,
+    answer_text: str,
+    changed_files: list[str],
+) -> str:
+    if not changed_files:
+        return answer_text
+    lines = ["PR metadata (changed files):"]
+    for path in changed_files[:12]:
+        lines.append(f"- `{path}`")
+    if len(changed_files) > 12:
+        lines.append(f"- +{len(changed_files) - 12} more")
+    prefix = "\n".join(lines)
+    clean_answer = answer_text.strip()
+    if not clean_answer:
+        return prefix
+    return f"{prefix}\n\n{clean_answer}"
+
+
+def _resolve_answer_grounding_mode(*, pr_metadata_used: bool, evidence_count: int) -> str:
+    if not pr_metadata_used:
+        return "retrieval"
+    return "hybrid" if int(evidence_count) > 0 else "pr_metadata"
+
+
 def _build_qa_markdown(
     *,
     repo_root: Path,
@@ -4136,6 +4288,9 @@ def _build_qa_markdown(
     remote_fail_open = bool(getattr(cfg, "tky_remote_fail_open", True))
     index_path = resolved_repo_root / "artifacts" / "index-package.zip"
     question = question_from_command(cmd, query)
+    qa_github_context = _enrich_github_context_with_pr_metadata(
+        github_context_seed=github_context_seed,
+    )
     chunks, index_source, index_elapsed_ms, chunk_vectors_by_id, vectors_meta = _normalize_chunks_meta(
         load_or_build_chunks_with_meta(resolved_repo_root, index_path, governor=governor)
     )
@@ -4192,7 +4347,7 @@ def _build_qa_markdown(
         tky_mode_requested=effective_tky_mode,
         remote_fail_open=remote_fail_open,
         timings_ms=(audit.get("timings_ms") if isinstance(audit, dict) else None),
-        github_context=github_context_seed,
+        github_context=qa_github_context,
         verification_context=verification_context_seed,
     )
     audit_summary = dict(result.audit_summary)
@@ -4261,10 +4416,28 @@ def _build_qa_markdown(
         audit_summary["embed_used"] = False
     if "embed_reason" not in audit_summary:
         audit_summary["embed_reason"] = "n/a"
-    if github_context_seed:
-        touched_files = github_context_seed.get("changed_files", [])
-        if isinstance(touched_files, list) and touched_files:
-            audit_summary["touched_files"] = [str(item) for item in touched_files if str(item).strip()]
+    changed_files_from_pr = _collect_pr_changed_files_from_context(qa_github_context)
+    if changed_files_from_pr:
+        audit_summary["touched_files"] = changed_files_from_pr
+        audit_summary["pr_changed_files_count"] = len(changed_files_from_pr)
+    else:
+        audit_summary["pr_changed_files_count"] = 0
+
+    semantic_llm_intent = str(audit_summary.get("llm_intent", "none") or "none")
+    semantic_execution_mode = str(audit_summary.get("execution_mode", "retrieval_only") or "retrieval_only")
+    pr_metadata_used = _should_use_pr_metadata_grounding(
+        cmd=cmd,
+        question=question,
+        github_context=qa_github_context,
+        execution_mode=semantic_execution_mode,
+        llm_intent=semantic_llm_intent,
+    )
+    audit_summary["pr_metadata_used"] = pr_metadata_used
+    audit_summary["answer_grounding_mode"] = _resolve_answer_grounding_mode(
+        pr_metadata_used=pr_metadata_used,
+        evidence_count=len(result.evidence),
+    )
+
     evidence_out = result.evidence
     answer_text_out = result.answer_text
     if cmd == "locate":
@@ -4289,13 +4462,23 @@ def _build_qa_markdown(
         llm_decision_reason_code=str(
             audit_summary.get("llm_decision_reason_code", "DEFAULT_RETRIEVAL_ONLY")
         ),
-        github_context=dict(github_context_seed or {}),
+        github_context=dict(qa_github_context or {}),
         locators=evidence_out,
         candidates_count=int(audit_summary.get("retrieved", len(evidence_out)) or 0),
         governor=governor,
     )
     if llm_text and cmd in {"ask", "explain"}:
         answer_text_out = llm_text
+    if pr_metadata_used and cmd in {"ask", "explain"} and changed_files_from_pr:
+        answer_text_out = _prepend_pr_metadata_to_answer(
+            answer_text=answer_text_out,
+            changed_files=changed_files_from_pr,
+        )
+    llm_meta["pr_changed_files_count"] = int(audit_summary.get("pr_changed_files_count", 0) or 0)
+    llm_meta["pr_metadata_used"] = bool(audit_summary.get("pr_metadata_used", False))
+    llm_meta["answer_grounding_mode"] = str(
+        audit_summary.get("answer_grounding_mode", "retrieval") or "retrieval"
+    )
     _merge_llm_meta(audit_summary, llm_meta)
     desired_llm = str(audit_summary.get("execution_mode", "retrieval_only")) == "retrieval_plus_llm"
     if desired_llm and not bool(llm_meta.get("llm_used", False)):
@@ -4326,6 +4509,11 @@ def _build_qa_markdown(
         audit["remote_skipped_reason"] = str(
             audit_summary.get("remote_skipped_reason", remote_skipped_reason or "n/a") or "n/a"
         )
+        audit["pr_changed_files_count"] = int(audit_summary.get("pr_changed_files_count", 0) or 0)
+        audit["pr_metadata_used"] = bool(audit_summary.get("pr_metadata_used", False))
+        audit["answer_grounding_mode"] = str(
+            audit_summary.get("answer_grounding_mode", "retrieval") or "retrieval"
+        )
         audit["tky_remote_status"] = audit_summary.get("tky_remote_status", None)
         audit["tky_fallback_reason"] = str(audit_summary.get("tky_fallback_reason", "n/a") or "n/a")
         audit["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
@@ -4355,6 +4543,12 @@ def _build_qa_markdown(
         audit["embeddings_index_reason"] = index_embeddings_reason
         audit["embeddings_runtime"] = dict(embeddings_runtime)
         audit["embeddings_usage_payload"] = _build_embeddings_usage_payload(embeddings_meta)
+
+    diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
+    diagnostic_path = _write_diagnostic_summary_markdown(resolved_repo_root, diagnostic_markdown)
+    audit_summary["diagnostic_summary_artifact"] = "artifacts/diagnostic_summary.md"
+    if audit is not None:
+        audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
 
     t0 = time.perf_counter()
     final_route = str(audit_summary.get("route_final", result.tky.route) or result.tky.route).strip().upper()
@@ -4821,6 +5015,10 @@ def _build_review_markdown(
         path = _write_batch_summaries(repo_root, payload)
         audit_summary["batch_summaries_artifact"] = path.as_posix()
 
+    diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
+    diagnostic_path = _write_diagnostic_summary_markdown(repo_root, diagnostic_markdown)
+    audit_summary["diagnostic_summary_artifact"] = "artifacts/diagnostic_summary.md"
+
     check_annotations = _build_check_annotations_from_candidates(
         review_candidates,
         route=str(audit_summary.get("route_final", "REVIEW")),
@@ -4862,6 +5060,7 @@ def _build_review_markdown(
             audit["batch_summaries_artifact"] = str(
                 audit_summary.get("batch_summaries_artifact", "n/a") or "n/a"
             )
+            audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
             _merge_llm_meta(audit, llm_meta)
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
         return body
@@ -5031,6 +5230,7 @@ def _build_review_markdown(
         audit["batch_summaries_artifact"] = str(
             audit_summary.get("batch_summaries_artifact", "n/a") or "n/a"
         )
+        audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
         audit["patch_parts_count"] = len(patch_parts)
         audit["patch_conflicts_detected"] = batch_patch_conflicts
         audit["patch_conflict_details"] = batch_patch_conflict_details[:20]

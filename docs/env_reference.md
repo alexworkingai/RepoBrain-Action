@@ -53,7 +53,7 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_RETRIEVAL_W_LEX` | float | `0.55` | 0.0..1.0 | Hybrid lexical weight. |
 | `RB_RETRIEVAL_W_VEC` | float | `0.45` | 0.0..1.0 | Hybrid vector weight. |
 | `RB_TKYA_ALLOW_REMOTE` | bool | `0` | - | Allow remote/network operations in TKYA. |
-| `RB_TKYA_BACKEND` | enum | `lite` | lite, v2, v5, original | TKYA backend selection. |
+| `RB_TKYA_BACKEND` | enum | `lite` | lite, v5, original | TKYA backend selection (active: lite or v5; legacy aliases are normalized internally). |
 | `RB_TKYA_ORIGINAL_PATH` | str | `` | - | Optional override path for original vendor file. |
 | `RB_TKYA_STRICT` | bool | `0` | - | Strict TKYA load mode. |
 | `RB_TKYA_STRICT_ORIGINAL` | bool | `0` | - | Strict original vendor load mode. |

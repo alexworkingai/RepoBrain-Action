@@ -74,12 +74,14 @@ Template behavior:
 - include `What I used` with file locators only (`path + line range`)
 - include `Verification` summary (`PASS/WARN/NOT_RUN`)
 - include `Route/Mode`, including deep-pass marker when pass-2 was used
+- include grouped diagnostics tables (`Parameter | Value | Meaning / Risk`) with compact usersafe fields only
 
 Comment size protection:
 
 - if rendered markdown exceeds ~60KB, comment is truncated safely
 - full markdown is saved to `artifacts/ask_result.md`
 - workflow should publish artifacts for deeper inspection
+- grouped diagnostics are written to `artifacts/diagnostic_summary.md`
 
 ## Review/Fix Artifacts
 
@@ -89,6 +91,7 @@ When review/fix verification runs:
 - `artifacts/patch.diff` is written when `/repobrain fix` has a generated patch
 - `artifacts/patch_parts/*.diff` stores per-batch patch parts when batch LLM fix mode is enabled
 - `artifacts/check_run_payload.json` is written when PR check payload is prepared
+- `artifacts/diagnostic_summary.md` stores grouped usersafe diagnostics for answer/review/fix comments
 - `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
 - `artifacts/llm_http_debug.json` is written for workflow_dispatch fix failures with usersafe provider diagnostics
 - `artifacts/embeddings_usage.json` is written when embeddings are enabled
@@ -108,6 +111,8 @@ When review/fix verification runs:
 - `llm_decision_reason_short`
 - `llm_decision_reason_code`
 - `llm_runtime_override_reason`
+- `answer_grounding_mode` (when available)
+- `pr_changed_files_count`, `pr_metadata_used` (when available)
 - `policy_event_name`
 - `policy_is_pr_context`
 - `policy_issue_comment_enabled`
@@ -202,6 +207,19 @@ When review/fix verification runs:
 - `config` (sanitized `RepoBrainConfig.usersafe_dict()`)
 - `warnings` (validation/clamp notes)
 - `feature_summary` (enabled flags and key modes)
+
+`artifacts/diagnostic_summary.md` (usersafe) includes:
+
+- grouped sections:
+  - Decision summary
+  - Runtime / Policy
+  - LLM
+  - Embeddings
+  - Retrieval / Evidence
+  - Verification
+  - Provider / Quota
+- markdown tables with `Parameter | Value | Meaning / Risk`
+- undefined/disabled diagnostics moved to a compact dedicated section
 
 Safe defaults:
 
