@@ -125,6 +125,7 @@ When review/fix verification runs:
 - `model_id`, `tier`
 - `final_synthesis_model_id`
 - `preferred_model_id`, `model_selection_reason`, `model_downgrade_reason`
+- `retained_preferred_model_reason` (when preferred model is intentionally retained)
 - `primary_model_id`, `effective_model_id`, `fallback_used`
 - `provider_http_status`, `provider_error_type`
 - `calls_this_run`
@@ -206,6 +207,11 @@ When review/fix verification runs:
 - `touched_files`
 - `placeholder_detected`
 - `grounded`
+
+`no_patch` semantics:
+
+- treated as a valid safe outcome when localized evidence-backed patch targets are unavailable
+- `patch_targeting_mode=none` is a valid state (not an undefined diagnostic value)
 
 `artifacts/index_embeddings_evidence.json` (usersafe) includes:
 

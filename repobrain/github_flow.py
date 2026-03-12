@@ -2121,6 +2121,7 @@ def _maybe_generate_llm_text(
     next_call_cost_est = max(1, prompt_cost_est + int(max_output_tokens))
     governor_action = "n/a"
     governor_reason = "n/a"
+    retained_preferred_model = False
     if governor is not None:
         decision = governor.can_call_llm(
             next_call_cost_est=next_call_cost_est,
@@ -2215,11 +2216,13 @@ def _maybe_generate_llm_text(
             if retain_preferred:
                 model_downgrade_reason = "n/a"
                 llm_retained_preferred_model_reason = retain_reason
+                retained_preferred_model = True
             elif governor.llm_last_remaining is not None and int(governor.llm_last_remaining) >= downgrade_threshold:
                 model_downgrade_reason = "n/a"
                 llm_retained_preferred_model_reason = (
                     "retained preferred model: remaining quota above downgrade threshold"
                 )
+                retained_preferred_model = True
             else:
                 model_id = model_low
                 tier = "low"
@@ -2232,7 +2235,21 @@ def _maybe_generate_llm_text(
                 _llm_downgrade_threshold_for_command(cfg, cmd, effective_intent)
             )
         if decision.budget_action != "n/a":
-            governor_action = decision.budget_action
+            if retained_preferred_model:
+                action_items = [
+                    item.strip()
+                    for item in str(decision.budget_action).split(";")
+                    if item.strip()
+                    and item.strip()
+                    not in {"model_downgraded_to_mini", "model_downgraded_to_mini_estimate_mode"}
+                ]
+                governor_action = (
+                    "; ".join(action_items)
+                    if action_items
+                    else "budget policy evaluated; preferred model retained"
+                )
+            else:
+                governor_action = decision.budget_action
     else:
         llm_retained_preferred_model_reason = "n/a"
         llm_downgrade_threshold_used = str(
@@ -5168,21 +5185,26 @@ def _build_review_markdown(
     )
     audit_summary["review_validation_artifact"] = "artifacts/review_validation.json"
     audit_summary["patch_validation_result"] = "n/a"
-    changed_files = list(dict.fromkeys(str(item.get("filename", "")).strip() for item in files if item.get("filename")))
-    changed_file_hunks = [
+    all_pr_changed_files = list(
+        dict.fromkeys(str(item.get("filename", "")).strip() for item in files if item.get("filename"))
+    )
+    all_pr_changed_hunks = [
         str(item.get("patch", "")).strip()
         for item in files
         if isinstance(item, dict) and str(item.get("patch", "")).strip()
     ]
+    changed_files = list(all_pr_changed_files)
+    changed_file_hunks = list(all_pr_changed_hunks)
+    pr_metadata_available = bool(all_pr_changed_files)
     patch_targeting: dict[str, Any] = {
-        "patch_target_files_total": len(changed_files),
-        "patch_target_files_selected": len(changed_files),
-        "patch_target_hunks_selected": len(changed_file_hunks),
+        "patch_target_files_total": len(all_pr_changed_files),
+        "patch_target_files_selected": len(all_pr_changed_files),
+        "patch_target_hunks_selected": len(all_pr_changed_hunks),
         "patch_targeting_mode": "full_pr_context",
         "patch_targeting_reason": "not_applicable",
         "localized_patch_evidence_count": 0,
-        "selected_files": list(changed_files),
-        "selected_hunks": list(changed_file_hunks),
+        "selected_files": list(all_pr_changed_files),
+        "selected_hunks": list(all_pr_changed_hunks),
     }
     if cmd == "fix":
         patch_targeting = select_patch_targets(
@@ -5209,9 +5231,12 @@ def _build_review_markdown(
         changed_file_hunks = list(dict.fromkeys(selected_hunks))
     if changed_files:
         audit_summary["touched_files"] = changed_files
-    audit_summary["pr_changed_files_count"] = len(changed_files)
-    audit_summary["pr_metadata_used"] = bool(changed_files)
-    audit_summary["answer_grounding_mode"] = "hybrid" if changed_files else "retrieval"
+    audit_summary["pr_changed_files_count"] = len(all_pr_changed_files)
+    audit_summary["pr_metadata_used"] = pr_metadata_available
+    if pr_metadata_available:
+        audit_summary["answer_grounding_mode"] = "hybrid" if changed_files else "pr_metadata"
+    else:
+        audit_summary["answer_grounding_mode"] = "retrieval"
     if cmd == "fix":
         audit_summary["patch_target_files_total"] = int(
             patch_targeting.get("patch_target_files_total", len(files)) or 0
@@ -5231,9 +5256,7 @@ def _build_review_markdown(
         audit_summary["localized_patch_evidence_count"] = int(
             patch_targeting.get("localized_patch_evidence_count", 0) or 0
         )
-        audit_summary["patch_grounding_mode"] = (
-            "pr_metadata" if bool(audit_summary["patch_target_files_selected"]) else "none"
-        )
+        audit_summary["patch_grounding_mode"] = "pr_metadata" if pr_metadata_available else "retrieval"
     review_locators = [
         EvidenceItem(
             file_path=item.file_path,
@@ -5596,7 +5619,7 @@ def _build_review_markdown(
         )[:3]
     if cmd == "fix":
         audit_summary["patch_target_files_count"] = len(changed_files)
-        audit_summary["patch_grounding_mode"] = "pr_metadata" if changed_files else "retrieval"
+        audit_summary["patch_grounding_mode"] = "pr_metadata" if pr_metadata_available else "retrieval"
         audit_summary["patch_generation_result"] = str(
             audit_summary.get("patch_generation_result", "pending") or "pending"
         )
@@ -5799,7 +5822,7 @@ def _build_review_markdown(
             patch_text = ""
 
     patch_written = False
-    patch_apply_message = "no patch generated by engine"
+    patch_apply_message = "safe no_patch outcome: no sufficiently localized, evidence-backed patch target."
     patch_apply_result: dict[str, Any] = {
         "applied": False,
         "pushed": False,
@@ -5867,16 +5890,27 @@ def _build_review_markdown(
         elif no_patch_response:
             patch_validation_payload["status"] = "no_patch"
             patch_validation_payload["reason_code"] = "NO_PATCH"
+            patch_validation_payload["reason_short"] = (
+                "No patch generated: no sufficiently localized, evidence-backed patch target was found."
+            )
+            patch_apply_message = (
+                "safe no_patch outcome: no sufficiently localized, evidence-backed patch target."
+            )
+            patch_pr_message = "auto-pr skipped (no_patch)"
         elif provider_http_status is not None or provider_error_type not in {"n/a", ""}:
             patch_validation_payload["status"] = "provider_failed"
             patch_validation_payload["reason_code"] = "PROVIDER_FAILED"
             patch_validation_payload["reason_short"] = "Patch generation failed due to LLM provider error."
+            patch_apply_message = "patch generation failed due to LLM provider error"
+            patch_pr_message = "auto-pr skipped (provider_failed)"
         else:
             patch_validation_payload["status"] = "patch_validation_failed"
             patch_validation_payload["reason_code"] = "EXTRACTOR_FAILED"
             patch_validation_payload["reason_short"] = (
                 "Patch validation failed: no grounded unified diff could be extracted."
             )
+            patch_apply_message = "patch extraction failed: no grounded unified diff"
+            patch_pr_message = "auto-pr skipped (extractor_failed)"
         patch_debug_payload = {
             "reason": (
                 "patch_validation_failed"
