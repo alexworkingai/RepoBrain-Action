@@ -93,6 +93,7 @@ When review/fix verification runs:
 - `artifacts/check_run_payload.json` is written when PR check payload is prepared
 - `artifacts/diagnostic_summary.md` stores grouped usersafe diagnostics for answer/review/fix comments
 - `artifacts/review_validation.json` stores evidence-backed review validation output (confirmed findings vs possible signals)
+- `artifacts/review_generation_debug.json` stores review synthesis fallback diagnostics (compaction/batching/provider status)
 - `artifacts/patch_validation.json` stores patch grounding validation result before publication
 - `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
 - `artifacts/llm_http_debug.json` is written for workflow_dispatch fix failures with usersafe provider diagnostics
@@ -122,6 +123,7 @@ When review/fix verification runs:
 - `policy_issue_only_enabled`
 - `policy_allowed`
 - `model_id`, `tier`
+- `final_synthesis_model_id`
 - `preferred_model_id`, `model_selection_reason`, `model_downgrade_reason`
 - `primary_model_id`, `effective_model_id`, `fallback_used`
 - `provider_http_status`, `provider_error_type`
@@ -174,8 +176,23 @@ When review/fix verification runs:
 - `risk_level`
 - `confirmed_findings`
 - `possible_signals`
+- `informational_notes`
+- `risk_drivers`
 - `validation.confirmed_findings_count`
 - `validation.possible_signals_count`
+- `validation.informational_notes_count`
+
+`artifacts/review_generation_debug.json` (usersafe) includes:
+
+- `attempted_compaction`
+- `attempted_review_batching`
+- `estimated_input_tokens`
+- `final_summary_count`
+- `provider_http_status`, `provider_error_type`
+- `review_generation_result`
+- `review_batch_mode`, `review_batch_count`
+- `review_compacted`
+- `dropped_files_count`, `dropped_findings_count`, `dropped_hunks_count`
 
 `artifacts/patch_validation.json` (usersafe) includes:
 

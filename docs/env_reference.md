@@ -34,8 +34,12 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_LLM_ENABLE_ISSUE_COMMENT` | bool | `1` | - | Allow LLM for issue_comment event path. |
 | `RB_LLM_ENABLE_ISSUE_ONLY` | bool | `0` | - | Allow LLM for issue_comment on non-PR issues. |
 | `RB_LLM_ENABLE_PR_COMMENTS` | bool | `1` | - | Allow LLM for issue_comment on PR discussions. |
+| `RB_LLM_MAX_FILES_REVIEW_CONTEXT` | int | `40` | 1..500 | Maximum changed files included in final review synthesis context. |
+| `RB_LLM_MAX_FINDINGS_CONTEXT` | int | `24` | 1..200 | Maximum condensed findings/notes included in final review synthesis context. |
+| `RB_LLM_MAX_HUNKS_REVIEW_CONTEXT` | int | `24` | 1..500 | Maximum diff hunks included in final review synthesis context. |
 | `RB_LLM_MAX_INPUT_TOKENS` | int | `7600` | 256..64000 | Prompt input token budget. |
 | `RB_LLM_MAX_INPUT_TOKENS_PATCH` | int | `3200` | 256..64000 | Patch prompt input token budget. |
+| `RB_LLM_MAX_INPUT_TOKENS_REVIEW_FINAL` | int | `3600` | 256..64000 | Final review synthesis prompt input token budget. |
 | `RB_LLM_MAX_OUTPUT_TOKENS_ASK` | int | `1000` | 200..16000 | Ask max output tokens. |
 | `RB_LLM_MAX_OUTPUT_TOKENS_FIX` | int | `2000` | 200..16000 | Fix max output tokens. |
 | `RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL` | int | `2000` | 200..16000 | Global max output tokens. |

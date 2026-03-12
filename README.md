@@ -41,8 +41,11 @@ PR Review:
 
 * Use `/repobrain review` in a Pull Request discussion (issue comments on a PR).
 * RepoBrain fetches changed files, builds a lightweight risk summary, and posts a markdown PR review comment.
+* Review synthesis uses hierarchical payload shaping (PR metadata summary -> targeted evidence -> final synthesis) with automatic compaction/batch fallback for provider safety.
+* Findings are normalized/deduplicated and split into `Confirmed findings` vs `Possible signals`; high-severity findings require explicit evidence.
 * `/repobrain review` is not available in regular Issues (non-PR threads).
 * `/repobrain fix <instruction>` can generate a patch proposal (`artifacts/patch.diff`) with usersafe diff snippet.
+* `/repobrain fix` uses patch-specific semantics (`llm_intent=patch`, patch reason codes, patch diagnostics) and does not reuse review-only counters in user output.
 * In PR context RepoBrain also publishes a GitHub Check Run (`RepoBrain Review` / `RepoBrain Fix`) with usersafe annotations.
 
 Index cache / prebuild:
@@ -211,8 +214,7 @@ GitHub Models LLM (optional):
     * In PR discussion run `/repobrain ask what files changed in this PR?`
     * Expect `TKYA LLM decision: used`, non-empty `Reason`, no `Runtime override` disabled message, and visible model/tokens.
 * Reports include LLM diagnostics:
-  * preferred model, effective model, model selection reason, downgrade reason
-  * model id
+  * preferred model, final synthesis model, per-model call distribution, model selection reason, downgrade reason
   * token usage (`prompt/completion/total`, reported or estimated)
   * remaining requests / reset time (from `x-ratelimit-*` headers when available)
   * if headers are missing, remaining is shown as `(estimated)`
@@ -221,6 +223,11 @@ GitHub Models LLM (optional):
   * `RB_LLM_MAX_OUTPUT_TOKENS_ASK` (default `1000`)
   * `RB_LLM_MAX_OUTPUT_TOKENS_REVIEW` (default `1400`)
   * `RB_LLM_MAX_OUTPUT_TOKENS_FIX` (default `2000`)
+* Review synthesis input caps:
+  * `RB_LLM_MAX_INPUT_TOKENS_REVIEW_FINAL` (default `3600`)
+  * `RB_LLM_MAX_FILES_REVIEW_CONTEXT` (default `40`)
+  * `RB_LLM_MAX_FINDINGS_CONTEXT` (default `24`)
+  * `RB_LLM_MAX_HUNKS_REVIEW_CONTEXT` (default `24`)
 
 Batch LLM for large PRs (optional):
 

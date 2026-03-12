@@ -147,6 +147,14 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     runtime_override = str(audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a")
     model_id = str(audit_summary.get("llm_model_used", "not used") or "not used")
     preferred_model_id = str(audit_summary.get("llm_preferred_model_id", "n/a") or "n/a")
+    final_synthesis_model_id = str(
+        audit_summary.get("llm_final_synthesis_model_id", model_id or "not used") or "not used"
+    )
+    if not llm_used:
+        final_synthesis_model_id = "n/a"
+    if llm_used and final_synthesis_model_id in {"", "n/a", "not used"}:
+        final_synthesis_model_id = model_id
+    preferred_model_id = str(audit_summary.get("llm_preferred_model_id", "n/a") or "n/a")
     selection_reason = str(audit_summary.get("llm_model_selection_reason", "n/a") or "n/a")
     downgrade_reason = str(audit_summary.get("llm_model_downgrade_reason", "n/a") or "n/a")
     prompt = _int(audit_summary.get("llm_tokens_prompt", 0))
@@ -181,7 +189,8 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
         [
             "- LLM used: yes" if llm_used else f"- LLM used: no ({skip_reason})",
             f"- Preferred model: `{preferred_model_id}`",
-            f"- LLM model used: `{model_id}`",
+            f"- Final synthesis model: `{final_synthesis_model_id}`",
+            f"- LLM model used: `{model_id if llm_used else 'not used'}`",
             f"- Model selection reason: {selection_reason}",
             (
                 f"- Tokens used: prompt={prompt} completion={completion} total={total} "
@@ -334,6 +343,78 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
         touched = audit_summary.get("touched_files", [])
         if isinstance(touched, list):
             pr_files = len([item for item in touched if str(item).strip()])
+    command = str(audit_summary.get("command", "ask") or "ask").strip().lower()
+    retrieval_rows: list[tuple[str, Any, str]] = [
+        ("Retrieved candidates", _int(audit_summary.get("retrieved", 0)), "Candidates retrieved before selection."),
+        ("Selected evidence", _int(audit_summary.get("selected", 0)), "Evidence items selected for response."),
+        ("Retrieval passes", _int(audit_summary.get("pass_count", 1), 1), "Number of retrieval passes executed."),
+        ("Top score", audit_summary.get("top_score", "n/a"), "Highest retrieval score observed."),
+        (
+            "PR changed files",
+            pr_files,
+            "Count of changed files from PR metadata (if available).",
+        ),
+    ]
+    if command == "fix":
+        retrieval_rows.extend(
+            [
+                (
+                    "Patch target files",
+                    _int(audit_summary.get("patch_target_files_count", 0)),
+                    "Number of files targeted by patch generation context.",
+                ),
+                (
+                    "Patch grounding mode",
+                    audit_summary.get("patch_grounding_mode", "n/a"),
+                    "How patch grounding context was assembled.",
+                ),
+                (
+                    "Patch generation result",
+                    audit_summary.get("patch_generation_result", "n/a"),
+                    "Patch generation classification before publish.",
+                ),
+                (
+                    "Patch validation",
+                    audit_summary.get("patch_validation_result", "n/a"),
+                    "Patch validation classification before publication.",
+                ),
+            ]
+        )
+    else:
+        retrieval_rows.extend(
+            [
+                (
+                    "Review confirmed findings",
+                    _int(audit_summary.get("review_confirmed_findings_count", 0)),
+                    "Count of findings with evidence-backed validation.",
+                ),
+                (
+                    "Review possible signals",
+                    _int(audit_summary.get("review_possible_signals_count", 0)),
+                    "Count of downgraded heuristic signals without strong evidence.",
+                ),
+                (
+                    "Review generation result",
+                    audit_summary.get("review_generation_result", "n/a"),
+                    "Review synthesis outcome after compaction/batching safeguards.",
+                ),
+                (
+                    "Review compacted",
+                    bool(audit_summary.get("review_compacted", False)),
+                    "Whether final review context was compacted.",
+                ),
+                (
+                    "Review batch mode",
+                    bool(audit_summary.get("review_batch_mode", False)),
+                    "Whether review used hierarchical batch synthesis.",
+                ),
+                (
+                    "Review batch count",
+                    _int(audit_summary.get("review_batch_count", 0)),
+                    "Executed review batch calls count.",
+                ),
+            ]
+        )
 
     return [
         (
@@ -431,6 +512,14 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     "Per-model call distribution for this run.",
                 ),
                 (
+                    "Final synthesis model",
+                    audit_summary.get(
+                        "llm_final_synthesis_model_id",
+                        audit_summary.get("llm_model_used", "n/a"),
+                    ),
+                    "Model that produced final user-facing synthesis text.",
+                ),
+                (
                     "Model selection reason",
                     audit_summary.get("llm_model_selection_reason", "n/a"),
                     "Why this model tier was selected.",
@@ -485,32 +574,7 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
         ),
         (
             "E. Retrieval / Evidence",
-            [
-                ("Retrieved candidates", _int(audit_summary.get("retrieved", 0)), "Candidates retrieved before selection."),
-                ("Selected evidence", _int(audit_summary.get("selected", 0)), "Evidence items selected for response."),
-                ("Retrieval passes", _int(audit_summary.get("pass_count", 1), 1), "Number of retrieval passes executed."),
-                ("Top score", audit_summary.get("top_score", "n/a"), "Highest retrieval score observed."),
-                (
-                    "PR changed files",
-                    pr_files,
-                    "Count of changed files from PR metadata (if available).",
-                ),
-                (
-                    "Review confirmed findings",
-                    _int(audit_summary.get("review_confirmed_findings_count", 0)),
-                    "Count of findings with evidence-backed validation.",
-                ),
-                (
-                    "Review possible signals",
-                    _int(audit_summary.get("review_possible_signals_count", 0)),
-                    "Count of downgraded heuristic signals without strong evidence.",
-                ),
-                (
-                    "Patch validation",
-                    audit_summary.get("patch_validation_result", "n/a"),
-                    "Patch validation classification before publication.",
-                ),
-            ],
+            retrieval_rows,
         ),
         (
             "F. Verification",
@@ -829,12 +893,21 @@ def render_review_markdown(
     recommendations = review.get("recommendations", review.get("suggested_tests", []))
     if not isinstance(recommendations, list):
         recommendations = []
+    informational_notes = review.get("informational_notes", review.get("notes", []))
+    if not isinstance(informational_notes, list):
+        informational_notes = []
+    risk_drivers = review.get("risk_drivers", [])
+    if not isinstance(risk_drivers, list):
+        risk_drivers = []
     summary_text = str(review.get("summary_text", "No summary available.")).strip()
     risk_level = str(review.get("risk_level", "low") or "low").upper()
+    possible_block = [f"- {item}" for item in possible_signals] if possible_signals else ["- None."]
     sections = [
         "### ✅ PR Review",
         f"TL;DR: {summary_text}",
         f"Risk level: **{risk_level}**",
+        "Risk drivers:",
+        *([f"- {item}" for item in risk_drivers[:3]] if risk_drivers else ["- n/a"]),
         "",
         "### 🗂️ Touched files",
         *(files_block[:10] if files_block else ["- No changed files detected."]),
@@ -848,8 +921,10 @@ def render_review_markdown(
         ),
         "",
         "### 🟡 Possible signals",
-        *([f"- {item}" for item in possible_signals] if possible_signals else ["- No weak signals."]),
-        *([f"- Note: {item}" for item in notes[:5]] if notes else []),
+        *possible_block,
+        "",
+        "### ℹ️ Informational notes",
+        *([f"- {item}" for item in informational_notes[:6]] if informational_notes else ["- None."]),
         "",
         "### ✅ Recommendations",
         *([f"- {item}" for item in recommendations[:8]] if recommendations else ["- Run standard CI checks before merge."]),
@@ -883,13 +958,23 @@ def render_patch_markdown(
     audit_summary: dict[str, Any],
 ) -> str:
     summary_text = str(review.get("summary_text", "Patch suggestion flow")).strip()
+    patch_generation_result = str(audit_summary.get("patch_generation_result", "n/a") or "n/a")
+    patch_validation_reason = str(audit_summary.get("patch_validation_reason", "n/a") or "n/a")
+    patch_target_files = _int(audit_summary.get("patch_target_files_count", 0))
+    patch_grounding_mode = str(audit_summary.get("patch_grounding_mode", "n/a") or "n/a")
     sections = [
         "### 🛠️ Patch proposal",
         f"Summary: {summary_text}",
         "",
+        "### 🧪 Patch diagnostics",
+        f"- Patch generation result: `{patch_generation_result}`",
+        f"- Patch validation result: `{str(audit_summary.get('patch_validation_result', 'n/a') or 'n/a')}`",
+        f"- Patch validation reason: {patch_validation_reason}",
+        f"- Patch target files: {patch_target_files}",
+        f"- Patch grounding mode: {patch_grounding_mode}",
+        "",
         "### 📦 Patch artifact",
         "- Full patch is saved to `artifacts/patch.diff`." if patch_written else "- No patch generated.",
-        f"- Patch validation: `{str(audit_summary.get('patch_validation_result', 'n/a') or 'n/a')}`",
         f"- Apply status: {patch_apply_message}",
         "",
         "### 🧩 Patch snippet",

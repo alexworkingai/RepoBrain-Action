@@ -197,7 +197,11 @@ class LLMConfig:
     model_high: str = "openai/gpt-4.1"
     model_low: str = "openai/gpt-4.1-mini"
     max_input_tokens: int = 7600
+    max_input_tokens_review_final: int = 3600
     max_input_tokens_patch: int = 3200
+    max_files_review_context: int = 40
+    max_findings_review_context: int = 24
+    max_hunks_review_context: int = 24
     max_output_tokens_global: int = 2000
     max_output_tokens_ask: int = 1000
     max_output_tokens_review: int = 1400
@@ -340,12 +344,44 @@ class RepoBrainConfig:
                 max_value=64_000,
                 warnings=warnings,
             ),
+            max_input_tokens_review_final=env_int(
+                "RB_LLM_MAX_INPUT_TOKENS_REVIEW_FINAL",
+                3600,
+                source=env_source,
+                min_value=256,
+                max_value=64_000,
+                warnings=warnings,
+            ),
             max_input_tokens_patch=env_int(
                 "RB_LLM_MAX_INPUT_TOKENS_PATCH",
                 3200,
                 source=env_source,
                 min_value=256,
                 max_value=64_000,
+                warnings=warnings,
+            ),
+            max_files_review_context=env_int(
+                "RB_LLM_MAX_FILES_REVIEW_CONTEXT",
+                40,
+                source=env_source,
+                min_value=1,
+                max_value=500,
+                warnings=warnings,
+            ),
+            max_findings_review_context=env_int(
+                "RB_LLM_MAX_FINDINGS_CONTEXT",
+                24,
+                source=env_source,
+                min_value=1,
+                max_value=200,
+                warnings=warnings,
+            ),
+            max_hunks_review_context=env_int(
+                "RB_LLM_MAX_HUNKS_REVIEW_CONTEXT",
+                24,
+                source=env_source,
+                min_value=1,
+                max_value=500,
                 warnings=warnings,
             ),
             max_output_tokens_global=env_int(
@@ -823,7 +859,39 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec("RB_LLM_MODEL_HIGH", "str", "openai/gpt-4.1", "High-tier model id."),
     EnvVarSpec("RB_LLM_MODEL_LOW", "str", "openai/gpt-4.1-mini", "Low-tier model id."),
     EnvVarSpec("RB_LLM_MAX_INPUT_TOKENS", "int", "7600", "Prompt input token budget.", min_value=256, max_value=64000),
+    EnvVarSpec(
+        "RB_LLM_MAX_INPUT_TOKENS_REVIEW_FINAL",
+        "int",
+        "3600",
+        "Final review synthesis prompt input token budget.",
+        min_value=256,
+        max_value=64000,
+    ),
     EnvVarSpec("RB_LLM_MAX_INPUT_TOKENS_PATCH", "int", "3200", "Patch prompt input token budget.", min_value=256, max_value=64000),
+    EnvVarSpec(
+        "RB_LLM_MAX_FILES_REVIEW_CONTEXT",
+        "int",
+        "40",
+        "Maximum changed files included in final review synthesis context.",
+        min_value=1,
+        max_value=500,
+    ),
+    EnvVarSpec(
+        "RB_LLM_MAX_FINDINGS_CONTEXT",
+        "int",
+        "24",
+        "Maximum condensed findings/notes included in final review synthesis context.",
+        min_value=1,
+        max_value=200,
+    ),
+    EnvVarSpec(
+        "RB_LLM_MAX_HUNKS_REVIEW_CONTEXT",
+        "int",
+        "24",
+        "Maximum diff hunks included in final review synthesis context.",
+        min_value=1,
+        max_value=500,
+    ),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL", "int", "2000", "Global max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_ASK", "int", "1000", "Ask max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_REVIEW", "int", "1400", "Review max output tokens.", min_value=200, max_value=16000),

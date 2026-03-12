@@ -819,6 +819,7 @@ def _llm_default_meta(
         "llm_decision_reason_code": llm_decision_reason_code,
         "llm_runtime_override_reason": "n/a",
         "llm_model_used": "not used",
+        "llm_final_synthesis_model_id": "not used",
         "llm_preferred_model_id": "n/a",
         "llm_model_selection_reason": "n/a",
         "llm_model_downgrade_reason": "n/a",
@@ -876,6 +877,51 @@ def _is_fix_intent(cmd: str, intent: str) -> bool:
     return cmd == "fix" or intent == "patch"
 
 
+def _normalize_fix_semantics(
+    *,
+    execution_mode: str,
+    llm_intent: str,
+    reason_code: str,
+    reason_short: str,
+) -> tuple[str, str, str]:
+    intent = "patch"
+    mapped_code = str(reason_code or "").strip().upper() or "PATCH_GROUNDING_REQUIRED"
+    mapped_short = str(reason_short or "").strip()
+
+    if mapped_code.startswith("REVIEW_"):
+        mapped_code = "PATCH_" + mapped_code[len("REVIEW_") :]
+    if mapped_code in {"MULTI_SOURCE_SYNTHESIS_REQUIRED", "COMPLEX_SYNTHESIS_REQUIRED"}:
+        mapped_code = "PATCH_SYNTHESIS_REQUIRED"
+    if mapped_code == "DEFAULT_RETRIEVAL_ONLY":
+        mapped_code = "FIX_CONTEXT_INSUFFICIENT"
+    if mapped_code == "DIRECT_EVIDENCE_SUFFICIENT":
+        mapped_code = "PATCH_GROUNDING_REQUIRED"
+
+    lowered = mapped_short.lower()
+    if "review" in lowered:
+        mapped_short = re.sub("review", "patch", mapped_short, flags=re.IGNORECASE)
+    if "pr review" in lowered:
+        mapped_short = re.sub("pr review", "patch", mapped_short, flags=re.IGNORECASE)
+
+    mode_norm = str(execution_mode or "").strip().lower()
+    if mode_norm == "retrieval_plus_llm":
+        mapped_short = (
+            mapped_short
+            or "LLM used: patch synthesis required for grounded fix proposal."
+        )
+        if mapped_short.lower().startswith("llm not used"):
+            mapped_short = "LLM used: patch synthesis required for grounded fix proposal."
+        if mapped_code in {"FIX_CONTEXT_INSUFFICIENT", "PATCH_GROUNDING_REQUIRED"}:
+            mapped_code = "PATCH_SYNTHESIS_REQUIRED"
+    else:
+        mapped_short = mapped_short or "LLM not used: fix context insufficient for grounded patch."
+        if mapped_code == "PATCH_SYNTHESIS_REQUIRED":
+            mapped_code = "FIX_CONTEXT_INSUFFICIENT"
+
+    _ = llm_intent
+    return intent, mapped_code, mapped_short
+
+
 def _alternate_model_id(primary_model: str, *, model_high: str, model_low: str) -> str:
     primary = str(primary_model or "").strip()
     if primary.lower() == model_high.lower():
@@ -892,6 +938,20 @@ def _is_retryable_llm_error(exc: GitHubModelsError) -> bool:
     if status_code in {429, 500, 502, 503, 504}:
         return True
     return exc.reason in {"network", "rate_limited", "server_error"}
+
+
+def _review_context_needs_batch(
+    *,
+    cfg: RepoBrainConfig,
+    changed_files_count: int,
+    diff_hunks_count: int,
+    estimated_input_tokens: int,
+) -> bool:
+    return (
+        int(estimated_input_tokens) > int(cfg.llm.max_input_tokens_review_final)
+        or int(changed_files_count) > int(cfg.llm.max_files_review_context)
+        or int(diff_hunks_count) > int(cfg.llm.max_hunks_review_context)
+    )
 
 
 def _is_fallback_eligible_llm_error(exc: GitHubModelsError) -> bool:
@@ -1038,6 +1098,10 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "budget_action": str(llm_meta.get("llm_budget_action", "n/a") or "n/a"),
         "governor_reason": str(llm_meta.get("llm_governor_reason", "n/a") or "n/a"),
         "model_id": str(llm_meta.get("llm_model_used", "not used")),
+        "final_synthesis_model_id": str(
+            llm_meta.get("llm_final_synthesis_model_id", llm_meta.get("llm_model_used", "not used"))
+            or "not used"
+        ),
         "preferred_model_id": str(llm_meta.get("llm_preferred_model_id", "n/a") or "n/a"),
         "model_selection_reason": str(
             llm_meta.get("llm_model_selection_reason", "n/a") or "n/a"
@@ -1318,6 +1382,13 @@ def _write_patch_generation_debug(repo_root: Path, payload: dict[str, Any]) -> P
 
 def _write_review_validation(repo_root: Path, payload: dict[str, Any]) -> Path:
     path = repo_root / "artifacts" / "review_validation.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _write_review_generation_debug(repo_root: Path, payload: dict[str, Any]) -> Path:
+    path = repo_root / "artifacts" / "review_generation_debug.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
@@ -1877,7 +1948,12 @@ def _maybe_generate_llm_text(
     cfg = _runtime_env_cfg()
     effective_intent = normalized_llm_intent if normalized_llm_intent != "none" else intent
     is_patch_request = _is_fix_intent(cmd, effective_intent)
-    max_input_tokens = int(cfg.llm.max_input_tokens_patch if is_patch_request else cfg.llm.max_input_tokens)
+    if is_patch_request:
+        max_input_tokens = int(cfg.llm.max_input_tokens_patch)
+    elif cmd == "review":
+        max_input_tokens = int(cfg.llm.max_input_tokens_review_final)
+    else:
+        max_input_tokens = int(cfg.llm.max_input_tokens)
     model_high = str(cfg.llm.model_high or "openai/gpt-4.1")
     model_low = str(cfg.llm.model_low or "openai/gpt-4.1-mini")
 
@@ -1968,6 +2044,9 @@ def _maybe_generate_llm_text(
                 diff_hunks=diff_hunks,
                 max_input_tokens=max_input_tokens,
                 selected_snippets=selected_snippets,
+                max_files_context=int(cfg.llm.max_files_review_context),
+                max_findings_context=int(cfg.llm.max_findings_review_context),
+                max_hunks_context=int(cfg.llm.max_hunks_review_context),
             )
         else:
             messages, budgeting_stats = build_messages_for_ask(
@@ -1999,10 +2078,12 @@ def _maybe_generate_llm_text(
                 llm_decision_reason_code=decision_reason_code,
             )
             llm_meta["llm_decision_route"] = normalized_route or "n/a"
-            llm_meta["llm_model_used"] = model_id
+            llm_meta["llm_model_used"] = "not used"
+            llm_meta["llm_final_synthesis_model_id"] = "not used"
             llm_meta["llm_preferred_model_id"] = preferred_model_id_resolved
             llm_meta["llm_model_selection_reason"] = selection_reason
             llm_meta["llm_model_downgrade_reason"] = model_downgrade_reason
+            llm_meta["llm_effective_model_id"] = model_id
             llm_meta["llm_tier"] = tier
             llm_meta["llm_budget_action"] = decision.budget_action
             llm_meta["llm_governor_reason"] = decision.reason
@@ -2123,7 +2204,8 @@ def _maybe_generate_llm_text(
             llm_decision_reason_code=decision_reason_code,
         )
         llm_meta["llm_decision_route"] = normalized_route or "n/a"
-        llm_meta["llm_model_used"] = effective_model_id if fallback_used else primary_model_id
+        llm_meta["llm_model_used"] = "not used"
+        llm_meta["llm_final_synthesis_model_id"] = "not used"
         llm_meta["llm_preferred_model_id"] = preferred_model_id_resolved
         llm_meta["llm_model_selection_reason"] = selection_reason
         llm_meta["llm_model_downgrade_reason"] = model_downgrade_reason
@@ -2197,6 +2279,7 @@ def _maybe_generate_llm_text(
         "llm_runtime_override_reason": "n/a",
         "llm_decision_route": normalized_route or "n/a",
         "llm_model_used": response.model_id,
+        "llm_final_synthesis_model_id": response.model_id,
         "llm_preferred_model_id": preferred_model_id_resolved,
         "llm_model_selection_reason": selection_reason,
         "llm_model_downgrade_reason": (
@@ -2802,10 +2885,12 @@ def _run_batch_llm_review_fix(
                 llm_decision_reason_code=llm_reason_code,
             )
             llm_meta["llm_decision_route"] = route_norm or "n/a"
-            llm_meta["llm_model_used"] = overall_model
+            llm_meta["llm_model_used"] = "not used"
+            llm_meta["llm_final_synthesis_model_id"] = "not used"
             llm_meta["llm_preferred_model_id"] = overall_preferred_model
             llm_meta["llm_model_selection_reason"] = overall_selection_reason
             llm_meta["llm_model_downgrade_reason"] = overall_downgrade_reason
+            llm_meta["llm_effective_model_id"] = overall_model
             llm_meta["llm_budget_action"] = bootstrap_decision.budget_action
             llm_meta["llm_governor_reason"] = bootstrap_decision.reason
             llm_meta["llm_request_mode"] = "patch" if is_patch_mode else "normal"
@@ -2846,10 +2931,12 @@ def _run_batch_llm_review_fix(
             llm_decision_reason_code=llm_reason_code,
         )
         llm_meta["llm_decision_route"] = route_norm or "n/a"
-        llm_meta["llm_model_used"] = overall_model
+        llm_meta["llm_model_used"] = "not used"
+        llm_meta["llm_final_synthesis_model_id"] = "not used"
         llm_meta["llm_preferred_model_id"] = overall_preferred_model
         llm_meta["llm_model_selection_reason"] = overall_selection_reason
         llm_meta["llm_model_downgrade_reason"] = overall_downgrade_reason
+        llm_meta["llm_effective_model_id"] = overall_model
         llm_meta["llm_request_mode"] = "patch" if is_patch_mode else "normal"
         llm_meta["llm_patch_batch_mode"] = bool(is_patch_mode)
         llm_meta["llm_patch_batch_count"] = 0
@@ -3113,6 +3200,12 @@ def _run_batch_llm_review_fix(
     tokens_completion_total = sum(_int_or_zero(item.get("tokens_completion", 0)) for item in calls)
     tokens_total_total = sum(_int_or_zero(item.get("tokens_total", 0)) for item in calls)
     model_counts = _build_model_counts(calls)
+    final_synthesis_model = "not used"
+    if any_used and calls:
+        if reduce_enable and reduce_text:
+            final_synthesis_model = str(calls[-1].get("model_id", "not used") or "not used")
+        else:
+            final_synthesis_model = str(calls[-1].get("model_id", "not used") or "not used")
     final_remaining = calls[-1].get("remaining_requests", "n/a") if calls else "n/a"
     final_remaining_estimated = bool(calls[-1].get("remaining_is_estimate", True)) if calls else True
     final_reset = calls[-1].get("reset_time_utc_iso") if calls else None
@@ -3125,10 +3218,14 @@ def _run_batch_llm_review_fix(
         "llm_decision_reason_code": llm_reason_code,
         "llm_runtime_override_reason": "n/a",
         "llm_decision_route": route_norm or "n/a",
-        "llm_model_used": next(iter(model_counts.keys()), overall_model),
+        "llm_model_used": final_synthesis_model if any_used else "not used",
+        "llm_final_synthesis_model_id": final_synthesis_model if any_used else "not used",
         "llm_preferred_model_id": overall_preferred_model,
         "llm_model_selection_reason": overall_selection_reason,
         "llm_model_downgrade_reason": overall_downgrade_reason,
+        "llm_primary_model_id": overall_model,
+        "llm_effective_model_id": final_synthesis_model if any_used else overall_model,
+        "llm_fallback_used": False,
         "llm_tier": "high" if any("gpt-4.1" in key and "mini" not in key for key in model_counts) else "low",
         "llm_budget_action": "; ".join(dict.fromkeys(budget_actions)) if budget_actions else "n/a",
         "llm_governor_reason": "; ".join(dict.fromkeys(governor_reasons)) if governor_reasons else "n/a",
@@ -4615,6 +4712,7 @@ def _build_qa_markdown(
         audit_summary.get("answer_grounding_mode", "retrieval") or "retrieval"
     )
     _merge_llm_meta(audit_summary, llm_meta)
+    audit_summary["command"] = cmd
     desired_llm = str(audit_summary.get("execution_mode", "retrieval_only")) == "retrieval_plus_llm"
     if desired_llm and not bool(llm_meta.get("llm_used", False)):
         override_reason = _runtime_override_reason_from_skip(str(llm_meta.get("llm_skip_reason", "n/a")))
@@ -4983,6 +5081,20 @@ def _build_review_markdown(
         audit_summary.get("llm_decision_reason_code", "DEFAULT_RETRIEVAL_ONLY")
         or "DEFAULT_RETRIEVAL_ONLY"
     )
+    if cmd == "fix":
+        (
+            llm_decision_intent,
+            llm_decision_reason_code,
+            llm_decision_reason_short,
+        ) = _normalize_fix_semantics(
+            execution_mode=execution_mode,
+            llm_intent=llm_decision_intent,
+            reason_code=llm_decision_reason_code,
+            reason_short=llm_decision_reason_short,
+        )
+        audit_summary["llm_intent"] = llm_decision_intent
+        audit_summary["llm_decision_reason_code"] = llm_decision_reason_code
+        audit_summary["llm_decision_reason_short"] = llm_decision_reason_short
     llm_context = dict(github_context_seed or {})
     if changed_files:
         llm_context["changed_files"] = list(changed_files)
@@ -4997,9 +5109,30 @@ def _build_review_markdown(
         limits={"query_length": len(query or question)},
     )
     patch_budget_stats: dict[str, Any] = {}
+    review_budget_stats: dict[str, Any] = {}
+    review_estimated_input_tokens = 0
     patch_estimated_input_tokens = 0
     diff_hunks_raw = llm_context.get("diff_hunks", [])
     diff_hunks = [str(item) for item in diff_hunks_raw if str(item).strip()] if isinstance(diff_hunks_raw, list) else []
+    if cmd == "review":
+        review_snippets = [
+            str(item.chunk_id)
+            for item in review_candidates[:120]
+            if str(getattr(item, "chunk_id", "")).strip()
+        ]
+        _, review_budget_stats = build_messages_for_review(
+            query=query or question,
+            changed_files=changed_files,
+            diff_hunks=diff_hunks,
+            max_input_tokens=int(cfg.llm.max_input_tokens_review_final),
+            selected_snippets=review_snippets,
+            max_files_context=int(cfg.llm.max_files_review_context),
+            max_findings_context=int(cfg.llm.max_findings_review_context),
+            max_hunks_context=int(cfg.llm.max_hunks_review_context),
+        )
+        review_estimated_input_tokens = int(
+            review_budget_stats.get("input_budget_used_est", 0) or 0
+        )
     if cmd == "fix":
         patch_snippets = [
             str(item.chunk_id)
@@ -5023,6 +5156,13 @@ def _build_review_markdown(
         diff_hunks_count=len(diff_hunks),
         estimated_patch_input_tokens=patch_estimated_input_tokens,
     )
+    if cmd == "review" and _review_context_needs_batch(
+        cfg=cfg,
+        changed_files_count=len(changed_files),
+        diff_hunks_count=len(diff_hunks),
+        estimated_input_tokens=review_estimated_input_tokens,
+    ):
+        use_batch_mode = True
     batch_result: dict[str, Any] = {
         "batch_used": False,
         "planned_batches": 0,
@@ -5034,8 +5174,14 @@ def _build_review_markdown(
         "no_patch_batches_count": 0,
         "no_patch_returned": False,
     }
+    review_compaction_attempted = False
+    review_batching_attempted = False
+    review_generation_result = "single_call"
     llm_text_for_patch = ""
     if use_batch_mode:
+        review_batching_attempted = cmd == "review"
+        if cmd == "review":
+            review_generation_result = "batch_mode"
         batch_result, llm_meta = _run_batch_llm_review_fix(
             repo_root=repo_root,
             cmd=cmd,
@@ -5078,6 +5224,71 @@ def _build_review_markdown(
         llm_text_for_patch = llm_text or ""
         if llm_text:
             review["summary_text"] = llm_text
+        if cmd == "review" and _int_or_zero(llm_meta.get("llm_provider_http_status", 0)) == 413:
+            review_compaction_attempted = True
+            compact_messages, compact_stats = build_messages_for_review(
+                query=query or question,
+                changed_files=changed_files,
+                diff_hunks=diff_hunks,
+                max_input_tokens=max(256, int(cfg.llm.max_input_tokens_review_final // 2)),
+                selected_snippets=[
+                    str(item.chunk_id)
+                    for item in review_candidates[:80]
+                    if str(getattr(item, "chunk_id", "")).strip()
+                ],
+                max_files_context=max(8, int(cfg.llm.max_files_review_context // 2)),
+                max_findings_context=max(8, int(cfg.llm.max_findings_review_context // 2)),
+                max_hunks_context=max(6, int(cfg.llm.max_hunks_review_context // 2)),
+            )
+            compact_text, compact_meta = _maybe_generate_llm_text(
+                cmd=cmd,
+                intent=llm_intent,
+                query=query or question,
+                route=llm_route,
+                execution_mode=execution_mode,
+                llm_intent_decision=llm_decision_intent,
+                llm_decision_reason_short=llm_decision_reason_short,
+                llm_decision_reason_code=llm_decision_reason_code,
+                github_context=llm_context,
+                locators=review_locators,
+                candidates_count=len(review_candidates),
+                prebuilt_messages=compact_messages,
+                prebuilt_budget_stats=compact_stats,
+                governor=governor,
+            )
+            if compact_text:
+                llm_meta = compact_meta
+                review["summary_text"] = compact_text
+                review_generation_result = "compacted_retry_ok"
+            else:
+                review_batching_attempted = True
+                batch_result, retried_meta = _run_batch_llm_review_fix(
+                    repo_root=repo_root,
+                    cmd=cmd,
+                    intent=llm_intent,
+                    query=query or question,
+                    route=llm_route,
+                    execution_mode=execution_mode,
+                    llm_intent_decision=llm_decision_intent,
+                    llm_decision_reason_short=llm_decision_reason_short,
+                    llm_decision_reason_code=llm_decision_reason_code,
+                    github_context=llm_context,
+                    selected_chunks=review_candidates,
+                    locators=review_locators,
+                    governor=governor,
+                    force_patch_batch=False,
+                )
+                use_batch_mode = True
+                llm_meta = retried_meta
+                if str(batch_result.get("summary_text", "")).strip():
+                    review["summary_text"] = str(batch_result.get("summary_text", "")).strip()
+                batch_findings = batch_result.get("findings", [])
+                if isinstance(batch_findings, list) and batch_findings:
+                    notes_raw = review.get("notes", [])
+                    notes = [str(item) for item in notes_raw if str(item).strip()] if isinstance(notes_raw, list) else []
+                    notes.extend(str(item) for item in batch_findings[:8] if str(item).strip())
+                    review["notes"] = list(dict.fromkeys(notes))
+                review_generation_result = "batch_retry_after_413"
         should_retry_patch_batch = _should_retry_patch_batch_after_single_call(
             cmd=cmd,
             llm_meta=llm_meta,
@@ -5151,6 +5362,36 @@ def _build_review_markdown(
             or 0
         )
     _merge_llm_meta(audit_summary, llm_meta)
+    audit_summary["command"] = cmd
+    if cmd == "review":
+        if review_generation_result == "single_call" and use_batch_mode:
+            review_generation_result = "batch_mode"
+        if (
+            review_generation_result == "single_call"
+            and not bool(llm_meta.get("llm_used", False))
+            and _int_or_zero(llm_meta.get("llm_provider_http_status", 0)) > 0
+        ):
+            review_generation_result = "provider_failed"
+        review_risk_drivers = review.get("risk_drivers", [])
+        if not isinstance(review_risk_drivers, list):
+            review_risk_drivers = []
+        audit_summary["review_batch_mode"] = bool(batch_result.get("batch_used", False) or use_batch_mode)
+        audit_summary["review_batch_count"] = int(batch_result.get("executed_batches", 0) or 0)
+        audit_summary["review_compacted"] = bool(
+            review_compaction_attempted
+            or review_budget_stats.get("review_compacted", False)
+            or llm_meta.get("llm_compacted", False)
+        )
+        audit_summary["review_generation_result"] = review_generation_result
+        audit_summary["review_risk_drivers"] = list(
+            dict.fromkeys(str(item).strip() for item in review_risk_drivers if str(item).strip())
+        )[:3]
+    if cmd == "fix":
+        audit_summary["patch_target_files_count"] = len(changed_files)
+        audit_summary["patch_grounding_mode"] = "pr_metadata" if changed_files else "retrieval"
+        audit_summary["patch_generation_result"] = str(
+            audit_summary.get("patch_generation_result", "pending") or "pending"
+        )
     desired_llm = str(audit_summary.get("execution_mode", "retrieval_only")) == "retrieval_plus_llm"
     if desired_llm and not bool(llm_meta.get("llm_used", False)):
         override_reason = _runtime_override_reason_from_skip(str(llm_meta.get("llm_skip_reason", "n/a")))
@@ -5181,6 +5422,13 @@ def _build_review_markdown(
             for model, count in sorted(model_counts.items(), key=lambda kv: kv[0])
         )
         audit_summary["llm_models_used"] = model_counts_str or "n/a"
+    if not bool(llm_meta.get("llm_used", False)):
+        audit_summary["llm_model_used"] = "not used"
+        audit_summary["llm_final_synthesis_model_id"] = "not used"
+    elif not str(audit_summary.get("llm_final_synthesis_model_id", "")).strip():
+        audit_summary["llm_final_synthesis_model_id"] = str(
+            audit_summary.get("llm_model_used", "not used") or "not used"
+        )
     audit_summary["llm_batch_used"] = bool(batch_result.get("batch_used", False))
     audit_summary["llm_batch_calls"] = int(llm_meta.get("llm_calls_this_run", 0) or 0)
     audit_summary["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
@@ -5196,6 +5444,30 @@ def _build_review_markdown(
         }
         path = _write_batch_summaries(repo_root, payload)
         audit_summary["batch_summaries_artifact"] = path.as_posix()
+    if cmd == "review":
+        review_debug_payload = {
+            "attempted_compaction": bool(review_compaction_attempted),
+            "attempted_review_batching": bool(review_batching_attempted or batch_result.get("batch_used", False)),
+            "estimated_input_tokens": int(review_estimated_input_tokens),
+            "final_summary_count": len(
+                [
+                    str(item).strip()
+                    for item in str(review.get("summary_text", "") or "").splitlines()
+                    if str(item).strip()
+                ]
+            ),
+            "provider_http_status": llm_meta.get("llm_provider_http_status"),
+            "provider_error_type": str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a"),
+            "review_generation_result": str(audit_summary.get("review_generation_result", "n/a") or "n/a"),
+            "review_batch_mode": bool(audit_summary.get("review_batch_mode", False)),
+            "review_batch_count": int(audit_summary.get("review_batch_count", 0) or 0),
+            "review_compacted": bool(audit_summary.get("review_compacted", False)),
+            "dropped_files_count": int(review_budget_stats.get("dropped_files_count", 0) or 0),
+            "dropped_findings_count": int(review_budget_stats.get("dropped_findings_count", 0) or 0),
+            "dropped_hunks_count": int(review_budget_stats.get("dropped_hunks_count", 0) or 0),
+        }
+        review_debug_path = _write_review_generation_debug(repo_root, review_debug_payload)
+        audit_summary["review_generation_debug_artifact"] = review_debug_path.as_posix()
 
     diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
     diagnostic_path = _write_diagnostic_summary_markdown(repo_root, diagnostic_markdown)
@@ -5244,11 +5516,20 @@ def _build_review_markdown(
             )
             audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
             audit["review_validation_artifact"] = review_validation_path.as_posix()
+            audit["review_generation_debug_artifact"] = str(
+                audit_summary.get("review_generation_debug_artifact", "n/a") or "n/a"
+            )
             audit["review_confirmed_findings_count"] = int(
                 audit_summary.get("review_confirmed_findings_count", 0) or 0
             )
             audit["review_possible_signals_count"] = int(
                 audit_summary.get("review_possible_signals_count", 0) or 0
+            )
+            audit["review_batch_mode"] = bool(audit_summary.get("review_batch_mode", False))
+            audit["review_batch_count"] = int(audit_summary.get("review_batch_count", 0) or 0)
+            audit["review_compacted"] = bool(audit_summary.get("review_compacted", False))
+            audit["review_generation_result"] = str(
+                audit_summary.get("review_generation_result", "n/a") or "n/a"
             )
             _merge_llm_meta(audit, llm_meta)
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
@@ -5442,6 +5723,12 @@ def _build_review_markdown(
     audit_summary["patch_validation_result"] = str(
         patch_validation_payload.get("status", "no_patch") or "no_patch"
     )
+    audit_summary["patch_generation_result"] = str(
+        patch_validation_payload.get("status", "no_patch") or "no_patch"
+    )
+    audit_summary["patch_validation_reason"] = str(
+        patch_validation_payload.get("reason_short", "n/a") or "n/a"
+    )
     audit_summary["patch_validation_artifact"] = "artifacts/patch_validation.json"
     combined_patch_message = f"{patch_apply_message}; {patch_pr_message}"
 
@@ -5499,6 +5786,18 @@ def _build_review_markdown(
         audit["patch_conflict_details"] = batch_patch_conflict_details[:20]
         audit["patch_validation_result"] = str(
             audit_summary.get("patch_validation_result", "n/a") or "n/a"
+        )
+        audit["patch_generation_result"] = str(
+            audit_summary.get("patch_generation_result", "n/a") or "n/a"
+        )
+        audit["patch_validation_reason"] = str(
+            audit_summary.get("patch_validation_reason", "n/a") or "n/a"
+        )
+        audit["patch_target_files_count"] = int(
+            audit_summary.get("patch_target_files_count", 0) or 0
+        )
+        audit["patch_grounding_mode"] = str(
+            audit_summary.get("patch_grounding_mode", "n/a") or "n/a"
         )
         audit["patch_validation_artifact"] = patch_validation_path.as_posix()
         if patch_debug_payload is not None:
