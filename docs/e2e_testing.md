@@ -111,6 +111,12 @@ Patch generation notes:
   - `Downgrade threshold (remaining requests)`
   - normalized budget action text when preferred model is retained
 - Review diagnostics should show the same retention/downgrade transparency for `openai/gpt-4.1` vs `openai/gpt-4.1-mini`.
+  - when final synthesis stays on preferred model but helper calls used mini, diagnostics must mark this as **intermediate downgrade** (not full final downgrade)
+
+Closed/merged PR UX:
+
+- `/repobrain review` and `/repobrain fix` on closed/merged PR should post an explicit usersafe skip comment (no silent skip).
+- skip diagnostics should include `skip_reason_code`, `skip_reason_short`, `skip_visible_to_user=true`.
 
 ## PASS/FAIL interpretation
 

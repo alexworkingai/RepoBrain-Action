@@ -825,6 +825,9 @@ def _llm_default_meta(
         "llm_model_selection_reason": "n/a",
         "llm_model_downgrade_reason": "n/a",
         "llm_retained_preferred_model_reason": "n/a",
+        "llm_final_synthesis_retained_preferred_model": False,
+        "llm_intermediate_downgrade_occurred": False,
+        "llm_intermediate_downgrade_reason": "n/a",
         "llm_downgrade_threshold_used": "n/a",
         "llm_primary_model_id": "not used",
         "llm_effective_model_id": "not used",
@@ -1214,6 +1217,15 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         ),
         "downgrade_threshold_used": str(
             llm_meta.get("llm_downgrade_threshold_used", "n/a") or "n/a"
+        ),
+        "final_synthesis_retained_preferred_model": bool(
+            llm_meta.get("llm_final_synthesis_retained_preferred_model", False)
+        ),
+        "intermediate_downgrade_occurred": bool(
+            llm_meta.get("llm_intermediate_downgrade_occurred", False)
+        ),
+        "intermediate_downgrade_reason": str(
+            llm_meta.get("llm_intermediate_downgrade_reason", "n/a") or "n/a"
         ),
         "primary_model_id": str(llm_meta.get("llm_primary_model_id", "not used") or "not used"),
         "effective_model_id": str(llm_meta.get("llm_effective_model_id", "not used") or "not used"),
@@ -5120,6 +5132,7 @@ def _build_review_markdown(
 
     files: list[dict[str, Any]]
     head_sha = ""
+    pull: dict[str, Any] = {}
     repo_name = extract_repo_from_env() or (client.repo if client is not None else "")
     if dry_run:
         files = []
@@ -5127,6 +5140,32 @@ def _build_review_markdown(
         if client is None:
             raise ValueError("GitHub client is required for PR review/fix in post mode")
         pull = client.get_pull(pull_number=issue_number)
+        pr_state = str(pull.get("state", "") or "").strip().lower()
+        pr_merged = bool(pull.get("merged", False))
+        if pr_state == "closed" or pr_merged:
+            status_label = "closed/merged" if pr_merged else "closed"
+            if cmd == "fix":
+                reason_short = (
+                    "Skipped: `/repobrain fix` runs only on open PRs with an active diff context. "
+                    f"This PR is already {status_label}. Run the command on an open PR."
+                )
+                reason_code = "pr_closed_or_merged_fix"
+            else:
+                reason_short = (
+                    "Skipped: `/repobrain review` runs only on open PRs. "
+                    f"This PR is already {status_label}. Run the command on an open PR."
+                )
+                reason_code = "pr_closed_or_merged_review"
+            if audit is not None:
+                audit["route_final"] = "WAIT"
+                audit["pass_count"] = 1
+                audit["index_source"] = "n/a"
+                audit["skip_reason_code"] = reason_code
+                audit["skip_reason_short"] = reason_short
+                audit["skip_visible_to_user"] = True
+                audit["pr_state"] = pr_state or "unknown"
+                audit["pr_merged"] = pr_merged
+            return reason_short
         head = pull.get("head", {})
         if isinstance(head, dict):
             head_sha = str(head.get("sha", "") or "")
@@ -5755,6 +5794,35 @@ def _build_review_markdown(
             for model, count in sorted(model_counts.items(), key=lambda kv: kv[0])
         )
         audit_summary["llm_models_used"] = model_counts_str or "n/a"
+    llm_used_flag = bool(llm_meta.get("llm_used", False))
+    preferred_model_id = str(llm_meta.get("llm_preferred_model_id", "n/a") or "n/a")
+    final_synthesis_model_id = str(
+        llm_meta.get("llm_final_synthesis_model_id", llm_meta.get("llm_model_used", "not used"))
+        or "not used"
+    )
+    final_synthesis_retained_preferred = (
+        llm_used_flag
+        and preferred_model_id not in {"", "n/a", "not used"}
+        and final_synthesis_model_id == preferred_model_id
+    )
+    has_mini_calls = isinstance(model_counts, dict) and any(
+        "mini" in str(model).lower() and _int_or_zero(count) > 0
+        for model, count in model_counts.items()
+    )
+    intermediate_downgrade_occurred = bool(final_synthesis_retained_preferred and has_mini_calls)
+    intermediate_downgrade_reason = "n/a"
+    if intermediate_downgrade_occurred:
+        intermediate_downgrade_reason = str(
+            llm_meta.get("llm_model_downgrade_reason", "n/a") or "n/a"
+        )
+        if intermediate_downgrade_reason == "n/a":
+            intermediate_downgrade_reason = str(llm_meta.get("llm_budget_action", "n/a") or "n/a")
+    llm_meta["llm_final_synthesis_retained_preferred_model"] = final_synthesis_retained_preferred
+    llm_meta["llm_intermediate_downgrade_occurred"] = intermediate_downgrade_occurred
+    llm_meta["llm_intermediate_downgrade_reason"] = intermediate_downgrade_reason
+    audit_summary["llm_final_synthesis_retained_preferred_model"] = final_synthesis_retained_preferred
+    audit_summary["llm_intermediate_downgrade_occurred"] = intermediate_downgrade_occurred
+    audit_summary["llm_intermediate_downgrade_reason"] = intermediate_downgrade_reason
     if not bool(llm_meta.get("llm_used", False)):
         audit_summary["llm_model_used"] = "not used"
         audit_summary["llm_final_synthesis_model_id"] = "not used"

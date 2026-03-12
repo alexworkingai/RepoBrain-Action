@@ -126,6 +126,8 @@ When review/fix verification runs:
 - `final_synthesis_model_id`
 - `preferred_model_id`, `model_selection_reason`, `model_downgrade_reason`
 - `retained_preferred_model_reason` (when preferred model is intentionally retained)
+- `final_synthesis_retained_preferred_model` (whether final synthesis stayed on preferred model)
+- `intermediate_downgrade_occurred`, `intermediate_downgrade_reason` (auxiliary-call downgrade clarity)
 - `primary_model_id`, `effective_model_id`, `fallback_used`
 - `provider_http_status`, `provider_error_type`
 - `calls_this_run`
@@ -190,6 +192,7 @@ When review/fix verification runs:
 Review rendering notes:
 
 - when `confirmed_findings_count=0`, user-facing review output renders a neutral `Confirmed findings: none.` line (no pseudo-finding text)
+- evidence-backed confirmed findings may include compact file references (`file:` / `files:`) when available
 
 `artifacts/review_generation_debug.json` (usersafe) includes:
 
@@ -271,6 +274,10 @@ Review rendering notes:
   - Provider / Quota
 - markdown tables with `Parameter | Value | Meaning / Risk`
 - undefined/disabled diagnostics moved to a compact dedicated section
+- skip diagnostics for closed/merged PR handling:
+  - `skip_reason_code`
+  - `skip_reason_short`
+  - `skip_visible_to_user`
 
 Safe defaults:
 
