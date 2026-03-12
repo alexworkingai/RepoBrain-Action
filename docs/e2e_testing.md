@@ -70,7 +70,10 @@ Diagnostic UX checks:
 - for review/fix diagnostics, validation fields should be present:
   - `Review confirmed findings`
   - `Review possible signals`
+  - `Review generation result`
+  - `Review batch mode`
   - `Patch validation`
+  - `Patch generation result`
 
 Artifacts are downloaded into:
 

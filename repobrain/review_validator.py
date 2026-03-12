@@ -27,6 +27,15 @@ def _severity_from_message(message: str) -> str:
     return "low"
 
 
+def _canonical_message(message: str) -> str:
+    return " ".join(str(message or "").strip().split())
+
+
+def _collect_evidence_paths(evidence: list[dict[str, str]]) -> list[str]:
+    paths = [str(item.get("path", "")).strip() for item in evidence if str(item.get("path", "")).strip()]
+    return sorted(set(paths))
+
+
 def _collect_risk_items(review: dict[str, Any]) -> list[dict[str, Any]]:
     raw_items = review.get("risk_items", [])
     if isinstance(raw_items, list) and raw_items:
@@ -82,10 +91,50 @@ def _compose_summary_text(base_summary: str, risk_level: str) -> str:
     return summary
 
 
+def _aggregate_risk_items(risk_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in risk_items:
+        message = _canonical_message(str(item.get("message", "") or ""))
+        if not message:
+            continue
+        severity = str(item.get("severity", "low") or "low").strip().lower()
+        if severity not in {"low", "medium", "high"}:
+            severity = _severity_from_message(message)
+        evidence_raw = item.get("evidence", [])
+        evidence = evidence_raw if isinstance(evidence_raw, list) else []
+        key = (severity, message.lower())
+        bucket = merged.setdefault(
+            key,
+            {
+                "message": message,
+                "severity": severity,
+                "evidence_paths": set(),
+            },
+        )
+        for path in _collect_evidence_paths(evidence):
+            bucket["evidence_paths"].add(path)
+
+    out: list[dict[str, Any]] = []
+    for key in sorted(merged, key=lambda item: (item[0], item[1])):
+        item = merged[key]
+        paths = sorted(path for path in item["evidence_paths"] if path)
+        out.append(
+            {
+                "message": str(item["message"]),
+                "severity": str(item["severity"]),
+                "evidence_paths": paths,
+                "evidence_count": len(paths),
+            }
+        )
+    return out
+
+
 def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
     """Validate review findings so severe claims are evidence-backed."""
     risk_items = _collect_risk_items(review)
+    aggregated_risks = _aggregate_risk_items(risk_items)
     confirmed_findings: list[str] = []
+    confirmed_risk_entries: list[dict[str, Any]] = []
     possible_signals: list[str] = []
     recommendations_raw = review.get("suggested_tests", review.get("next_steps", []))
     recommendations = (
@@ -94,37 +143,62 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         else []
     )
 
-    for item in risk_items:
-        message = str(item.get("message", "") or "").strip()
+    for item in aggregated_risks:
+        message = _canonical_message(str(item.get("message", "") or ""))
         if not message:
             continue
         severity = str(item.get("severity", "low") or "low").lower()
-        evidence_raw = item.get("evidence", [])
-        evidence = evidence_raw if isinstance(evidence_raw, list) else []
-        has_evidence = any(isinstance(entry, dict) and str(entry.get("path", "")).strip() for entry in evidence)
+        evidence_paths = [str(path).strip() for path in item.get("evidence_paths", []) if str(path).strip()]
+        has_evidence = bool(evidence_paths)
+        lowered = message.lower()
 
         if severity == "high" and not has_evidence:
             possible_signals.append(f"{message} (downgraded: missing evidence)")
             continue
-        if severity == "medium" and not has_evidence and "no obvious high-risk" not in message.lower():
+        if lowered.startswith("possible "):
+            possible_signals.append(f"{message} (signal: heuristic wording)")
+            continue
+        if severity in {"medium", "high"} and not has_evidence and "no obvious high-risk" not in lowered:
             possible_signals.append(f"{message} (signal: verify evidence)")
             continue
-        confirmed_findings.append(message)
+        evidence_suffix = f" (evidence: {len(evidence_paths)} file(s))" if evidence_paths else ""
+        confirmed_findings.append(f"{message}{evidence_suffix}")
+        confirmed_risk_entries.append(
+            {
+                "message": message,
+                "severity": severity,
+                "evidence_paths": evidence_paths,
+            }
+        )
 
-    if any(_severity_from_message(item) == "high" for item in confirmed_findings):
+    if any(str(item.get("severity", "low")) == "high" for item in confirmed_risk_entries):
         risk_level = "high"
-    elif any(_severity_from_message(item) == "medium" for item in confirmed_findings):
+    elif any(str(item.get("severity", "low")) == "medium" for item in confirmed_risk_entries):
         risk_level = "medium"
     elif possible_signals:
         risk_level = "medium"
     else:
         risk_level = "low"
 
+    risk_drivers: list[str] = []
+    for item in confirmed_risk_entries:
+        if str(item.get("severity", "low")) == "high":
+            risk_drivers.append(str(item.get("message", "")))
+    if not risk_drivers:
+        for item in confirmed_risk_entries:
+            if str(item.get("severity", "low")) == "medium":
+                risk_drivers.append(str(item.get("message", "")))
+                if len(risk_drivers) >= 3:
+                    break
+    if not risk_drivers:
+        risk_drivers.extend(signal for signal in possible_signals[:3])
+    risk_drivers = list(dict.fromkeys(item for item in risk_drivers if item))
+
     if not confirmed_findings:
         if possible_signals:
             confirmed_findings = ["No confirmed high-risk findings (signals require manual verification)."]
         else:
-            confirmed_findings = ["No obvious high-risk patterns detected"]
+            confirmed_findings = ["No evidence-backed high-risk findings detected."]
 
     validated = dict(review)
     validated["summary_text"] = _compose_summary_text(
@@ -133,18 +207,25 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
     )
     validated["risk_level"] = risk_level
     validated["confirmed_findings"] = confirmed_findings
-    validated["possible_signals"] = possible_signals
+    validated["possible_signals"] = list(dict.fromkeys(possible_signals))
     validated["recommendations"] = recommendations
+    validated["risk_drivers"] = risk_drivers
+    validated["confirmed_risk_items"] = confirmed_risk_entries
     # Backward-compatible output fields.
     validated["risks"] = confirmed_findings
     notes_raw = review.get("notes", [])
-    notes = [str(item).strip() for item in notes_raw if str(item).strip()] if isinstance(notes_raw, list) else []
-    notes.extend(possible_signals)
-    validated["notes"] = list(dict.fromkeys(notes))
+    informational_notes = (
+        [str(item).strip() for item in notes_raw if str(item).strip()]
+        if isinstance(notes_raw, list)
+        else []
+    )
+    validated["notes"] = list(dict.fromkeys(informational_notes))
+    validated["informational_notes"] = list(dict.fromkeys(informational_notes))
     validated["validation"] = {
         "confirmed_findings_count": len(confirmed_findings),
-        "possible_signals_count": len(possible_signals),
+        "possible_signals_count": len(validated["possible_signals"]),
+        "informational_notes_count": len(validated["informational_notes"]),
         "risk_level": risk_level,
+        "risk_drivers": risk_drivers,
     }
     return validated
-

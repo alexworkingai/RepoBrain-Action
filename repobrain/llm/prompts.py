@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 from repobrain.evidence import EvidenceItem
@@ -267,20 +268,68 @@ def build_messages_for_review(
     diff_hunks: list[str],
     max_input_tokens: int,
     selected_snippets: list[str] | None = None,
+    max_files_context: int = 40,
+    max_findings_context: int = 24,
+    max_hunks_context: int = 24,
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
-    locators_lines = [f"- {path}" for path in changed_files[:80]]
-    return _build_messages(
+    files = [str(path).strip() for path in changed_files if str(path).strip()]
+    unique_files = list(dict.fromkeys(files))
+    subsystem_counts: defaultdict[str, int] = defaultdict(int)
+    for path in unique_files:
+        root = path.split("/", 1)[0] if "/" in path else path
+        subsystem_counts[root] += 1
+
+    max_files = max(1, int(max_files_context))
+    max_findings = max(1, int(max_findings_context))
+    max_hunks = max(1, int(max_hunks_context))
+
+    grouped_summary_lines = [
+        f"- subsystem `{name}`: {count} file(s)"
+        for name, count in sorted(subsystem_counts.items(), key=lambda item: item[0])
+    ]
+    file_lines = [f"- {path}" for path in unique_files[:max_files]]
+    dropped_files = max(0, len(unique_files) - len(file_lines))
+
+    condensed_hunks = [str(item).strip() for item in diff_hunks if str(item).strip()]
+    hunk_lines = [
+        f"- hunk[{idx + 1}]: {_trim_to_budget(hunk, 72)}"
+        for idx, hunk in enumerate(condensed_hunks[:max_hunks])
+    ]
+    dropped_hunks_limit = max(0, len(condensed_hunks) - len(hunk_lines))
+
+    snippets = [str(item).strip() for item in (selected_snippets or []) if str(item).strip()]
+    finding_lines = [
+        f"- signal: {_trim_to_budget(item.split(':', 1)[0], 12)}"
+        for item in snippets[:max_findings]
+    ]
+    dropped_findings = max(0, len(snippets) - len(finding_lines))
+
+    locators_lines = [
+        *grouped_summary_lines[:max_findings],
+        *file_lines,
+        *finding_lines,
+    ]
+    messages, stats = _build_messages(
         system_content=(
             "You are RepoBrain PR reviewer. Be usersafe and deterministic. "
-            "Focus on risks, impact, and practical next steps."
+            "Use hierarchical synthesis: (1) PR metadata summary, (2) targeted evidence, "
+            "(3) concise final review. Focus on risks, impact, and practical next steps."
         ),
         task_line="Task: produce concise PR review summary.",
         query=query,
         locators_lines=locators_lines,
-        diff_hunks=[str(item) for item in diff_hunks],
-        selected_snippets=[str(item) for item in (selected_snippets or [])],
+        diff_hunks=hunk_lines,
+        selected_snippets=[],
         max_input_tokens=max_input_tokens,
     )
+    stats["review_compacted"] = True
+    stats["review_files_included"] = len(file_lines)
+    stats["review_hunks_included"] = len(hunk_lines)
+    stats["review_findings_included"] = len(finding_lines)
+    stats["dropped_files_count"] = int(dropped_files)
+    stats["dropped_findings_count"] = int(dropped_findings)
+    stats["dropped_hunks_count"] = int(stats.get("dropped_hunks_count", 0)) + int(dropped_hunks_limit)
+    return messages, stats
 
 
 def build_messages_for_fix(
