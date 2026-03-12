@@ -163,6 +163,9 @@ When review/fix verification runs:
 - `estimated_input_tokens`, `max_output_tokens_used`
 - `patch_batch_mode`, `patch_batch_count`
 - `compacted`, `attempted_compaction`, `attempted_patch_batch`
+- `patch_target_files_total`, `patch_target_files_selected`
+- `patch_targeting_mode`, `patch_targeting_reason`
+- `localized_patch_evidence_count`
 - `found_fenced_diff`, `found_raw_diff`, `has_json_envelope`, `has_no_patch`
 - `raw_output_shape`:
   - `has_diff_fence`
@@ -181,6 +184,7 @@ When review/fix verification runs:
 - `validation.confirmed_findings_count`
 - `validation.possible_signals_count`
 - `validation.informational_notes_count`
+- `validation.risk_drivers_count`
 
 `artifacts/review_generation_debug.json` (usersafe) includes:
 

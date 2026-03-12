@@ -48,6 +48,7 @@ from repobrain.retrieval.hybrid import rank_hybrid_candidates
 from repobrain.review import build_pr_review
 from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
+from repobrain.patch_targeting import select_patch_targets
 from repobrain.security_policy import classify_security_scope
 from repobrain.tky_local import LocalTKYProvider
 from repobrain.tky_provider import CandidateChunk, TKYResult
@@ -823,6 +824,8 @@ def _llm_default_meta(
         "llm_preferred_model_id": "n/a",
         "llm_model_selection_reason": "n/a",
         "llm_model_downgrade_reason": "n/a",
+        "llm_retained_preferred_model_reason": "n/a",
+        "llm_downgrade_threshold_used": "n/a",
         "llm_primary_model_id": "not used",
         "llm_effective_model_id": "not used",
         "llm_fallback_used": False,
@@ -875,6 +878,57 @@ def _merge_embeddings_meta(target: dict[str, Any], meta: dict[str, Any]) -> None
 
 def _is_fix_intent(cmd: str, intent: str) -> bool:
     return cmd == "fix" or intent == "patch"
+
+
+def _llm_downgrade_threshold_for_command(cfg: RepoBrainConfig, cmd: str, intent: str) -> int:
+    normalized_cmd = str(cmd or "").strip().lower()
+    normalized_intent = str(intent or "").strip().lower()
+    if _is_fix_intent(normalized_cmd, normalized_intent):
+        return max(0, int(cfg.llm.downgrade_min_remaining_requests_fix))
+    if normalized_cmd == "review":
+        return max(0, int(cfg.llm.downgrade_min_remaining_requests_review))
+    return max(0, int(cfg.llm.downgrade_min_remaining_requests_ask))
+
+
+def _should_retain_preferred_model_for_ask(
+    *,
+    cfg: RepoBrainConfig,
+    cmd: str,
+    execution_mode: str,
+    llm_intent: str,
+    route: str,
+    complexity_score: int,
+    remaining_requests: int | None,
+    github_context: dict[str, Any],
+) -> tuple[bool, str]:
+    if not bool(cfg.llm.force_strong_model_for_complex_ask):
+        return False, "n/a"
+    if str(cmd or "").strip().lower() not in {"ask", "explain"}:
+        return False, "n/a"
+    if str(execution_mode or "").strip().lower() != "retrieval_plus_llm":
+        return False, "n/a"
+    intent_norm = str(llm_intent or "").strip().lower()
+    if intent_norm not in {"summarize", "explain"}:
+        return False, "n/a"
+    threshold = max(0, int(cfg.llm.downgrade_min_remaining_requests_ask))
+    if remaining_requests is not None and int(remaining_requests) < threshold:
+        return False, "n/a"
+    route_norm = str(route or "").strip().upper()
+    changed_files = github_context.get("changed_files", [])
+    changed_count = len(changed_files) if isinstance(changed_files, list) else 0
+    high_complexity = int(complexity_score) >= 60
+    very_high_complexity = int(complexity_score) >= 75
+    strong_pr_context = changed_count >= 3 and route_norm == "FAST"
+    if not (high_complexity or route_norm == "DEEP" or strong_pr_context):
+        return False, "n/a"
+    if remaining_requests is None and not (very_high_complexity or route_norm == "DEEP"):
+        return False, "n/a"
+    if remaining_requests is None:
+        return True, "retained preferred model: complex ask/explain in estimate mode"
+    reason = (
+        "retained preferred model: complex ask/explain with sufficient remaining quota"
+    )
+    return True, reason
 
 
 def _normalize_fix_semantics(
@@ -1108,6 +1162,12 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         ),
         "model_downgrade_reason": str(
             llm_meta.get("llm_model_downgrade_reason", "n/a") or "n/a"
+        ),
+        "retained_preferred_model_reason": str(
+            llm_meta.get("llm_retained_preferred_model_reason", "n/a") or "n/a"
+        ),
+        "downgrade_threshold_used": str(
+            llm_meta.get("llm_downgrade_threshold_used", "n/a") or "n/a"
         ),
         "primary_model_id": str(llm_meta.get("llm_primary_model_id", "not used") or "not used"),
         "effective_model_id": str(llm_meta.get("llm_effective_model_id", "not used") or "not used"),
@@ -2083,6 +2143,10 @@ def _maybe_generate_llm_text(
             llm_meta["llm_preferred_model_id"] = preferred_model_id_resolved
             llm_meta["llm_model_selection_reason"] = selection_reason
             llm_meta["llm_model_downgrade_reason"] = model_downgrade_reason
+            llm_meta["llm_retained_preferred_model_reason"] = "n/a"
+            llm_meta["llm_downgrade_threshold_used"] = str(
+                _llm_downgrade_threshold_for_command(cfg, cmd, effective_intent)
+            )
             llm_meta["llm_effective_model_id"] = model_id
             llm_meta["llm_tier"] = tier
             llm_meta["llm_budget_action"] = decision.budget_action
@@ -2137,11 +2201,43 @@ def _maybe_generate_llm_text(
                 allowed=True,
             )
         if decision.switch_to_mini and "mini" not in model_id.lower():
-            model_id = model_low
-            tier = "low"
-            model_downgrade_reason = "budget_policy: switched to mini due remaining/quota constraints"
+            downgrade_threshold = _llm_downgrade_threshold_for_command(cfg, cmd, effective_intent)
+            retain_preferred, retain_reason = _should_retain_preferred_model_for_ask(
+                cfg=cfg,
+                cmd=cmd,
+                execution_mode=normalized_execution_mode,
+                llm_intent=normalized_llm_intent,
+                route=normalized_route,
+                complexity_score=complexity_score,
+                remaining_requests=governor.llm_last_remaining,
+                github_context=github_context,
+            )
+            if retain_preferred:
+                model_downgrade_reason = "n/a"
+                llm_retained_preferred_model_reason = retain_reason
+            elif governor.llm_last_remaining is not None and int(governor.llm_last_remaining) >= downgrade_threshold:
+                model_downgrade_reason = "n/a"
+                llm_retained_preferred_model_reason = (
+                    "retained preferred model: remaining quota above downgrade threshold"
+                )
+            else:
+                model_id = model_low
+                tier = "low"
+                model_downgrade_reason = "budget_policy: switched to mini due remaining/quota constraints"
+                llm_retained_preferred_model_reason = "n/a"
+            llm_downgrade_threshold_used = str(downgrade_threshold)
+        else:
+            llm_retained_preferred_model_reason = "n/a"
+            llm_downgrade_threshold_used = str(
+                _llm_downgrade_threshold_for_command(cfg, cmd, effective_intent)
+            )
         if decision.budget_action != "n/a":
             governor_action = decision.budget_action
+    else:
+        llm_retained_preferred_model_reason = "n/a"
+        llm_downgrade_threshold_used = str(
+            _llm_downgrade_threshold_for_command(cfg, cmd, effective_intent)
+        )
     client = GitHubModelsClient(token=token)
     primary_model_id = model_id
     effective_model_id = model_id
@@ -2209,6 +2305,8 @@ def _maybe_generate_llm_text(
         llm_meta["llm_preferred_model_id"] = preferred_model_id_resolved
         llm_meta["llm_model_selection_reason"] = selection_reason
         llm_meta["llm_model_downgrade_reason"] = model_downgrade_reason
+        llm_meta["llm_retained_preferred_model_reason"] = llm_retained_preferred_model_reason
+        llm_meta["llm_downgrade_threshold_used"] = llm_downgrade_threshold_used
         llm_meta["llm_primary_model_id"] = primary_model_id
         llm_meta["llm_effective_model_id"] = effective_model_id if fallback_used else primary_model_id
         llm_meta["llm_fallback_used"] = bool(fallback_used)
@@ -2287,6 +2385,8 @@ def _maybe_generate_llm_text(
             if fallback_used and str(response.model_id).strip().lower() != preferred_model_id_resolved.lower()
             else model_downgrade_reason
         ),
+        "llm_retained_preferred_model_reason": llm_retained_preferred_model_reason,
+        "llm_downgrade_threshold_used": llm_downgrade_threshold_used,
         "llm_primary_model_id": primary_model_id,
         "llm_effective_model_id": response.model_id,
         "llm_fallback_used": bool(fallback_used),
@@ -2890,6 +2990,10 @@ def _run_batch_llm_review_fix(
             llm_meta["llm_preferred_model_id"] = overall_preferred_model
             llm_meta["llm_model_selection_reason"] = overall_selection_reason
             llm_meta["llm_model_downgrade_reason"] = overall_downgrade_reason
+            llm_meta["llm_retained_preferred_model_reason"] = "n/a"
+            llm_meta["llm_downgrade_threshold_used"] = str(
+                _llm_downgrade_threshold_for_command(cfg, cmd, intent)
+            )
             llm_meta["llm_effective_model_id"] = overall_model
             llm_meta["llm_budget_action"] = bootstrap_decision.budget_action
             llm_meta["llm_governor_reason"] = bootstrap_decision.reason
@@ -2936,6 +3040,10 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_preferred_model_id"] = overall_preferred_model
         llm_meta["llm_model_selection_reason"] = overall_selection_reason
         llm_meta["llm_model_downgrade_reason"] = overall_downgrade_reason
+        llm_meta["llm_retained_preferred_model_reason"] = "n/a"
+        llm_meta["llm_downgrade_threshold_used"] = str(
+            _llm_downgrade_threshold_for_command(cfg, cmd, intent)
+        )
         llm_meta["llm_effective_model_id"] = overall_model
         llm_meta["llm_request_mode"] = "patch" if is_patch_mode else "normal"
         llm_meta["llm_patch_batch_mode"] = bool(is_patch_mode)
@@ -3223,6 +3331,10 @@ def _run_batch_llm_review_fix(
         "llm_preferred_model_id": overall_preferred_model,
         "llm_model_selection_reason": overall_selection_reason,
         "llm_model_downgrade_reason": overall_downgrade_reason,
+        "llm_retained_preferred_model_reason": "n/a",
+        "llm_downgrade_threshold_used": str(
+            _llm_downgrade_threshold_for_command(cfg, cmd, intent)
+        ),
         "llm_primary_model_id": overall_model,
         "llm_effective_model_id": final_synthesis_model if any_used else overall_model,
         "llm_fallback_used": False,
@@ -5044,6 +5156,16 @@ def _build_review_markdown(
     audit_summary["review_possible_signals_count"] = int(
         validation.get("possible_signals_count", 0) or 0
     )
+    risk_drivers_raw = review.get("risk_drivers", [])
+    risk_drivers = (
+        [str(item).strip() for item in risk_drivers_raw if str(item).strip()]
+        if isinstance(risk_drivers_raw, list)
+        else []
+    )
+    audit_summary["review_risk_drivers_count"] = len(risk_drivers)
+    audit_summary["review_informational_notes_count"] = int(
+        validation.get("informational_notes_count", 0) or 0
+    )
     audit_summary["review_validation_artifact"] = "artifacts/review_validation.json"
     audit_summary["patch_validation_result"] = "n/a"
     changed_files = list(dict.fromkeys(str(item.get("filename", "")).strip() for item in files if item.get("filename")))
@@ -5052,11 +5174,66 @@ def _build_review_markdown(
         for item in files
         if isinstance(item, dict) and str(item.get("patch", "")).strip()
     ]
+    patch_targeting: dict[str, Any] = {
+        "patch_target_files_total": len(changed_files),
+        "patch_target_files_selected": len(changed_files),
+        "patch_target_hunks_selected": len(changed_file_hunks),
+        "patch_targeting_mode": "full_pr_context",
+        "patch_targeting_reason": "not_applicable",
+        "localized_patch_evidence_count": 0,
+        "selected_files": list(changed_files),
+        "selected_hunks": list(changed_file_hunks),
+    }
+    if cmd == "fix":
+        patch_targeting = select_patch_targets(
+            files=files,
+            review=review,
+            query=query or question,
+            max_target_files=int(cfg.llm.patch_max_target_files),
+            max_target_hunks=int(cfg.llm.patch_max_target_hunks),
+            require_localized_evidence=bool(cfg.llm.patch_require_localized_evidence),
+        )
+        selected_files_raw = patch_targeting.get("selected_files", [])
+        selected_hunks_raw = patch_targeting.get("selected_hunks", [])
+        selected_files = (
+            [str(item).strip() for item in selected_files_raw if str(item).strip()]
+            if isinstance(selected_files_raw, list)
+            else []
+        )
+        selected_hunks = (
+            [str(item).strip() for item in selected_hunks_raw if str(item).strip()]
+            if isinstance(selected_hunks_raw, list)
+            else []
+        )
+        changed_files = list(dict.fromkeys(selected_files))
+        changed_file_hunks = list(dict.fromkeys(selected_hunks))
     if changed_files:
         audit_summary["touched_files"] = changed_files
     audit_summary["pr_changed_files_count"] = len(changed_files)
     audit_summary["pr_metadata_used"] = bool(changed_files)
     audit_summary["answer_grounding_mode"] = "hybrid" if changed_files else "retrieval"
+    if cmd == "fix":
+        audit_summary["patch_target_files_total"] = int(
+            patch_targeting.get("patch_target_files_total", len(files)) or 0
+        )
+        audit_summary["patch_target_files_selected"] = int(
+            patch_targeting.get("patch_target_files_selected", len(changed_files)) or 0
+        )
+        audit_summary["patch_target_hunks_selected"] = int(
+            patch_targeting.get("patch_target_hunks_selected", len(changed_file_hunks)) or 0
+        )
+        audit_summary["patch_targeting_mode"] = str(
+            patch_targeting.get("patch_targeting_mode", "n/a") or "n/a"
+        )
+        audit_summary["patch_targeting_reason"] = str(
+            patch_targeting.get("patch_targeting_reason", "n/a") or "n/a"
+        )
+        audit_summary["localized_patch_evidence_count"] = int(
+            patch_targeting.get("localized_patch_evidence_count", 0) or 0
+        )
+        audit_summary["patch_grounding_mode"] = (
+            "pr_metadata" if bool(audit_summary["patch_target_files_selected"]) else "none"
+        )
     review_locators = [
         EvidenceItem(
             file_path=item.file_path,
@@ -5177,8 +5354,36 @@ def _build_review_markdown(
     review_compaction_attempted = False
     review_batching_attempted = False
     review_generation_result = "single_call"
+    no_localized_patch_target = (
+        cmd == "fix"
+        and bool(cfg.llm.patch_require_localized_evidence)
+        and len(changed_files) == 0
+    )
     llm_text_for_patch = ""
-    if use_batch_mode:
+    if no_localized_patch_target:
+        llm_meta = _llm_default_meta(
+            "no_localized_patch_target",
+            execution_mode=execution_mode,
+            llm_intent=llm_decision_intent,
+            llm_decision_reason_short=(
+                "LLM not used: no sufficiently localized, evidence-backed patch target."
+            ),
+            llm_decision_reason_code="FIX_CONTEXT_INSUFFICIENT",
+        )
+        llm_meta["llm_request_mode"] = "patch"
+        llm_meta["llm_compacted"] = True
+        llm_meta["llm_attempted_compaction"] = False
+        llm_meta["llm_patch_batch_mode"] = False
+        llm_meta["llm_patch_batch_count"] = 0
+        llm_meta["llm_attempted_patch_batch"] = False
+        llm_meta["llm_model_used"] = "not used"
+        llm_meta["llm_final_synthesis_model_id"] = "not used"
+        llm_meta["llm_effective_model_id"] = "not used"
+        llm_meta["llm_retained_preferred_model_reason"] = "n/a"
+        llm_meta["llm_downgrade_threshold_used"] = str(
+            _llm_downgrade_threshold_for_command(cfg, cmd, llm_intent)
+        )
+    elif use_batch_mode:
         review_batching_attempted = cmd == "review"
         if cmd == "review":
             review_generation_result = "batch_mode"
@@ -5325,7 +5530,10 @@ def _build_review_markdown(
     if cmd == "fix":
         llm_meta.setdefault("llm_request_mode", "patch")
         llm_meta["llm_compacted"] = True
-        llm_meta["llm_attempted_compaction"] = True
+        llm_meta["llm_attempted_compaction"] = bool(
+            llm_meta.get("llm_attempted_compaction", False)
+            or (not no_localized_patch_target)
+        )
         llm_meta["llm_patch_batch_mode"] = bool(batch_result.get("batch_used", False))
         llm_meta["llm_patch_batch_count"] = int(batch_result.get("executed_batches", 0) or 0)
         llm_meta["llm_attempted_patch_batch"] = bool(
@@ -5553,6 +5761,9 @@ def _build_review_markdown(
     no_patch_response = False
     extraction_path_used = "none"
     response_chars = 0
+    if no_localized_patch_target:
+        no_patch_response = True
+        extraction_path_used = "patch_targeting_no_patch"
     if not patch_text and llm_text_for_patch:
         (
             patch_text,
@@ -5715,6 +5926,19 @@ def _build_review_markdown(
             ),
             "patch_validation_reason_short": str(
                 patch_validation_payload.get("reason_short", "n/a") or "n/a"
+            ),
+            "patch_target_files_total": int(audit_summary.get("patch_target_files_total", 0) or 0),
+            "patch_target_files_selected": int(
+                audit_summary.get("patch_target_files_selected", 0) or 0
+            ),
+            "patch_targeting_mode": str(
+                audit_summary.get("patch_targeting_mode", "n/a") or "n/a"
+            ),
+            "patch_targeting_reason": str(
+                audit_summary.get("patch_targeting_reason", "n/a") or "n/a"
+            ),
+            "localized_patch_evidence_count": int(
+                audit_summary.get("localized_patch_evidence_count", 0) or 0
             ),
         }
         debug_path = _write_patch_generation_debug(repo_root, patch_debug_payload)

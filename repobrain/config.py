@@ -202,6 +202,9 @@ class LLMConfig:
     max_files_review_context: int = 40
     max_findings_review_context: int = 24
     max_hunks_review_context: int = 24
+    patch_max_target_files: int = 5
+    patch_max_target_hunks: int = 12
+    patch_require_localized_evidence: bool = True
     max_output_tokens_global: int = 2000
     max_output_tokens_ask: int = 1000
     max_output_tokens_review: int = 1400
@@ -211,6 +214,10 @@ class LLMConfig:
     enable_issue_comment: bool = True
     enable_pr_comments: bool = True
     enable_issue_only: bool = False
+    downgrade_min_remaining_requests_ask: int = 8
+    downgrade_min_remaining_requests_review: int = 4
+    downgrade_min_remaining_requests_fix: int = 5
+    force_strong_model_for_complex_ask: bool = True
 
 
 @dataclass(frozen=True)
@@ -384,6 +391,28 @@ class RepoBrainConfig:
                 max_value=500,
                 warnings=warnings,
             ),
+            patch_max_target_files=env_int(
+                "RB_LLM_PATCH_MAX_TARGET_FILES",
+                5,
+                source=env_source,
+                min_value=1,
+                max_value=100,
+                warnings=warnings,
+            ),
+            patch_max_target_hunks=env_int(
+                "RB_LLM_PATCH_MAX_TARGET_HUNKS",
+                12,
+                source=env_source,
+                min_value=1,
+                max_value=300,
+                warnings=warnings,
+            ),
+            patch_require_localized_evidence=env_bool(
+                "RB_LLM_PATCH_REQUIRE_LOCALIZED_EVIDENCE",
+                True,
+                source=env_source,
+                warnings=warnings,
+            ),
             max_output_tokens_global=env_int(
                 "RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL",
                 2000,
@@ -440,6 +469,36 @@ class RepoBrainConfig:
             enable_issue_only=env_bool(
                 "RB_LLM_ENABLE_ISSUE_ONLY",
                 False,
+                source=env_source,
+                warnings=warnings,
+            ),
+            downgrade_min_remaining_requests_ask=env_int(
+                "RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_ASK",
+                8,
+                source=env_source,
+                min_value=0,
+                max_value=1000,
+                warnings=warnings,
+            ),
+            downgrade_min_remaining_requests_review=env_int(
+                "RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_REVIEW",
+                4,
+                source=env_source,
+                min_value=0,
+                max_value=1000,
+                warnings=warnings,
+            ),
+            downgrade_min_remaining_requests_fix=env_int(
+                "RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_FIX",
+                5,
+                source=env_source,
+                min_value=0,
+                max_value=1000,
+                warnings=warnings,
+            ),
+            force_strong_model_for_complex_ask=env_bool(
+                "RB_LLM_FORCE_STRONG_MODEL_FOR_COMPLEX_ASK",
+                True,
                 source=env_source,
                 warnings=warnings,
             ),
@@ -892,6 +951,28 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
         min_value=1,
         max_value=500,
     ),
+    EnvVarSpec(
+        "RB_LLM_PATCH_MAX_TARGET_FILES",
+        "int",
+        "5",
+        "Maximum files selected for localized patch generation.",
+        min_value=1,
+        max_value=100,
+    ),
+    EnvVarSpec(
+        "RB_LLM_PATCH_MAX_TARGET_HUNKS",
+        "int",
+        "12",
+        "Maximum hunks selected for localized patch generation.",
+        min_value=1,
+        max_value=300,
+    ),
+    EnvVarSpec(
+        "RB_LLM_PATCH_REQUIRE_LOCALIZED_EVIDENCE",
+        "bool",
+        "1",
+        "Require localized evidence before running patch generation.",
+    ),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_GLOBAL", "int", "2000", "Global max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_ASK", "int", "1000", "Ask max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_REVIEW", "int", "1400", "Review max output tokens.", min_value=200, max_value=16000),
@@ -901,6 +982,36 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec("RB_LLM_ENABLE_ISSUE_COMMENT", "bool", "1", "Allow LLM for issue_comment event path."),
     EnvVarSpec("RB_LLM_ENABLE_PR_COMMENTS", "bool", "1", "Allow LLM for issue_comment on PR discussions."),
     EnvVarSpec("RB_LLM_ENABLE_ISSUE_ONLY", "bool", "0", "Allow LLM for issue_comment on non-PR issues."),
+    EnvVarSpec(
+        "RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_ASK",
+        "int",
+        "8",
+        "Minimum remaining requests before allowing ask downgrade from preferred model.",
+        min_value=0,
+        max_value=1000,
+    ),
+    EnvVarSpec(
+        "RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_REVIEW",
+        "int",
+        "4",
+        "Minimum remaining requests before allowing review downgrade from preferred model.",
+        min_value=0,
+        max_value=1000,
+    ),
+    EnvVarSpec(
+        "RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_FIX",
+        "int",
+        "5",
+        "Minimum remaining requests before allowing fix downgrade from preferred model.",
+        min_value=0,
+        max_value=1000,
+    ),
+    EnvVarSpec(
+        "RB_LLM_FORCE_STRONG_MODEL_FOR_COMPLEX_ASK",
+        "bool",
+        "1",
+        "Retain preferred strong model for complex ask/explain when quota remains comfortable.",
+    ),
     EnvVarSpec("RB_LLM_BATCH_ENABLE", "bool", "0", "Enable batch map-reduce LLM mode."),
     EnvVarSpec("RB_LLM_BATCH_FORCE", "bool", "0", "Force batch mode for review/fix in controlled runs."),
     EnvVarSpec("RB_LLM_BATCH_MAX_CALLS_PER_RUN", "int", "6", "Batch LLM call cap per run.", min_value=1, max_value=100),

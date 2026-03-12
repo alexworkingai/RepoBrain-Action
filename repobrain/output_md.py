@@ -21,6 +21,23 @@ def _route(audit_summary: dict[str, Any]) -> str:
     return route or "FAST"
 
 
+def _clean_review_tldr(summary_text: str) -> str:
+    lines = [str(item).strip() for item in str(summary_text or "").splitlines() if str(item).strip()]
+    cleaned: list[str] = []
+    for line in lines:
+        lowered = line.lower()
+        if lowered.startswith("(1) pr metadata summary"):
+            continue
+        if lowered.startswith("(2) targeted evidence"):
+            continue
+        if lowered.startswith("(3) concise final review"):
+            continue
+        cleaned.append(line)
+    if not cleaned:
+        return "Review summary available in findings and diagnostics."
+    return " ".join(cleaned)
+
+
 def _int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
@@ -157,6 +174,8 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     preferred_model_id = str(audit_summary.get("llm_preferred_model_id", "n/a") or "n/a")
     selection_reason = str(audit_summary.get("llm_model_selection_reason", "n/a") or "n/a")
     downgrade_reason = str(audit_summary.get("llm_model_downgrade_reason", "n/a") or "n/a")
+    retained_reason = str(audit_summary.get("llm_retained_preferred_model_reason", "n/a") or "n/a")
+    downgrade_threshold = str(audit_summary.get("llm_downgrade_threshold_used", "n/a") or "n/a")
     prompt = _int(audit_summary.get("llm_tokens_prompt", 0))
     completion = _int(audit_summary.get("llm_tokens_completion", 0))
     total = _int(audit_summary.get("llm_tokens_total", 0))
@@ -209,6 +228,10 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     )
     if downgrade_reason != "n/a":
         lines.append(f"- Model downgrade reason: {downgrade_reason}")
+    if retained_reason != "n/a":
+        lines.append(f"- Preferred model retained: {retained_reason}")
+    if downgrade_threshold != "n/a":
+        lines.append(f"- Downgrade threshold (remaining requests): {downgrade_threshold}")
     if budget_action != "n/a":
         lines.append(f"- AI Budget action: {budget_action}")
     return lines
@@ -360,8 +383,28 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             [
                 (
                     "Patch target files",
-                    _int(audit_summary.get("patch_target_files_count", 0)),
+                    _int(
+                        audit_summary.get(
+                            "patch_target_files_selected",
+                            audit_summary.get("patch_target_files_count", 0),
+                        )
+                    ),
                     "Number of files targeted by patch generation context.",
+                ),
+                (
+                    "Patch target files total",
+                    _int(audit_summary.get("patch_target_files_total", 0)),
+                    "Total candidate files considered before patch-target narrowing.",
+                ),
+                (
+                    "Patch targeting mode",
+                    audit_summary.get("patch_targeting_mode", "n/a"),
+                    "Localized patch-target selection strategy outcome.",
+                ),
+                (
+                    "Patch targeting reason",
+                    audit_summary.get("patch_targeting_reason", "n/a"),
+                    "Why patch targets were narrowed or no patch target was selected.",
                 ),
                 (
                     "Patch grounding mode",
@@ -374,13 +417,18 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     "Patch generation classification before publish.",
                 ),
                 (
+                    "Localized patch evidence",
+                    _int(audit_summary.get("localized_patch_evidence_count", 0)),
+                    "Count of localized evidence/query signals used for patch targeting.",
+                ),
+                (
                     "Patch validation",
                     audit_summary.get("patch_validation_result", "n/a"),
                     "Patch validation classification before publication.",
                 ),
             ]
         )
-    else:
+    elif command == "review":
         retrieval_rows.extend(
             [
                 (
@@ -392,6 +440,16 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     "Review possible signals",
                     _int(audit_summary.get("review_possible_signals_count", 0)),
                     "Count of downgraded heuristic signals without strong evidence.",
+                ),
+                (
+                    "Review risk drivers",
+                    _int(audit_summary.get("review_risk_drivers_count", 0)),
+                    "Count of explicit reasons driving current risk level.",
+                ),
+                (
+                    "Review informational notes",
+                    _int(audit_summary.get("review_informational_notes_count", 0)),
+                    "Count of non-risk informational notes in review output.",
                 ),
                 (
                     "Review generation result",
@@ -412,6 +470,21 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     "Review batch count",
                     _int(audit_summary.get("review_batch_count", 0)),
                     "Executed review batch calls count.",
+                ),
+            ]
+        )
+    else:
+        retrieval_rows.extend(
+            [
+                (
+                    "PR metadata used",
+                    bool(audit_summary.get("pr_metadata_used", False)),
+                    "Whether authoritative PR metadata grounded this answer.",
+                ),
+                (
+                    "Answer grounding mode",
+                    audit_summary.get("answer_grounding_mode", "retrieval"),
+                    "Primary grounding source for ask/explain output.",
                 ),
             ]
         )
@@ -528,6 +601,16 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     "Model downgrade reason",
                     audit_summary.get("llm_model_downgrade_reason", "n/a"),
                     "Runtime/governor reason for downgrade from preferred model.",
+                ),
+                (
+                    "Retained preferred model reason",
+                    audit_summary.get("llm_retained_preferred_model_reason", "n/a"),
+                    "Why preferred model was retained despite downgrade opportunity.",
+                ),
+                (
+                    "Downgrade threshold",
+                    audit_summary.get("llm_downgrade_threshold_used", "n/a"),
+                    "Remaining-request threshold used for downgrade decisions.",
                 ),
                 ("Tokens total", _int(audit_summary.get("llm_tokens_total", 0)), "LLM token usage for this run."),
                 (
@@ -900,6 +983,7 @@ def render_review_markdown(
     if not isinstance(risk_drivers, list):
         risk_drivers = []
     summary_text = str(review.get("summary_text", "No summary available.")).strip()
+    summary_text = _clean_review_tldr(summary_text)
     risk_level = str(review.get("risk_level", "low") or "low").upper()
     possible_block = [f"- {item}" for item in possible_signals] if possible_signals else ["- None."]
     sections = [
@@ -960,7 +1044,16 @@ def render_patch_markdown(
     summary_text = str(review.get("summary_text", "Patch suggestion flow")).strip()
     patch_generation_result = str(audit_summary.get("patch_generation_result", "n/a") or "n/a")
     patch_validation_reason = str(audit_summary.get("patch_validation_reason", "n/a") or "n/a")
-    patch_target_files = _int(audit_summary.get("patch_target_files_count", 0))
+    patch_target_files = _int(
+        audit_summary.get(
+            "patch_target_files_selected",
+            audit_summary.get("patch_target_files_count", 0),
+        )
+    )
+    patch_target_files_total = _int(audit_summary.get("patch_target_files_total", 0))
+    patch_targeting_mode = str(audit_summary.get("patch_targeting_mode", "n/a") or "n/a")
+    patch_targeting_reason = str(audit_summary.get("patch_targeting_reason", "n/a") or "n/a")
+    localized_patch_evidence = _int(audit_summary.get("localized_patch_evidence_count", 0))
     patch_grounding_mode = str(audit_summary.get("patch_grounding_mode", "n/a") or "n/a")
     sections = [
         "### 🛠️ Patch proposal",
@@ -971,6 +1064,10 @@ def render_patch_markdown(
         f"- Patch validation result: `{str(audit_summary.get('patch_validation_result', 'n/a') or 'n/a')}`",
         f"- Patch validation reason: {patch_validation_reason}",
         f"- Patch target files: {patch_target_files}",
+        f"- Patch target files total: {patch_target_files_total}",
+        f"- Patch targeting mode: `{patch_targeting_mode}`",
+        f"- Patch targeting reason: {patch_targeting_reason}",
+        f"- Localized patch evidence: {localized_patch_evidence}",
         f"- Patch grounding mode: {patch_grounding_mode}",
         "",
         "### 📦 Patch artifact",

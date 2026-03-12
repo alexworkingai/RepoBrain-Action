@@ -70,10 +70,14 @@ Diagnostic UX checks:
 - for review/fix diagnostics, validation fields should be present:
   - `Review confirmed findings`
   - `Review possible signals`
+  - `Review risk drivers`
   - `Review generation result`
   - `Review batch mode`
+  - `Patch targeting mode`
+  - `Patch target files`
   - `Patch validation`
   - `Patch generation result`
+  - `Localized patch evidence`
 
 Artifacts are downloaded into:
 
@@ -101,6 +105,9 @@ Patch generation notes:
 - If no diff is extracted, RepoBrain writes `artifacts/patch_generation_debug.json` for usersafe diagnostics.
 - If fix LLM fails in `workflow_dispatch`, RepoBrain writes `artifacts/llm_http_debug.json` with usersafe provider diagnostics (`status/error type`, no prompt/code/secrets).
 - Strict report diagnostics for fix include: `compacted`, `patch_batch_mode`, `patch_batch_count`, `estimated_input_tokens`, `max_output_tokens_used`.
+- Ask diagnostics should explain strong-model retention vs downgrade decisions using:
+  - `Preferred model retained`
+  - `Downgrade threshold (remaining requests)`
 
 ## PASS/FAIL interpretation
 

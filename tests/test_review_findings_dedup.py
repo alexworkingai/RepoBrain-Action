@@ -22,9 +22,10 @@ def test_duplicate_findings_are_collapsed_with_merged_evidence() -> None:
 
     validated = validate_review_findings(review)
 
-    assert len(validated["confirmed_findings"]) == 1
-    assert "evidence: 2 file(s)" in validated["confirmed_findings"][0]
-    assert int(validated["validation"]["confirmed_findings_count"]) == 1
+    assert validated["confirmed_findings"] == []
+    assert validated["risk_drivers"] == ["CI/CD changed: verify workflows"]
+    assert int(validated["validation"]["confirmed_findings_count"]) == 0
+    assert int(validated["validation"]["risk_drivers_count"]) == 1
 
 
 def test_possible_wording_does_not_enter_confirmed_findings() -> None:
