@@ -110,6 +110,7 @@ Patch generation notes:
   - `Preferred model retained`
   - `Downgrade threshold (remaining requests)`
   - normalized budget action text when preferred model is retained
+- Review diagnostics should show the same retention/downgrade transparency for `openai/gpt-4.1` vs `openai/gpt-4.1-mini`.
 
 ## PASS/FAIL interpretation
 

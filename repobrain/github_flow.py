@@ -931,6 +931,52 @@ def _should_retain_preferred_model_for_ask(
     return True, reason
 
 
+def _should_retain_preferred_model_for_review(
+    *,
+    cfg: RepoBrainConfig,
+    cmd: str,
+    execution_mode: str,
+    llm_intent: str,
+    route: str,
+    complexity_score: int,
+    remaining_requests: int | None,
+    github_context: dict[str, Any],
+    payload_token_est: int,
+    payload_token_limit: int,
+) -> tuple[bool, str]:
+    if str(cmd or "").strip().lower() != "review":
+        return False, "n/a"
+    if str(execution_mode or "").strip().lower() != "retrieval_plus_llm":
+        return False, "n/a"
+    intent_norm = str(llm_intent or "").strip().lower()
+    if intent_norm not in {"review", "summarize", "explain"}:
+        return False, "n/a"
+
+    threshold = max(0, int(cfg.llm.downgrade_min_remaining_requests_review))
+    if remaining_requests is not None and int(remaining_requests) < threshold:
+        return False, "n/a"
+
+    route_norm = str(route or "").strip().upper()
+    changed_files = github_context.get("changed_files", [])
+    changed_count = len(changed_files) if isinstance(changed_files, list) else 0
+    complexity_gate = int(complexity_score) >= 35 or route_norm == "DEEP" or changed_count >= 2
+    if not complexity_gate:
+        return False, "n/a"
+
+    payload_limit = max(1, int(payload_token_limit or 1))
+    payload_est = max(0, int(payload_token_est or 0))
+    payload_compact_enough = payload_est <= max(1, int(payload_limit * 0.92))
+    if not payload_compact_enough:
+        return False, "n/a"
+
+    if remaining_requests is None:
+        if int(complexity_score) < 60 and route_norm != "DEEP":
+            return False, "n/a"
+        return True, "review synthesis retained strong model in estimate mode with compact payload."
+
+    return True, "review synthesis retained strong model under current quota."
+
+
 def _normalize_fix_semantics(
     *,
     execution_mode: str,
@@ -2203,16 +2249,33 @@ def _maybe_generate_llm_text(
             )
         if decision.switch_to_mini and "mini" not in model_id.lower():
             downgrade_threshold = _llm_downgrade_threshold_for_command(cfg, cmd, effective_intent)
-            retain_preferred, retain_reason = _should_retain_preferred_model_for_ask(
-                cfg=cfg,
-                cmd=cmd,
-                execution_mode=normalized_execution_mode,
-                llm_intent=normalized_llm_intent,
-                route=normalized_route,
-                complexity_score=complexity_score,
-                remaining_requests=governor.llm_last_remaining,
-                github_context=github_context,
-            )
+            retain_preferred = False
+            retain_reason = "n/a"
+            cmd_norm = str(cmd or "").strip().lower()
+            if cmd_norm in {"ask", "explain"}:
+                retain_preferred, retain_reason = _should_retain_preferred_model_for_ask(
+                    cfg=cfg,
+                    cmd=cmd,
+                    execution_mode=normalized_execution_mode,
+                    llm_intent=normalized_llm_intent,
+                    route=normalized_route,
+                    complexity_score=complexity_score,
+                    remaining_requests=governor.llm_last_remaining,
+                    github_context=github_context,
+                )
+            elif cmd_norm == "review":
+                retain_preferred, retain_reason = _should_retain_preferred_model_for_review(
+                    cfg=cfg,
+                    cmd=cmd,
+                    execution_mode=normalized_execution_mode,
+                    llm_intent=normalized_llm_intent,
+                    route=normalized_route,
+                    complexity_score=complexity_score,
+                    remaining_requests=governor.llm_last_remaining,
+                    github_context=github_context,
+                    payload_token_est=prompt_cost_est,
+                    payload_token_limit=max_input_tokens,
+                )
             if retain_preferred:
                 model_downgrade_reason = "n/a"
                 llm_retained_preferred_model_reason = retain_reason
@@ -2981,10 +3044,16 @@ def _run_batch_llm_review_fix(
     )
     overall_preferred_model = overall_model
     overall_downgrade_reason = "n/a"
+    overall_retained_preferred_reason = "n/a"
+    retained_preferred_model = False
     reduce_model_override = str(cfg.batch.reduce_model or "").strip()
     reduce_enable = bool(cfg.batch.reduce_enable)
     pre_batch_action = "n/a"
     pre_batch_reason = "n/a"
+    planned_payload_est = max(
+        (int(batch.estimated_input_tokens or 0) for batch in planned),
+        default=max(1, int(max_input_tokens / 2)),
+    )
     if governor is not None:
         bootstrap_decision = governor.can_call_llm(
             next_call_cost_est=max(1, int(max_input_tokens / 2)),
@@ -3031,16 +3100,49 @@ def _run_batch_llm_review_fix(
                 allowed=True,
             )
         if bootstrap_decision.switch_to_mini:
-            if "mini" not in overall_model.lower():
-                overall_downgrade_reason = (
-                    "budget_policy: switched to mini due remaining/quota constraints"
+            retain_review_preferred = False
+            retain_review_reason = "n/a"
+            if "mini" not in overall_model.lower() and str(cmd or "").strip().lower() == "review":
+                retain_review_preferred, retain_review_reason = _should_retain_preferred_model_for_review(
+                    cfg=cfg,
+                    cmd=cmd,
+                    execution_mode=execution_mode_norm,
+                    llm_intent=llm_intent_norm,
+                    route=route_norm,
+                    complexity_score=overall_score,
+                    remaining_requests=governor.llm_last_remaining,
+                    github_context=github_context,
+                    payload_token_est=planned_payload_est,
+                    payload_token_limit=max_input_tokens,
                 )
-            overall_model = model_low
-            overall_tier = "low"
+            if retain_review_preferred:
+                retained_preferred_model = True
+                overall_retained_preferred_reason = retain_review_reason
+                overall_downgrade_reason = "n/a"
+            else:
+                if "mini" not in overall_model.lower():
+                    overall_downgrade_reason = (
+                        "budget_policy: switched to mini due remaining/quota constraints"
+                    )
+                overall_model = model_low
+                overall_tier = "low"
         if bootstrap_decision.max_calls is not None:
             max_calls = min(max_calls, max(1, int(bootstrap_decision.max_calls)))
         if bootstrap_decision.disable_reduce:
             reduce_enable = False
+        if pre_batch_action != "n/a" and retained_preferred_model:
+            action_items = [
+                item.strip()
+                for item in str(pre_batch_action).split(";")
+                if item.strip()
+                and item.strip()
+                not in {"model_downgraded_to_mini", "model_downgraded_to_mini_estimate_mode"}
+            ]
+            pre_batch_action = (
+                "; ".join(action_items)
+                if action_items
+                else "budget policy evaluated; preferred model retained"
+            )
 
     batches = planned[:max_calls]
     if not batches:
@@ -3057,7 +3159,7 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_preferred_model_id"] = overall_preferred_model
         llm_meta["llm_model_selection_reason"] = overall_selection_reason
         llm_meta["llm_model_downgrade_reason"] = overall_downgrade_reason
-        llm_meta["llm_retained_preferred_model_reason"] = "n/a"
+        llm_meta["llm_retained_preferred_model_reason"] = overall_retained_preferred_reason
         llm_meta["llm_downgrade_threshold_used"] = str(
             _llm_downgrade_threshold_for_command(cfg, cmd, intent)
         )
@@ -3348,7 +3450,7 @@ def _run_batch_llm_review_fix(
         "llm_preferred_model_id": overall_preferred_model,
         "llm_model_selection_reason": overall_selection_reason,
         "llm_model_downgrade_reason": overall_downgrade_reason,
-        "llm_retained_preferred_model_reason": "n/a",
+        "llm_retained_preferred_model_reason": overall_retained_preferred_reason,
         "llm_downgrade_threshold_used": str(
             _llm_downgrade_threshold_for_command(cfg, cmd, intent)
         ),

@@ -187,6 +187,10 @@ When review/fix verification runs:
 - `validation.informational_notes_count`
 - `validation.risk_drivers_count`
 
+Review rendering notes:
+
+- when `confirmed_findings_count=0`, user-facing review output renders a neutral `Confirmed findings: none.` line (no pseudo-finding text)
+
 `artifacts/review_generation_debug.json` (usersafe) includes:
 
 - `attempted_compaction`
