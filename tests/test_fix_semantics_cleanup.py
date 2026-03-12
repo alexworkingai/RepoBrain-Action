@@ -29,14 +29,21 @@ def test_render_patch_markdown_uses_patch_specific_sections() -> None:
             "patch_validation_result": "valid_patch",
             "patch_validation_reason": "Patch validated.",
             "patch_target_files_count": 2,
+            "patch_target_files_selected": 2,
+            "patch_target_files_total": 3,
+            "patch_targeting_mode": "localized",
+            "patch_targeting_reason": "patch_target_narrowed_to_localized_subset",
             "patch_grounding_mode": "pr_metadata",
             "route_final": "FAST",
             "pass_count": 1,
+            "command": "fix",
         },
     )
 
-    assert "### 🧪 Patch diagnostics" in md
+    assert "### 🧾 Patch result" in md
+    assert "### 🎯 Patch targeting" in md
+    assert "### ✅ Patch validation" in md
     assert "Patch generation result: `valid_patch`" in md
-    assert "Patch target files: 2" in md
+    assert "Patch target files selected: 2" in md
     assert "### ⚠️ Confirmed findings" not in md
     assert "### 🟡 Possible signals" not in md

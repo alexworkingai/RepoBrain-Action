@@ -58,3 +58,29 @@ def test_failed_llm_run_does_not_claim_final_model_used() -> None:
     assert "LLM used: no" in md
     assert "Final synthesis model: `n/a`" in md
     assert "Models used: n/a" in md
+
+
+def test_retained_preferred_model_hides_downgrade_only_budget_action() -> None:
+    md = render_answer_markdown(
+        answer_text="Summary",
+        evidence=[],
+        audit_summary={
+            "route_final": "DEEP",
+            "pass_count": 2,
+            "retrieved": 20,
+            "selected": 5,
+            "execution_mode": "retrieval_plus_llm",
+            "llm_used": True,
+            "llm_preferred_model_id": "openai/gpt-4.1",
+            "llm_final_synthesis_model_id": "openai/gpt-4.1",
+            "llm_model_used": "openai/gpt-4.1",
+            "llm_retained_preferred_model_reason": "retained preferred model: complex ask/explain in estimate mode",
+            "llm_budget_action": "model_downgraded_to_mini_estimate_mode",
+        },
+        next_steps="Validate",
+        command="ask",
+    )
+
+    assert "Preferred model retained:" in md
+    assert "AI Budget action: budget policy evaluated; preferred model retained" in md
+    assert "model_downgraded_to_mini_estimate_mode" not in md

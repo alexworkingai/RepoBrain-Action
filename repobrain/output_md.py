@@ -24,6 +24,7 @@ def _route(audit_summary: dict[str, Any]) -> str:
 def _clean_review_tldr(summary_text: str) -> str:
     lines = [str(item).strip() for item in str(summary_text or "").splitlines() if str(item).strip()]
     cleaned: list[str] = []
+    seen: set[str] = set()
     for line in lines:
         lowered = line.lower()
         if lowered.startswith("(1) pr metadata summary"):
@@ -32,10 +33,18 @@ def _clean_review_tldr(summary_text: str) -> str:
             continue
         if lowered.startswith("(3) concise final review"):
             continue
+        if lowered in seen:
+            continue
+        seen.add(lowered)
         cleaned.append(line)
     if not cleaned:
         return "Review summary available in findings and diagnostics."
-    return " ".join(cleaned)
+    if len(cleaned) > 3:
+        cleaned = cleaned[:3]
+    summary = " ".join(cleaned).strip()
+    if len(summary) > 420:
+        summary = summary[:417].rstrip() + "..."
+    return summary
 
 
 def _int(value: Any, default: int = 0) -> int:
@@ -149,6 +158,29 @@ def _llm_models_used_summary(audit_summary: dict[str, Any]) -> str:
     return "n/a"
 
 
+def _normalized_budget_action(
+    *,
+    budget_action: str,
+    retained_reason: str,
+) -> str:
+    action = str(budget_action or "n/a").strip()
+    retained = str(retained_reason or "n/a").strip()
+    if action.lower() == "n/a":
+        return "n/a"
+    if retained.lower() == "n/a":
+        return action
+
+    parts = [item.strip() for item in action.split(";") if item.strip()]
+    filtered = [
+        item
+        for item in parts
+        if item not in {"model_downgraded_to_mini", "model_downgraded_to_mini_estimate_mode"}
+    ]
+    if filtered:
+        return "; ".join(filtered)
+    return "budget policy evaluated; preferred model retained"
+
+
 def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     llm_used = bool(audit_summary.get("llm_used", False))
     skip_reason = str(audit_summary.get("llm_skip_reason", "n/a") or "n/a")
@@ -197,6 +229,10 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     calls_count = _int(audit_summary.get("llm_calls_this_run", 0))
     models_used = _llm_models_used_summary(audit_summary)
     budget_action = str(audit_summary.get("llm_budget_action", "n/a") or "n/a")
+    budget_action = _normalized_budget_action(
+        budget_action=budget_action,
+        retained_reason=retained_reason,
+    )
     lines = [
         "### 🤖 LLM",
         f"- TKYA LLM decision: {tkya_decision}",
@@ -335,8 +371,11 @@ def _diag_state(value: Any, parameter: str) -> str:
         return "meaningful" if len(value) > 0 else "disabled"
     if isinstance(value, str):
         normalized = value.strip().lower()
+        parameter_norm = str(parameter or "").strip().lower()
         if not normalized:
             return "undefined"
+        if normalized == "none" and parameter_norm in {"patch targeting mode", "patch grounding mode"}:
+            return "meaningful"
         if normalized in {"n/a", "none", "null", "<missing>", "not used", "unknown"}:
             return "undefined"
         if normalized in {"disabled", "off", "false"}:
@@ -692,7 +731,12 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                 ),
                 (
                     "Budget action",
-                    audit_summary.get("llm_budget_action", "n/a"),
+                    _normalized_budget_action(
+                        budget_action=str(audit_summary.get("llm_budget_action", "n/a") or "n/a"),
+                        retained_reason=str(
+                            audit_summary.get("llm_retained_preferred_model_reason", "n/a") or "n/a"
+                        ),
+                    ),
                     "Governor action that constrained this run.",
                 ),
                 (
@@ -961,12 +1005,6 @@ def render_review_markdown(
     files_block = review.get("files_block", [])
     if not isinstance(files_block, list):
         files_block = []
-    risks = review.get("risks", [])
-    if not isinstance(risks, list):
-        risks = []
-    notes = review.get("notes", [])
-    if not isinstance(notes, list):
-        notes = []
     confirmed_findings = review.get("confirmed_findings", [])
     if not isinstance(confirmed_findings, list):
         confirmed_findings = []
@@ -985,24 +1023,35 @@ def render_review_markdown(
     summary_text = str(review.get("summary_text", "No summary available.")).strip()
     summary_text = _clean_review_tldr(summary_text)
     risk_level = str(review.get("risk_level", "low") or "low").upper()
+    if not summary_text:
+        summary_text = "Review completed."
+    confirmed_block = [f"- {item}" for item in confirmed_findings if str(item).strip()]
+    if not confirmed_block:
+        confirmed_block = ["- none."]
     possible_block = [f"- {item}" for item in possible_signals] if possible_signals else ["- None."]
+    risk_driver_block = (
+        [f"- {item}" for item in risk_drivers[:4] if str(item).strip()]
+        if risk_drivers
+        else ["- No material risk drivers identified."]
+    )
+    default_recommendation = (
+        "- Proceed with standard CI checks before merge."
+        if risk_level == "LOW" and confirmed_block == ["- none."]
+        else "- Run standard CI checks before merge."
+    )
     sections = [
         "### ✅ PR Review",
         f"TL;DR: {summary_text}",
         f"Risk level: **{risk_level}**",
         "Risk drivers:",
-        *([f"- {item}" for item in risk_drivers[:3]] if risk_drivers else ["- n/a"]),
+        *risk_driver_block,
         "",
         "### 🗂️ Touched files",
         *(files_block[:10] if files_block else ["- No changed files detected."]),
         *([f"- +{len(files_block) - 10} more"] if len(files_block) > 10 else []),
         "",
         "### ⚠️ Confirmed findings",
-        *(
-            [f"- {item}" for item in confirmed_findings]
-            if confirmed_findings
-            else ([f"- {item}" for item in risks] if risks else ["- No confirmed high-risk findings detected."])
-        ),
+        *confirmed_block,
         "",
         "### 🟡 Possible signals",
         *possible_block,
@@ -1011,7 +1060,7 @@ def render_review_markdown(
         *([f"- {item}" for item in informational_notes[:6]] if informational_notes else ["- None."]),
         "",
         "### ✅ Recommendations",
-        *([f"- {item}" for item in recommendations[:8]] if recommendations else ["- Run standard CI checks before merge."]),
+        *([f"- {item}" for item in recommendations[:8]] if recommendations else [default_recommendation]),
         "",
         *_verification_report_lines(verification_report),
         "",
@@ -1055,23 +1104,42 @@ def render_patch_markdown(
     patch_targeting_reason = str(audit_summary.get("patch_targeting_reason", "n/a") or "n/a")
     localized_patch_evidence = _int(audit_summary.get("localized_patch_evidence_count", 0))
     patch_grounding_mode = str(audit_summary.get("patch_grounding_mode", "n/a") or "n/a")
+    no_patch_result = patch_generation_result == "no_patch"
+    if no_patch_result:
+        summary_text = (
+            "No patch generated: no sufficiently localized, evidence-backed patch target was found."
+        )
+    elif not summary_text:
+        summary_text = "Patch proposal generated from localized PR context."
     sections = [
-        "### 🛠️ Patch proposal",
+        "### 🛠️ Patch operation",
         f"Summary: {summary_text}",
         "",
-        "### 🧪 Patch diagnostics",
+        "### 🧾 Patch result",
         f"- Patch generation result: `{patch_generation_result}`",
-        f"- Patch validation result: `{str(audit_summary.get('patch_validation_result', 'n/a') or 'n/a')}`",
-        f"- Patch validation reason: {patch_validation_reason}",
-        f"- Patch target files: {patch_target_files}",
+        (
+            "- Outcome: safe no_patch (no grounded localized target)."
+            if no_patch_result
+            else "- Outcome: patch candidate generated."
+        ),
+        "",
+        "### 🎯 Patch targeting",
         f"- Patch target files total: {patch_target_files_total}",
+        f"- Patch target files selected: {patch_target_files}",
         f"- Patch targeting mode: `{patch_targeting_mode}`",
         f"- Patch targeting reason: {patch_targeting_reason}",
         f"- Localized patch evidence: {localized_patch_evidence}",
         f"- Patch grounding mode: {patch_grounding_mode}",
         "",
+        "### ✅ Patch validation",
+        f"- Patch generation result: `{patch_generation_result}`",
+        f"- Patch validation result: `{str(audit_summary.get('patch_validation_result', 'n/a') or 'n/a')}`",
+        f"- Patch validation reason: {patch_validation_reason}",
+        "",
         "### 📦 Patch artifact",
-        "- Full patch is saved to `artifacts/patch.diff`." if patch_written else "- No patch generated.",
+        "- Full patch is saved to `artifacts/patch.diff`."
+        if patch_written
+        else "- No patch generated (safe outcome).",
         f"- Apply status: {patch_apply_message}",
         "",
         "### 🧩 Patch snippet",

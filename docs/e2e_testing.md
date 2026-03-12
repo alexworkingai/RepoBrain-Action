@@ -78,6 +78,7 @@ Diagnostic UX checks:
   - `Patch validation`
   - `Patch generation result`
   - `Localized patch evidence`
+  - `Patch targeting mode` (`none` is valid for safe no_patch)
 
 Artifacts are downloaded into:
 
@@ -108,6 +109,7 @@ Patch generation notes:
 - Ask diagnostics should explain strong-model retention vs downgrade decisions using:
   - `Preferred model retained`
   - `Downgrade threshold (remaining requests)`
+  - normalized budget action text when preferred model is retained
 
 ## PASS/FAIL interpretation
 
@@ -121,6 +123,7 @@ Fix scenario special classification:
 - Provider rate-limited errors (`provider_http_status=429` or `provider_error_type=rate_limited`) are classified as **FAIL_INFRA**.
 - Provider payload-too-large after retries/batching (`provider_http_status=413`) remains **FAIL_PRODUCT** with explicit compaction/batching diagnostics.
 - If model explicitly returns `NO_PATCH` (`patch_generation_debug.reason=no_patch_returned`), scenario is classified as **WARN** (model chose no safe patch).
+- `no_patch` is treated as an intentional safe outcome when no localized evidence-backed patch target exists.
 - **FAIL_PRODUCT** for fix is only used when model path is available but patch output/extraction still fails.
 
 Artifact transport fallback diagnostics:

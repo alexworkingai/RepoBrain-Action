@@ -33,5 +33,6 @@ def test_risk_driver_items_are_not_rendered_as_confirmed_findings() -> None:
 
     assert "Risk drivers:" in md
     assert "- CI/CD changed: verify workflows" in md
+    assert "- n/a" not in md
     assert "### ⚠️ Confirmed findings" in md
     assert "- CI/CD changed: verify workflows" not in md.split("### ⚠️ Confirmed findings", 1)[1]
