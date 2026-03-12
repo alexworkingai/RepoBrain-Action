@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from repobrain.evidence import EvidenceItem
@@ -21,22 +22,38 @@ def _route(audit_summary: dict[str, Any]) -> str:
     return route or "FAST"
 
 
+_REVIEW_SCAFFOLD_ONLY_RE = re.compile(
+    r"^(?:[#>*\-\s]*)?(?:\(?\d+\)?[.)]?\s*)?"
+    r"(?:pr metadata summary|targeted evidence|concise final review|final review synthesis|concise review)\s*:?\s*$",
+    re.IGNORECASE,
+)
+_REVIEW_SCAFFOLD_PREFIX_RE = re.compile(
+    r"^(?:[#>*\-\s]*)?(?:\(?\d+\)?[.)]?\s*)?"
+    r"(?:pr metadata summary|targeted evidence|concise final review|final review synthesis|concise review)\s*:\s*",
+    re.IGNORECASE,
+)
+
+
+def _semantic_key(text: str) -> str:
+    compact = " ".join(str(text or "").strip().lower().split())
+    return re.sub(r"[^a-z0-9]+", " ", compact).strip()
+
+
 def _clean_review_tldr(summary_text: str) -> str:
     lines = [str(item).strip() for item in str(summary_text or "").splitlines() if str(item).strip()]
     cleaned: list[str] = []
     seen: set[str] = set()
     for line in lines:
-        lowered = line.lower()
-        if lowered.startswith("(1) pr metadata summary"):
+        if _REVIEW_SCAFFOLD_ONLY_RE.match(line):
             continue
-        if lowered.startswith("(2) targeted evidence"):
+        line_without_scaffold = _REVIEW_SCAFFOLD_PREFIX_RE.sub("", line).strip()
+        if not line_without_scaffold:
             continue
-        if lowered.startswith("(3) concise final review"):
+        key = _semantic_key(line_without_scaffold)
+        if not key or key in seen:
             continue
-        if lowered in seen:
-            continue
-        seen.add(lowered)
-        cleaned.append(line)
+        seen.add(key)
+        cleaned.append(line_without_scaffold)
     if not cleaned:
         return "Review summary available in findings and diagnostics."
     if len(cleaned) > 3:
@@ -45,6 +62,94 @@ def _clean_review_tldr(summary_text: str) -> str:
     if len(summary) > 420:
         summary = summary[:417].rstrip() + "..."
     return summary
+
+
+def _compress_review_summary(
+    summary_text: str,
+    *,
+    risk_drivers: list[str],
+    informational_notes: list[str],
+) -> str:
+    summary = _clean_review_tldr(summary_text)
+    sentence_split = [
+        item.strip()
+        for item in re.split(r"(?<=[.!?])\s+", summary)
+        if str(item).strip()
+    ]
+    if not sentence_split:
+        return summary
+    blocker_keys = {
+        _semantic_key(item)
+        for item in [*risk_drivers, *informational_notes]
+        if str(item).strip()
+    }
+    deduped_sentences: list[str] = []
+    seen: set[str] = set()
+    for sentence in sentence_split:
+        key = _semantic_key(sentence)
+        if not key or key in seen:
+            continue
+        if key in blocker_keys:
+            continue
+        seen.add(key)
+        deduped_sentences.append(sentence)
+        if len(deduped_sentences) >= 3:
+            break
+    if not deduped_sentences:
+        deduped_sentences = sentence_split[:1]
+    compact = " ".join(deduped_sentences).strip()
+    if len(compact) > 420:
+        compact = compact[:417].rstrip() + "..."
+    return compact or "Review summary available in findings and diagnostics."
+
+
+def _confirmed_evidence_map(review: dict[str, Any]) -> dict[str, list[str]]:
+    raw_items = review.get("confirmed_risk_items", [])
+    if not isinstance(raw_items, list):
+        return {}
+    mapping: dict[str, list[str]] = {}
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        message = str(item.get("message", "") or "").strip()
+        if not message:
+            continue
+        key = _semantic_key(message)
+        if not key:
+            continue
+        paths_raw = item.get("evidence_paths", [])
+        paths = (
+            [str(path).strip() for path in paths_raw if str(path).strip()]
+            if isinstance(paths_raw, list)
+            else []
+        )
+        if paths:
+            mapping[key] = list(dict.fromkeys(paths))
+    return mapping
+
+
+def _render_confirmed_finding_with_evidence(
+    finding: str,
+    *,
+    evidence_map: dict[str, list[str]],
+) -> str:
+    text = str(finding or "").strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    if "files:" in lowered or "file:" in lowered or "locator:" in lowered:
+        return text
+    base = re.sub(r"\s*\(evidence:\s*\d+\s*file\(s\)\)\s*$", "", text, flags=re.IGNORECASE).strip()
+    key = _semantic_key(base)
+    evidence_paths = evidence_map.get(key, [])
+    if not evidence_paths:
+        return text
+    if len(evidence_paths) == 1:
+        return f"{base} (file: `{evidence_paths[0]}`)"
+    if len(evidence_paths) <= 3:
+        rendered = ", ".join(f"`{path}`" for path in evidence_paths)
+        return f"{base} (files: {rendered})"
+    return f"{base} (evidence: {len(evidence_paths)} files; sample: `{evidence_paths[0]}`)"
 
 
 def _int(value: Any, default: int = 0) -> int:
@@ -162,12 +267,14 @@ def _normalized_budget_action(
     *,
     budget_action: str,
     retained_reason: str,
+    intermediate_downgrade_occurred: bool = False,
+    final_synthesis_retained_preferred: bool = False,
 ) -> str:
     action = str(budget_action or "n/a").strip()
     retained = str(retained_reason or "n/a").strip()
     if action.lower() == "n/a":
         return "n/a"
-    if retained.lower() == "n/a":
+    if retained.lower() == "n/a" and not final_synthesis_retained_preferred:
         return action
 
     parts = [item.strip() for item in action.split(";") if item.strip()]
@@ -176,9 +283,16 @@ def _normalized_budget_action(
         for item in parts
         if item not in {"model_downgraded_to_mini", "model_downgraded_to_mini_estimate_mode"}
     ]
+    if intermediate_downgrade_occurred and final_synthesis_retained_preferred:
+        retention_note = (
+            "budget policy evaluated; final synthesis retained preferred model; "
+            "intermediate downgrade used for auxiliary calls"
+        )
+    else:
+        retention_note = "budget policy evaluated; preferred model retained"
     if filtered:
-        return "; ".join(filtered)
-    return "budget policy evaluated; preferred model retained"
+        return "; ".join([*filtered, retention_note])
+    return retention_note
 
 
 def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
@@ -229,9 +343,37 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     calls_count = _int(audit_summary.get("llm_calls_this_run", 0))
     models_used = _llm_models_used_summary(audit_summary)
     budget_action = str(audit_summary.get("llm_budget_action", "n/a") or "n/a")
+    model_counts_raw = audit_summary.get("llm_model_counts", {})
+    model_counts = model_counts_raw if isinstance(model_counts_raw, dict) else {}
+    computed_final_retained = (
+        llm_used
+        and preferred_model_id not in {"", "n/a", "not used"}
+        and final_synthesis_model_id == preferred_model_id
+    )
+    final_retained = bool(
+        audit_summary.get("llm_final_synthesis_retained_preferred_model", computed_final_retained)
+    )
+    computed_intermediate_downgrade = (
+        llm_used
+        and final_retained
+        and any("mini" in str(model).lower() and _int(count) > 0 for model, count in model_counts.items())
+    )
+    intermediate_downgrade = bool(
+        audit_summary.get("llm_intermediate_downgrade_occurred", computed_intermediate_downgrade)
+    )
+    intermediate_downgrade_reason = str(
+        audit_summary.get("llm_intermediate_downgrade_reason", "n/a") or "n/a"
+    )
+    if intermediate_downgrade and intermediate_downgrade_reason == "n/a":
+        if downgrade_reason != "n/a":
+            intermediate_downgrade_reason = downgrade_reason
+        elif budget_action != "n/a":
+            intermediate_downgrade_reason = budget_action
     budget_action = _normalized_budget_action(
         budget_action=budget_action,
         retained_reason=retained_reason,
+        intermediate_downgrade_occurred=intermediate_downgrade,
+        final_synthesis_retained_preferred=final_retained,
     )
     lines = [
         "### 🤖 LLM",
@@ -255,6 +397,8 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
             f"- Reset time UTC: {reset_value}",
             f"- Calls this run: {calls_count}",
             f"- Models used: {models_used}",
+            f"- Final synthesis retained preferred model: {'yes' if final_retained else 'no'}",
+            f"- Intermediate downgrade occurred: {'yes' if intermediate_downgrade else 'no'}",
             f"- Prompt budget: used~{input_budget_used} / limit={input_budget_limit}",
             (
                 "- Dropped context items: "
@@ -262,6 +406,8 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
             ),
         ]
     )
+    if intermediate_downgrade and intermediate_downgrade_reason != "n/a":
+        lines.append(f"- Intermediate downgrade reason: {intermediate_downgrade_reason}")
     if downgrade_reason != "n/a":
         lines.append(f"- Model downgrade reason: {downgrade_reason}")
     if retained_reason != "n/a":
@@ -406,6 +552,37 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
         if isinstance(touched, list):
             pr_files = len([item for item in touched if str(item).strip()])
     command = str(audit_summary.get("command", "ask") or "ask").strip().lower()
+    llm_used = bool(audit_summary.get("llm_used", False))
+    preferred_model = str(audit_summary.get("llm_preferred_model_id", "n/a") or "n/a")
+    final_model = str(
+        audit_summary.get("llm_final_synthesis_model_id", audit_summary.get("llm_model_used", "not used"))
+        or "not used"
+    )
+    llm_model_counts_raw = audit_summary.get("llm_model_counts", {})
+    llm_model_counts = llm_model_counts_raw if isinstance(llm_model_counts_raw, dict) else {}
+    final_retained_default = (
+        llm_used
+        and preferred_model not in {"", "n/a", "not used"}
+        and final_model == preferred_model
+    )
+    final_synthesis_retained = bool(
+        audit_summary.get("llm_final_synthesis_retained_preferred_model", final_retained_default)
+    )
+    intermediate_downgrade_default = (
+        llm_used
+        and final_synthesis_retained
+        and any("mini" in str(model).lower() and _int(count) > 0 for model, count in llm_model_counts.items())
+    )
+    intermediate_downgrade = bool(
+        audit_summary.get("llm_intermediate_downgrade_occurred", intermediate_downgrade_default)
+    )
+    intermediate_downgrade_reason = str(
+        audit_summary.get("llm_intermediate_downgrade_reason", "n/a") or "n/a"
+    )
+    if intermediate_downgrade and intermediate_downgrade_reason == "n/a":
+        fallback_reason = str(audit_summary.get("llm_model_downgrade_reason", "n/a") or "n/a")
+        if fallback_reason != "n/a":
+            intermediate_downgrade_reason = fallback_reason
     retrieval_rows: list[tuple[str, Any, str]] = [
         ("Retrieved candidates", _int(audit_summary.get("retrieved", 0)), "Candidates retrieved before selection."),
         ("Selected evidence", _int(audit_summary.get("selected", 0)), "Evidence items selected for response."),
@@ -606,6 +783,21 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     audit_summary.get("security_reason_code", "n/a"),
                     "Machine-readable security policy reason.",
                 ),
+                (
+                    "Skip reason code",
+                    audit_summary.get("skip_reason_code", "n/a"),
+                    "Machine-readable reason when command was intentionally skipped.",
+                ),
+                (
+                    "Skip reason",
+                    audit_summary.get("skip_reason_short", "n/a"),
+                    "Usersafe explanation for intentional skip outcome.",
+                ),
+                (
+                    "Skip visible to user",
+                    bool(audit_summary.get("skip_visible_to_user", False)),
+                    "Whether skip reason was posted in the user-facing comment.",
+                ),
             ],
         ),
         (
@@ -630,6 +822,21 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                         audit_summary.get("llm_model_used", "n/a"),
                     ),
                     "Model that produced final user-facing synthesis text.",
+                ),
+                (
+                    "Final synthesis retained preferred model",
+                    final_synthesis_retained,
+                    "Whether final synthesis kept the preferred model selection.",
+                ),
+                (
+                    "Intermediate downgrade",
+                    intermediate_downgrade,
+                    "Whether auxiliary calls used downgraded model while final synthesis stayed preferred.",
+                ),
+                (
+                    "Intermediate downgrade reason",
+                    intermediate_downgrade_reason,
+                    "Reason for intermediate-only model downgrade when it occurred.",
                 ),
                 (
                     "Model selection reason",
@@ -736,6 +943,8 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                         retained_reason=str(
                             audit_summary.get("llm_retained_preferred_model_reason", "n/a") or "n/a"
                         ),
+                        intermediate_downgrade_occurred=intermediate_downgrade,
+                        final_synthesis_retained_preferred=final_synthesis_retained,
                     ),
                     "Governor action that constrained this run.",
                 ),
@@ -1021,7 +1230,11 @@ def render_review_markdown(
     if not isinstance(risk_drivers, list):
         risk_drivers = []
     summary_text = str(review.get("summary_text", "No summary available.")).strip()
-    summary_text = _clean_review_tldr(summary_text)
+    summary_text = _compress_review_summary(
+        summary_text,
+        risk_drivers=risk_drivers,
+        informational_notes=informational_notes,
+    )
     risk_level = str(review.get("risk_level", "low") or "low").upper()
     if not summary_text:
         summary_text = "Review completed."
@@ -1030,12 +1243,18 @@ def render_review_markdown(
         "no confirmed high-risk findings detected",
         "no evidence-backed high-risk findings detected",
     }
-    confirmed_block = [
-        f"- {item}"
-        for item in confirmed_findings
-        if str(item).strip()
-        and str(item).strip().lower() not in pseudo_confirmed_markers
-    ]
+    evidence_map = _confirmed_evidence_map(review)
+    confirmed_block = []
+    for raw_item in confirmed_findings:
+        item = str(raw_item).strip()
+        if not item or item.lower() in pseudo_confirmed_markers:
+            continue
+        rendered = _render_confirmed_finding_with_evidence(
+            item,
+            evidence_map=evidence_map,
+        )
+        if rendered:
+            confirmed_block.append(f"- {rendered}")
     confirmed_section = (
         ["", "### ⚠️ Confirmed findings", *confirmed_block]
         if confirmed_block

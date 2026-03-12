@@ -43,8 +43,10 @@ PR Review:
 * RepoBrain fetches changed files, builds a lightweight risk summary, and posts a markdown PR review comment.
 * Review synthesis uses hierarchical payload shaping (PR metadata summary -> targeted evidence -> final synthesis) with automatic compaction/batch fallback for provider safety.
 * Findings are normalized/deduplicated and split into semantic layers: `Confirmed findings`, `Risk drivers`, `Possible signals`, `Informational notes`; high-severity findings require explicit evidence.
+* Confirmed findings include compact file evidence references when available (for example `file: path` / short `files: ...`) to improve trust and actionability.
 * Low-risk reviews render cleanly with `Confirmed findings: none.` (no pseudo-findings) and natural risk-driver wording (no placeholder `n/a` blocks).
 * `/repobrain review` is not available in regular Issues (non-PR threads).
+* On closed or merged PRs, `/repobrain review` and `/repobrain fix` now return an explicit usersafe skip comment (no silent skip).
 * `/repobrain fix <instruction>` can generate a patch proposal (`artifacts/patch.diff`) with usersafe diff snippet.
 * `/repobrain fix` uses patch-specific semantics (`llm_intent=patch`, patch reason codes, patch diagnostics) and does not reuse review-only counters in user output.
 * `/repobrain fix` narrows patch scope before LLM generation (localized evidence/query-matched files first) and prefers `NO_PATCH` over broad generic diffs when grounding is insufficient.
@@ -222,6 +224,7 @@ GitHub Models LLM (optional):
     * Expect `TKYA LLM decision: used`, non-empty `Reason`, no `Runtime override` disabled message, and visible model/tokens.
 * Reports include LLM diagnostics:
   * preferred model, final synthesis model, per-model call distribution, model selection reason, downgrade reason
+  * clear distinction between intermediate downgrade (auxiliary calls) and final synthesis model retention
   * token usage (`prompt/completion/total`, reported or estimated)
   * remaining requests / reset time (from `x-ratelimit-*` headers when available)
   * if headers are missing, remaining is shown as `(estimated)`
