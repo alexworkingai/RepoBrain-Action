@@ -43,7 +43,7 @@ PR Review:
 * RepoBrain fetches changed files, builds a lightweight risk summary, and posts a markdown PR review comment.
 * Review synthesis uses hierarchical payload shaping (PR metadata summary -> targeted evidence -> final synthesis) with automatic compaction/batch fallback for provider safety.
 * Findings are normalized/deduplicated and split into semantic layers: `Confirmed findings`, `Risk drivers`, `Possible signals`, `Informational notes`; high-severity findings require explicit evidence.
-* Low-risk reviews render cleanly with `Confirmed findings: none` and natural risk-driver wording (no placeholder `n/a` blocks).
+* Low-risk reviews render cleanly with `Confirmed findings: none.` (no pseudo-findings) and natural risk-driver wording (no placeholder `n/a` blocks).
 * `/repobrain review` is not available in regular Issues (non-PR threads).
 * `/repobrain fix <instruction>` can generate a patch proposal (`artifacts/patch.diff`) with usersafe diff snippet.
 * `/repobrain fix` uses patch-specific semantics (`llm_intent=patch`, patch reason codes, patch diagnostics) and does not reuse review-only counters in user output.
@@ -203,6 +203,7 @@ GitHub Models LLM (optional):
   * simple tasks -> `openai/gpt-4.1-mini` (low tier)
   * governor can downgrade to mini when remaining budget is low (reported explicitly)
   * complex ask/explain (`retrieval_plus_llm`) can retain preferred `gpt-4.1` when quota is comfortably above ask downgrade threshold (`RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_ASK`) and `RB_LLM_FORCE_STRONG_MODEL_FOR_COMPLEX_ASK=1`
+  * review can retain preferred `gpt-4.1` when quota remains above review threshold (`RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_REVIEW`) and payload stays compact after shaping
   * diagnostics keep model/budget reporting consistent: when preferred model is retained, downgrade-only budget actions are normalized to a neutral retained message
 * Strict gating (safe default):
   * LLM is never called for routes `WAIT`/`REFUSE`/`BLOCK`

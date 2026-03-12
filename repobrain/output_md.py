@@ -1025,9 +1025,22 @@ def render_review_markdown(
     risk_level = str(review.get("risk_level", "low") or "low").upper()
     if not summary_text:
         summary_text = "Review completed."
-    confirmed_block = [f"- {item}" for item in confirmed_findings if str(item).strip()]
-    if not confirmed_block:
-        confirmed_block = ["- none."]
+    pseudo_confirmed_markers = {
+        "no obvious high-risk patterns detected",
+        "no confirmed high-risk findings detected",
+        "no evidence-backed high-risk findings detected",
+    }
+    confirmed_block = [
+        f"- {item}"
+        for item in confirmed_findings
+        if str(item).strip()
+        and str(item).strip().lower() not in pseudo_confirmed_markers
+    ]
+    confirmed_section = (
+        ["", "### ⚠️ Confirmed findings", *confirmed_block]
+        if confirmed_block
+        else ["", "Confirmed findings: none."]
+    )
     possible_block = [f"- {item}" for item in possible_signals] if possible_signals else ["- None."]
     risk_driver_block = (
         [f"- {item}" for item in risk_drivers[:4] if str(item).strip()]
@@ -1036,7 +1049,7 @@ def render_review_markdown(
     )
     default_recommendation = (
         "- Proceed with standard CI checks before merge."
-        if risk_level == "LOW" and confirmed_block == ["- none."]
+        if risk_level == "LOW" and not confirmed_block
         else "- Run standard CI checks before merge."
     )
     sections = [
@@ -1049,9 +1062,7 @@ def render_review_markdown(
         "### 🗂️ Touched files",
         *(files_block[:10] if files_block else ["- No changed files detected."]),
         *([f"- +{len(files_block) - 10} more"] if len(files_block) > 10 else []),
-        "",
-        "### ⚠️ Confirmed findings",
-        *confirmed_block,
+        *confirmed_section,
         "",
         "### 🟡 Possible signals",
         *possible_block,
