@@ -17,6 +17,12 @@ _MEDIUM_SEVERITY_HINTS = (
     "fixme",
 )
 
+_RISK_DRIVER_HINTS = (
+    "security-sensitive area changed",
+    "ci/cd changed: verify workflows",
+    "dependencies changed: verify install and tests",
+)
+
 
 def _severity_from_message(message: str) -> str:
     lowered = str(message or "").strip().lower()
@@ -79,6 +85,11 @@ def _collect_risk_items(review: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _is_risk_driver_message(message: str) -> bool:
+    lowered = str(message or "").strip().lower()
+    return any(token in lowered for token in _RISK_DRIVER_HINTS)
+
+
 def _compose_summary_text(base_summary: str, risk_level: str) -> str:
     summary = str(base_summary or "").strip()
     if not summary:
@@ -136,6 +147,8 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
     confirmed_findings: list[str] = []
     confirmed_risk_entries: list[dict[str, Any]] = []
     possible_signals: list[str] = []
+    risk_drivers: list[str] = []
+    risk_driver_severities: list[str] = []
     recommendations_raw = review.get("suggested_tests", review.get("next_steps", []))
     recommendations = (
         [str(item).strip() for item in recommendations_raw if str(item).strip()]
@@ -161,6 +174,10 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         if severity in {"medium", "high"} and not has_evidence and "no obvious high-risk" not in lowered:
             possible_signals.append(f"{message} (signal: verify evidence)")
             continue
+        if _is_risk_driver_message(message):
+            risk_drivers.append(message)
+            risk_driver_severities.append(severity)
+            continue
         evidence_suffix = f" (evidence: {len(evidence_paths)} file(s))" if evidence_paths else ""
         confirmed_findings.append(f"{message}{evidence_suffix}")
         confirmed_risk_entries.append(
@@ -173,14 +190,18 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
 
     if any(str(item.get("severity", "low")) == "high" for item in confirmed_risk_entries):
         risk_level = "high"
+    elif any(item == "high" for item in risk_driver_severities):
+        risk_level = "high"
     elif any(str(item.get("severity", "low")) == "medium" for item in confirmed_risk_entries):
+        risk_level = "medium"
+    elif any(item == "medium" for item in risk_driver_severities):
         risk_level = "medium"
     elif possible_signals:
         risk_level = "medium"
     else:
         risk_level = "low"
 
-    risk_drivers: list[str] = []
+    risk_drivers = list(dict.fromkeys(risk_drivers))
     for item in confirmed_risk_entries:
         if str(item.get("severity", "low")) == "high":
             risk_drivers.append(str(item.get("message", "")))
@@ -193,12 +214,6 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
     if not risk_drivers:
         risk_drivers.extend(signal for signal in possible_signals[:3])
     risk_drivers = list(dict.fromkeys(item for item in risk_drivers if item))
-
-    if not confirmed_findings:
-        if possible_signals:
-            confirmed_findings = ["No confirmed high-risk findings (signals require manual verification)."]
-        else:
-            confirmed_findings = ["No evidence-backed high-risk findings detected."]
 
     validated = dict(review)
     validated["summary_text"] = _compose_summary_text(
@@ -225,6 +240,7 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         "confirmed_findings_count": len(confirmed_findings),
         "possible_signals_count": len(validated["possible_signals"]),
         "informational_notes_count": len(validated["informational_notes"]),
+        "risk_drivers_count": len(validated["risk_drivers"]),
         "risk_level": risk_level,
         "risk_drivers": risk_drivers,
     }

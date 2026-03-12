@@ -42,10 +42,12 @@ PR Review:
 * Use `/repobrain review` in a Pull Request discussion (issue comments on a PR).
 * RepoBrain fetches changed files, builds a lightweight risk summary, and posts a markdown PR review comment.
 * Review synthesis uses hierarchical payload shaping (PR metadata summary -> targeted evidence -> final synthesis) with automatic compaction/batch fallback for provider safety.
-* Findings are normalized/deduplicated and split into `Confirmed findings` vs `Possible signals`; high-severity findings require explicit evidence.
+* Findings are normalized/deduplicated and split into semantic layers: `Confirmed findings`, `Risk drivers`, `Possible signals`, `Informational notes`; high-severity findings require explicit evidence.
 * `/repobrain review` is not available in regular Issues (non-PR threads).
 * `/repobrain fix <instruction>` can generate a patch proposal (`artifacts/patch.diff`) with usersafe diff snippet.
 * `/repobrain fix` uses patch-specific semantics (`llm_intent=patch`, patch reason codes, patch diagnostics) and does not reuse review-only counters in user output.
+* `/repobrain fix` narrows patch scope before LLM generation (localized evidence/query-matched files first) and prefers `NO_PATCH` over broad generic diffs when grounding is insufficient.
+* Patch targeting caps are configurable via `RB_LLM_PATCH_MAX_TARGET_FILES`, `RB_LLM_PATCH_MAX_TARGET_HUNKS`, and `RB_LLM_PATCH_REQUIRE_LOCALIZED_EVIDENCE`.
 * In PR context RepoBrain also publishes a GitHub Check Run (`RepoBrain Review` / `RepoBrain Fix`) with usersafe annotations.
 
 Index cache / prebuild:
@@ -198,6 +200,7 @@ GitHub Models LLM (optional):
   * review/fix/patch and complex DEEP synthesis -> `openai/gpt-4.1` (high tier)
   * simple tasks -> `openai/gpt-4.1-mini` (low tier)
   * governor can downgrade to mini when remaining budget is low (reported explicitly)
+  * complex ask/explain (`retrieval_plus_llm`) can retain preferred `gpt-4.1` when quota is comfortably above ask downgrade threshold (`RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_ASK`) and `RB_LLM_FORCE_STRONG_MODEL_FOR_COMPLEX_ASK=1`
 * Strict gating (safe default):
   * LLM is never called for routes `WAIT`/`REFUSE`/`BLOCK`
   * `locate` skips LLM by default; opt-in via `RB_LLM_ALLOW_LOCATE=1`

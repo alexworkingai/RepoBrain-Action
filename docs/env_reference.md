@@ -30,10 +30,14 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_LLM_BATCH_MAX_CALLS_PER_RUN` | int | `6` | 1..100 | Batch LLM call cap per run. |
 | `RB_LLM_BATCH_REDUCE_ENABLE` | bool | `1` | - | Enable reduce step in batch mode. |
 | `RB_LLM_BATCH_REDUCE_MODEL` | str | `` | - | Optional override model for reduce step. |
+| `RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_ASK` | int | `8` | 0..1000 | Minimum remaining requests before allowing ask downgrade from preferred model. |
+| `RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_FIX` | int | `5` | 0..1000 | Minimum remaining requests before allowing fix downgrade from preferred model. |
+| `RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_REVIEW` | int | `4` | 0..1000 | Minimum remaining requests before allowing review downgrade from preferred model. |
 | `RB_LLM_ENABLED` | bool | `0` | - | Enable LLM layer. |
 | `RB_LLM_ENABLE_ISSUE_COMMENT` | bool | `1` | - | Allow LLM for issue_comment event path. |
 | `RB_LLM_ENABLE_ISSUE_ONLY` | bool | `0` | - | Allow LLM for issue_comment on non-PR issues. |
 | `RB_LLM_ENABLE_PR_COMMENTS` | bool | `1` | - | Allow LLM for issue_comment on PR discussions. |
+| `RB_LLM_FORCE_STRONG_MODEL_FOR_COMPLEX_ASK` | bool | `1` | - | Retain preferred strong model for complex ask/explain when quota remains comfortable. |
 | `RB_LLM_MAX_FILES_REVIEW_CONTEXT` | int | `40` | 1..500 | Maximum changed files included in final review synthesis context. |
 | `RB_LLM_MAX_FINDINGS_CONTEXT` | int | `24` | 1..200 | Maximum condensed findings/notes included in final review synthesis context. |
 | `RB_LLM_MAX_HUNKS_REVIEW_CONTEXT` | int | `24` | 1..500 | Maximum diff hunks included in final review synthesis context. |
@@ -51,6 +55,9 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_LLM_PATCH_BATCH_FORCE` | bool | `0` | - | Force patch batching in fix mode. |
 | `RB_LLM_PATCH_BATCH_MAX_CALLS` | int | `4` | 1..32 | Patch batch call cap per run. |
 | `RB_LLM_PATCH_MAX_HUNKS_PER_CALL` | int | `4` | 1..64 | Patch max diff hunks per LLM call. |
+| `RB_LLM_PATCH_MAX_TARGET_FILES` | int | `5` | 1..100 | Maximum files selected for localized patch generation. |
+| `RB_LLM_PATCH_MAX_TARGET_HUNKS` | int | `12` | 1..300 | Maximum hunks selected for localized patch generation. |
+| `RB_LLM_PATCH_REQUIRE_LOCALIZED_EVIDENCE` | bool | `1` | - | Require localized evidence before running patch generation. |
 | `RB_LLM_PROVIDER` | str | `` | - | LLM provider name (github_models). |
 | `RB_REQUIRE_VERIFY_FOR_PATCH` | bool | `0` | - | Require verification pass for patch success. |
 | `RB_RETRIEVAL_VECTOR_TOPK` | int | `30` | 1..500 | Vector candidate top-k. |
