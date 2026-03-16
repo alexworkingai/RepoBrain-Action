@@ -279,6 +279,14 @@ Review rendering notes:
   - `skip_reason_short`
   - `skip_visible_to_user`
 
+GitHub Checks UX v1 notes:
+
+- check runs are command-specific (`RepoBrain Ask`, `RepoBrain Review`, `RepoBrain Fix`)
+- checks summary is compact/usersafe (short status + key command metrics), not full comment markdown
+- expected neutral outcomes:
+  - `fix` safe `no_patch`
+  - intentional `review/fix` skip on closed/merged PR
+
 Safe defaults:
 
 - patch is **not** auto-applied unless both `RB_APPLY_PATCH=1` and `RB_TRUSTED_CONTEXT=1`

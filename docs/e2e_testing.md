@@ -118,6 +118,15 @@ Closed/merged PR UX:
 - `/repobrain review` and `/repobrain fix` on closed/merged PR should post an explicit usersafe skip comment (no silent skip).
 - skip diagnostics should include `skip_reason_code`, `skip_reason_short`, `skip_visible_to_user=true`.
 
+GitHub Checks UX v1 expectations:
+
+- PR commands publish command-specific checks summaries:
+  - `RepoBrain Ask`
+  - `RepoBrain Review`
+  - `RepoBrain Fix`
+- checks summaries are compact/usersafe and command-aware (no review-only fields in ask, no patch-only fields in review)
+- `fix=no_patch` and closed/merged `review/fix` skip should map to **neutral** checks conclusion
+
 ## PASS/FAIL interpretation
 
 - **PASS**: workflow succeeded and all required assertions passed.
