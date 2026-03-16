@@ -53,6 +53,12 @@ PR Review:
 * `no_patch` is treated as a valid safe outcome when no sufficiently localized evidence-backed target exists.
 * Patch targeting caps are configurable via `RB_LLM_PATCH_MAX_TARGET_FILES`, `RB_LLM_PATCH_MAX_TARGET_HUNKS`, and `RB_LLM_PATCH_REQUIRE_LOCALIZED_EVIDENCE`.
 * In PR context RepoBrain also publishes a GitHub Check Run (`RepoBrain Review` / `RepoBrain Fix`) with usersafe annotations.
+* RepoBrain now publishes command-specific compact checks summaries:
+  * `RepoBrain Ask`
+  * `RepoBrain Review`
+  * `RepoBrain Fix`
+  These checks are short, usersafe, and complement comment UX (they do not duplicate full comment markdown).
+* Expected neutral check outcomes include safe governed paths such as `fix=no_patch` and `review/fix` on closed/merged PR.
 
 Index cache / prebuild:
 

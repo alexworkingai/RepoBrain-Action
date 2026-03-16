@@ -21,6 +21,11 @@ from repobrain.ai_budget_governor import (
 from repobrain.audit import add_timing, build_audit_base, finalize_audit
 from repobrain.ask import AnswerResult, answer_question, make_provider
 from repobrain.commands import parse_command
+from repobrain.checks_md import (
+    build_check_summary_markdown,
+    check_name_for_command,
+    map_check_conclusion,
+)
 from repobrain.config import RepoBrainConfig, env_bool, env_int, load_config
 from repobrain import __version__ as REPOBRAIN_VERSION
 from repobrain.evidence import EvidenceItem
@@ -4971,6 +4976,7 @@ def _build_qa_markdown(
         audit["pass_count"] = int(audit_summary.get("pass_count", 1) or 1)
         audit["retrieved"] = int(audit_summary.get("retrieved", 0) or 0)
         audit["selected"] = len(evidence_out)
+        audit["check_answer_summary"] = " ".join(str(answer_text_out or "").strip().split())
         audit["top_score_pass1"] = audit_summary.get("pass1.top_score")
         audit["top_score_pass2"] = audit_summary.get("pass2.top_score")
         audit["tky_mode_requested"] = str(audit_summary.get("tky_mode_requested", tky_mode or "n/a"))
@@ -5898,6 +5904,8 @@ def _build_review_markdown(
             audit["pass_count"] = 1
             audit["retrieved"] = len(files)
             audit["selected"] = len(review.get("files_changed", []))
+            audit["review_tldr"] = " ".join(str(review.get("summary_text", "") or "").strip().split())
+            audit["review_risk_level"] = str(review.get("risk_level", "low") or "low").upper()
             audit["repobrain_version"] = REPOBRAIN_VERSION
             audit["tkya_backend"] = str(cfg.tkya.backend or "lite")
             audit["verification_pass_count"] = pass_count
@@ -5925,6 +5933,12 @@ def _build_review_markdown(
             )
             audit["review_possible_signals_count"] = int(
                 audit_summary.get("review_possible_signals_count", 0) or 0
+            )
+            audit["review_risk_drivers_count"] = int(
+                audit_summary.get("review_risk_drivers_count", 0) or 0
+            )
+            audit["review_informational_notes_count"] = int(
+                audit_summary.get("review_informational_notes_count", 0) or 0
             )
             audit["review_batch_mode"] = bool(audit_summary.get("review_batch_mode", False))
             audit["review_batch_count"] = int(audit_summary.get("review_batch_count", 0) or 0)
@@ -6180,6 +6194,8 @@ def _build_review_markdown(
         audit["pass_count"] = 1
         audit["retrieved"] = len(files)
         audit["selected"] = len(review.get("files_changed", []))
+        audit["review_tldr"] = " ".join(str(review.get("summary_text", "") or "").strip().split())
+        audit["review_risk_level"] = str(review.get("risk_level", "low") or "low").upper()
         audit["repobrain_version"] = REPOBRAIN_VERSION
         audit["tkya_backend"] = str(cfg.tkya.backend or "lite")
         audit["verification_pass_count"] = pass_count
@@ -6224,8 +6240,20 @@ def _build_review_markdown(
         audit["patch_target_files_count"] = int(
             audit_summary.get("patch_target_files_count", 0) or 0
         )
+        audit["patch_target_files_selected"] = int(
+            audit_summary.get("patch_target_files_selected", 0) or 0
+        )
+        audit["patch_target_files_total"] = int(
+            audit_summary.get("patch_target_files_total", 0) or 0
+        )
+        audit["patch_targeting_mode"] = str(
+            audit_summary.get("patch_targeting_mode", "n/a") or "n/a"
+        )
         audit["patch_grounding_mode"] = str(
             audit_summary.get("patch_grounding_mode", "n/a") or "n/a"
+        )
+        audit["fix_outcome_line"] = str(
+            audit_summary.get("patch_validation_reason", patch_apply_message) or patch_apply_message
         )
         audit["patch_validation_artifact"] = patch_validation_path.as_posix()
         if patch_debug_payload is not None:
@@ -6363,26 +6391,28 @@ def _publish_pr_check_run(
     )
     route = str(audit.get("route_final", "FAST") or "FAST")
     intent = str(audit.get("check_intent", "analysis") or "analysis")
-    conclusion, headline, details = compute_conclusion(route, verification_report, intent)
-    check_name = "RepoBrain Fix" if cmd == "fix" else "RepoBrain Review"
+    base_conclusion, _headline, _details = compute_conclusion(route, verification_report, intent)
+    conclusion = map_check_conclusion(
+        cmd=cmd,
+        audit=audit,
+        base_conclusion=base_conclusion,
+    )
+    check_name = check_name_for_command(cmd)
     annotations_raw = audit.get("check_annotations_raw", [])
     annotations = annotations_raw if isinstance(annotations_raw, list) else []
-
-    summary_md = "\n".join(
-        [
-            f"Conclusion: **{conclusion}**",
-            f"Route: `{route}`",
-            f"Intent: `{intent}`",
-            f"Headline: {headline}",
-            details,
-        ]
+    summary_md, text_md = build_check_summary_markdown(
+        cmd=cmd,
+        audit=audit,
+        conclusion=conclusion,
     )
+    if not str(text_md or "").strip():
+        text_md = str(body_markdown or summary_md)
     payload = build_check_run_payload(
         name=check_name,
         head_sha=head_sha,
         conclusion=conclusion,
         summary_md=summary_md,
-        text_md=body_markdown,
+        text_md=text_md,
         annotations=annotations,
     )
     _write_check_run_payload(repo_root, payload)
@@ -6393,10 +6423,11 @@ def _publish_pr_check_run(
         head_sha=head_sha,
         conclusion=conclusion,
         summary_md=summary_md,
-        text_md=body_markdown,
+        text_md=text_md,
         annotations=annotations,
     )
     audit["check_run_name"] = check_name
+    audit["check_run_base_conclusion"] = base_conclusion
     audit["check_run_conclusion"] = conclusion
     audit["check_run_published"] = bool(result.get("ok", False))
     audit["check_run_status_code"] = result.get("status_code")
@@ -6658,29 +6689,31 @@ def run_github_flow(
                 )
                 route = str(audit.get("route_final", "FAST") or "FAST")
                 intent = str(audit.get("check_intent", "analysis") or "analysis")
-                conclusion, headline, details = compute_conclusion(route, verification_report, intent)
-                check_name = "RepoBrain Fix" if cmd == "fix" else "RepoBrain Review"
+                base_conclusion, _headline, _details = compute_conclusion(route, verification_report, intent)
+                conclusion = map_check_conclusion(
+                    cmd=cmd,
+                    audit=audit,
+                    base_conclusion=base_conclusion,
+                )
+                check_name = check_name_for_command(cmd)
                 annotations_raw = audit.get("check_annotations_raw", [])
                 annotations = annotations_raw if isinstance(annotations_raw, list) else []
-                summary_md = "\n".join(
-                    [
-                        f"Conclusion: **{conclusion}**",
-                        f"Route: `{route}`",
-                        f"Intent: `{intent}`",
-                        f"Headline: {headline}",
-                        details,
-                    ]
+                summary_md, text_md = build_check_summary_markdown(
+                    cmd=cmd,
+                    audit=audit,
+                    conclusion=conclusion,
                 )
                 payload = build_check_run_payload(
                     name=check_name,
                     head_sha=dry_head_sha,
                     conclusion=conclusion,
                     summary_md=summary_md,
-                    text_md=body_markdown,
+                    text_md=text_md,
                     annotations=annotations,
                 )
                 _write_check_run_payload(repo_root, payload)
                 audit["check_run_name"] = check_name
+                audit["check_run_base_conclusion"] = base_conclusion
                 audit["check_run_conclusion"] = conclusion
                 audit["check_run_published"] = False
                 audit["check_run_status_code"] = "dry_run"
