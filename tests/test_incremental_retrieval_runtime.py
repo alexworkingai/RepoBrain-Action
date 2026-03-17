@@ -41,3 +41,11 @@ def test_retrieve_runtime_exposes_incremental_fields(tmp_path: Path) -> None:
     assert "retrieval_cache_hits" in runtime
     assert "retrieval_cache_misses" in runtime
     assert "incremental_fallback_reason" in runtime
+    assert "evidence_budget_used" in runtime
+    assert "evidence_budget_limit" in runtime
+    assert "evidence_budget_mode" in runtime
+    assert "evidence_budget_bucket_counts" in runtime
+    assert "evidence_budget_cutoffs" in runtime
+    assert "evidence_budget_overflow" in runtime
+    assert "evidence_budget_primary_selected" in runtime
+    assert "evidence_budget_support_selected" in runtime

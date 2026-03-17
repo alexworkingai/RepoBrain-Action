@@ -645,6 +645,49 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             "Deterministic reason codes describing evidence filtering decisions.",
         ),
         (
+            "Evidence budget used",
+            _int(audit_summary.get("evidence_budget_used", 0)),
+            "Number of candidates retained by command-aware evidence budget planning.",
+        ),
+        (
+            "Evidence budget limit",
+            _int(audit_summary.get("evidence_budget_limit", 0)),
+            "Maximum candidates allowed by evidence budget policy for this command.",
+        ),
+        (
+            "Evidence budget mode",
+            audit_summary.get("evidence_budget_mode", "not_applied"),
+            "Adaptive evidence-budget profile applied for this run.",
+        ),
+        (
+            "Evidence budget bucket counts",
+            audit_summary.get(
+                "evidence_budget_bucket_counts",
+                "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+            ),
+            "Selected evidence counts by planner buckets.",
+        ),
+        (
+            "Evidence budget cutoffs",
+            audit_summary.get("evidence_budget_cutoffs", "no_cutoff"),
+            "Planner cutoff reason codes when lower-priority evidence was dropped.",
+        ),
+        (
+            "Evidence budget overflow",
+            _int(audit_summary.get("evidence_budget_overflow", 0)),
+            "Candidates dropped because evidence budget capacity was exceeded.",
+        ),
+        (
+            "Evidence budget primary selected",
+            _int(audit_summary.get("evidence_budget_primary_selected", 0)),
+            "Selected evidence from changed primary/secondary buckets.",
+        ),
+        (
+            "Evidence budget support selected",
+            _int(audit_summary.get("evidence_budget_support_selected", 0)),
+            "Selected evidence retained as supporting context.",
+        ),
+        (
             "Signal calibration used",
             bool(audit_summary.get("signal_calibration_used", False)),
             "Whether review security-like signals were calibrated before final buckets.",

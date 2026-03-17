@@ -58,6 +58,7 @@ from repobrain.output_md import (
 from repobrain.retrieve_pro import retrieve_topk_pro
 from repobrain.retrieval.hybrid import rank_hybrid_candidates
 from repobrain.retrieval.hybrid_ranker import rerank_candidates
+from repobrain.retrieval.evidence_budget_planner import plan_evidence_budget
 from repobrain.retrieval.incremental_index import scope_chunks_incremental
 from repobrain.review import build_pr_review
 from repobrain.review_validator import validate_review_findings
@@ -4143,6 +4144,13 @@ def _retrieve_candidates_with_runtime(
         query=question,
         max_items=max(1, int(topk)),
     )
+    budget_plan = plan_evidence_budget(
+        filtered.candidates,
+        command=cmd,
+        github_context=github_context,
+        limit_hint=max(1, int(topk)),
+        incremental_scope_mode=str(retrieval_runtime.get("incremental_scope_mode", "fallback_full")),
+    )
     retrieval_runtime["hybrid_rerank_used"] = bool(rerank.hybrid_rerank_used)
     mode_suffix = rerank.retrieval_ranking_mode
     retrieval_runtime["retrieval_ranking_mode"] = (
@@ -4152,7 +4160,18 @@ def _retrieve_candidates_with_runtime(
     )
     retrieval_runtime["evidence_filtered_count"] = int(filtered.filtered_count)
     retrieval_runtime["evidence_filter_reason_codes"] = sorted(filtered.reason_codes) or ["none"]
-    return filtered.candidates, retrieval_runtime
+    retrieval_runtime["evidence_budget_used"] = int(budget_plan.evidence_budget_used)
+    retrieval_runtime["evidence_budget_limit"] = int(budget_plan.evidence_budget_limit)
+    retrieval_runtime["evidence_budget_mode"] = str(budget_plan.evidence_budget_mode or "not_applied")
+    retrieval_runtime["evidence_budget_bucket_counts"] = ",".join(
+        f"{bucket}:{int(count)}"
+        for bucket, count in budget_plan.evidence_budget_bucket_counts.items()
+    ) or "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0"
+    retrieval_runtime["evidence_budget_cutoffs"] = list(budget_plan.evidence_budget_cutoffs or ["no_cutoff"])
+    retrieval_runtime["evidence_budget_overflow"] = int(budget_plan.evidence_budget_overflow)
+    retrieval_runtime["evidence_budget_primary_selected"] = int(budget_plan.evidence_budget_primary_selected)
+    retrieval_runtime["evidence_budget_support_selected"] = int(budget_plan.evidence_budget_support_selected)
+    return budget_plan.candidates, retrieval_runtime
 
 
 def _retrieve_candidates(
@@ -4552,6 +4571,34 @@ def run_qa_two_pass(
     audit_extra["incremental_fallback_reason"] = str(
         final_retrieval_runtime.get("incremental_fallback_reason", "none") or "none"
     )
+    audit_extra["evidence_budget_used"] = int(final_retrieval_runtime.get("evidence_budget_used", 0) or 0)
+    audit_extra["evidence_budget_limit"] = int(final_retrieval_runtime.get("evidence_budget_limit", 0) or 0)
+    audit_extra["evidence_budget_mode"] = str(
+        final_retrieval_runtime.get("evidence_budget_mode", "not_applied") or "not_applied"
+    )
+    bucket_counts_value = final_retrieval_runtime.get(
+        "evidence_budget_bucket_counts",
+        "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+    )
+    audit_extra["evidence_budget_bucket_counts"] = (
+        bucket_counts_value
+        if isinstance(bucket_counts_value, str)
+        else str(bucket_counts_value)
+    )
+    cutoffs_raw = final_retrieval_runtime.get("evidence_budget_cutoffs", ["no_cutoff"])
+    cutoffs_list = (
+        [str(item).strip() for item in cutoffs_raw if str(item).strip()]
+        if isinstance(cutoffs_raw, list)
+        else [str(cutoffs_raw).strip()]
+    )
+    audit_extra["evidence_budget_cutoffs"] = ",".join(cutoffs_list) if cutoffs_list else "no_cutoff"
+    audit_extra["evidence_budget_overflow"] = int(final_retrieval_runtime.get("evidence_budget_overflow", 0) or 0)
+    audit_extra["evidence_budget_primary_selected"] = int(
+        final_retrieval_runtime.get("evidence_budget_primary_selected", 0) or 0
+    )
+    audit_extra["evidence_budget_support_selected"] = int(
+        final_retrieval_runtime.get("evidence_budget_support_selected", 0) or 0
+    )
     query_embedded = bool(query_vector)
     vectors_loaded = bool(chunk_vectors_by_id)
     chunks_with_vectors = len(chunk_vectors_by_id or {})
@@ -4912,6 +4959,17 @@ def _build_qa_markdown(
     audit_summary.setdefault("retrieval_cache_hits", 0)
     audit_summary.setdefault("retrieval_cache_misses", 0)
     audit_summary.setdefault("incremental_fallback_reason", "none")
+    audit_summary.setdefault("evidence_budget_used", 0)
+    audit_summary.setdefault("evidence_budget_limit", 0)
+    audit_summary.setdefault("evidence_budget_mode", "not_applied")
+    audit_summary.setdefault(
+        "evidence_budget_bucket_counts",
+        "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+    )
+    audit_summary.setdefault("evidence_budget_cutoffs", "no_cutoff")
+    audit_summary.setdefault("evidence_budget_overflow", 0)
+    audit_summary.setdefault("evidence_budget_primary_selected", 0)
+    audit_summary.setdefault("evidence_budget_support_selected", 0)
     audit_summary["remote_skipped_reason"] = remote_skipped_reason or "n/a"
     audit_summary["config_loaded"] = bool(getattr(cfg, "config_loaded", False))
     audit_summary["config_path"] = str(getattr(cfg, "config_path", "<missing>") or "<missing>")
@@ -5138,6 +5196,28 @@ def _build_qa_markdown(
         )
         audit["incremental_fallback_reason"] = str(
             audit_summary.get("incremental_fallback_reason", "none") or "none"
+        )
+        audit["evidence_budget_used"] = int(audit_summary.get("evidence_budget_used", 0) or 0)
+        audit["evidence_budget_limit"] = int(audit_summary.get("evidence_budget_limit", 0) or 0)
+        audit["evidence_budget_mode"] = str(
+            audit_summary.get("evidence_budget_mode", "not_applied") or "not_applied"
+        )
+        audit["evidence_budget_bucket_counts"] = str(
+            audit_summary.get(
+                "evidence_budget_bucket_counts",
+                "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+            )
+            or "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0"
+        )
+        audit["evidence_budget_cutoffs"] = str(
+            audit_summary.get("evidence_budget_cutoffs", "no_cutoff") or "no_cutoff"
+        )
+        audit["evidence_budget_overflow"] = int(audit_summary.get("evidence_budget_overflow", 0) or 0)
+        audit["evidence_budget_primary_selected"] = int(
+            audit_summary.get("evidence_budget_primary_selected", 0) or 0
+        )
+        audit["evidence_budget_support_selected"] = int(
+            audit_summary.get("evidence_budget_support_selected", 0) or 0
         )
         audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
         audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
@@ -5411,7 +5491,26 @@ def _build_review_markdown(
         hmac_secret=hmac_secret or None,
         enable_hmac=enable_hmac,
     )
+    all_pr_changed_files = list(
+        dict.fromkeys(str(item.get("filename", "")).strip() for item in files if item.get("filename"))
+    )
+    all_pr_changed_hunks = [
+        str(item.get("patch", "")).strip()
+        for item in files
+        if isinstance(item, dict) and str(item.get("patch", "")).strip()
+    ]
     review_candidates = _review_candidates_from_files(files)
+    planner_context = dict(github_context_seed or {})
+    if all_pr_changed_files:
+        planner_context["changed_files"] = list(all_pr_changed_files)
+    review_budget_plan = plan_evidence_budget(
+        review_candidates,
+        command=cmd,
+        github_context=planner_context,
+        limit_hint=min(80, max(10, len(review_candidates))),
+        incremental_scope_mode="review_pr_files",
+    )
+    review_candidates = review_budget_plan.candidates
     verification_context = dict(verification_context_seed or {})
     verification_context.update(_verification_context_from_report(verification_report))
     policy = {
@@ -5514,6 +5613,20 @@ def _build_review_markdown(
         "retrieval_cache_hits": 0,
         "retrieval_cache_misses": 0,
         "incremental_fallback_reason": "not_applicable",
+        "evidence_budget_used": int(review_budget_plan.evidence_budget_used),
+        "evidence_budget_limit": int(review_budget_plan.evidence_budget_limit),
+        "evidence_budget_mode": str(review_budget_plan.evidence_budget_mode or "not_applied"),
+        "evidence_budget_bucket_counts": ",".join(
+            f"{bucket}:{int(count)}"
+            for bucket, count in review_budget_plan.evidence_budget_bucket_counts.items()
+        )
+        or "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+        "evidence_budget_cutoffs": ",".join(review_budget_plan.evidence_budget_cutoffs)
+        if review_budget_plan.evidence_budget_cutoffs
+        else "no_cutoff",
+        "evidence_budget_overflow": int(review_budget_plan.evidence_budget_overflow),
+        "evidence_budget_primary_selected": int(review_budget_plan.evidence_budget_primary_selected),
+        "evidence_budget_support_selected": int(review_budget_plan.evidence_budget_support_selected),
     }
     audit_summary.update(_execution_from_tky_result(tky_result.tky))
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
@@ -5553,14 +5666,6 @@ def _build_review_markdown(
     )
     audit_summary["review_validation_artifact"] = "artifacts/review_validation.json"
     audit_summary["patch_validation_result"] = "n/a"
-    all_pr_changed_files = list(
-        dict.fromkeys(str(item.get("filename", "")).strip() for item in files if item.get("filename"))
-    )
-    all_pr_changed_hunks = [
-        str(item.get("patch", "")).strip()
-        for item in files
-        if isinstance(item, dict) and str(item.get("patch", "")).strip()
-    ]
     changed_files = list(all_pr_changed_files)
     changed_file_hunks = list(all_pr_changed_hunks)
     pr_metadata_available = bool(all_pr_changed_files)
@@ -6237,6 +6342,28 @@ def _build_review_markdown(
             audit["incremental_fallback_reason"] = str(
                 audit_summary.get("incremental_fallback_reason", "none") or "none"
             )
+            audit["evidence_budget_used"] = int(audit_summary.get("evidence_budget_used", 0) or 0)
+            audit["evidence_budget_limit"] = int(audit_summary.get("evidence_budget_limit", 0) or 0)
+            audit["evidence_budget_mode"] = str(
+                audit_summary.get("evidence_budget_mode", "not_applied") or "not_applied"
+            )
+            audit["evidence_budget_bucket_counts"] = str(
+                audit_summary.get(
+                    "evidence_budget_bucket_counts",
+                    "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+                )
+                or "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0"
+            )
+            audit["evidence_budget_cutoffs"] = str(
+                audit_summary.get("evidence_budget_cutoffs", "no_cutoff") or "no_cutoff"
+            )
+            audit["evidence_budget_overflow"] = int(audit_summary.get("evidence_budget_overflow", 0) or 0)
+            audit["evidence_budget_primary_selected"] = int(
+                audit_summary.get("evidence_budget_primary_selected", 0) or 0
+            )
+            audit["evidence_budget_support_selected"] = int(
+                audit_summary.get("evidence_budget_support_selected", 0) or 0
+            )
             audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
             audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
             audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
@@ -6616,6 +6743,28 @@ def _build_review_markdown(
         )
         audit["incremental_fallback_reason"] = str(
             audit_summary.get("incremental_fallback_reason", "none") or "none"
+        )
+        audit["evidence_budget_used"] = int(audit_summary.get("evidence_budget_used", 0) or 0)
+        audit["evidence_budget_limit"] = int(audit_summary.get("evidence_budget_limit", 0) or 0)
+        audit["evidence_budget_mode"] = str(
+            audit_summary.get("evidence_budget_mode", "not_applied") or "not_applied"
+        )
+        audit["evidence_budget_bucket_counts"] = str(
+            audit_summary.get(
+                "evidence_budget_bucket_counts",
+                "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+            )
+            or "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0"
+        )
+        audit["evidence_budget_cutoffs"] = str(
+            audit_summary.get("evidence_budget_cutoffs", "no_cutoff") or "no_cutoff"
+        )
+        audit["evidence_budget_overflow"] = int(audit_summary.get("evidence_budget_overflow", 0) or 0)
+        audit["evidence_budget_primary_selected"] = int(
+            audit_summary.get("evidence_budget_primary_selected", 0) or 0
+        )
+        audit["evidence_budget_support_selected"] = int(
+            audit_summary.get("evidence_budget_support_selected", 0) or 0
         )
         audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
         audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))

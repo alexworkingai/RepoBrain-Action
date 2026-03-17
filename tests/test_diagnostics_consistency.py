@@ -291,3 +291,34 @@ def test_incremental_retrieval_fields_render_in_fix_diagnostics() -> None:
     assert "| Incremental retrieval used | `no` |" in md
     assert "| Incremental scope mode | `not_applicable` |" in md
     assert "| Incremental fallback reason | `not_applicable` |" in md
+
+
+def test_evidence_budget_fields_render_in_diagnostics() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "DEEP",
+            "pass_count": 2,
+            "evidence_budget_used": 11,
+            "evidence_budget_limit": 18,
+            "evidence_budget_mode": "ask_dense_incremental",
+            "evidence_budget_bucket_counts": (
+                "changed_primary:6,changed_secondary:2,support_context:2,tests:1,docs:0,workflow_config:0"
+            ),
+            "evidence_budget_cutoffs": "dropped_docs,budget_exhausted",
+            "evidence_budget_overflow": 9,
+            "evidence_budget_primary_selected": 8,
+            "evidence_budget_support_selected": 3,
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "| Evidence budget used | `11` |" in md
+    assert "| Evidence budget limit | `18` |" in md
+    assert "| Evidence budget mode | `ask_dense_incremental` |" in md
+    assert "| Evidence budget bucket counts | `changed_primary:6,changed_secondary:2,support_context:2,tests:1,docs:0,workflow_config:0` |" in md
+    assert "| Evidence budget cutoffs | `dropped_docs,budget_exhausted` |" in md
+    assert "| Evidence budget overflow | `9` |" in md
