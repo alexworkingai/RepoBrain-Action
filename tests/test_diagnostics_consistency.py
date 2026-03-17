@@ -127,3 +127,41 @@ def test_fix_diagnostics_do_not_include_review_only_rows() -> None:
 
     assert "Review confirmed findings" not in md
     assert "Review possible signals" not in md
+
+
+def test_sprint38_observability_fields_render_for_fix() -> None:
+    md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 2,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_confirmed_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+            "hybrid_rerank_used": False,
+            "retrieval_ranking_mode": "lexical",
+            "evidence_filtered_count": 2,
+            "evidence_filter_reason_codes": "docs_noise,duplicate_region",
+            "signal_calibration_used": True,
+            "patch_guard_triggered": True,
+            "tldr_compressed": False,
+        },
+    )
+
+    assert "| Hybrid rerank used | `no` |" in md
+    assert "| Retrieval ranking mode | `lexical` |" in md
+    assert "| Evidence filtered | `2` |" in md
+    assert "| Evidence filter reason codes | `docs_noise,duplicate_region` |" in md
+    assert "| Signal calibration used | `yes` |" in md
+    assert "| Patch guard triggered | `yes` |" in md
+    assert "| TL;DR compressed | `no` |" in md

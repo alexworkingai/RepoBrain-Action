@@ -5147,6 +5147,49 @@ def _review_candidates_from_files(files: list[dict[str, Any]]) -> list[Candidate
     ]
 
 
+def _count_confirmed_localized_findings(
+    *,
+    review: dict[str, Any],
+    selected_files: list[str],
+) -> int:
+    selected_set = {str(path).strip() for path in selected_files if str(path).strip()}
+    confirmed_items_raw = review.get("confirmed_risk_items", [])
+    if not isinstance(confirmed_items_raw, list):
+        return 0
+
+    count = 0
+    for item in confirmed_items_raw:
+        if not isinstance(item, dict):
+            continue
+        evidence_paths_raw = item.get("evidence_paths", [])
+        evidence_paths = (
+            [str(path).strip() for path in evidence_paths_raw if str(path).strip()]
+            if isinstance(evidence_paths_raw, list)
+            else []
+        )
+        if not evidence_paths:
+            continue
+        if selected_set:
+            if any(path in selected_set for path in evidence_paths):
+                count += 1
+        else:
+            count += 1
+    return count
+
+
+def _should_block_fix_patch_without_localized_evidence(
+    *,
+    require_localized_evidence: bool,
+    selected_files: list[str],
+    confirmed_localized_findings: int,
+) -> bool:
+    if not bool(require_localized_evidence):
+        return False
+    if len([path for path in selected_files if str(path).strip()]) == 0:
+        return True
+    return int(confirmed_localized_findings) <= 0
+
+
 def _build_review_markdown(
     *,
     repo_root: Path,
@@ -5420,6 +5463,7 @@ def _build_review_markdown(
         "selected_files": list(all_pr_changed_files),
         "selected_hunks": list(all_pr_changed_hunks),
     }
+    confirmed_localized_findings = 0
     if cmd == "fix":
         patch_targeting = select_patch_targets(
             files=files,
@@ -5471,6 +5515,23 @@ def _build_review_markdown(
             patch_targeting.get("localized_patch_evidence_count", 0) or 0
         )
         audit_summary["patch_grounding_mode"] = "pr_metadata" if pr_metadata_available else "retrieval"
+        confirmed_localized_findings = _count_confirmed_localized_findings(
+            review=review,
+            selected_files=changed_files,
+        )
+        audit_summary["patch_confirmed_localized_findings_count"] = int(confirmed_localized_findings)
+        if _should_block_fix_patch_without_localized_evidence(
+            require_localized_evidence=bool(cfg.llm.patch_require_localized_evidence),
+            selected_files=changed_files,
+            confirmed_localized_findings=confirmed_localized_findings,
+        ):
+            changed_files = []
+            changed_file_hunks = []
+            audit_summary["patch_target_files_selected"] = 0
+            audit_summary["patch_target_hunks_selected"] = 0
+            audit_summary["patch_targeting_mode"] = "none"
+            audit_summary["patch_targeting_reason"] = "no_confirmed_localized_evidence"
+            audit_summary["localized_patch_evidence_count"] = 0
     filtered_review_candidates = filter_candidate_evidence(
         review_candidates,
         command=cmd,
@@ -5602,8 +5663,11 @@ def _build_review_markdown(
     review_generation_result = "single_call"
     no_localized_patch_target = (
         cmd == "fix"
-        and bool(cfg.llm.patch_require_localized_evidence)
-        and len(changed_files) == 0
+        and _should_block_fix_patch_without_localized_evidence(
+            require_localized_evidence=bool(cfg.llm.patch_require_localized_evidence),
+            selected_files=changed_files,
+            confirmed_localized_findings=confirmed_localized_findings,
+        )
     )
     llm_text_for_patch = ""
     if no_localized_patch_target:
@@ -6508,9 +6572,19 @@ def _publish_pr_check_run(
     audit: dict[str, Any],
     github_context_seed: dict[str, Any],
 ) -> None:
+    check_name = check_name_for_command(cmd)
+    audit["check_run_name"] = check_name
+    audit.setdefault("check_run_base_conclusion", "n/a")
+    audit.setdefault("check_run_conclusion", "n/a")
+    audit.setdefault("check_run_published", False)
+    audit.setdefault("check_run_status_code", "skipped")
+    audit.setdefault("check_run_skip_reason", "n/a")
+
     if client is None:
+        audit["check_run_skip_reason"] = "client_missing"
         return
     if cmd not in {"ask", "locate", "explain", "review", "fix"}:
+        audit["check_run_skip_reason"] = "unsupported_command"
         return
 
     head_sha = _resolve_pr_head_sha(
@@ -6520,6 +6594,7 @@ def _publish_pr_check_run(
         github_context_seed=github_context_seed,
     )
     if not head_sha:
+        audit["check_run_skip_reason"] = "head_sha_missing"
         return
 
     verification_report_raw = audit.get("verification_report", {})
@@ -6534,7 +6609,7 @@ def _publish_pr_check_run(
         audit=audit,
         base_conclusion=base_conclusion,
     )
-    check_name = check_name_for_command(cmd)
+    audit["check_run_skip_reason"] = "n/a"
     annotations_raw = audit.get("check_annotations_raw", [])
     annotations = annotations_raw if isinstance(annotations_raw, list) else []
     summary_md, text_md = build_check_summary_markdown(

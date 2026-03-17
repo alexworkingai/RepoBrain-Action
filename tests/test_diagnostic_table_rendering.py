@@ -27,6 +27,13 @@ def test_diagnostic_table_renders_and_orders_meaningful_before_undefined() -> No
             "llm_calls_this_run": 1,
             "retrieved": 12,
             "selected": 3,
+            "hybrid_rerank_used": False,
+            "retrieval_ranking_mode": "lexical",
+            "evidence_filtered_count": 0,
+            "evidence_filter_reason_codes": "none",
+            "signal_calibration_used": False,
+            "patch_guard_triggered": False,
+            "tldr_compressed": False,
             "verification_pass_count": 1,
             "verification_fail_count": 0,
             "verification_pending_count": 0,
@@ -39,6 +46,13 @@ def test_diagnostic_table_renders_and_orders_meaningful_before_undefined() -> No
     assert "| Parameter | Value | Meaning / Risk |" in md
     assert "#### A. Decision summary" in md
     assert "| Route | `DEEP` |" in md
+    assert "| Hybrid rerank used | `no` |" in md
+    assert "| Retrieval ranking mode | `lexical` |" in md
+    assert "| Evidence filtered | `0` |" in md
+    assert "| Evidence filter reason codes | `none` |" in md
+    assert "| Signal calibration used | `no` |" in md
+    assert "| Patch guard triggered | `no` |" in md
+    assert "| TL;DR compressed | `no` |" in md
 
     decision_idx = md.index("#### A. Decision summary")
     undefined_idx = md.index("#### Undefined / disabled diagnostics")

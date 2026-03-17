@@ -53,4 +53,4 @@ def test_heuristic_signal_without_evidence_stays_out_of_confirmed_findings() -> 
     )
 
     assert "### ⚠️ Confirmed findings" not in md
-    assert "### 🟡 Possible signals" in md
+    assert "missing concrete secret evidence" in md
