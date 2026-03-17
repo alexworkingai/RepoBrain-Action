@@ -2605,6 +2605,12 @@ def _extract_patch_from_stats(compression_stats: dict[str, Any]) -> str:
     return ""
 
 
+def _apply_fix_localization_gate(*, patch_text: str, no_localized_patch_target: bool) -> str:
+    if no_localized_patch_target:
+        return ""
+    return str(patch_text or "")
+
+
 def _write_patch_artifact(repo_root: Path, patch_text: str) -> Path:
     path = repo_root / "artifacts" / "patch.diff"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -6108,9 +6114,14 @@ def _build_review_markdown(
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
         return body
 
-    patch_text = _extract_patch_from_stats(compression_stats)
+    patch_text = _apply_fix_localization_gate(
+        patch_text=_extract_patch_from_stats(compression_stats),
+        no_localized_patch_target=no_localized_patch_target,
+    )
     patch_parts_raw = batch_result.get("patch_parts", [])
     patch_parts = patch_parts_raw if isinstance(patch_parts_raw, list) else []
+    if no_localized_patch_target:
+        patch_parts = []
     merged_batch_patch = ""
     batch_patch_conflicts = False
     batch_patch_conflict_details: list[str] = []

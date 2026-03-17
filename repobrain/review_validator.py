@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from repobrain.signal_calibrator import calibrate_security_signal
@@ -23,6 +24,14 @@ _RISK_DRIVER_HINTS = (
     "security-sensitive area changed",
     "ci/cd changed: verify workflows",
     "dependencies changed: verify install and tests",
+)
+
+_SECRET_LIKE_WORDING_RE = re.compile(r"(?i)\b(secret leakage|possible secret|credential leak)\b")
+_STRONG_SECRET_INDICATOR_RE = re.compile(
+    r"(?i)(begin private key|ghp_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|akia[0-9a-z]{16}|api[_-]?key|token=|password=)"
+)
+_SECRET_SUPPORTING_PATH_RE = re.compile(
+    r"(?i)(auth|security|secret|credential|token|vault|key|\.env|\.github/workflows/)"
 )
 
 
@@ -90,6 +99,23 @@ def _collect_risk_items(review: dict[str, Any]) -> list[dict[str, Any]]:
 def _is_risk_driver_message(message: str) -> bool:
     lowered = str(message or "").strip().lower()
     return any(token in lowered for token in _RISK_DRIVER_HINTS)
+
+
+def _has_secret_supporting_evidence(*, message: str, evidence_paths: list[str]) -> bool:
+    if _STRONG_SECRET_INDICATOR_RE.search(str(message or "")):
+        return True
+    for path in evidence_paths:
+        raw = str(path or "").strip()
+        if not raw:
+            continue
+        lowered = raw.lower()
+        if lowered.startswith(("docs/", "documentation/")):
+            continue
+        if lowered.endswith((".md", ".rst", ".txt", ".adoc")):
+            continue
+        if _SECRET_SUPPORTING_PATH_RE.search(raw):
+            return True
+    return False
 
 
 def _compose_summary_text(base_summary: str, risk_level: str) -> str:
@@ -184,6 +210,14 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         if ("secret leakage" in lowered or "possible secret" in lowered) and not has_evidence:
             calibrated_notes.append(
                 f"{message} (informational: missing concrete secret evidence)"
+            )
+            continue
+        if _SECRET_LIKE_WORDING_RE.search(lowered) and not _has_secret_supporting_evidence(
+            message=message,
+            evidence_paths=evidence_paths,
+        ):
+            calibrated_notes.append(
+                f"{message} (informational: heuristic security wording without concrete evidence)"
             )
             continue
         if severity == "high" and not has_evidence:

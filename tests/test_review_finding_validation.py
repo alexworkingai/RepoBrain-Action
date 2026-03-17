@@ -81,3 +81,24 @@ def test_docs_only_secret_wording_is_not_promoted_to_possible_signal() -> None:
 
     assert not any("secret leakage" in item.lower() for item in validated["possible_signals"])
     assert any("docs-only security wording" in item.lower() for item in validated["informational_notes"])
+
+
+def test_heuristic_secret_wording_without_secret_support_stays_informational() -> None:
+    review = {
+        "summary_text": "Code cleanup.",
+        "risk_items": [
+            {
+                "message": "Possible secret leakage in patch",
+                "severity": "medium",
+                "evidence": [{"kind": "patch", "path": "src/utils/helpers.py", "source": "patch_scan"}],
+            }
+        ],
+    }
+
+    validated = validate_review_findings(review)
+
+    assert not any("secret leakage" in item.lower() for item in validated["possible_signals"])
+    assert any(
+        "heuristic security wording without concrete evidence" in item.lower()
+        for item in validated.get("informational_notes", [])
+    )
