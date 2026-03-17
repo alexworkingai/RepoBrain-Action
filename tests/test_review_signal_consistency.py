@@ -58,3 +58,26 @@ def test_high_risk_output_includes_explicit_risk_drivers() -> None:
     assert "Risk level: **HIGH**" in md
     assert "Risk drivers:" in md
     assert "Security-sensitive area changed" in md
+
+
+def test_rendered_review_never_leaks_heuristic_secret_signal() -> None:
+    review = validate_review_findings(
+        {
+            "summary_text": "Review summary.",
+            "risk_items": [
+                {
+                    "message": "Possible secret leakage in patch",
+                    "severity": "high",
+                    "evidence": [{"kind": "patch", "path": ".github/workflows/repobrain.yml", "source": "patch_scan"}],
+                }
+            ],
+        }
+    )
+    md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "not run", "checks": []},
+        audit_summary={"route_final": "DEEP", "pass_count": 1},
+    )
+
+    assert "Possible secret leakage in patch (signal: heuristic wording)" not in md
+    assert "heuristic security wording without concrete evidence" in md

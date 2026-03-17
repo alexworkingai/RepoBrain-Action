@@ -984,6 +984,46 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             "G. Provider / Quota",
             [
                 (
+                    "Check-run attempted",
+                    bool(audit_summary.get("check_run_attempted", False)),
+                    "Whether GitHub Checks API publication was attempted in this run.",
+                ),
+                (
+                    "Check-run published",
+                    bool(audit_summary.get("check_run_published", False)),
+                    "Whether check-run publication succeeded.",
+                ),
+                (
+                    "Check-run status",
+                    audit_summary.get("check_run_status_code", "n/a"),
+                    "HTTP status code (or deterministic marker) for check publication.",
+                ),
+                (
+                    "Check-run failure class",
+                    audit_summary.get("check_run_failure_class", "n/a"),
+                    "Normalized failure class for check publication failures.",
+                ),
+                (
+                    "Check-run token source",
+                    audit_summary.get("check_run_token_source", "n/a"),
+                    "Token path used for check publication.",
+                ),
+                (
+                    "Check-run event",
+                    audit_summary.get("check_run_event_name", "n/a"),
+                    "GitHub event context for check publication.",
+                ),
+                (
+                    "Check-run required permissions",
+                    audit_summary.get("check_run_required_permissions_header", "n/a"),
+                    "Accepted permissions header from GitHub response when available.",
+                ),
+                (
+                    "Check-run skip reason",
+                    audit_summary.get("check_run_skip_reason", "n/a"),
+                    "Reason check publication was skipped in this run.",
+                ),
+                (
                     "Provider HTTP status",
                     audit_summary.get("llm_provider_http_status", "n/a"),
                     "Provider HTTP status for latest LLM call.",

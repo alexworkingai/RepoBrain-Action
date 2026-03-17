@@ -6573,6 +6573,32 @@ def _resolve_pr_head_sha(
     return extract_sha_from_env()
 
 
+def _classify_check_run_failure(
+    *,
+    attempted: bool,
+    status_code: Any,
+    skip_reason: str,
+) -> str:
+    if not attempted:
+        if skip_reason == "deferred_workflow_publisher":
+            return "deferred"
+        if skip_reason in {"client_missing", "head_sha_missing", "unsupported_command"}:
+            return skip_reason
+        return "not_attempted"
+    status = _int_or_zero(status_code)
+    if status in {401, 403}:
+        return "permissions"
+    if status in {404, 422}:
+        return "missing_sha"
+    if status == 0:
+        return "transport"
+    if status >= 500:
+        return "transport"
+    if status >= 200 and status < 300:
+        return "none"
+    return "other"
+
+
 def _publish_pr_check_run(
     *,
     repo_root: Path,
@@ -6583,19 +6609,46 @@ def _publish_pr_check_run(
     audit: dict[str, Any],
     github_context_seed: dict[str, Any],
 ) -> None:
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "").strip() or "unknown"
+    publish_mode = os.environ.get("RB_CHECK_RUN_PUBLISH_MODE", "").strip().lower()
+    if publish_mode not in {"direct", "deferred"}:
+        publish_mode = "deferred" if event_name == "issue_comment" else "direct"
     check_name = check_name_for_command(cmd)
     audit["check_run_name"] = check_name
+    audit.setdefault("check_run_attempted", False)
     audit.setdefault("check_run_base_conclusion", "n/a")
     audit.setdefault("check_run_conclusion", "n/a")
     audit.setdefault("check_run_published", False)
     audit.setdefault("check_run_status_code", "skipped")
     audit.setdefault("check_run_skip_reason", "n/a")
+    audit.setdefault("check_run_token_source", "github_token")
+    audit.setdefault("check_run_event_name", event_name)
+    audit.setdefault("check_run_required_permissions_header", "n/a")
+    audit.setdefault("check_run_failure_class", "not_attempted")
+
+    token_source = (
+        "workflow_run_github_token"
+        if publish_mode == "deferred"
+        else str(os.environ.get("RB_CHECK_RUN_TOKEN_SOURCE", "github_token") or "github_token")
+    )
+    audit["check_run_token_source"] = token_source
+    audit["check_run_event_name"] = event_name
 
     if client is None:
         audit["check_run_skip_reason"] = "client_missing"
+        audit["check_run_failure_class"] = _classify_check_run_failure(
+            attempted=False,
+            status_code=audit.get("check_run_status_code"),
+            skip_reason="client_missing",
+        )
         return
     if cmd not in {"ask", "locate", "explain", "review", "fix"}:
         audit["check_run_skip_reason"] = "unsupported_command"
+        audit["check_run_failure_class"] = _classify_check_run_failure(
+            attempted=False,
+            status_code=audit.get("check_run_status_code"),
+            skip_reason="unsupported_command",
+        )
         return
 
     head_sha = _resolve_pr_head_sha(
@@ -6606,6 +6659,11 @@ def _publish_pr_check_run(
     )
     if not head_sha:
         audit["check_run_skip_reason"] = "head_sha_missing"
+        audit["check_run_failure_class"] = _classify_check_run_failure(
+            attempted=False,
+            status_code=audit.get("check_run_status_code"),
+            skip_reason="head_sha_missing",
+        )
         return
 
     verification_report_raw = audit.get("verification_report", {})
@@ -6639,6 +6697,19 @@ def _publish_pr_check_run(
         annotations=annotations,
     )
     _write_check_run_payload(repo_root, payload)
+    if publish_mode == "deferred":
+        audit["check_run_attempted"] = False
+        audit["check_run_status_code"] = "deferred"
+        audit["check_run_skip_reason"] = "deferred_workflow_publisher"
+        audit["check_run_required_permissions_header"] = "n/a"
+        audit["check_run_failure_class"] = _classify_check_run_failure(
+            attempted=False,
+            status_code="deferred",
+            skip_reason="deferred_workflow_publisher",
+        )
+        return
+
+    audit["check_run_attempted"] = True
     result = publish_check_run(
         repo=client.repo,
         token=client.token,
@@ -6654,6 +6725,14 @@ def _publish_pr_check_run(
     audit["check_run_conclusion"] = conclusion
     audit["check_run_published"] = bool(result.get("ok", False))
     audit["check_run_status_code"] = result.get("status_code")
+    audit["check_run_required_permissions_header"] = str(
+        result.get("required_permissions_header", "n/a") or "n/a"
+    )
+    audit["check_run_failure_class"] = _classify_check_run_failure(
+        attempted=True,
+        status_code=audit.get("check_run_status_code"),
+        skip_reason=str(audit.get("check_run_skip_reason", "n/a") or "n/a"),
+    )
     if not bool(result.get("ok", False)):
         print("Check-run publish unavailable, using comment fallback only.")
 
@@ -6936,10 +7015,16 @@ def run_github_flow(
                 )
                 _write_check_run_payload(repo_root, payload)
                 audit["check_run_name"] = check_name
+                audit["check_run_attempted"] = False
                 audit["check_run_base_conclusion"] = base_conclusion
                 audit["check_run_conclusion"] = conclusion
                 audit["check_run_published"] = False
                 audit["check_run_status_code"] = "dry_run"
+                audit["check_run_skip_reason"] = "dry_run"
+                audit["check_run_token_source"] = "github_token"
+                audit["check_run_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "").strip() or "unknown"
+                audit["check_run_required_permissions_header"] = "n/a"
+                audit["check_run_failure_class"] = "not_attempted"
         else:
             _publish_pr_check_run(
                 repo_root=repo_root,

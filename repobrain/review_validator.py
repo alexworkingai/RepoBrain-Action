@@ -30,9 +30,6 @@ _SECRET_LIKE_WORDING_RE = re.compile(r"(?i)\b(secret leakage|possible secret|cre
 _STRONG_SECRET_INDICATOR_RE = re.compile(
     r"(?i)(begin private key|ghp_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|akia[0-9a-z]{16}|api[_-]?key|token=|password=)"
 )
-_SECRET_SUPPORTING_PATH_RE = re.compile(
-    r"(?i)(auth|security|secret|credential|token|vault|key|\.env|\.github/workflows/)"
-)
 
 
 def _severity_from_message(message: str) -> str:
@@ -101,20 +98,9 @@ def _is_risk_driver_message(message: str) -> bool:
     return any(token in lowered for token in _RISK_DRIVER_HINTS)
 
 
-def _has_secret_supporting_evidence(*, message: str, evidence_paths: list[str]) -> bool:
+def _has_secret_supporting_evidence(*, message: str) -> bool:
     if _STRONG_SECRET_INDICATOR_RE.search(str(message or "")):
         return True
-    for path in evidence_paths:
-        raw = str(path or "").strip()
-        if not raw:
-            continue
-        lowered = raw.lower()
-        if lowered.startswith(("docs/", "documentation/")):
-            continue
-        if lowered.endswith((".md", ".rst", ".txt", ".adoc")):
-            continue
-        if _SECRET_SUPPORTING_PATH_RE.search(raw):
-            return True
     return False
 
 
@@ -168,6 +154,27 @@ def _aggregate_risk_items(risk_items: list[dict[str, Any]]) -> list[dict[str, An
     return out
 
 
+def _finalize_possible_signals(
+    *,
+    possible_signals: list[str],
+    informational_notes: list[str],
+) -> tuple[list[str], list[str]]:
+    normalized_possible: list[str] = []
+    normalized_notes = list(informational_notes)
+    for item in possible_signals:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        lowered = text.lower()
+        if "secret leakage" in lowered and ("heuristic wording" in lowered or "verify evidence" in lowered):
+            normalized_notes.append(
+                "Possible secret leakage signal downgraded to informational (no concrete secret evidence)."
+            )
+            continue
+        normalized_possible.append(text)
+    return list(dict.fromkeys(normalized_possible)), list(dict.fromkeys(normalized_notes))
+
+
 def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
     """Validate review findings so severe claims are evidence-backed."""
     risk_items = _collect_risk_items(review)
@@ -214,7 +221,6 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
             continue
         if _SECRET_LIKE_WORDING_RE.search(lowered) and not _has_secret_supporting_evidence(
             message=message,
-            evidence_paths=evidence_paths,
         ):
             calibrated_notes.append(
                 f"{message} (informational: heuristic security wording without concrete evidence)"
@@ -290,8 +296,13 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         else []
     )
     informational_notes.extend(calibrated_notes)
-    validated["notes"] = list(dict.fromkeys(informational_notes))
-    validated["informational_notes"] = list(dict.fromkeys(informational_notes))
+    possible_signals_final, informational_notes_final = _finalize_possible_signals(
+        possible_signals=validated["possible_signals"],
+        informational_notes=informational_notes,
+    )
+    validated["possible_signals"] = possible_signals_final
+    validated["notes"] = informational_notes_final
+    validated["informational_notes"] = informational_notes_final
     validated["validation"] = {
         "confirmed_findings_count": len(confirmed_findings),
         "possible_signals_count": len(validated["possible_signals"]),

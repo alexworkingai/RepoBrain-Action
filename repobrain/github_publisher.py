@@ -59,6 +59,16 @@ def _post_with_retry(
     return False, last_status, last_json
 
 
+def _header_value(headers: Any, key: str) -> str:
+    if headers is None:
+        return ""
+    try:
+        value = headers.get(key) or headers.get(key.lower())
+    except AttributeError:
+        value = ""
+    return str(value or "").strip()
+
+
 def publish_comment(
     *,
     repo: str,
@@ -157,8 +167,50 @@ def publish_check_run(
         annotations=annotations,
     )
     url = f"https://api.github.com/repos/{repo}/check-runs"
-    ok, status, data = _post_with_retry(url=url, token=token, payload=payload, retries=2)
-    return {"ok": ok, "status_code": status, "data": data, "payload": payload}
+    required_permissions_header = "n/a"
+    ok = False
+    status: int | None = None
+    data: dict[str, Any] = {}
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                url,
+                json=payload,
+                headers=_headers(token),
+                timeout=15,
+            )
+        except requests.RequestException:
+            if attempt < 2:
+                time.sleep(0.5)
+                continue
+            status = None
+            data = {"error": "network"}
+            break
+
+        status = int(getattr(response, "status_code", 0) or 0)
+        try:
+            raw_data = response.json()
+            data = raw_data if isinstance(raw_data, dict) else {}
+        except ValueError:
+            data = {}
+        response_headers = getattr(response, "headers", {})
+        required_permissions = _header_value(response_headers, "X-Accepted-GitHub-Permissions")
+        if required_permissions:
+            required_permissions_header = required_permissions
+        if 200 <= status < 300:
+            ok = True
+            break
+        if status in {429, 500, 502, 503, 504} and attempt < 2:
+            time.sleep(0.5)
+            continue
+        break
+    return {
+        "ok": ok,
+        "status_code": status,
+        "data": data,
+        "payload": payload,
+        "required_permissions_header": required_permissions_header,
+    }
 
 
 def create_pull_request(
