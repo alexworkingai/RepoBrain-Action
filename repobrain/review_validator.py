@@ -168,7 +168,7 @@ def _finalize_possible_signals(
         lowered = text.lower()
         if "secret leakage" in lowered and ("heuristic wording" in lowered or "verify evidence" in lowered):
             normalized_notes.append(
-                "Possible secret leakage signal downgraded to informational (no concrete secret evidence)."
+                "Heuristic security wording was downgraded to informational (missing concrete evidence)."
             )
             continue
         normalized_possible.append(text)
@@ -209,21 +209,26 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         calibration_reason_codes.add(calibration.reason_code)
         severity = calibration.severity
         if calibration.bucket == "informational":
-            calibrated_notes.append(f"{message} ({calibration.reason_short})")
+            if _SECRET_LIKE_WORDING_RE.search(message.lower()):
+                calibrated_notes.append(
+                    "Heuristic security wording was downgraded to informational (missing concrete evidence)."
+                )
+            else:
+                calibrated_notes.append(f"{message} ({calibration.reason_short})")
             continue
         has_evidence = bool(evidence_paths)
         lowered = message.lower()
 
         if ("secret leakage" in lowered or "possible secret" in lowered) and not has_evidence:
             calibrated_notes.append(
-                f"{message} (informational: missing concrete secret evidence)"
+                "Heuristic security wording was downgraded to informational (missing concrete evidence)."
             )
             continue
         if _SECRET_LIKE_WORDING_RE.search(lowered) and not _has_secret_supporting_evidence(
             message=message,
         ):
             calibrated_notes.append(
-                f"{message} (informational: heuristic security wording without concrete evidence)"
+                "Heuristic security wording was downgraded to informational (missing concrete evidence)."
             )
             continue
         if severity == "high" and not has_evidence:
@@ -301,6 +306,20 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         informational_notes=informational_notes,
     )
     validated["possible_signals"] = possible_signals_final
+    risk_drivers = [item for item in risk_drivers if "secret leakage" not in str(item).lower()]
+    validated["risk_drivers"] = list(dict.fromkeys(risk_drivers))
+    if (
+        risk_level == "medium"
+        and not validated["possible_signals"]
+        and not validated["risk_drivers"]
+        and not validated["confirmed_findings"]
+    ):
+        risk_level = "low"
+        validated["risk_level"] = risk_level
+        validated["summary_text"] = _compose_summary_text(
+            str(review.get("summary_text", "")),
+            risk_level,
+        )
     validated["notes"] = informational_notes_final
     validated["informational_notes"] = informational_notes_final
     validated["validation"] = {
@@ -309,7 +328,7 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         "informational_notes_count": len(validated["informational_notes"]),
         "risk_drivers_count": len(validated["risk_drivers"]),
         "risk_level": risk_level,
-        "risk_drivers": risk_drivers,
+        "risk_drivers": list(validated["risk_drivers"]),
         "signal_calibration_used": calibration_used,
         "signal_calibration_reason_codes": sorted(calibration_reason_codes) or ["none"],
     }

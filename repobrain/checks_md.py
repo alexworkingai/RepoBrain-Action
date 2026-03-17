@@ -20,6 +20,13 @@ def _compact_text(text: str, *, max_len: int = 220) -> str:
     return f"{compact[: max_len - 3].rstrip()}..."
 
 
+def _sanitize_secret_leak_phrase(text: str) -> str:
+    cleaned = " ".join(str(text or "").strip().split())
+    if "possible secret leakage in patch" in cleaned.lower():
+        return ""
+    return cleaned
+
+
 def _verification_status(audit: dict[str, Any]) -> str:
     report_raw = audit.get("verification_report", {})
     report = dict(report_raw) if isinstance(report_raw, dict) else {}
@@ -176,6 +183,7 @@ def build_check_summary_markdown(
         str(audit.get("review_tldr", audit.get("check_review_tldr", "Review completed.")) or "Review completed."),
         max_len=260,
     )
+    tldr = _sanitize_secret_leak_phrase(tldr) or "Review completed."
     tldr = re.sub(r"^\s*TL;DR:\s*", "", tldr, flags=re.IGNORECASE).strip() or "Review completed."
     if risk_level == "LOW" and confirmed == 0 and possible == 0:
         tldr = "Low-risk review completed with no confirmed findings."

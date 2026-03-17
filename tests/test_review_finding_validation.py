@@ -21,7 +21,7 @@ def test_high_severity_claim_without_evidence_is_downgraded() -> None:
     assert validated["risk_level"] != "high"
     assert not any("secret leakage" in item.lower() for item in validated["possible_signals"])
     assert any(
-        "missing concrete secret evidence" in item.lower()
+        "heuristic security wording was downgraded" in item.lower()
         for item in validated.get("informational_notes", [])
     )
     assert all("secret leakage" not in item.lower() for item in validated["confirmed_findings"])
@@ -80,7 +80,11 @@ def test_docs_only_secret_wording_is_not_promoted_to_possible_signal() -> None:
     validated = validate_review_findings(review)
 
     assert not any("secret leakage" in item.lower() for item in validated["possible_signals"])
-    assert any("docs-only security wording" in item.lower() for item in validated["informational_notes"])
+    assert any(
+        "heuristic security wording was downgraded" in item.lower()
+        for item in validated["informational_notes"]
+    )
+    assert not any("possible secret leakage in patch" in item.lower() for item in validated["informational_notes"])
 
 
 def test_heuristic_secret_wording_without_secret_support_stays_informational() -> None:
@@ -99,6 +103,6 @@ def test_heuristic_secret_wording_without_secret_support_stays_informational() -
 
     assert not any("secret leakage" in item.lower() for item in validated["possible_signals"])
     assert any(
-        "heuristic security wording without concrete evidence" in item.lower()
+        "heuristic security wording was downgraded" in item.lower()
         for item in validated.get("informational_notes", [])
     )

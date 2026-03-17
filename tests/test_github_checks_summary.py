@@ -89,3 +89,23 @@ def test_closed_pr_review_skip_summary_is_usersafe_and_neutral() -> None:
 
     assert "Status: **neutral (safe skip)**" in summary
     assert "Skip reason: Skipped: `/repobrain review` runs only on open PRs." in summary
+
+
+def test_review_check_summary_drops_unsupported_secret_phrase_from_tldr() -> None:
+    summary, _ = build_check_summary_markdown(
+        cmd="review",
+        audit={
+            "route_final": "DEEP",
+            "review_risk_level": "LOW",
+            "review_confirmed_findings_count": 0,
+            "review_possible_signals_count": 0,
+            "review_informational_notes_count": 0,
+            "review_risk_drivers_count": 0,
+            "review_tldr": "Possible secret leakage in patch (signal: heuristic wording)",
+            "verification_report": {"overall": "NOT_RUN"},
+            "pr_number": 22,
+        },
+        conclusion="neutral",
+    )
+
+    assert "Possible secret leakage in patch" not in summary
