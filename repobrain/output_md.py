@@ -531,6 +531,15 @@ def _diag_state(value: Any, parameter: str) -> str:
         "signal calibration used",
         "patch guard triggered",
         "tl;dr compressed",
+        "incremental retrieval used",
+        "incremental scope mode",
+        "changed files considered",
+        "changed regions considered",
+        "unchanged files skipped",
+        "unchanged chunks skipped",
+        "retrieval cache hits",
+        "retrieval cache misses",
+        "incremental fallback reason",
     }
     if parameter_norm in sprint38_always_meaningful:
         return "meaningful"
@@ -654,6 +663,51 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             "PR changed files",
             pr_files,
             "Count of changed files from PR metadata (if available).",
+        ),
+        (
+            "Incremental retrieval used",
+            bool(audit_summary.get("incremental_retrieval_used", False)),
+            "Whether changed-region/file-first incremental retrieval scope was applied.",
+        ),
+        (
+            "Incremental scope mode",
+            audit_summary.get("incremental_scope_mode", "fallback_full"),
+            "Effective incremental scope mode selected for this run.",
+        ),
+        (
+            "Changed files considered",
+            _int(audit_summary.get("changed_files_considered", 0)),
+            "Changed files included in incremental retrieval scope.",
+        ),
+        (
+            "Changed regions considered",
+            _int(audit_summary.get("changed_regions_considered", 0)),
+            "Changed diff hunks considered for incremental scope decisions.",
+        ),
+        (
+            "Unchanged files skipped",
+            _int(audit_summary.get("unchanged_files_skipped", 0)),
+            "Unchanged files skipped by incremental scope narrowing.",
+        ),
+        (
+            "Unchanged chunks skipped",
+            _int(audit_summary.get("unchanged_chunks_skipped", 0)),
+            "Unchanged chunks skipped by incremental scope narrowing.",
+        ),
+        (
+            "Retrieval cache hits",
+            _int(audit_summary.get("retrieval_cache_hits", 0)),
+            "File-hash reuse hits from incremental retrieval cache snapshot.",
+        ),
+        (
+            "Retrieval cache misses",
+            _int(audit_summary.get("retrieval_cache_misses", 0)),
+            "File-hash reuse misses from incremental retrieval cache snapshot.",
+        ),
+        (
+            "Incremental fallback reason",
+            audit_summary.get("incremental_fallback_reason", "none"),
+            "Reason incremental scope fell back to full retrieval when applicable.",
         ),
     ]
     if command == "fix":
@@ -1307,6 +1361,29 @@ def render_error_markdown(
     )
 
 
+_LEAKED_SECRET_SIGNAL_PHRASE = "possible secret leakage in patch (signal: heuristic wording)"
+
+
+def _strip_review_secret_signal_leak(text: str) -> str:
+    lines = [line for line in str(text or "").splitlines() if _LEAKED_SECRET_SIGNAL_PHRASE not in line.lower()]
+    normalized = "\n".join(lines).strip()
+    if not normalized:
+        return ""
+    return normalized
+
+
+def _sanitize_review_possible_signals(possible_signals: list[str]) -> list[str]:
+    sanitized: list[str] = []
+    for raw in possible_signals:
+        item = str(raw or "").strip()
+        if not item:
+            continue
+        if _LEAKED_SECRET_SIGNAL_PHRASE in item.lower():
+            continue
+        sanitized.append(item)
+    return list(dict.fromkeys(sanitized))
+
+
 def render_review_markdown(
     *,
     review: dict[str, Any],
@@ -1322,6 +1399,7 @@ def render_review_markdown(
     possible_signals = review.get("possible_signals", [])
     if not isinstance(possible_signals, list):
         possible_signals = []
+    possible_signals = _sanitize_review_possible_signals(possible_signals)
     recommendations = review.get("recommendations", review.get("suggested_tests", []))
     if not isinstance(recommendations, list):
         recommendations = []
@@ -1331,7 +1409,9 @@ def render_review_markdown(
     risk_drivers = review.get("risk_drivers", [])
     if not isinstance(risk_drivers, list):
         risk_drivers = []
-    summary_text = str(review.get("summary_text", "No summary available.")).strip()
+    summary_text = _strip_review_secret_signal_leak(
+        str(review.get("summary_text", "No summary available.")).strip()
+    )
     summary_text, tldr_compressed = _compress_review_summary_with_flag(
         summary_text,
         risk_drivers=risk_drivers,

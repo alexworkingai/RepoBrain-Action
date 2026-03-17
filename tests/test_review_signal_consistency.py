@@ -81,3 +81,22 @@ def test_rendered_review_never_leaks_heuristic_secret_signal() -> None:
 
     assert "Possible secret leakage in patch (signal: heuristic wording)" not in md
     assert "heuristic security wording without concrete evidence" in md
+
+
+def test_render_review_strips_raw_leaked_secret_phrase_from_possible_signals() -> None:
+    review = {
+        "summary_text": "Summary includes review notes.",
+        "risk_level": "low",
+        "files_block": ["- `src/a.py`"],
+        "confirmed_findings": [],
+        "possible_signals": ["Possible secret leakage in patch (signal: heuristic wording)"],
+        "informational_notes": ["Context note."],
+        "recommendations": ["Run tests."],
+    }
+    md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "not run", "checks": []},
+        audit_summary={"route_final": "FAST", "pass_count": 1},
+    )
+
+    assert "Possible secret leakage in patch (signal: heuristic wording)" not in md
