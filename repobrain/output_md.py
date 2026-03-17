@@ -522,6 +522,18 @@ def _version_backend_lines(audit_summary: dict[str, Any]) -> list[str]:
 
 
 def _diag_state(value: Any, parameter: str) -> str:
+    parameter_norm = str(parameter or "").strip().lower()
+    sprint38_always_meaningful = {
+        "hybrid rerank used",
+        "retrieval ranking mode",
+        "evidence filtered",
+        "evidence filter reason codes",
+        "signal calibration used",
+        "patch guard triggered",
+        "tl;dr compressed",
+    }
+    if parameter_norm in sprint38_always_meaningful:
+        return "meaningful"
     if value is None:
         return "undefined"
     if isinstance(value, bool):
@@ -533,7 +545,6 @@ def _diag_state(value: Any, parameter: str) -> str:
         return "meaningful" if len(value) > 0 else "disabled"
     if isinstance(value, str):
         normalized = value.strip().lower()
-        parameter_norm = str(parameter or "").strip().lower()
         if not normalized:
             return "undefined"
         if normalized == "none" and parameter_norm in {"patch targeting mode", "patch grounding mode"}:

@@ -181,6 +181,11 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         has_evidence = bool(evidence_paths)
         lowered = message.lower()
 
+        if ("secret leakage" in lowered or "possible secret" in lowered) and not has_evidence:
+            calibrated_notes.append(
+                f"{message} (informational: missing concrete secret evidence)"
+            )
+            continue
         if severity == "high" and not has_evidence:
             possible_signals.append(f"{message} (downgraded: missing evidence)")
             continue
