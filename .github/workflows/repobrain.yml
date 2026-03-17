@@ -101,6 +101,7 @@ jobs:
       RB_LLM_ENABLE_ISSUE_ONLY: "0"
       RB_LLM_BATCH_ENABLE: "0"
       RB_EMBED_ENABLED: "0"
+      RB_CHECK_RUN_PUBLISH_MODE: "deferred"
     steps:
       - uses: actions/github-script@v7
         id: ack

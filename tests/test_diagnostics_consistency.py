@@ -165,3 +165,30 @@ def test_sprint38_observability_fields_render_for_fix() -> None:
     assert "| Signal calibration used | `yes` |" in md
     assert "| Patch guard triggered | `yes` |" in md
     assert "| TL;DR compressed | `no` |" in md
+
+
+def test_check_publication_diagnostics_fields_render() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "check_run_attempted": False,
+            "check_run_published": False,
+            "check_run_status_code": "deferred",
+            "check_run_failure_class": "deferred",
+            "check_run_token_source": "workflow_run_github_token",
+            "check_run_event_name": "issue_comment",
+            "check_run_required_permissions_header": "n/a",
+            "check_run_skip_reason": "deferred_workflow_publisher",
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "| Check-run attempted | `no` |" in md
+    assert "| Check-run status | `deferred` |" in md
+    assert "| Check-run token source | `workflow_run_github_token` |" in md
+    assert "| Check-run failure class | `deferred` |" in md
