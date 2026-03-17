@@ -103,6 +103,22 @@ def _compress_review_summary(
     return compact or "Review summary available in findings and diagnostics."
 
 
+def _compress_review_summary_with_flag(
+    summary_text: str,
+    *,
+    risk_drivers: list[str],
+    informational_notes: list[str],
+) -> tuple[str, bool]:
+    original = " ".join(str(summary_text or "").strip().split())
+    compact = _compress_review_summary(
+        summary_text,
+        risk_drivers=risk_drivers,
+        informational_notes=informational_notes,
+    )
+    compact_norm = " ".join(str(compact or "").strip().split())
+    return compact, compact_norm != original
+
+
 def _confirmed_evidence_map(review: dict[str, Any]) -> dict[str, list[str]]:
     raw_items = review.get("confirmed_risk_items", [])
     if not isinstance(raw_items, list):
@@ -588,6 +604,41 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
         ("Selected evidence", _int(audit_summary.get("selected", 0)), "Evidence items selected for response."),
         ("Retrieval passes", _int(audit_summary.get("pass_count", 1), 1), "Number of retrieval passes executed."),
         ("Top score", audit_summary.get("top_score", "n/a"), "Highest retrieval score observed."),
+        (
+            "Retrieval ranking mode",
+            audit_summary.get("retrieval_ranking_mode", "n/a"),
+            "Effective ranking strategy used for candidate ordering.",
+        ),
+        (
+            "Hybrid rerank used",
+            bool(audit_summary.get("hybrid_rerank_used", False)),
+            "Whether post-retrieval hybrid reranking was applied.",
+        ),
+        (
+            "Evidence filtered",
+            _int(audit_summary.get("evidence_filtered_count", 0)),
+            "Number of low-value/duplicate evidence items filtered before synthesis.",
+        ),
+        (
+            "Evidence filter reason codes",
+            audit_summary.get("evidence_filter_reason_codes", "none"),
+            "Deterministic reason codes describing evidence filtering decisions.",
+        ),
+        (
+            "Signal calibration used",
+            bool(audit_summary.get("signal_calibration_used", False)),
+            "Whether review security-like signals were calibrated before final buckets.",
+        ),
+        (
+            "Patch guard triggered",
+            bool(audit_summary.get("patch_guard_triggered", False)),
+            "Whether early placeholder/generic patch guard was triggered.",
+        ),
+        (
+            "TL;DR compressed",
+            bool(audit_summary.get("tldr_compressed", False)),
+            "Whether compact summary compression removed scaffold/repetition.",
+        ),
         (
             "PR changed files",
             pr_files,
@@ -1230,11 +1281,12 @@ def render_review_markdown(
     if not isinstance(risk_drivers, list):
         risk_drivers = []
     summary_text = str(review.get("summary_text", "No summary available.")).strip()
-    summary_text = _compress_review_summary(
+    summary_text, tldr_compressed = _compress_review_summary_with_flag(
         summary_text,
         risk_drivers=risk_drivers,
         informational_notes=informational_notes,
     )
+    audit_summary["tldr_compressed"] = bool(tldr_compressed)
     risk_level = str(review.get("risk_level", "low") or "low").upper()
     if not summary_text:
         summary_text = "Review completed."
