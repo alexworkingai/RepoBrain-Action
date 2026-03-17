@@ -53,4 +53,5 @@ def test_heuristic_signal_without_evidence_stays_out_of_confirmed_findings() -> 
     )
 
     assert "### ⚠️ Confirmed findings" not in md
-    assert "missing concrete secret evidence" in md
+    assert "heuristic security wording was downgraded" in md.lower()
+    assert "possible secret leakage in patch" not in md.lower()

@@ -1361,7 +1361,7 @@ def render_error_markdown(
     )
 
 
-_LEAKED_SECRET_SIGNAL_PHRASE = "possible secret leakage in patch (signal: heuristic wording)"
+_LEAKED_SECRET_SIGNAL_PHRASE = "possible secret leakage in patch"
 
 
 def _strip_review_secret_signal_leak(text: str) -> str:
@@ -1375,6 +1375,18 @@ def _strip_review_secret_signal_leak(text: str) -> str:
 def _sanitize_review_possible_signals(possible_signals: list[str]) -> list[str]:
     sanitized: list[str] = []
     for raw in possible_signals:
+        item = str(raw or "").strip()
+        if not item:
+            continue
+        if _LEAKED_SECRET_SIGNAL_PHRASE in item.lower():
+            continue
+        sanitized.append(item)
+    return list(dict.fromkeys(sanitized))
+
+
+def _sanitize_review_user_lines(values: list[str]) -> list[str]:
+    sanitized: list[str] = []
+    for raw in values:
         item = str(raw or "").strip()
         if not item:
             continue
@@ -1403,12 +1415,15 @@ def render_review_markdown(
     recommendations = review.get("recommendations", review.get("suggested_tests", []))
     if not isinstance(recommendations, list):
         recommendations = []
+    recommendations = _sanitize_review_user_lines(recommendations)
     informational_notes = review.get("informational_notes", review.get("notes", []))
     if not isinstance(informational_notes, list):
         informational_notes = []
+    informational_notes = _sanitize_review_user_lines(informational_notes)
     risk_drivers = review.get("risk_drivers", [])
     if not isinstance(risk_drivers, list):
         risk_drivers = []
+    risk_drivers = _sanitize_review_user_lines(risk_drivers)
     summary_text = _strip_review_secret_signal_leak(
         str(review.get("summary_text", "No summary available.")).strip()
     )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from repobrain.output_md import render_answer_markdown, render_patch_markdown
+from repobrain.output_md import render_answer_markdown, render_patch_markdown, render_review_markdown
 
 
 def test_retained_preferred_model_does_not_render_downgrade_budget_action() -> None:
@@ -221,3 +221,73 @@ def test_incremental_retrieval_diagnostics_fields_render() -> None:
     assert "| Changed files considered | `3` |" in md
     assert "| Unchanged chunks skipped | `64` |" in md
     assert "| Retrieval cache hits | `24` |" in md
+
+
+def test_incremental_retrieval_fields_render_in_review_diagnostics() -> None:
+    review = {
+        "summary_text": "Review complete.",
+        "risk_level": "low",
+        "files_block": [],
+        "confirmed_findings": [],
+        "possible_signals": [],
+        "informational_notes": [],
+        "recommendations": [],
+    }
+    md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "incremental_retrieval_used": False,
+            "incremental_scope_mode": "not_applicable",
+            "changed_files_considered": 0,
+            "changed_regions_considered": 0,
+            "unchanged_files_skipped": 0,
+            "unchanged_chunks_skipped": 0,
+            "retrieval_cache_hits": 0,
+            "retrieval_cache_misses": 0,
+            "incremental_fallback_reason": "not_applicable",
+        },
+    )
+
+    assert "| Incremental retrieval used | `no` |" in md
+    assert "| Incremental scope mode | `not_applicable` |" in md
+    assert "| Retrieval cache misses | `0` |" in md
+
+
+def test_incremental_retrieval_fields_render_in_fix_diagnostics() -> None:
+    md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 2,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+            "incremental_retrieval_used": False,
+            "incremental_scope_mode": "not_applicable",
+            "changed_files_considered": 0,
+            "changed_regions_considered": 0,
+            "unchanged_files_skipped": 0,
+            "unchanged_chunks_skipped": 0,
+            "retrieval_cache_hits": 0,
+            "retrieval_cache_misses": 0,
+            "incremental_fallback_reason": "not_applicable",
+        },
+    )
+
+    assert "| Incremental retrieval used | `no` |" in md
+    assert "| Incremental scope mode | `not_applicable` |" in md
+    assert "| Incremental fallback reason | `not_applicable` |" in md
