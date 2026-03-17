@@ -59,3 +59,8 @@ def test_publish_pr_check_run_sets_skip_reason_when_head_missing(monkeypatch, tm
 
     assert audit["check_run_published"] is False
     assert audit["check_run_skip_reason"] == "head_sha_missing"
+
+
+def test_repobrain_workflow_allows_check_run_publication() -> None:
+    workflow = Path(".github/workflows/repobrain.yml").read_text(encoding="utf-8")
+    assert "checks: write" in workflow

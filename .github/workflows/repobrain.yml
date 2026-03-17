@@ -79,7 +79,7 @@ on:
 permissions:
   contents: read
   models: read
-  checks: read
+  checks: write
   statuses: read
   actions: read
   issues: write

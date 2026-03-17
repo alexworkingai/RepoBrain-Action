@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from repobrain.github_flow import (
+    _apply_fix_localization_gate,
     _count_confirmed_localized_findings,
     _should_block_fix_patch_without_localized_evidence,
 )
@@ -44,3 +45,20 @@ def test_fix_allows_patch_with_confirmed_localized_evidence() -> None:
         selected_files=["repobrain/github_flow.py"],
         confirmed_localized_findings=count,
     )
+
+
+def test_fix_localization_gate_clears_patch_when_localized_evidence_missing() -> None:
+    patch = _apply_fix_localization_gate(
+        patch_text="--- a/a.py\n+++ b/a.py\n@@\n-print('x')\n+print('y')\n",
+        no_localized_patch_target=True,
+    )
+    assert patch == ""
+
+
+def test_fix_localization_gate_keeps_patch_when_localized_evidence_present() -> None:
+    raw_patch = "--- a/a.py\n+++ b/a.py\n@@\n-print('x')\n+print('y')\n"
+    patch = _apply_fix_localization_gate(
+        patch_text=raw_patch,
+        no_localized_patch_target=False,
+    )
+    assert patch == raw_patch
