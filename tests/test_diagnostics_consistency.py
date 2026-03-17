@@ -192,3 +192,32 @@ def test_check_publication_diagnostics_fields_render() -> None:
     assert "| Check-run status | `deferred` |" in md
     assert "| Check-run token source | `workflow_run_github_token` |" in md
     assert "| Check-run failure class | `deferred` |" in md
+
+
+def test_incremental_retrieval_diagnostics_fields_render() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "incremental_retrieval_used": True,
+            "incremental_scope_mode": "changed_files_first",
+            "changed_files_considered": 3,
+            "changed_regions_considered": 7,
+            "unchanged_files_skipped": 12,
+            "unchanged_chunks_skipped": 64,
+            "retrieval_cache_hits": 24,
+            "retrieval_cache_misses": 3,
+            "incremental_fallback_reason": "none",
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "| Incremental retrieval used | `yes` |" in md
+    assert "| Incremental scope mode | `changed_files_first` |" in md
+    assert "| Changed files considered | `3` |" in md
+    assert "| Unchanged chunks skipped | `64` |" in md
+    assert "| Retrieval cache hits | `24` |" in md

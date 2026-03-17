@@ -58,6 +58,7 @@ from repobrain.output_md import (
 from repobrain.retrieve_pro import retrieve_topk_pro
 from repobrain.retrieval.hybrid import rank_hybrid_candidates
 from repobrain.retrieval.hybrid_ranker import rerank_candidates
+from repobrain.retrieval.incremental_index import scope_chunks_incremental
 from repobrain.review import build_pr_review
 from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
@@ -4047,10 +4048,29 @@ def _retrieve_candidates_with_runtime(
     chunk_vectors_by_id: dict[str, list[float]] | None = None,
     query_vector: list[float] | None = None,
     github_context: dict[str, Any] | None = None,
+    repo_root: Path | None = None,
 ) -> tuple[list[CandidateChunk], dict[str, Any]]:
     vectors = chunk_vectors_by_id or {}
+    incremental_scope = scope_chunks_incremental(
+        question=question,
+        command=cmd,
+        chunks=chunks,
+        github_context=github_context,
+        repo_root=repo_root,
+    )
+    scoped_chunks = incremental_scope.chunks
     base_mode = "lexical"
-    retrieval_runtime: dict[str, Any]
+    retrieval_runtime: dict[str, Any] = {
+        "incremental_retrieval_used": bool(incremental_scope.incremental_retrieval_used),
+        "incremental_scope_mode": str(incremental_scope.incremental_scope_mode or "fallback_full"),
+        "changed_files_considered": int(incremental_scope.changed_files_considered),
+        "changed_regions_considered": int(incremental_scope.changed_regions_considered),
+        "unchanged_files_skipped": int(incremental_scope.unchanged_files_skipped),
+        "unchanged_chunks_skipped": int(incremental_scope.unchanged_chunks_skipped),
+        "retrieval_cache_hits": int(incremental_scope.retrieval_cache_hits),
+        "retrieval_cache_misses": int(incremental_scope.retrieval_cache_misses),
+        "incremental_fallback_reason": str(incremental_scope.incremental_fallback_reason or "none"),
+    }
     if vectors and query_vector:
         env_cfg = _runtime_env_cfg()
         vector_topk = int(env_cfg.embeddings.vector_topk)
@@ -4063,7 +4083,7 @@ def _retrieve_candidates_with_runtime(
             w_lex, w_vec = w_lex / total, w_vec / total
         hybrid = rank_hybrid_candidates(
             question=question,
-            chunks=chunks,
+            chunks=scoped_chunks,
             topk=topk,
             task_type=cmd,
             chunk_vectors_by_id=vectors,
@@ -4074,7 +4094,8 @@ def _retrieve_candidates_with_runtime(
             max_per_file=2,
         )
         base_mode = "hybrid"
-        retrieval_runtime = {
+        retrieval_runtime.update(
+            {
             "retrieval_mode": "hybrid",
             "query_embedded": True,
             "index_vectors_loaded": True,
@@ -4082,14 +4103,22 @@ def _retrieve_candidates_with_runtime(
             "chunks_with_vectors": len(vectors),
             "evidence_reason": str(hybrid.reason or "n/a"),
             "vector_topk_used": int(hybrid.vector_topk),
-        }
+            }
+        )
         base_candidates = hybrid.candidates
     else:
         if cmd == "ask":
-            base_candidates = retrieve_topk(question, chunks, topk=topk)
+            base_candidates = retrieve_topk(question, scoped_chunks, topk=topk)
         else:
-            base_candidates = retrieve_topk_pro(question, chunks, topk=topk, task_type=cmd, max_per_file=2)
-        retrieval_runtime = {
+            base_candidates = retrieve_topk_pro(
+                question,
+                scoped_chunks,
+                topk=topk,
+                task_type=cmd,
+                max_per_file=2,
+            )
+        retrieval_runtime.update(
+            {
             "retrieval_mode": "lexical",
             "query_embedded": bool(query_vector),
             "index_vectors_loaded": bool(vectors),
@@ -4097,7 +4126,8 @@ def _retrieve_candidates_with_runtime(
             "chunks_with_vectors": len(vectors),
             "evidence_reason": "query_vector_missing" if not query_vector else "index_vectors_not_loaded",
             "vector_topk_used": 0,
-        }
+            }
+        )
 
     rerank = rerank_candidates(
         base_candidates,
@@ -4142,6 +4172,7 @@ def _retrieve_candidates(
         chunk_vectors_by_id=chunk_vectors_by_id,
         query_vector=query_vector,
         github_context=None,
+        repo_root=None,
     )
     return candidates
 
@@ -4314,6 +4345,7 @@ def run_qa_two_pass(
     timings_ms: dict[str, float] | None = None,
     github_context: dict[str, Any] | None = None,
     verification_context: dict[str, Any] | None = None,
+    repo_root: Path | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Run at most two retrieval+TKY passes using the TKY route from pass 1."""
     topk_fast = int(getattr(cfg, "topk_fast", getattr(cfg, "topk", 30)))
@@ -4335,6 +4367,7 @@ def run_qa_two_pass(
         chunk_vectors_by_id=chunk_vectors_by_id,
         query_vector=query_vector,
         github_context=github_context,
+        repo_root=repo_root,
     )
     if timings_ms is not None:
         timings_ms["retrieve_pass1"] = round((time.perf_counter() - t0) * 1000.0, 3)
@@ -4410,6 +4443,7 @@ def run_qa_two_pass(
             chunk_vectors_by_id=chunk_vectors_by_id,
             query_vector=query_vector,
             github_context=github_context,
+            repo_root=repo_root,
         )
         if timings_ms is not None:
             timings_ms["retrieve_pass2"] = round((time.perf_counter() - t0) * 1000.0, 3)
@@ -4491,6 +4525,33 @@ def run_qa_two_pass(
     audit_extra["evidence_filter_reason_codes"] = ",".join(
         str(item).strip() for item in filter_codes if str(item).strip()
     ) or "none"
+    audit_extra["incremental_retrieval_used"] = bool(
+        final_retrieval_runtime.get("incremental_retrieval_used", False)
+    )
+    audit_extra["incremental_scope_mode"] = str(
+        final_retrieval_runtime.get("incremental_scope_mode", "fallback_full") or "fallback_full"
+    )
+    audit_extra["changed_files_considered"] = int(
+        final_retrieval_runtime.get("changed_files_considered", 0) or 0
+    )
+    audit_extra["changed_regions_considered"] = int(
+        final_retrieval_runtime.get("changed_regions_considered", 0) or 0
+    )
+    audit_extra["unchanged_files_skipped"] = int(
+        final_retrieval_runtime.get("unchanged_files_skipped", 0) or 0
+    )
+    audit_extra["unchanged_chunks_skipped"] = int(
+        final_retrieval_runtime.get("unchanged_chunks_skipped", 0) or 0
+    )
+    audit_extra["retrieval_cache_hits"] = int(
+        final_retrieval_runtime.get("retrieval_cache_hits", 0) or 0
+    )
+    audit_extra["retrieval_cache_misses"] = int(
+        final_retrieval_runtime.get("retrieval_cache_misses", 0) or 0
+    )
+    audit_extra["incremental_fallback_reason"] = str(
+        final_retrieval_runtime.get("incremental_fallback_reason", "none") or "none"
+    )
     query_embedded = bool(query_vector)
     vectors_loaded = bool(chunk_vectors_by_id)
     chunks_with_vectors = len(chunk_vectors_by_id or {})
@@ -4831,6 +4892,7 @@ def _build_qa_markdown(
         timings_ms=(audit.get("timings_ms") if isinstance(audit, dict) else None),
         github_context=qa_github_context,
         verification_context=verification_context_seed,
+        repo_root=resolved_repo_root,
     )
     audit_summary = dict(result.audit_summary)
     audit_summary.update(loop_audit)
@@ -4841,6 +4903,15 @@ def _build_qa_markdown(
     audit_summary.setdefault("signal_calibration_used", False)
     audit_summary.setdefault("patch_guard_triggered", False)
     audit_summary.setdefault("tldr_compressed", False)
+    audit_summary.setdefault("incremental_retrieval_used", False)
+    audit_summary.setdefault("incremental_scope_mode", "fallback_full")
+    audit_summary.setdefault("changed_files_considered", 0)
+    audit_summary.setdefault("changed_regions_considered", 0)
+    audit_summary.setdefault("unchanged_files_skipped", 0)
+    audit_summary.setdefault("unchanged_chunks_skipped", 0)
+    audit_summary.setdefault("retrieval_cache_hits", 0)
+    audit_summary.setdefault("retrieval_cache_misses", 0)
+    audit_summary.setdefault("incremental_fallback_reason", "none")
     audit_summary["remote_skipped_reason"] = remote_skipped_reason or "n/a"
     audit_summary["config_loaded"] = bool(getattr(cfg, "config_loaded", False))
     audit_summary["config_path"] = str(getattr(cfg, "config_path", "<missing>") or "<missing>")
@@ -5042,6 +5113,31 @@ def _build_qa_markdown(
         audit["evidence_filtered_count"] = int(audit_summary.get("evidence_filtered_count", 0) or 0)
         audit["evidence_filter_reason_codes"] = str(
             audit_summary.get("evidence_filter_reason_codes", "none") or "none"
+        )
+        audit["incremental_retrieval_used"] = bool(
+            audit_summary.get("incremental_retrieval_used", False)
+        )
+        audit["incremental_scope_mode"] = str(
+            audit_summary.get("incremental_scope_mode", "fallback_full") or "fallback_full"
+        )
+        audit["changed_files_considered"] = int(
+            audit_summary.get("changed_files_considered", 0) or 0
+        )
+        audit["changed_regions_considered"] = int(
+            audit_summary.get("changed_regions_considered", 0) or 0
+        )
+        audit["unchanged_files_skipped"] = int(
+            audit_summary.get("unchanged_files_skipped", 0) or 0
+        )
+        audit["unchanged_chunks_skipped"] = int(
+            audit_summary.get("unchanged_chunks_skipped", 0) or 0
+        )
+        audit["retrieval_cache_hits"] = int(audit_summary.get("retrieval_cache_hits", 0) or 0)
+        audit["retrieval_cache_misses"] = int(
+            audit_summary.get("retrieval_cache_misses", 0) or 0
+        )
+        audit["incremental_fallback_reason"] = str(
+            audit_summary.get("incremental_fallback_reason", "none") or "none"
         )
         audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
         audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
@@ -5409,6 +5505,15 @@ def _build_review_markdown(
         "signal_calibration_used": False,
         "patch_guard_triggered": False,
         "tldr_compressed": False,
+        "incremental_retrieval_used": False,
+        "incremental_scope_mode": "fallback_full",
+        "changed_files_considered": 0,
+        "changed_regions_considered": 0,
+        "unchanged_files_skipped": 0,
+        "unchanged_chunks_skipped": 0,
+        "retrieval_cache_hits": 0,
+        "retrieval_cache_misses": 0,
+        "incremental_fallback_reason": "not_applicable",
     }
     audit_summary.update(_execution_from_tky_result(tky_result.tky))
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
@@ -6107,6 +6212,31 @@ def _build_review_markdown(
             audit["evidence_filter_reason_codes"] = str(
                 audit_summary.get("evidence_filter_reason_codes", "none") or "none"
             )
+            audit["incremental_retrieval_used"] = bool(
+                audit_summary.get("incremental_retrieval_used", False)
+            )
+            audit["incremental_scope_mode"] = str(
+                audit_summary.get("incremental_scope_mode", "fallback_full") or "fallback_full"
+            )
+            audit["changed_files_considered"] = int(
+                audit_summary.get("changed_files_considered", 0) or 0
+            )
+            audit["changed_regions_considered"] = int(
+                audit_summary.get("changed_regions_considered", 0) or 0
+            )
+            audit["unchanged_files_skipped"] = int(
+                audit_summary.get("unchanged_files_skipped", 0) or 0
+            )
+            audit["unchanged_chunks_skipped"] = int(
+                audit_summary.get("unchanged_chunks_skipped", 0) or 0
+            )
+            audit["retrieval_cache_hits"] = int(audit_summary.get("retrieval_cache_hits", 0) or 0)
+            audit["retrieval_cache_misses"] = int(
+                audit_summary.get("retrieval_cache_misses", 0) or 0
+            )
+            audit["incremental_fallback_reason"] = str(
+                audit_summary.get("incremental_fallback_reason", "none") or "none"
+            )
             audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
             audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
             audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
@@ -6463,6 +6593,29 @@ def _build_review_markdown(
         audit["evidence_filtered_count"] = int(audit_summary.get("evidence_filtered_count", 0) or 0)
         audit["evidence_filter_reason_codes"] = str(
             audit_summary.get("evidence_filter_reason_codes", "none") or "none"
+        )
+        audit["incremental_retrieval_used"] = bool(audit_summary.get("incremental_retrieval_used", False))
+        audit["incremental_scope_mode"] = str(
+            audit_summary.get("incremental_scope_mode", "fallback_full") or "fallback_full"
+        )
+        audit["changed_files_considered"] = int(
+            audit_summary.get("changed_files_considered", 0) or 0
+        )
+        audit["changed_regions_considered"] = int(
+            audit_summary.get("changed_regions_considered", 0) or 0
+        )
+        audit["unchanged_files_skipped"] = int(
+            audit_summary.get("unchanged_files_skipped", 0) or 0
+        )
+        audit["unchanged_chunks_skipped"] = int(
+            audit_summary.get("unchanged_chunks_skipped", 0) or 0
+        )
+        audit["retrieval_cache_hits"] = int(audit_summary.get("retrieval_cache_hits", 0) or 0)
+        audit["retrieval_cache_misses"] = int(
+            audit_summary.get("retrieval_cache_misses", 0) or 0
+        )
+        audit["incremental_fallback_reason"] = str(
+            audit_summary.get("incremental_fallback_reason", "none") or "none"
         )
         audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
         audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
