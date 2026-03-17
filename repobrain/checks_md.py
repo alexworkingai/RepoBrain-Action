@@ -177,6 +177,8 @@ def build_check_summary_markdown(
         max_len=260,
     )
     tldr = re.sub(r"^\s*TL;DR:\s*", "", tldr, flags=re.IGNORECASE).strip() or "Review completed."
+    if risk_level == "LOW" and confirmed == 0 and possible == 0:
+        tldr = "Low-risk review completed with no confirmed findings."
 
     lines = [
         "### RepoBrain Review Check",

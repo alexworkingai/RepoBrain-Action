@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from repobrain.signal_calibrator import calibrate_security_signal
+
 
 _HIGH_SEVERITY_HINTS = (
     "secret leakage",
@@ -149,6 +151,9 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
     possible_signals: list[str] = []
     risk_drivers: list[str] = []
     risk_driver_severities: list[str] = []
+    calibrated_notes: list[str] = []
+    calibration_reason_codes: set[str] = set()
+    calibration_used = False
     recommendations_raw = review.get("suggested_tests", review.get("next_steps", []))
     recommendations = (
         [str(item).strip() for item in recommendations_raw if str(item).strip()]
@@ -162,6 +167,17 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
             continue
         severity = str(item.get("severity", "low") or "low").lower()
         evidence_paths = [str(path).strip() for path in item.get("evidence_paths", []) if str(path).strip()]
+        calibration = calibrate_security_signal(
+            message=message,
+            severity=severity,
+            evidence_paths=evidence_paths,
+        )
+        calibration_used = True
+        calibration_reason_codes.add(calibration.reason_code)
+        severity = calibration.severity
+        if calibration.bucket == "informational":
+            calibrated_notes.append(f"{message} ({calibration.reason_short})")
+            continue
         has_evidence = bool(evidence_paths)
         lowered = message.lower()
 
@@ -234,6 +250,7 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         if isinstance(notes_raw, list)
         else []
     )
+    informational_notes.extend(calibrated_notes)
     validated["notes"] = list(dict.fromkeys(informational_notes))
     validated["informational_notes"] = list(dict.fromkeys(informational_notes))
     validated["validation"] = {
@@ -243,5 +260,9 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         "risk_drivers_count": len(validated["risk_drivers"]),
         "risk_level": risk_level,
         "risk_drivers": risk_drivers,
+        "signal_calibration_used": calibration_used,
+        "signal_calibration_reason_codes": sorted(calibration_reason_codes) or ["none"],
     }
+    validated["signal_calibration_used"] = calibration_used
+    validated["signal_calibration_reason_codes"] = sorted(calibration_reason_codes) or ["none"]
     return validated

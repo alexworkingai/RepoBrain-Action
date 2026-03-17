@@ -29,7 +29,14 @@ from repobrain.checks_md import (
 from repobrain.config import RepoBrainConfig, env_bool, env_int, load_config
 from repobrain import __version__ as REPOBRAIN_VERSION
 from repobrain.evidence import EvidenceItem
+from repobrain.evidence_filter import filter_candidate_evidence, filter_evidence_items
 from repobrain.execution_mode import coerce_execution_decision
+from repobrain.fix.patch_extract import (
+    extract_patch_candidate as extract_patch_candidate_normalized,
+    is_unified_diff as is_unified_diff_normalized,
+    normalize_patch_output as normalize_patch_output_value,
+)
+from repobrain.fix.patch_guard import evaluate_patch_payload
 from repobrain.formatting import format_refusal_comment, format_verify_comment
 from repobrain.github_publisher import (
     build_check_run_payload,
@@ -50,6 +57,7 @@ from repobrain.output_md import (
 )
 from repobrain.retrieve_pro import retrieve_topk_pro
 from repobrain.retrieval.hybrid import rank_hybrid_candidates
+from repobrain.retrieval.hybrid_ranker import rerank_candidates
 from repobrain.review import build_pr_review
 from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
@@ -2626,9 +2634,7 @@ def _sanitize_batch_text(text: str, *, max_lines: int = 8) -> list[str]:
 
 
 def _normalize_patch_output(text: str) -> str:
-    payload = str(text or "")
-    payload = payload.replace("\r\n", "\n").replace("\r", "\n")
-    return payload.strip()
+    return normalize_patch_output_value(text)
 
 
 def _extract_json_envelope_patch(text: str) -> tuple[str, bool]:
@@ -2658,54 +2664,16 @@ def _extract_json_envelope_patch(text: str) -> tuple[str, bool]:
 def _extract_patch_candidate(
     text: str,
 ) -> tuple[str, bool, bool, bool, bool, str, int]:
-    payload = _normalize_patch_output(text)
-    response_chars = len(payload)
-
-    fence_matches = list(re.finditer(r"```diff\s*(.*?)```", payload, flags=re.DOTALL | re.IGNORECASE))
-    has_diff_fence = bool(fence_matches)
-    for match in fence_matches:
-        candidate = _normalize_patch_output(match.group(1))
-        if _is_unified_diff(candidate):
-            return candidate, True, False, False, False, "diff_fence", response_chars
-
-    has_raw_diff = False
-    idx = payload.find("diff --git")
-    if idx >= 0:
-        candidate = _normalize_patch_output(payload[idx:])
-        has_raw_diff = True
-        if _is_unified_diff(candidate):
-            return candidate, False, True, False, False, "raw_diff", response_chars
-    payload_stripped = payload
-    if payload_stripped.startswith("--- ") and "\n+++ " in payload_stripped:
-        has_raw_diff = True
-        if _is_unified_diff(payload_stripped):
-            return payload_stripped, False, True, False, False, "raw_diff", response_chars
-    idx_plain = payload.find("\n--- ")
-    if idx_plain >= 0:
-        candidate = _normalize_patch_output(payload[idx_plain + 1 :])
-        if candidate.startswith("--- ") and "\n+++ " in candidate:
-            has_raw_diff = True
-            if _is_unified_diff(candidate):
-                return candidate, False, True, False, False, "raw_diff", response_chars
-
-    json_diff, has_json_envelope = _extract_json_envelope_patch(payload)
-    if json_diff and _is_unified_diff(json_diff):
-        return json_diff, False, False, True, False, "json_envelope", response_chars
-
-    has_no_patch = payload.strip().upper() == "NO_PATCH"
-    if not has_no_patch:
-        try:
-            envelope = json.loads(payload)
-        except json.JSONDecodeError:
-            envelope = None
-        if isinstance(envelope, dict):
-            result = str(envelope.get("result", "") or "").strip().lower()
-            has_no_patch = result in {"no_patch", "nopatch"}
-            has_json_envelope = has_json_envelope or "result" in envelope
-    if has_no_patch:
-        return "", has_diff_fence, has_raw_diff, has_json_envelope, True, "no_patch", response_chars
-
-    return "", has_diff_fence, has_raw_diff, has_json_envelope, False, "none", response_chars
+    extracted = extract_patch_candidate_normalized(text)
+    return (
+        extracted.patch_text,
+        extracted.has_diff_fence,
+        extracted.has_raw_diff,
+        extracted.has_json_envelope,
+        extracted.has_no_patch,
+        extracted.extraction_path,
+        extracted.response_chars,
+    )
 
 
 def _extract_patch_from_llm_text_with_flags(text: str) -> tuple[str, bool, bool]:
@@ -2719,10 +2687,7 @@ def _extract_patch_from_llm_text(text: str) -> str:
 
 
 def _is_unified_diff(patch_text: str) -> bool:
-    text = str(patch_text or "")
-    if not text.strip():
-        return False
-    return ("--- " in text and "+++ " in text and "@@ " in text) or text.startswith("diff --git")
+    return is_unified_diff_normalized(patch_text)
 
 
 def _parse_patch_ranges(patch_text: str) -> dict[str, list[tuple[int, int]]]:
@@ -4075,8 +4040,11 @@ def _retrieve_candidates_with_runtime(
     cmd: str,
     chunk_vectors_by_id: dict[str, list[float]] | None = None,
     query_vector: list[float] | None = None,
+    github_context: dict[str, Any] | None = None,
 ) -> tuple[list[CandidateChunk], dict[str, Any]]:
     vectors = chunk_vectors_by_id or {}
+    base_mode = "lexical"
+    retrieval_runtime: dict[str, Any]
     if vectors and query_vector:
         env_cfg = _runtime_env_cfg()
         vector_topk = int(env_cfg.embeddings.vector_topk)
@@ -4099,7 +4067,8 @@ def _retrieve_candidates_with_runtime(
             vector_topk=vector_topk,
             max_per_file=2,
         )
-        return hybrid.candidates, {
+        base_mode = "hybrid"
+        retrieval_runtime = {
             "retrieval_mode": "hybrid",
             "query_embedded": True,
             "index_vectors_loaded": True,
@@ -4108,20 +4077,46 @@ def _retrieve_candidates_with_runtime(
             "evidence_reason": str(hybrid.reason or "n/a"),
             "vector_topk_used": int(hybrid.vector_topk),
         }
-
-    if cmd == "ask":
-        candidates = retrieve_topk(question, chunks, topk=topk)
+        base_candidates = hybrid.candidates
     else:
-        candidates = retrieve_topk_pro(question, chunks, topk=topk, task_type=cmd, max_per_file=2)
-    return candidates, {
-        "retrieval_mode": "lexical",
-        "query_embedded": bool(query_vector),
-        "index_vectors_loaded": bool(vectors),
-        "index_vectors_used": False,
-        "chunks_with_vectors": len(vectors),
-        "evidence_reason": "query_vector_missing" if not query_vector else "index_vectors_not_loaded",
-        "vector_topk_used": 0,
-    }
+        if cmd == "ask":
+            base_candidates = retrieve_topk(question, chunks, topk=topk)
+        else:
+            base_candidates = retrieve_topk_pro(question, chunks, topk=topk, task_type=cmd, max_per_file=2)
+        retrieval_runtime = {
+            "retrieval_mode": "lexical",
+            "query_embedded": bool(query_vector),
+            "index_vectors_loaded": bool(vectors),
+            "index_vectors_used": False,
+            "chunks_with_vectors": len(vectors),
+            "evidence_reason": "query_vector_missing" if not query_vector else "index_vectors_not_loaded",
+            "vector_topk_used": 0,
+        }
+
+    rerank = rerank_candidates(
+        base_candidates,
+        query_context={
+            "question": question,
+            "command": cmd,
+            "changed_files": list((github_context or {}).get("changed_files", []) or []),
+        },
+    )
+    filtered = filter_candidate_evidence(
+        rerank.candidates,
+        command=cmd,
+        query=question,
+        max_items=max(1, int(topk)),
+    )
+    retrieval_runtime["hybrid_rerank_used"] = bool(rerank.hybrid_rerank_used)
+    mode_suffix = rerank.retrieval_ranking_mode
+    retrieval_runtime["retrieval_ranking_mode"] = (
+        f"{base_mode}+{mode_suffix}"
+        if mode_suffix not in {"fallback_lexical", "passthrough"}
+        else f"{base_mode}" if mode_suffix == "passthrough" else mode_suffix
+    )
+    retrieval_runtime["evidence_filtered_count"] = int(filtered.filtered_count)
+    retrieval_runtime["evidence_filter_reason_codes"] = sorted(filtered.reason_codes) or ["none"]
+    return filtered.candidates, retrieval_runtime
 
 
 def _retrieve_candidates(
@@ -4140,6 +4135,7 @@ def _retrieve_candidates(
         cmd=cmd,
         chunk_vectors_by_id=chunk_vectors_by_id,
         query_vector=query_vector,
+        github_context=None,
     )
     return candidates
 
@@ -4332,6 +4328,7 @@ def run_qa_two_pass(
         cmd=cmd,
         chunk_vectors_by_id=chunk_vectors_by_id,
         query_vector=query_vector,
+        github_context=github_context,
     )
     if timings_ms is not None:
         timings_ms["retrieve_pass1"] = round((time.perf_counter() - t0) * 1000.0, 3)
@@ -4406,6 +4403,7 @@ def run_qa_two_pass(
             cmd=cmd,
             chunk_vectors_by_id=chunk_vectors_by_id,
             query_vector=query_vector,
+            github_context=github_context,
         )
         if timings_ms is not None:
             timings_ms["retrieve_pass2"] = round((time.perf_counter() - t0) * 1000.0, 3)
@@ -4475,6 +4473,18 @@ def run_qa_two_pass(
     if pass2_top_score is not None:
         audit_extra["pass2.top_score"] = round(pass2_top_score, 6)
         audit_extra["top_score_pass2"] = round(pass2_top_score, 6)
+    audit_extra["hybrid_rerank_used"] = bool(final_retrieval_runtime.get("hybrid_rerank_used", False))
+    audit_extra["retrieval_ranking_mode"] = str(
+        final_retrieval_runtime.get("retrieval_ranking_mode", final_retrieval_runtime.get("retrieval_mode", "lexical"))
+        or "lexical"
+    )
+    audit_extra["evidence_filtered_count"] = int(final_retrieval_runtime.get("evidence_filtered_count", 0) or 0)
+    filter_codes = final_retrieval_runtime.get("evidence_filter_reason_codes", ["none"])
+    if not isinstance(filter_codes, list):
+        filter_codes = [str(filter_codes)]
+    audit_extra["evidence_filter_reason_codes"] = ",".join(
+        str(item).strip() for item in filter_codes if str(item).strip()
+    ) or "none"
     query_embedded = bool(query_vector)
     vectors_loaded = bool(chunk_vectors_by_id)
     chunks_with_vectors = len(chunk_vectors_by_id or {})
@@ -4818,6 +4828,13 @@ def _build_qa_markdown(
     )
     audit_summary = dict(result.audit_summary)
     audit_summary.update(loop_audit)
+    audit_summary.setdefault("hybrid_rerank_used", False)
+    audit_summary.setdefault("retrieval_ranking_mode", "lexical")
+    audit_summary.setdefault("evidence_filtered_count", 0)
+    audit_summary.setdefault("evidence_filter_reason_codes", "none")
+    audit_summary.setdefault("signal_calibration_used", False)
+    audit_summary.setdefault("patch_guard_triggered", False)
+    audit_summary.setdefault("tldr_compressed", False)
     audit_summary["remote_skipped_reason"] = remote_skipped_reason or "n/a"
     audit_summary["config_loaded"] = bool(getattr(cfg, "config_loaded", False))
     audit_summary["config_path"] = str(getattr(cfg, "config_path", "<missing>") or "<missing>")
@@ -4925,6 +4942,24 @@ def _build_qa_markdown(
     elif cmd == "explain":
         evidence_out = _dedupe_evidence_by_file(result.evidence, max_files=7)
         answer_text_out = _build_explain_answer(evidence_out, question)
+    evidence_filter_result = filter_evidence_items(
+        evidence_out,
+        command=cmd,
+        query=question,
+    )
+    evidence_out = evidence_filter_result.evidence_items
+    audit_summary["evidence_filtered_count"] = int(audit_summary.get("evidence_filtered_count", 0) or 0) + int(
+        evidence_filter_result.filtered_count
+    )
+    existing_filter_codes = str(audit_summary.get("evidence_filter_reason_codes", "none") or "none")
+    merged_filter_codes = sorted(
+        {
+            code.strip()
+            for code in [*existing_filter_codes.split(","), *evidence_filter_result.reason_codes]
+            if code and code.strip() and code.strip().lower() != "none"
+        }
+    )
+    audit_summary["evidence_filter_reason_codes"] = ",".join(merged_filter_codes) if merged_filter_codes else "none"
 
     llm_text, llm_meta = _maybe_generate_llm_text(
         cmd=cmd,
@@ -4996,6 +5031,15 @@ def _build_qa_markdown(
         audit["answer_grounding_mode"] = str(
             audit_summary.get("answer_grounding_mode", "retrieval") or "retrieval"
         )
+        audit["hybrid_rerank_used"] = bool(audit_summary.get("hybrid_rerank_used", False))
+        audit["retrieval_ranking_mode"] = str(audit_summary.get("retrieval_ranking_mode", "lexical") or "lexical")
+        audit["evidence_filtered_count"] = int(audit_summary.get("evidence_filtered_count", 0) or 0)
+        audit["evidence_filter_reason_codes"] = str(
+            audit_summary.get("evidence_filter_reason_codes", "none") or "none"
+        )
+        audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
+        audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
+        audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
         audit["tky_remote_status"] = audit_summary.get("tky_remote_status", None)
         audit["tky_fallback_reason"] = str(audit_summary.get("tky_fallback_reason", "n/a") or "n/a")
         audit["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
@@ -5309,11 +5353,34 @@ def _build_review_markdown(
         "security_reason_short": str(
             audit.get("security_reason_short", "n/a") if isinstance(audit, dict) else "n/a"
         ),
+        "hybrid_rerank_used": False,
+        "retrieval_ranking_mode": "lexical",
+        "evidence_filtered_count": 0,
+        "evidence_filter_reason_codes": "none",
+        "signal_calibration_used": False,
+        "patch_guard_triggered": False,
+        "tldr_compressed": False,
     }
     audit_summary.update(_execution_from_tky_result(tky_result.tky))
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
     validation_raw = review.get("validation", {})
     validation = dict(validation_raw) if isinstance(validation_raw, dict) else {}
+    signal_calibration_used = bool(
+        review.get("signal_calibration_used", validation.get("signal_calibration_used", False))
+    )
+    signal_calibration_codes_raw = review.get(
+        "signal_calibration_reason_codes",
+        validation.get("signal_calibration_reason_codes", ["none"]),
+    )
+    signal_calibration_codes = (
+        [str(item).strip() for item in signal_calibration_codes_raw if str(item).strip()]
+        if isinstance(signal_calibration_codes_raw, list)
+        else [str(signal_calibration_codes_raw).strip()]
+    )
+    audit_summary["signal_calibration_used"] = signal_calibration_used
+    audit_summary["signal_calibration_reason_codes"] = (
+        ",".join(sorted(set(signal_calibration_codes))) if signal_calibration_codes else "none"
+    )
     audit_summary["review_confirmed_findings_count"] = int(
         validation.get("confirmed_findings_count", 0) or 0
     )
@@ -5404,6 +5471,15 @@ def _build_review_markdown(
             patch_targeting.get("localized_patch_evidence_count", 0) or 0
         )
         audit_summary["patch_grounding_mode"] = "pr_metadata" if pr_metadata_available else "retrieval"
+    filtered_review_candidates = filter_candidate_evidence(
+        review_candidates,
+        command=cmd,
+        query=query or question,
+        max_items=len(review_candidates),
+    )
+    review_candidates = filtered_review_candidates.candidates
+    audit_summary["evidence_filtered_count"] = int(filtered_review_candidates.filtered_count)
+    audit_summary["evidence_filter_reason_codes"] = ",".join(filtered_review_candidates.reason_codes) or "none"
     review_locators = [
         EvidenceItem(
             file_path=item.file_path,
@@ -5764,6 +5840,13 @@ def _build_review_markdown(
         audit_summary["review_risk_drivers"] = list(
             dict.fromkeys(str(item).strip() for item in review_risk_drivers if str(item).strip())
         )[:3]
+        summary_text_probe = str(review.get("summary_text", "") or "")
+        normalized_summary_probe = " ".join(summary_text_probe.strip().split())
+        audit_summary["tldr_compressed"] = bool(
+            review_compaction_attempted
+            or ("\n" in summary_text_probe.strip())
+            or (len(normalized_summary_probe) < len(summary_text_probe.strip()))
+        )
     if cmd == "fix":
         audit_summary["patch_target_files_count"] = len(changed_files)
         audit_summary["patch_grounding_mode"] = "pr_metadata" if pr_metadata_available else "retrieval"
@@ -5946,6 +6029,17 @@ def _build_review_markdown(
             audit["review_generation_result"] = str(
                 audit_summary.get("review_generation_result", "n/a") or "n/a"
             )
+            audit["hybrid_rerank_used"] = bool(audit_summary.get("hybrid_rerank_used", False))
+            audit["retrieval_ranking_mode"] = str(
+                audit_summary.get("retrieval_ranking_mode", "lexical") or "lexical"
+            )
+            audit["evidence_filtered_count"] = int(audit_summary.get("evidence_filtered_count", 0) or 0)
+            audit["evidence_filter_reason_codes"] = str(
+                audit_summary.get("evidence_filter_reason_codes", "none") or "none"
+            )
+            audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
+            audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
+            audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
             _merge_llm_meta(audit, llm_meta)
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
         return body
@@ -5966,12 +6060,24 @@ def _build_review_markdown(
     found_raw_diff = False
     found_json_envelope = False
     no_patch_response = False
+    patch_guard_triggered = False
+    patch_guard_reason_code = "n/a"
+    patch_guard_reason_short = "n/a"
     extraction_path_used = "none"
     response_chars = 0
     if no_localized_patch_target:
         no_patch_response = True
         extraction_path_used = "patch_targeting_no_patch"
     if not patch_text and llm_text_for_patch:
+        patch_guard_decision = evaluate_patch_payload(llm_text_for_patch)
+        if patch_guard_decision.triggered:
+            patch_guard_triggered = True
+            patch_guard_reason_code = patch_guard_decision.reason_code
+            patch_guard_reason_short = patch_guard_decision.reason_short
+            no_patch_response = True
+            extraction_path_used = "patch_guard"
+            response_chars = len(str(llm_text_for_patch or "").strip())
+    if not patch_text and llm_text_for_patch and not patch_guard_triggered:
         (
             patch_text,
             found_fenced_diff,
@@ -5981,6 +6087,9 @@ def _build_review_markdown(
             extraction_path_used,
             response_chars,
         ) = _extract_patch_candidate(llm_text_for_patch)
+    audit_summary["patch_guard_triggered"] = bool(patch_guard_triggered)
+    if patch_guard_triggered:
+        audit_summary["patch_guard_reason_code"] = patch_guard_reason_code
     if not patch_text and not no_patch_response and bool(batch_result.get("no_patch_returned", False)):
         no_patch_response = True
         extraction_path_used = "batch_no_patch"
@@ -6073,14 +6182,20 @@ def _build_review_markdown(
             )
         elif no_patch_response:
             patch_validation_payload["status"] = "no_patch"
-            patch_validation_payload["reason_code"] = "NO_PATCH"
-            patch_validation_payload["reason_short"] = (
-                "No patch generated: no sufficiently localized, evidence-backed patch target was found."
-            )
-            patch_apply_message = (
-                "safe no_patch outcome: no sufficiently localized, evidence-backed patch target."
-            )
-            patch_pr_message = "auto-pr skipped (no_patch)"
+            if patch_guard_triggered:
+                patch_validation_payload["reason_code"] = patch_guard_reason_code
+                patch_validation_payload["reason_short"] = patch_guard_reason_short
+                patch_apply_message = "safe no_patch outcome: placeholder/generic patch output rejected early."
+                patch_pr_message = "auto-pr skipped (patch_guard)"
+            else:
+                patch_validation_payload["reason_code"] = "NO_PATCH"
+                patch_validation_payload["reason_short"] = (
+                    "No patch generated: no sufficiently localized, evidence-backed patch target was found."
+                )
+                patch_apply_message = (
+                    "safe no_patch outcome: no sufficiently localized, evidence-backed patch target."
+                )
+                patch_pr_message = "auto-pr skipped (no_patch)"
         elif provider_http_status is not None or provider_error_type not in {"n/a", ""}:
             patch_validation_payload["status"] = "provider_failed"
             patch_validation_payload["reason_code"] = "PROVIDER_FAILED"
@@ -6089,18 +6204,23 @@ def _build_review_markdown(
             patch_pr_message = "auto-pr skipped (provider_failed)"
         else:
             patch_validation_payload["status"] = "patch_validation_failed"
-            patch_validation_payload["reason_code"] = "EXTRACTOR_FAILED"
+            patch_validation_payload["reason_code"] = "PATCH_MISSING"
             patch_validation_payload["reason_short"] = (
                 "Patch validation failed: no grounded unified diff could be extracted."
             )
             patch_apply_message = "patch extraction failed: no grounded unified diff"
-            patch_pr_message = "auto-pr skipped (extractor_failed)"
+            patch_pr_message = "auto-pr skipped (patch_missing)"
         patch_debug_payload = {
             "reason": (
                 "patch_validation_failed"
                 if patch_validation_failed
-                else ("no_patch_returned" if no_patch_response else "extractor_failed")
+                else (
+                    "patch_placeholder_detected"
+                    if patch_guard_triggered
+                    else ("no_patch_returned" if no_patch_response else "patch_missing")
+                )
             ),
+            "reason_code": str(patch_validation_payload.get("reason_code", "n/a") or "n/a"),
             "request_mode": "patch",
             "llm_used": bool(llm_meta.get("llm_used", False)),
             "model": str(llm_meta.get("llm_model_used", "n/a") or "n/a"),
@@ -6111,6 +6231,9 @@ def _build_review_markdown(
             "governor_reason": str(llm_meta.get("llm_governor_reason", "n/a") or "n/a"),
             "provider_http_status": provider_http_status,
             "provider_error_type": provider_error_type,
+            "patch_guard_triggered": bool(patch_guard_triggered),
+            "patch_guard_reason_code": patch_guard_reason_code,
+            "patch_guard_reason_short": patch_guard_reason_short,
             "extracted_len": len(str(patch_text or "").strip()),
             "found_fenced_diff": bool(found_fenced_diff),
             "found_raw_diff": bool(found_raw_diff),
@@ -6170,6 +6293,9 @@ def _build_review_markdown(
     )
     audit_summary["patch_validation_reason"] = str(
         patch_validation_payload.get("reason_short", "n/a") or "n/a"
+    )
+    audit_summary["patch_generation_reason_code"] = str(
+        patch_validation_payload.get("reason_code", "n/a") or "n/a"
     )
     audit_summary["patch_validation_artifact"] = "artifacts/patch_validation.json"
     combined_patch_message = f"{patch_apply_message}; {patch_pr_message}"
@@ -6255,6 +6381,17 @@ def _build_review_markdown(
         audit["fix_outcome_line"] = str(
             audit_summary.get("patch_validation_reason", patch_apply_message) or patch_apply_message
         )
+        audit["hybrid_rerank_used"] = bool(audit_summary.get("hybrid_rerank_used", False))
+        audit["retrieval_ranking_mode"] = str(
+            audit_summary.get("retrieval_ranking_mode", "lexical") or "lexical"
+        )
+        audit["evidence_filtered_count"] = int(audit_summary.get("evidence_filtered_count", 0) or 0)
+        audit["evidence_filter_reason_codes"] = str(
+            audit_summary.get("evidence_filter_reason_codes", "none") or "none"
+        )
+        audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
+        audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
+        audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
         audit["patch_validation_artifact"] = patch_validation_path.as_posix()
         if patch_debug_payload is not None:
             audit["patch_generation_debug"] = dict(patch_debug_payload)
