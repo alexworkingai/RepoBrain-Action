@@ -45,6 +45,14 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "pass_count": 0,
         "retrieved": 0,
         "selected": 0,
+        "async_batch_used": False,
+        "async_batch_mode": "sequential",
+        "async_batch_concurrency": 1,
+        "async_batch_tasks_total": 0,
+        "async_batch_tasks_completed": 0,
+        "async_batch_fallback_reason": "not_applicable",
+        "async_batch_order_preserved": True,
+        "async_batch_error_count": 0,
         "incremental_retrieval_used": False,
         "incremental_scope_mode": "fallback_full",
         "changed_files_considered": 0,
@@ -216,6 +224,32 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
         )
     except (TypeError, ValueError):
         normalized["evidence_budget_support_selected"] = 0
+    normalized["async_batch_used"] = bool(normalized.get("async_batch_used", False))
+    normalized["async_batch_mode"] = str(normalized.get("async_batch_mode", "sequential") or "sequential")
+    try:
+        normalized["async_batch_concurrency"] = int(normalized.get("async_batch_concurrency", 1) or 1)
+    except (TypeError, ValueError):
+        normalized["async_batch_concurrency"] = 1
+    try:
+        normalized["async_batch_tasks_total"] = int(normalized.get("async_batch_tasks_total", 0) or 0)
+    except (TypeError, ValueError):
+        normalized["async_batch_tasks_total"] = 0
+    try:
+        normalized["async_batch_tasks_completed"] = int(
+            normalized.get("async_batch_tasks_completed", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["async_batch_tasks_completed"] = 0
+    normalized["async_batch_fallback_reason"] = str(
+        normalized.get("async_batch_fallback_reason", "not_applicable") or "not_applicable"
+    )
+    normalized["async_batch_order_preserved"] = bool(
+        normalized.get("async_batch_order_preserved", True)
+    )
+    try:
+        normalized["async_batch_error_count"] = int(normalized.get("async_batch_error_count", 0) or 0)
+    except (TypeError, ValueError):
+        normalized["async_batch_error_count"] = 0
     normalized["pr_segmentation_used"] = bool(normalized.get("pr_segmentation_used", False))
     try:
         normalized["pr_segment_count"] = int(normalized.get("pr_segment_count", 0) or 0)

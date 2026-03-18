@@ -58,3 +58,28 @@ def test_diagnostic_output_is_compact_and_groups_primary_before_secondary() -> N
     decision_idx = md.index("#### A. Decision summary")
     secondary_idx = md.index("<summary>Secondary diagnostics (defaults/noise)</summary>")
     assert decision_idx < secondary_idx
+
+
+def test_secondary_diagnostics_and_audit_anchors_render_cleanly_inside_details() -> None:
+    md = render_answer_markdown(
+        answer_text="Short answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "execution_mode": "retrieval_only",
+            "llm_used": False,
+            "retrieval_ranking_mode": "lexical",
+            "hybrid_rerank_used": False,
+            "remote_skipped_reason": "n/a",
+            "tky_fallback_reason": "n/a",
+        },
+        next_steps="Validate evidence",
+        command="ask",
+    )
+
+    assert "<summary>Evidence and diagnostics</summary>" in md
+    assert "<summary>Secondary diagnostics (defaults/noise)</summary>" in md
+    assert "### 🧾 Audit anchors" in md
+    assert "</details>\n\n### 🧾 Audit anchors" in md
+    assert "Secondary diagnostics</summary>### 🧾 Audit anchors" not in md

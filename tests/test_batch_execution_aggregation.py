@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 from repobrain.evidence import EvidenceItem
@@ -13,19 +14,24 @@ def test_batch_execution_uses_reduce_and_aggregates(monkeypatch, tmp_path: Path)
     monkeypatch.setenv("RB_LLM_BATCH_REDUCE_ENABLE", "1")
     monkeypatch.setenv("RB_LLM_BATCH_MAX_CALLS_PER_RUN", "4")
     monkeypatch.setenv("RB_LLM_MAX_INPUT_TOKENS", "1200")
+    monkeypatch.setenv("RB_ASYNC_BATCH_ENABLE", "1")
+    monkeypatch.setenv("RB_ASYNC_BATCH_CONCURRENCY", "2")
 
     call_counter = {"n": 0}
+    call_lock = threading.Lock()
 
     def fake_llm_call(*args, **kwargs):  # noqa: ANN002, ANN003
-        call_counter["n"] += 1
+        with call_lock:
+            call_counter["n"] += 1
+            call_number = call_counter["n"]
         is_reduce = kwargs.get("prebuilt_messages") is not None
         if is_reduce:
             text = "Reduced executive summary"
             batch_id = "reduce"
             model = "openai/gpt-4.1"
         else:
-            text = f"- finding from map call {call_counter['n']}"
-            batch_id = f"map-{call_counter['n']}"
+            text = f"- finding from map call {call_number}"
+            batch_id = f"map-{call_number}"
             model = "openai/gpt-4.1-mini"
         meta = {
             "llm_used": True,
@@ -36,10 +42,10 @@ def test_batch_execution_uses_reduce_and_aggregates(monkeypatch, tmp_path: Path)
             "llm_tokens_completion": 40,
             "llm_tokens_total": 140,
             "llm_usage_estimated": False,
-            "llm_remaining_requests": 20 - call_counter["n"],
+            "llm_remaining_requests": 20 - call_number,
             "llm_remaining_is_estimate": False,
             "llm_reset_time_utc_iso": "2026-03-05T23:59:59+00:00",
-            "llm_requests_remaining": 20 - call_counter["n"],
+            "llm_requests_remaining": 20 - call_number,
             "llm_rate_limit_reset": "2026-03-05T23:59:59+00:00",
             "llm_reason": "ok",
             "llm_complexity_score": 70,
@@ -60,7 +66,7 @@ def test_batch_execution_uses_reduce_and_aggregates(monkeypatch, tmp_path: Path)
                     "tokens_prompt": 100,
                     "tokens_completion": 40,
                     "tokens_total": 140,
-                    "remaining_requests": 20 - call_counter["n"],
+                    "remaining_requests": 20 - call_number,
                     "remaining_is_estimate": False,
                     "reset_time_utc_iso": "2026-03-05T23:59:59+00:00",
                     "estimate_flags": {"usage_estimated": False, "remaining_estimated": False},
@@ -107,3 +113,7 @@ def test_batch_execution_uses_reduce_and_aggregates(monkeypatch, tmp_path: Path)
     assert "Reduced executive summary" in result["summary_text"]
     assert llm_meta["llm_used"] is True
     assert llm_meta["llm_calls_this_run"] >= 2
+    assert "async_batch_used" in result
+    assert "async_batch_mode" in result
+    assert "async_batch_tasks_total" in result
+    assert result["async_batch_order_preserved"] is True

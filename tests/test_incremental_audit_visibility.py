@@ -11,6 +11,14 @@ from repobrain.github_flow import _build_review_markdown, get_last_audit, run_gi
 def test_audit_base_contains_incremental_observability_fields() -> None:
     audit = build_audit_base({"repo": "owner/repo", "sha": "abc", "run_id": "1"})
 
+    assert "async_batch_used" in audit
+    assert "async_batch_mode" in audit
+    assert "async_batch_concurrency" in audit
+    assert "async_batch_tasks_total" in audit
+    assert "async_batch_tasks_completed" in audit
+    assert "async_batch_fallback_reason" in audit
+    assert "async_batch_order_preserved" in audit
+    assert "async_batch_error_count" in audit
     assert "incremental_retrieval_used" in audit
     assert "incremental_scope_mode" in audit
     assert "changed_files_considered" in audit
@@ -43,6 +51,14 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     audit = build_audit_base({"repo": "owner/repo", "sha": "abc", "run_id": "1"})
     audit.update(
         {
+            "async_batch_used": True,
+            "async_batch_mode": "async",
+            "async_batch_concurrency": 3,
+            "async_batch_tasks_total": 5,
+            "async_batch_tasks_completed": 5,
+            "async_batch_fallback_reason": "none",
+            "async_batch_order_preserved": True,
+            "async_batch_error_count": 0,
             "incremental_retrieval_used": True,
             "incremental_scope_mode": "changed_regions_first",
             "changed_files_considered": 5,
@@ -75,6 +91,14 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     )
     finalized = finalize_audit(audit)
 
+    assert finalized["async_batch_used"] is True
+    assert finalized["async_batch_mode"] == "async"
+    assert finalized["async_batch_concurrency"] == 3
+    assert finalized["async_batch_tasks_total"] == 5
+    assert finalized["async_batch_tasks_completed"] == 5
+    assert finalized["async_batch_fallback_reason"] == "none"
+    assert finalized["async_batch_order_preserved"] is True
+    assert finalized["async_batch_error_count"] == 0
     assert finalized["incremental_retrieval_used"] is True
     assert finalized["incremental_scope_mode"] == "changed_regions_first"
     assert finalized["changed_files_considered"] == 5
@@ -129,6 +153,14 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "pr_segment_file_counts" in audit
     assert "pr_segment_candidate_counts" in audit
     assert "pr_segmentation_fallback_reason" in audit
+    assert "async_batch_used" in audit
+    assert "async_batch_mode" in audit
+    assert "async_batch_concurrency" in audit
+    assert "async_batch_tasks_total" in audit
+    assert "async_batch_tasks_completed" in audit
+    assert "async_batch_fallback_reason" in audit
+    assert "async_batch_order_preserved" in audit
+    assert "async_batch_error_count" in audit
 
     audit_path = tmp_path / "audit.json"
     write_audit(audit, audit_path)
@@ -150,6 +182,14 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "pr_segment_file_counts" in payload
     assert "pr_segment_candidate_counts" in payload
     assert "pr_segmentation_fallback_reason" in payload
+    assert "async_batch_used" in payload
+    assert "async_batch_mode" in payload
+    assert "async_batch_concurrency" in payload
+    assert "async_batch_tasks_total" in payload
+    assert "async_batch_tasks_completed" in payload
+    assert "async_batch_fallback_reason" in payload
+    assert "async_batch_order_preserved" in payload
+    assert "async_batch_error_count" in payload
 
 
 def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
@@ -188,3 +228,11 @@ def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
         assert "pr_segment_file_counts" in audit
         assert "pr_segment_candidate_counts" in audit
         assert "pr_segmentation_fallback_reason" in audit
+        assert "async_batch_used" in audit
+        assert "async_batch_mode" in audit
+        assert "async_batch_concurrency" in audit
+        assert "async_batch_tasks_total" in audit
+        assert "async_batch_tasks_completed" in audit
+        assert "async_batch_fallback_reason" in audit
+        assert "async_batch_order_preserved" in audit
+        assert "async_batch_error_count" in audit

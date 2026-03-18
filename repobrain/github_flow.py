@@ -65,6 +65,7 @@ from repobrain.review import build_pr_review
 from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
 from repobrain.patch_targeting import select_patch_targets
+from repobrain.async_batch import run_bounded_batch_tasks
 from repobrain.security_policy import classify_security_scope
 from repobrain.tky_local import LocalTKYProvider
 from repobrain.tky_provider import CandidateChunk, TKYResult
@@ -2919,6 +2920,16 @@ def _run_batch_llm_review_fix(
         reason_short=llm_decision_reason_short,
         reason_code=llm_decision_reason_code,
     )
+    async_defaults = {
+        "async_batch_used": False,
+        "async_batch_mode": "sequential",
+        "async_batch_concurrency": 1,
+        "async_batch_tasks_total": 0,
+        "async_batch_tasks_completed": 0,
+        "async_batch_fallback_reason": "not_applicable",
+        "async_batch_order_preserved": True,
+        "async_batch_error_count": 0,
+    }
     execution_mode_norm = semantic.execution_mode
     llm_intent_norm = semantic.llm_intent
     llm_reason_short = semantic.reason_short
@@ -2936,7 +2947,13 @@ def _run_batch_llm_review_fix(
         )
         llm_meta["llm_decision_route"] = route_norm or "n/a"
         llm_meta["llm_request_mode"] = "patch" if _is_fix_intent(cmd, intent) else "normal"
-        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _attach_llm_policy_fields(
+        return {
+            **async_defaults,
+            "batch_used": False,
+            "summaries": [],
+            "findings": [],
+            "patch_parts": [],
+        }, _attach_llm_policy_fields(
             llm_meta,
             github_context=github_context,
             allowed=False,
@@ -2960,7 +2977,13 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_compacted"] = bool(is_patch_mode)
         llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
         llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
-        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _attach_llm_policy_fields(
+        return {
+            **async_defaults,
+            "batch_used": False,
+            "summaries": [],
+            "findings": [],
+            "patch_parts": [],
+        }, _attach_llm_policy_fields(
             llm_meta,
             github_context=github_context,
             allowed=False,
@@ -3081,6 +3104,7 @@ def _run_batch_llm_review_fix(
             llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
             llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
             return {
+                **async_defaults,
                 "batch_used": False,
                 "summaries": [],
                 "findings": [],
@@ -3161,7 +3185,13 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_compacted"] = bool(is_patch_mode)
         llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
         llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
-        return {"batch_used": False, "summaries": [], "findings": [], "patch_parts": []}, _attach_llm_policy_fields(
+        return {
+            **async_defaults,
+            "batch_used": False,
+            "summaries": [],
+            "findings": [],
+            "patch_parts": [],
+        }, _attach_llm_policy_fields(
             llm_meta,
             github_context=github_context,
             allowed=True,
@@ -3190,7 +3220,10 @@ def _run_batch_llm_review_fix(
     if pre_batch_reason != "n/a":
         governor_reasons.append(str(pre_batch_reason))
 
-    for index, batch in enumerate(batches):
+    async_enabled = _env_true("RB_ASYNC_BATCH_ENABLE", default=True)
+    async_concurrency = max(1, int(env_int("RB_ASYNC_BATCH_CONCURRENCY", 2)))
+
+    def _execute_batch_task(index: int, batch: Batch) -> dict[str, Any]:
         batch_context = dict(github_context)
         batch_context["changed_files"] = list(batch.paths)
         batch_context["diff_hunks"] = list(batch.diff_hunks)
@@ -3220,7 +3253,8 @@ def _run_batch_llm_review_fix(
             batch_model = model_high
             batch_tier = "high"
 
-        batch_locators = [item for item in locators if item.file_path in set(batch.paths)]
+        path_set = set(batch.paths)
+        batch_locators = [item for item in locators if item.file_path in path_set]
         batch_query = (
             f"{query}\n"
             f"Batch {index + 1}/{len(batches)}\n"
@@ -3260,54 +3294,100 @@ def _run_batch_llm_review_fix(
                 usage_estimated=bool(meta.get("llm_usage_estimated", True)),
             )
         call_entry["batch_id"] = batch.batch_id
-        if bool(call_entry.get("remaining_is_estimate", True)) and last_remaining not in {None, "", "n/a"}:
-            call_entry["remaining_requests"] = _remaining_after_decrement(last_remaining, decrement=1)
-        last_remaining = call_entry.get("remaining_requests", last_remaining)
-        last_reset = call_entry.get("reset_time_utc_iso", last_reset)
-        calls.append(call_entry)
-
-        llm_ratelimit_headers = dict(meta.get("llm_ratelimit_headers", llm_ratelimit_headers))
-        dropped_locators += _int_or_zero(meta.get("llm_dropped_locators_count", 0))
-        dropped_hunks += _int_or_zero(meta.get("llm_dropped_hunks_count", 0))
-        dropped_snippets += _int_or_zero(meta.get("llm_dropped_snippets_count", 0))
-        prompt_used_total += _int_or_zero(meta.get("llm_input_budget_used_est", 0))
-        prompt_limit_total += _int_or_zero(meta.get("llm_input_budget_limit", 0))
-        max_output_tokens_max = max(max_output_tokens_max, _int_or_zero(meta.get("llm_max_output_tokens_used", 0)))
-        usage_estimated_any = usage_estimated_any or bool(meta.get("llm_usage_estimated", True))
-        any_used = any_used or bool(meta.get("llm_used", False))
-        action_value = str(meta.get("llm_budget_action", "n/a") or "n/a")
-        reason_value = str(meta.get("llm_governor_reason", "n/a") or "n/a")
-        if action_value != "n/a":
-            budget_actions.append(action_value)
-        if reason_value != "n/a":
-            governor_reasons.append(reason_value)
 
         snippet_hashes = [
             hashlib.blake2s(value.encode("utf-8"), digest_size=8).hexdigest()
             for value in batch.snippet_ids
         ]
         summary_lines = _sanitize_batch_text(text or "")
-        summaries.append(
-            {
-                "batch_id": batch.batch_id,
-                "paths": list(batch.paths),
-                "finding_bullets": summary_lines[:6],
-                "locator_hashes": snippet_hashes[:20],
-                "estimated_input_tokens": batch.estimated_input_tokens,
-                "model_id": call_entry.get("model_id", batch_model),
-            }
-        )
-        findings.extend(summary_lines[:4])
+        summary_record = {
+            "batch_id": batch.batch_id,
+            "paths": list(batch.paths),
+            "finding_bullets": summary_lines[:6],
+            "locator_hashes": snippet_hashes[:20],
+            "estimated_input_tokens": batch.estimated_input_tokens,
+            "model_id": call_entry.get("model_id", batch_model),
+        }
+        finding_lines = list(summary_lines[:4])
+        patch_part: dict[str, Any] | None = None
+        no_patch = False
         if cmd == "fix":
             patch_info = _extract_patch_candidate(text or "")
             patch = patch_info[0]
             no_patch = bool(patch_info[4])
             if patch and _is_unified_diff(patch):
-                patch_parts.append({"batch_id": batch.batch_id, "patch": patch})
-                _write_patch_part(repo_root, batch.batch_id, patch)
+                patch_part = {"batch_id": batch.batch_id, "patch": patch}
             elif no_patch:
-                no_patch_count += 1
-                findings.append(f"batch={batch.batch_id} returned NO_PATCH")
+                finding_lines.append(f"batch={batch.batch_id} returned NO_PATCH")
+
+        return {
+            "call_entry": call_entry,
+            "llm_ratelimit_headers": dict(meta.get("llm_ratelimit_headers", {})),
+            "dropped_locators": _int_or_zero(meta.get("llm_dropped_locators_count", 0)),
+            "dropped_hunks": _int_or_zero(meta.get("llm_dropped_hunks_count", 0)),
+            "dropped_snippets": _int_or_zero(meta.get("llm_dropped_snippets_count", 0)),
+            "prompt_used": _int_or_zero(meta.get("llm_input_budget_used_est", 0)),
+            "prompt_limit": _int_or_zero(meta.get("llm_input_budget_limit", 0)),
+            "max_output_tokens": _int_or_zero(meta.get("llm_max_output_tokens_used", 0)),
+            "usage_estimated": bool(meta.get("llm_usage_estimated", True)),
+            "llm_used": bool(meta.get("llm_used", False)),
+            "budget_action": str(meta.get("llm_budget_action", "n/a") or "n/a"),
+            "governor_reason": str(meta.get("llm_governor_reason", "n/a") or "n/a"),
+            "summary_record": summary_record,
+            "finding_lines": finding_lines,
+            "patch_part": patch_part,
+            "no_patch": no_patch,
+        }
+
+    batch_exec_results, async_meta = run_bounded_batch_tasks(
+        items=batches,
+        worker=_execute_batch_task,
+        enabled=async_enabled and len(batches) > 1,
+        concurrency=async_concurrency,
+    )
+
+    for item in batch_exec_results:
+        call_entry = dict(item.get("call_entry", {}))
+        if bool(call_entry.get("remaining_is_estimate", True)) and last_remaining not in {None, "", "n/a"}:
+            call_entry["remaining_requests"] = _remaining_after_decrement(last_remaining, decrement=1)
+        last_remaining = call_entry.get("remaining_requests", last_remaining)
+        last_reset = call_entry.get("reset_time_utc_iso", last_reset)
+        calls.append(call_entry)
+
+        headers = item.get("llm_ratelimit_headers", {})
+        if isinstance(headers, dict) and headers:
+            llm_ratelimit_headers = dict(headers)
+        dropped_locators += _int_or_zero(item.get("dropped_locators", 0))
+        dropped_hunks += _int_or_zero(item.get("dropped_hunks", 0))
+        dropped_snippets += _int_or_zero(item.get("dropped_snippets", 0))
+        prompt_used_total += _int_or_zero(item.get("prompt_used", 0))
+        prompt_limit_total += _int_or_zero(item.get("prompt_limit", 0))
+        max_output_tokens_max = max(max_output_tokens_max, _int_or_zero(item.get("max_output_tokens", 0)))
+        usage_estimated_any = usage_estimated_any or bool(item.get("usage_estimated", True))
+        any_used = any_used or bool(item.get("llm_used", False))
+        action_value = str(item.get("budget_action", "n/a") or "n/a")
+        reason_value = str(item.get("governor_reason", "n/a") or "n/a")
+        if action_value != "n/a":
+            budget_actions.append(action_value)
+        if reason_value != "n/a":
+            governor_reasons.append(reason_value)
+
+        summary_record = item.get("summary_record", {})
+        if isinstance(summary_record, dict):
+            summaries.append(summary_record)
+        finding_lines = item.get("finding_lines", [])
+        if isinstance(finding_lines, list):
+            findings.extend(str(line) for line in finding_lines if str(line).strip())
+        patch_part = item.get("patch_part")
+        if isinstance(patch_part, dict) and str(patch_part.get("patch", "")).strip():
+            patch_parts.append(patch_part)
+            _write_patch_part(
+                repo_root,
+                str(patch_part.get("batch_id", "part") or "part"),
+                str(patch_part.get("patch", "") or ""),
+            )
+        if bool(item.get("no_patch", False)):
+            no_patch_count += 1
 
     reduce_text: str | None = None
     if reduce_enable and len(summaries) > 1 and any_used:
@@ -3485,6 +3565,8 @@ def _run_batch_llm_review_fix(
     if llm_meta["llm_remaining_requests"] in {None, "", "n/a"}:
         _apply_remaining_fallback(llm_meta)
     return {
+        **async_defaults,
+        **async_meta,
         "batch_used": True,
         "planned_batches": len(planned),
         "executed_batches": len(batches),
@@ -6263,6 +6345,20 @@ def _build_review_markdown(
     audit_summary["llm_batch_calls"] = int(llm_meta.get("llm_calls_this_run", 0) or 0)
     audit_summary["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
     audit_summary["llm_batch_executed"] = int(batch_result.get("executed_batches", 0) or 0)
+    audit_summary["async_batch_used"] = bool(batch_result.get("async_batch_used", False))
+    audit_summary["async_batch_mode"] = str(batch_result.get("async_batch_mode", "sequential") or "sequential")
+    audit_summary["async_batch_concurrency"] = int(batch_result.get("async_batch_concurrency", 1) or 1)
+    audit_summary["async_batch_tasks_total"] = int(batch_result.get("async_batch_tasks_total", 0) or 0)
+    audit_summary["async_batch_tasks_completed"] = int(
+        batch_result.get("async_batch_tasks_completed", 0) or 0
+    )
+    audit_summary["async_batch_fallback_reason"] = str(
+        batch_result.get("async_batch_fallback_reason", "not_applicable") or "not_applicable"
+    )
+    audit_summary["async_batch_order_preserved"] = bool(
+        batch_result.get("async_batch_order_preserved", True)
+    )
+    audit_summary["async_batch_error_count"] = int(batch_result.get("async_batch_error_count", 0) or 0)
 
     batch_summaries_raw = batch_result.get("summaries", [])
     if isinstance(batch_summaries_raw, list) and batch_summaries_raw:
@@ -6343,6 +6439,20 @@ def _build_review_markdown(
             audit["llm_batch_used"] = bool(batch_result.get("batch_used", False))
             audit["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
             audit["llm_batch_executed"] = int(batch_result.get("executed_batches", 0) or 0)
+            audit["async_batch_used"] = bool(batch_result.get("async_batch_used", False))
+            audit["async_batch_mode"] = str(batch_result.get("async_batch_mode", "sequential") or "sequential")
+            audit["async_batch_concurrency"] = int(batch_result.get("async_batch_concurrency", 1) or 1)
+            audit["async_batch_tasks_total"] = int(batch_result.get("async_batch_tasks_total", 0) or 0)
+            audit["async_batch_tasks_completed"] = int(
+                batch_result.get("async_batch_tasks_completed", 0) or 0
+            )
+            audit["async_batch_fallback_reason"] = str(
+                batch_result.get("async_batch_fallback_reason", "not_applicable") or "not_applicable"
+            )
+            audit["async_batch_order_preserved"] = bool(
+                batch_result.get("async_batch_order_preserved", True)
+            )
+            audit["async_batch_error_count"] = int(batch_result.get("async_batch_error_count", 0) or 0)
             audit["batch_summaries_artifact"] = str(
                 audit_summary.get("batch_summaries_artifact", "n/a") or "n/a"
             )
@@ -6745,6 +6855,18 @@ def _build_review_markdown(
         audit["llm_batch_used"] = bool(batch_result.get("batch_used", False))
         audit["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
         audit["llm_batch_executed"] = int(batch_result.get("executed_batches", 0) or 0)
+        audit["async_batch_used"] = bool(batch_result.get("async_batch_used", False))
+        audit["async_batch_mode"] = str(batch_result.get("async_batch_mode", "sequential") or "sequential")
+        audit["async_batch_concurrency"] = int(batch_result.get("async_batch_concurrency", 1) or 1)
+        audit["async_batch_tasks_total"] = int(batch_result.get("async_batch_tasks_total", 0) or 0)
+        audit["async_batch_tasks_completed"] = int(batch_result.get("async_batch_tasks_completed", 0) or 0)
+        audit["async_batch_fallback_reason"] = str(
+            batch_result.get("async_batch_fallback_reason", "not_applicable") or "not_applicable"
+        )
+        audit["async_batch_order_preserved"] = bool(
+            batch_result.get("async_batch_order_preserved", True)
+        )
+        audit["async_batch_error_count"] = int(batch_result.get("async_batch_error_count", 0) or 0)
         audit["batch_summaries_artifact"] = str(
             audit_summary.get("batch_summaries_artifact", "n/a") or "n/a"
         )
