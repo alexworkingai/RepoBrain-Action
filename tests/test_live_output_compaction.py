@@ -28,10 +28,14 @@ def test_ask_primary_output_is_compact_and_segment_visible() -> None:
     )
 
     primary = _primary(md)
-    assert "### 🧭 Run summary" in primary
+    assert "Run summary" in primary
     assert "- Segment summary: `primary=core_code:repobrain; support=tests:tests; cross_segment=yes`" in primary
-    assert "### 📊 Evidence" not in primary
-    assert "<summary>Details and diagnostics</summary>" in md
+    assert "Evidence (What I used)" not in primary
+    assert "LLM" not in primary
+    assert "### Embeddings" not in primary
+    assert "Route details" not in primary
+    assert "Runtime diagnostics" not in primary
+    assert "<summary>Evidence and diagnostics</summary>" in md
 
 
 def test_review_primary_output_is_tiered_and_non_duplicative() -> None:
@@ -56,10 +60,13 @@ def test_review_primary_output_is_tiered_and_non_duplicative() -> None:
     )
 
     primary = _primary(md)
-    assert "### ✅ PR Review" in primary
+    assert "PR Review" in primary
     assert "- Segment summary: `primary=core_code:repobrain; support=docs:docs; cross_segment=yes`" in primary
-    assert "### 🗂️ Touched files" not in primary
-    assert "### ✅ Recommendations" in primary
+    assert "Touched files" not in primary
+    assert "Recommendations" in primary
+    assert "LLM" not in primary
+    assert "### Embeddings" not in primary
+    assert "Runtime diagnostics" not in primary
 
 
 def test_fix_primary_output_focuses_on_outcome_not_full_patch_dump() -> None:
@@ -85,9 +92,12 @@ def test_fix_primary_output_focuses_on_outcome_not_full_patch_dump() -> None:
     )
 
     primary = _primary(md)
-    assert "### 🧾 Patch result" in primary
+    assert "Patch result" in primary
     assert "- Result: `no_patch`" in primary
-    assert "### 🎯 Patch targeting" not in primary
+    assert "Patch targeting" not in primary
+    assert "LLM" not in primary
+    assert "### Embeddings" not in primary
+    assert "Runtime diagnostics" not in primary
 
 
 def test_ask_output_no_long_touched_files_duplication() -> None:
@@ -106,3 +116,23 @@ def test_ask_output_no_long_touched_files_duplication() -> None:
     )
 
     assert "Touched files:" not in _primary(md)
+
+
+def test_ask_primary_hides_next_steps_and_audit_anchors() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer summary.",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "selected": 2,
+            "answer_grounding_mode": "retrieval",
+            "pr_segment_summary": "primary=core_code:repobrain; support=tests:tests; cross_segment=no",
+        },
+        next_steps="Do additional validation",
+        command="ask",
+    )
+    primary = _primary(md)
+    assert "Next steps" not in primary
+    assert "Audit anchors" not in primary
+    assert "<summary>Evidence and diagnostics</summary>" in md
