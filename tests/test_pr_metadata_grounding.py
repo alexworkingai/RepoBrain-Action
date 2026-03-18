@@ -34,7 +34,7 @@ def test_prepend_pr_metadata_places_changed_files_first() -> None:
     )
 
     first_line = text.splitlines()[0]
-    assert first_line == "PR metadata (changed files):"
+    assert first_line == "PR metadata: 2 changed files in current PR."
     assert "Primary segments: core_code:repobrain/github_flow" in text
     assert "Segment summary: primary=core_code:repobrain/github_flow" in text
     assert "- `repobrain/github_flow.py`" in text

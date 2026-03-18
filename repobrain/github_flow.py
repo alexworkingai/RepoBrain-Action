@@ -4843,15 +4843,15 @@ def _prepend_pr_metadata_to_answer(
 ) -> str:
     if not changed_files:
         return answer_text
-    lines = ["PR metadata (changed files):"]
+    lines = [f"PR metadata: {len(changed_files)} changed files in current PR."]
     if str(primary_segments or "none") != "none":
         lines.append(f"- Primary segments: {primary_segments}")
     if str(segment_summary or "none") != "none":
         lines.append(f"- Segment summary: {segment_summary}")
-    for path in changed_files[:12]:
+    for path in changed_files[:3]:
         lines.append(f"- `{path}`")
-    if len(changed_files) > 12:
-        lines.append(f"- +{len(changed_files) - 12} more")
+    if len(changed_files) > 3:
+        lines.append(f"- +{len(changed_files) - 3} more")
     prefix = "\n".join(lines)
     clean_answer = answer_text.strip()
     if not clean_answer:

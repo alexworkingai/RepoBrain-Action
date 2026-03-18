@@ -4,7 +4,7 @@ from repobrain.evidence import EvidenceItem
 from repobrain.output_md import render_answer_markdown
 
 
-def test_diagnostic_table_renders_and_orders_meaningful_before_undefined() -> None:
+def test_diagnostic_output_is_compact_and_groups_primary_before_secondary() -> None:
     md = render_answer_markdown(
         answer_text="Short answer",
         evidence=[
@@ -43,17 +43,18 @@ def test_diagnostic_table_renders_and_orders_meaningful_before_undefined() -> No
         command="ask",
     )
 
-    assert "| Parameter | Value | Meaning / Risk |" in md
+    assert "| Parameter | Value | Meaning / Risk |" not in md
+    assert "### 🧾 Runtime diagnostics" in md
     assert "#### A. Decision summary" in md
-    assert "| Route | `DEEP` |" in md
-    assert "| Hybrid rerank used | `no` |" in md
-    assert "| Retrieval ranking mode | `lexical` |" in md
-    assert "| Evidence filtered | `0` |" in md
-    assert "| Evidence filter reason codes | `none` |" in md
-    assert "| Signal calibration used | `no` |" in md
-    assert "| Patch guard triggered | `no` |" in md
-    assert "| TL;DR compressed | `no` |" in md
+    assert "- Route: `DEEP`" in md
+    assert "- Hybrid rerank used: `no`" in md
+    assert "- Retrieval ranking mode: `lexical`" in md
+    assert "- Evidence filtered: `0`" in md
+    assert "- Evidence filter reason codes: `none`" in md
+    assert "- Signal calibration used: `no`" in md
+    assert "- Patch guard triggered: `no`" in md
+    assert "- TL;DR compressed: `no`" in md
 
     decision_idx = md.index("#### A. Decision summary")
-    undefined_idx = md.index("#### Undefined / disabled diagnostics")
-    assert decision_idx < undefined_idx
+    secondary_idx = md.index("<summary>Secondary diagnostics (defaults/noise)</summary>")
+    assert decision_idx < secondary_idx

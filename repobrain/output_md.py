@@ -486,11 +486,12 @@ def _touched_files_lines(audit_summary: dict[str, Any]) -> list[str]:
     if not files:
         return []
     files = sorted(set(files))
-    lines = ["", "Touched files:"]
-    for path in files[:10]:
-        lines.append(f"- `{path}`")
-    if len(files) > 10:
-        lines.append(f"- +{len(files) - 10} more")
+    preview = ", ".join(f"`{path}`" for path in files[:3])
+    lines = ["", f"Touched files: {len(files)} total."]
+    if preview:
+        lines.append(f"- sample: {preview}")
+    if len(files) > 3:
+        lines.append(f"- +{len(files) - 3} more")
     return lines
 
 
@@ -502,15 +503,14 @@ def _pr_segments_lines(audit_summary: dict[str, Any]) -> list[str]:
     cross_segment = bool(audit_summary.get("pr_cross_segment", False))
     if not used and summary == "none":
         return []
-    lines = [
-        "",
-        "PR segments:",
-        f"- primary: {primary}",
-        f"- support: {support}",
-        f"- cross-segment: {'yes' if cross_segment else 'no'}",
-    ]
+    lines = [""]
     if summary != "none":
-        lines.append(f"- summary: {summary}")
+        lines.append(f"PR segments: {summary}")
+    else:
+        lines.append(
+            "PR segments: "
+            f"primary={primary}; support={support}; cross-segment={'yes' if cross_segment else 'no'}"
+        )
     return lines
 
 
@@ -616,6 +616,116 @@ def _diag_value(value: Any) -> str:
         return f"dict[{len(value)}]"
     text = str(value).strip()
     return text or "n/a"
+
+
+_PRIMARY_ALWAYS_VISIBLE_DIAGNOSTICS = {
+    "route",
+    "execution mode",
+    "llm intent",
+    "decision reason code",
+    "answer grounding mode",
+    "pr metadata used",
+    "retrieval ranking mode",
+    "hybrid rerank used",
+    "evidence filtered",
+    "evidence filter reason codes",
+    "evidence budget used",
+    "evidence budget limit",
+    "evidence budget mode",
+    "evidence budget bucket counts",
+    "evidence budget cutoffs",
+    "evidence budget overflow",
+    "evidence budget primary selected",
+    "evidence budget support selected",
+    "signal calibration used",
+    "patch guard triggered",
+    "tl;dr compressed",
+    "incremental retrieval used",
+    "incremental scope mode",
+    "changed files considered",
+    "changed regions considered",
+    "unchanged files skipped",
+    "unchanged chunks skipped",
+    "retrieval cache hits",
+    "retrieval cache misses",
+    "incremental fallback reason",
+    "pr segmentation used",
+    "pr segment count",
+    "pr primary segments",
+    "pr support segments",
+    "pr cross-segment",
+    "pr segment summary",
+    "pr segment file counts",
+    "pr segment candidate counts",
+    "pr segmentation fallback reason",
+    "risk level",
+    "verification status",
+    "check-run attempted",
+    "check-run published",
+    "check-run status",
+    "check-run failure class",
+    "check-run token source",
+    "check-run event",
+    "patch generation result",
+    "patch validation",
+    "patch targeting mode",
+    "patch targeting reason",
+    "patch target files",
+    "patch target files total",
+    "localized patch evidence",
+    "review confirmed findings",
+    "review possible signals",
+    "review risk drivers",
+    "review informational notes",
+}
+
+_LOW_VALUE_DIAGNOSTIC_TEXT = {
+    "n/a",
+    "none",
+    "null",
+    "<missing>",
+    "unknown",
+    "not used",
+    "not_applicable",
+    "no_cutoff",
+}
+
+
+def _is_low_value_diagnostic(*, parameter: str, value_text: str, state: str) -> bool:
+    parameter_norm = str(parameter or "").strip().lower()
+    if parameter_norm in _PRIMARY_ALWAYS_VISIBLE_DIAGNOSTICS:
+        return False
+    if state in {"undefined", "disabled"}:
+        return True
+    normalized = str(value_text or "").strip().lower()
+    if normalized in _LOW_VALUE_DIAGNOSTIC_TEXT:
+        return True
+    if normalized in {"0", "0.0", "false", "no"}:
+        return True
+    if normalized.startswith("list[0]") or normalized.startswith("dict[0]"):
+        return True
+    return False
+
+
+def _render_compact_diagnostic_groups(audit_summary: dict[str, Any]) -> tuple[list[str], list[tuple[str, str, str, str, str]]]:
+    lines: list[str] = ["### 🧾 Runtime diagnostics"]
+    secondary_rows: list[tuple[str, str, str, str, str]] = []
+    for group_name, rows in _diagnostic_groups(audit_summary):
+        primary_rows: list[tuple[str, str]] = []
+        for parameter, value, meaning in rows:
+            state = _diag_state(value, parameter)
+            value_text = _diag_value(value)
+            if _is_low_value_diagnostic(parameter=parameter, value_text=value_text, state=state):
+                secondary_rows.append((group_name, parameter, value_text, state, meaning))
+                continue
+            primary_rows.append((parameter, value_text))
+
+        if not primary_rows:
+            continue
+        primary_rows.sort(key=lambda item: item[0].lower())
+        lines.extend(["", f"#### {group_name}"])
+        lines.extend(f"- {parameter}: `{value_text}`" for parameter, value_text in primary_rows)
+    return lines, secondary_rows
 
 
 def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tuple[str, Any, str]]]]:
@@ -1240,48 +1350,20 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
 
 
 def _render_diagnostic_table(audit_summary: dict[str, Any]) -> list[str]:
-    lines: list[str] = ["### 🧾 Diagnostic report"]
-    undefined_rows: list[tuple[str, str, str, str]] = []
-
-    for group_name, rows in _diagnostic_groups(audit_summary):
-        meaningful: list[tuple[str, str, str]] = []
-        for parameter, value, meaning in rows:
-            state = _diag_state(value, parameter)
-            value_text = _diag_value(value)
-            if state == "meaningful":
-                meaningful.append((parameter, value_text, meaning))
-            else:
-                undefined_rows.append((parameter, value_text, meaning, state))
-
-        if not meaningful:
-            continue
-        meaningful.sort(key=lambda item: item[0].lower())
-        lines.extend(
-            [
-                "",
-                f"#### {group_name}",
-                "| Parameter | Value | Meaning / Risk |",
-                "| --- | --- | --- |",
-            ]
-        )
-        for parameter, value_text, meaning in meaningful:
-            lines.append(f"| {parameter} | `{value_text}` | {meaning} |")
-
-    if undefined_rows:
-        undefined_rows.sort(key=lambda item: item[0].lower())
-        lines.extend(
-            [
-                "",
-                "#### Undefined / disabled diagnostics",
-                "| Parameter | Value | Meaning / Risk |",
-                "| --- | --- | --- |",
-            ]
-        )
-        for parameter, value_text, meaning, state in undefined_rows[:24]:
-            lines.append(f"| {parameter} | `{value_text}` | {state}: {meaning} |")
-        if len(undefined_rows) > 24:
-            lines.append(f"| +{len(undefined_rows) - 24} more | `...` | omitted for compactness |")
-
+    lines, secondary_rows = _render_compact_diagnostic_groups(audit_summary)
+    if secondary_rows:
+        secondary_rows.sort(key=lambda item: (item[0].lower(), item[1].lower()))
+        lines.extend(["", "<details>", "<summary>Secondary diagnostics (defaults/noise)</summary>", ""])
+        current_group = ""
+        max_rows = 48
+        for group_name, parameter, value_text, state, _meaning in secondary_rows[:max_rows]:
+            if group_name != current_group:
+                current_group = group_name
+                lines.append(f"**{group_name}**")
+            lines.append(f"- {parameter}: `{value_text}` ({state})")
+        if len(secondary_rows) > max_rows:
+            lines.append(f"- +{len(secondary_rows) - max_rows} additional rows omitted for compactness.")
+        lines.extend(["", "</details>"])
     return lines
 
 
@@ -1354,7 +1436,6 @@ def render_answer_markdown(
                 "",
                 "### 📊 Evidence (What I used)",
                 *evidence_block,
-                *_touched_files_lines(audit_summary),
                 *_pr_segments_lines(audit_summary),
                 "",
                 *_verification_lines(audit_summary),
@@ -1374,10 +1455,7 @@ def render_answer_markdown(
     sections.extend(
         [
             "",
-            "### 🧾 Audit summary",
-            f"- retrieved: {_int(audit_summary.get('retrieved', 0))}",
-            f"- selected: {_int(audit_summary.get('selected', 0))}",
-            f"- top_score: {audit_summary.get('top_score', 'n/a')}",
+            "### 🧾 Audit anchors",
             *_version_backend_lines(audit_summary),
             "",
             *_render_diagnostic_table(audit_summary),
@@ -1410,9 +1488,7 @@ def render_wait_markdown(
             "- Route/Mode: `WAIT`",
             "- Passes: `1`",
             "",
-            "### 🧾 Audit summary",
-            f"- retrieved: {_int(audit_summary.get('retrieved', 0))}",
-            f"- selected: {_int(audit_summary.get('selected', 0))}",
+            "### 🧾 Audit anchors",
             *_version_backend_lines(audit_summary),
             "",
             *_render_diagnostic_table(audit_summary),
@@ -1447,10 +1523,8 @@ def render_refuse_markdown(
             "",
             *_embeddings_lines(audit_summary),
             "",
-            "### 🧾 Audit summary",
+            "### 🧾 Audit anchors",
             f"- route: {_route(audit_summary)}",
-            f"- retrieved: {_int(audit_summary.get('retrieved', 0))}",
-            f"- selected: {_int(audit_summary.get('selected', 0))}",
             *_version_backend_lines(audit_summary),
             "",
             *_render_diagnostic_table(audit_summary),
@@ -1474,10 +1548,8 @@ def render_error_markdown(
             "",
             *_embeddings_lines(audit_summary),
             "",
-            "### 🧾 Audit summary",
+            "### 🧾 Audit anchors",
             f"- route: {_route(audit_summary)}",
-            f"- retrieved: {_int(audit_summary.get('retrieved', 0))}",
-            f"- selected: {_int(audit_summary.get('selected', 0))}",
             *_version_backend_lines(audit_summary),
             "",
             *_render_diagnostic_table(audit_summary),
@@ -1603,8 +1675,8 @@ def render_review_markdown(
         *risk_driver_block,
         "",
         "### 🗂️ Touched files",
-        *(files_block[:10] if files_block else ["- No changed files detected."]),
-        *([f"- +{len(files_block) - 10} more"] if len(files_block) > 10 else []),
+        *(files_block[:6] if files_block else ["- No changed files detected."]),
+        *([f"- +{len(files_block) - 6} more"] if len(files_block) > 6 else []),
         *_pr_segments_lines(audit_summary),
         *confirmed_section,
         "",
@@ -1626,7 +1698,7 @@ def render_review_markdown(
         "### 🧭 Route details",
         *_mode_lines(audit_summary),
         "",
-        "### 🧾 Audit summary",
+        "### 🧾 Audit anchors",
         *_version_backend_lines(audit_summary),
         "",
         *_render_diagnostic_table(audit_summary),
@@ -1709,7 +1781,7 @@ def render_patch_markdown(
         "",
         *_embeddings_lines(audit_summary),
         "",
-        "### 🧾 Audit summary",
+        "### 🧾 Audit anchors",
         *_version_backend_lines(audit_summary),
         "",
         *_render_diagnostic_table(audit_summary),
