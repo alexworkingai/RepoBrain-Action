@@ -322,3 +322,104 @@ def test_evidence_budget_fields_render_in_diagnostics() -> None:
     assert "| Evidence budget bucket counts | `changed_primary:6,changed_secondary:2,support_context:2,tests:1,docs:0,workflow_config:0` |" in md
     assert "| Evidence budget cutoffs | `dropped_docs,budget_exhausted` |" in md
     assert "| Evidence budget overflow | `9` |" in md
+
+
+def test_evidence_budget_fields_are_not_classified_as_undefined() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "evidence_budget_used": 0,
+            "evidence_budget_limit": 0,
+            "evidence_budget_mode": "not_applied",
+            "evidence_budget_bucket_counts": (
+                "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0"
+            ),
+            "evidence_budget_cutoffs": "no_cutoff",
+            "evidence_budget_overflow": 0,
+            "evidence_budget_primary_selected": 0,
+            "evidence_budget_support_selected": 0,
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "| Evidence budget mode | `not_applied` |" in md
+    assert "undefined: Adaptive evidence-budget profile applied for this run." not in md
+
+
+def test_evidence_budget_fields_render_in_review_diagnostics() -> None:
+    review = {
+        "summary_text": "Review complete.",
+        "risk_level": "low",
+        "files_block": [],
+        "confirmed_findings": [],
+        "possible_signals": [],
+        "informational_notes": [],
+        "recommendations": [],
+    }
+    md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "evidence_budget_used": 16,
+            "evidence_budget_limit": 24,
+            "evidence_budget_mode": "review_risk_weighted_incremental",
+            "evidence_budget_bucket_counts": (
+                "changed_primary:8,changed_secondary:3,support_context:2,tests:1,docs:1,workflow_config:1"
+            ),
+            "evidence_budget_cutoffs": "dropped_docs,budget_exhausted",
+            "evidence_budget_overflow": 12,
+            "evidence_budget_primary_selected": 11,
+            "evidence_budget_support_selected": 5,
+        },
+    )
+
+    assert "| Evidence budget used | `16` |" in md
+    assert "| Evidence budget mode | `review_risk_weighted_incremental` |" in md
+    assert "| Evidence budget cutoffs | `dropped_docs,budget_exhausted` |" in md
+    assert "undefined: Adaptive evidence-budget profile applied for this run." not in md
+
+
+def test_evidence_budget_fields_render_in_fix_diagnostics() -> None:
+    md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 2,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+            "evidence_budget_used": 9,
+            "evidence_budget_limit": 12,
+            "evidence_budget_mode": "fix_localized_strict_incremental",
+            "evidence_budget_bucket_counts": (
+                "changed_primary:6,changed_secondary:1,support_context:1,tests:0,docs:0,workflow_config:1"
+            ),
+            "evidence_budget_cutoffs": "budget_exhausted",
+            "evidence_budget_overflow": 4,
+            "evidence_budget_primary_selected": 7,
+            "evidence_budget_support_selected": 2,
+        },
+    )
+
+    assert "| Evidence budget used | `9` |" in md
+    assert "| Evidence budget limit | `12` |" in md
+    assert "| Evidence budget mode | `fix_localized_strict_incremental` |" in md
+    assert "| Evidence budget overflow | `4` |" in md

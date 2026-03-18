@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from repobrain.audit import build_audit_base, finalize_audit
+from pathlib import Path
+
+import orjson
+
+from repobrain.audit import build_audit_base, finalize_audit, write_audit
+from repobrain.github_flow import _build_review_markdown, get_last_audit, run_github_flow
 
 
 def test_audit_base_contains_incremental_observability_fields() -> None:
@@ -69,3 +74,66 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     assert finalized["evidence_budget_overflow"] == 6
     assert finalized["evidence_budget_primary_selected"] == 10
     assert finalized["evidence_budget_support_selected"] == 4
+
+
+def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    status = run_github_flow(
+        repo_root=repo_root,
+        dry_run=True,
+        comment_text="/repobrain ask Where is provider selection implemented?",
+        issue_number=None,
+        tky_mode="baseline",
+    )
+    audit = get_last_audit()
+
+    assert status == "DRY_RUN_OK"
+    assert "evidence_budget_used" in audit
+    assert "evidence_budget_limit" in audit
+    assert "evidence_budget_mode" in audit
+    assert "evidence_budget_bucket_counts" in audit
+    assert "evidence_budget_cutoffs" in audit
+    assert "evidence_budget_overflow" in audit
+    assert "evidence_budget_primary_selected" in audit
+    assert "evidence_budget_support_selected" in audit
+
+    audit_path = tmp_path / "audit.json"
+    write_audit(audit, audit_path)
+    payload = orjson.loads(audit_path.read_bytes())
+    assert "evidence_budget_used" in payload
+    assert "evidence_budget_limit" in payload
+    assert "evidence_budget_mode" in payload
+    assert "evidence_budget_bucket_counts" in payload
+    assert "evidence_budget_cutoffs" in payload
+    assert "evidence_budget_overflow" in payload
+    assert "evidence_budget_primary_selected" in payload
+    assert "evidence_budget_support_selected" in payload
+
+
+def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    for cmd in ("review", "fix"):
+        audit: dict[str, object] = {}
+        _build_review_markdown(
+            repo_root=repo_root,
+            cmd=cmd,
+            query="",
+            is_pull_request=True,
+            issue_number=1,
+            dry_run=True,
+            client=None,
+            tky_mode="baseline",
+            remote_url="",
+            api_key="",
+            hmac_secret="",
+            enable_hmac=False,
+            audit=audit,
+        )
+        assert "evidence_budget_used" in audit
+        assert "evidence_budget_limit" in audit
+        assert "evidence_budget_mode" in audit
+        assert "evidence_budget_bucket_counts" in audit
+        assert "evidence_budget_cutoffs" in audit
+        assert "evidence_budget_overflow" in audit
+        assert "evidence_budget_primary_selected" in audit
+        assert "evidence_budget_support_selected" in audit
