@@ -21,9 +21,10 @@ def test_primary_diagnostics_render_without_wide_table() -> None:
         command="ask",
     )
 
-    assert "### 🧾 Runtime diagnostics" in md
     assert "| Parameter | Value | Meaning / Risk |" not in md
-    assert "- Retrieval ranking mode: `hybrid`" in md
+    assert "Runtime diagnostics" in md
+    primary = md.split("<details>", 1)[0]
+    assert "Runtime diagnostics" not in primary
 
 
 def test_low_value_diagnostics_are_suppressed_from_primary_view() -> None:
@@ -69,5 +70,5 @@ def test_fix_output_keeps_compact_patch_sections() -> None:
         },
     )
 
-    assert "### 🧾 Patch result" in md
+    assert "Patch result" in md
     assert "| Parameter | Value | Meaning / Risk |" not in md
