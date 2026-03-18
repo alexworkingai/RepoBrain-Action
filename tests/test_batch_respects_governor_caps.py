@@ -14,6 +14,7 @@ def test_batch_loop_is_capped_by_governor(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("RB_LLM_PROVIDER", "github_models")
     monkeypatch.setenv("RB_LLM_BATCH_ENABLE", "1")
     monkeypatch.setenv("RB_LLM_BATCH_MAX_CALLS_PER_RUN", "6")
+    monkeypatch.setenv("RB_ASYNC_BATCH_ENABLE", "0")
 
     governor = AIBudgetGovernor(
         BudgetPolicy(

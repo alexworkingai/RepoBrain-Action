@@ -548,6 +548,14 @@ def _diag_state(value: Any, parameter: str) -> str:
         "retrieval ranking mode",
         "evidence filtered",
         "evidence filter reason codes",
+        "async batch used",
+        "async batch mode",
+        "async batch concurrency",
+        "async batch tasks total",
+        "async batch tasks completed",
+        "async batch fallback reason",
+        "async batch order preserved",
+        "async batch error count",
         "evidence budget used",
         "evidence budget limit",
         "evidence budget mode",
@@ -943,6 +951,46 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             "Incremental fallback reason",
             audit_summary.get("incremental_fallback_reason", "none"),
             "Reason incremental scope fell back to full retrieval when applicable.",
+        ),
+        (
+            "Async batch used",
+            bool(audit_summary.get("async_batch_used", False)),
+            "Whether bounded async execution was used for multi-batch orchestration.",
+        ),
+        (
+            "Async batch mode",
+            audit_summary.get("async_batch_mode", "sequential"),
+            "Effective execution mode for batch orchestration (async or deterministic sequential fallback).",
+        ),
+        (
+            "Async batch concurrency",
+            _int(audit_summary.get("async_batch_concurrency", 1)),
+            "Configured bounded concurrency for async batch execution.",
+        ),
+        (
+            "Async batch tasks total",
+            _int(audit_summary.get("async_batch_tasks_total", 0)),
+            "Total batch tasks planned for orchestration.",
+        ),
+        (
+            "Async batch tasks completed",
+            _int(audit_summary.get("async_batch_tasks_completed", 0)),
+            "Batch tasks completed including fallback recoveries.",
+        ),
+        (
+            "Async batch fallback reason",
+            audit_summary.get("async_batch_fallback_reason", "not_applicable"),
+            "Deterministic reason when async orchestration falls back to sequential execution.",
+        ),
+        (
+            "Async batch order preserved",
+            bool(audit_summary.get("async_batch_order_preserved", True)),
+            "Whether final merged batch outputs preserved original input order.",
+        ),
+        (
+            "Async batch error count",
+            _int(audit_summary.get("async_batch_error_count", 0)),
+            "Count of batch-task errors recovered through deterministic fallback.",
         ),
     ]
     if command == "fix":
@@ -1437,8 +1485,12 @@ def _render_secondary_diagnostics_details(audit_summary: dict[str, Any]) -> list
 
 
 def _render_runtime_details_block(*, title: str, lines: list[str]) -> list[str]:
-    compact_lines = [str(line) for line in lines if str(line).strip()]
-    if not compact_lines:
+    compact_lines = [str(line) for line in lines]
+    while compact_lines and not compact_lines[0].strip():
+        compact_lines.pop(0)
+    while compact_lines and not compact_lines[-1].strip():
+        compact_lines.pop()
+    if not any(line.strip() for line in compact_lines):
         return []
     return [
         "<details>",

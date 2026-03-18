@@ -15,6 +15,7 @@ def test_batch_force_enables_batch_and_min_batches(monkeypatch, tmp_path: Path) 
     monkeypatch.setenv("RB_LLM_BATCH_MAX_CALLS_PER_RUN", "4")
     monkeypatch.setenv("RB_LLM_BATCH_REDUCE_ENABLE", "0")
     monkeypatch.setenv("RB_LLM_MAX_INPUT_TOKENS", "1200")
+    monkeypatch.setenv("RB_ASYNC_BATCH_ENABLE", "0")
 
     call_counter = {"n": 0}
 

@@ -524,3 +524,38 @@ def test_pr_segmentation_fields_render_in_fix_diagnostics() -> None:
 
     assert "- PR segmentation used: `yes`" in md
     assert "- PR segment summary: `primary=core_code:repobrain/github_flow; support=tests:tests; cross_segment=no`" in md
+
+
+def test_async_batch_fields_render_in_diagnostics_when_meaningful() -> None:
+    md = render_review_markdown(
+        review={
+            "summary_text": "Review complete.",
+            "risk_level": "low",
+            "files_block": [],
+            "confirmed_findings": [],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": [],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "DEEP",
+            "pass_count": 1,
+            "async_batch_used": True,
+            "async_batch_mode": "async",
+            "async_batch_concurrency": 2,
+            "async_batch_tasks_total": 3,
+            "async_batch_tasks_completed": 3,
+            "async_batch_fallback_reason": "none",
+            "async_batch_order_preserved": True,
+            "async_batch_error_count": 0,
+        },
+    )
+
+    assert "- Async batch used: `yes`" in md
+    assert "- Async batch mode: `async`" in md
+    assert "- Async batch concurrency: `2`" in md
+    assert "- Async batch tasks total: `3`" in md
+    assert "- Async batch tasks completed: `3`" in md
+    assert "- Async batch order preserved: `yes`" in md
