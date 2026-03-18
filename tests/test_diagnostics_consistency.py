@@ -52,8 +52,8 @@ def test_fix_pr_context_diagnostics_keep_pr_metadata_counts_consistent() -> None
         },
     )
 
-    assert "| PR changed files | `9` |" in md
-    assert "| PR metadata used | `yes` |" in md
+    assert "- PR changed files: `9`" in md
+    assert "- PR metadata used: `yes`" in md
 
 
 def test_patch_targeting_mode_none_is_meaningful_in_diagnostics() -> None:
@@ -80,7 +80,7 @@ def test_patch_targeting_mode_none_is_meaningful_in_diagnostics() -> None:
         },
     )
 
-    assert "| Patch targeting mode | `none` |" in md
+    assert "- Patch targeting mode: `none`" in md
     assert "undefined: Localized patch-target selection strategy outcome." not in md
 
 
@@ -158,13 +158,13 @@ def test_sprint38_observability_fields_render_for_fix() -> None:
         },
     )
 
-    assert "| Hybrid rerank used | `no` |" in md
-    assert "| Retrieval ranking mode | `lexical` |" in md
-    assert "| Evidence filtered | `2` |" in md
-    assert "| Evidence filter reason codes | `docs_noise,duplicate_region` |" in md
-    assert "| Signal calibration used | `yes` |" in md
-    assert "| Patch guard triggered | `yes` |" in md
-    assert "| TL;DR compressed | `no` |" in md
+    assert "- Hybrid rerank used: `no`" in md
+    assert "- Retrieval ranking mode: `lexical`" in md
+    assert "- Evidence filtered: `2`" in md
+    assert "- Evidence filter reason codes: `docs_noise,duplicate_region`" in md
+    assert "- Signal calibration used: `yes`" in md
+    assert "- Patch guard triggered: `yes`" in md
+    assert "- TL;DR compressed: `no`" in md
 
 
 def test_check_publication_diagnostics_fields_render() -> None:
@@ -188,10 +188,10 @@ def test_check_publication_diagnostics_fields_render() -> None:
         command="ask",
     )
 
-    assert "| Check-run attempted | `no` |" in md
-    assert "| Check-run status | `deferred` |" in md
-    assert "| Check-run token source | `workflow_run_github_token` |" in md
-    assert "| Check-run failure class | `deferred` |" in md
+    assert "- Check-run attempted: `no`" in md
+    assert "- Check-run status: `deferred`" in md
+    assert "- Check-run token source: `workflow_run_github_token`" in md
+    assert "- Check-run failure class: `deferred`" in md
 
 
 def test_incremental_retrieval_diagnostics_fields_render() -> None:
@@ -216,11 +216,11 @@ def test_incremental_retrieval_diagnostics_fields_render() -> None:
         command="ask",
     )
 
-    assert "| Incremental retrieval used | `yes` |" in md
-    assert "| Incremental scope mode | `changed_files_first` |" in md
-    assert "| Changed files considered | `3` |" in md
-    assert "| Unchanged chunks skipped | `64` |" in md
-    assert "| Retrieval cache hits | `24` |" in md
+    assert "- Incremental retrieval used: `yes`" in md
+    assert "- Incremental scope mode: `changed_files_first`" in md
+    assert "- Changed files considered: `3`" in md
+    assert "- Unchanged chunks skipped: `64`" in md
+    assert "- Retrieval cache hits: `24`" in md
 
 
 def test_incremental_retrieval_fields_render_in_review_diagnostics() -> None:
@@ -252,9 +252,9 @@ def test_incremental_retrieval_fields_render_in_review_diagnostics() -> None:
         },
     )
 
-    assert "| Incremental retrieval used | `no` |" in md
-    assert "| Incremental scope mode | `not_applicable` |" in md
-    assert "| Retrieval cache misses | `0` |" in md
+    assert "- Incremental retrieval used: `no`" in md
+    assert "- Incremental scope mode: `not_applicable`" in md
+    assert "- Retrieval cache misses: `0`" in md
 
 
 def test_incremental_retrieval_fields_render_in_fix_diagnostics() -> None:
@@ -288,9 +288,9 @@ def test_incremental_retrieval_fields_render_in_fix_diagnostics() -> None:
         },
     )
 
-    assert "| Incremental retrieval used | `no` |" in md
-    assert "| Incremental scope mode | `not_applicable` |" in md
-    assert "| Incremental fallback reason | `not_applicable` |" in md
+    assert "- Incremental retrieval used: `no`" in md
+    assert "- Incremental scope mode: `not_applicable`" in md
+    assert "- Incremental fallback reason: `not_applicable`" in md
 
 
 def test_evidence_budget_fields_render_in_diagnostics() -> None:
@@ -316,12 +316,15 @@ def test_evidence_budget_fields_render_in_diagnostics() -> None:
         command="ask",
     )
 
-    assert "| Evidence budget used | `11` |" in md
-    assert "| Evidence budget limit | `18` |" in md
-    assert "| Evidence budget mode | `ask_dense_incremental` |" in md
-    assert "| Evidence budget bucket counts | `changed_primary:6,changed_secondary:2,support_context:2,tests:1,docs:0,workflow_config:0` |" in md
-    assert "| Evidence budget cutoffs | `dropped_docs,budget_exhausted` |" in md
-    assert "| Evidence budget overflow | `9` |" in md
+    assert "- Evidence budget used: `11`" in md
+    assert "- Evidence budget limit: `18`" in md
+    assert "- Evidence budget mode: `ask_dense_incremental`" in md
+    assert (
+        "- Evidence budget bucket counts: "
+        "`changed_primary:6,changed_secondary:2,support_context:2,tests:1,docs:0,workflow_config:0`"
+    ) in md
+    assert "- Evidence budget cutoffs: `dropped_docs,budget_exhausted`" in md
+    assert "- Evidence budget overflow: `9`" in md
 
 
 def test_evidence_budget_fields_are_not_classified_as_undefined() -> None:
@@ -347,7 +350,7 @@ def test_evidence_budget_fields_are_not_classified_as_undefined() -> None:
         command="ask",
     )
 
-    assert "| Evidence budget mode | `not_applied` |" in md
+    assert "- Evidence budget mode: `not_applied`" in md
     assert "undefined: Adaptive evidence-budget profile applied for this run." not in md
 
 
@@ -381,9 +384,9 @@ def test_evidence_budget_fields_render_in_review_diagnostics() -> None:
         },
     )
 
-    assert "| Evidence budget used | `16` |" in md
-    assert "| Evidence budget mode | `review_risk_weighted_incremental` |" in md
-    assert "| Evidence budget cutoffs | `dropped_docs,budget_exhausted` |" in md
+    assert "- Evidence budget used: `16`" in md
+    assert "- Evidence budget mode: `review_risk_weighted_incremental`" in md
+    assert "- Evidence budget cutoffs: `dropped_docs,budget_exhausted`" in md
     assert "undefined: Adaptive evidence-budget profile applied for this run." not in md
 
 
@@ -419,10 +422,10 @@ def test_evidence_budget_fields_render_in_fix_diagnostics() -> None:
         },
     )
 
-    assert "| Evidence budget used | `9` |" in md
-    assert "| Evidence budget limit | `12` |" in md
-    assert "| Evidence budget mode | `fix_localized_strict_incremental` |" in md
-    assert "| Evidence budget overflow | `4` |" in md
+    assert "- Evidence budget used: `9`" in md
+    assert "- Evidence budget limit: `12`" in md
+    assert "- Evidence budget mode: `fix_localized_strict_incremental`" in md
+    assert "- Evidence budget overflow: `4`" in md
 
 
 def test_pr_segmentation_fields_render_in_ask_diagnostics() -> None:
@@ -447,11 +450,11 @@ def test_pr_segmentation_fields_render_in_ask_diagnostics() -> None:
         command="ask",
     )
 
-    assert "| PR segmentation used | `yes` |" in md
-    assert "| PR segment count | `3` |" in md
-    assert "| PR primary segments | `core_code:repobrain/github_flow` |" in md
-    assert "| PR cross-segment | `yes` |" in md
-    assert "| PR segment file counts | `core_code=4; docs=1; tests=2` |" in md
+    assert "- PR segmentation used: `yes`" in md
+    assert "- PR segment count: `3`" in md
+    assert "- PR primary segments: `core_code:repobrain/github_flow`" in md
+    assert "- PR cross-segment: `yes`" in md
+    assert "- PR segment file counts: `core_code=4; docs=1; tests=2`" in md
 
 
 def test_pr_segmentation_fields_render_in_review_diagnostics() -> None:
@@ -483,9 +486,9 @@ def test_pr_segmentation_fields_render_in_review_diagnostics() -> None:
         },
     )
 
-    assert "| PR segmentation used | `yes` |" in md
-    assert "| PR segment count | `2` |" in md
-    assert "| PR support segments | `workflow_ci:.github/workflows` |" in md
+    assert "- PR segmentation used: `yes`" in md
+    assert "- PR segment count: `2`" in md
+    assert "- PR support segments: `workflow_ci:.github/workflows`" in md
 
 
 def test_pr_segmentation_fields_render_in_fix_diagnostics() -> None:
@@ -519,5 +522,5 @@ def test_pr_segmentation_fields_render_in_fix_diagnostics() -> None:
         },
     )
 
-    assert "| PR segmentation used | `yes` |" in md
-    assert "| PR segment summary | `primary=core_code:repobrain/github_flow; support=tests:tests; cross_segment=no` |" in md
+    assert "- PR segmentation used: `yes`" in md
+    assert "- PR segment summary: `primary=core_code:repobrain/github_flow; support=tests:tests; cross_segment=no`" in md
