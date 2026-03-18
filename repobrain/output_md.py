@@ -494,6 +494,26 @@ def _touched_files_lines(audit_summary: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _pr_segments_lines(audit_summary: dict[str, Any]) -> list[str]:
+    used = bool(audit_summary.get("pr_segmentation_used", False))
+    summary = str(audit_summary.get("pr_segment_summary", "none") or "none")
+    primary = str(audit_summary.get("pr_primary_segments", "none") or "none")
+    support = str(audit_summary.get("pr_support_segments", "none") or "none")
+    cross_segment = bool(audit_summary.get("pr_cross_segment", False))
+    if not used and summary == "none":
+        return []
+    lines = [
+        "",
+        "PR segments:",
+        f"- primary: {primary}",
+        f"- support: {support}",
+        f"- cross-segment: {'yes' if cross_segment else 'no'}",
+    ]
+    if summary != "none":
+        lines.append(f"- summary: {summary}")
+    return lines
+
+
 def _tkya_mode_label(audit_summary: dict[str, Any]) -> str:
     raw = str(audit_summary.get("tky_engine", "n/a") or "n/a").strip().lower()
     if raw in {"baseline", "baseline-policy"}:
@@ -548,6 +568,15 @@ def _diag_state(value: Any, parameter: str) -> str:
         "retrieval cache hits",
         "retrieval cache misses",
         "incremental fallback reason",
+        "pr segmentation used",
+        "pr segment count",
+        "pr primary segments",
+        "pr support segments",
+        "pr cross-segment",
+        "pr segment summary",
+        "pr segment file counts",
+        "pr segment candidate counts",
+        "pr segmentation fallback reason",
     }
     if parameter_norm in sprint38_always_meaningful:
         return "meaningful"
@@ -714,6 +743,51 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             "PR changed files",
             pr_files,
             "Count of changed files from PR metadata (if available).",
+        ),
+        (
+            "PR segmentation used",
+            bool(audit_summary.get("pr_segmentation_used", False)),
+            "Whether hierarchical PR segmentation was computed for this run.",
+        ),
+        (
+            "PR segment count",
+            _int(audit_summary.get("pr_segment_count", 0)),
+            "Number of segment/subsystem groups detected in changed files.",
+        ),
+        (
+            "PR primary segments",
+            audit_summary.get("pr_primary_segments", "none"),
+            "Primary PR segments where substantive changes are concentrated.",
+        ),
+        (
+            "PR support segments",
+            audit_summary.get("pr_support_segments", "none"),
+            "Supporting segments (tests/docs/workflow/config) around primary changes.",
+        ),
+        (
+            "PR cross-segment",
+            bool(audit_summary.get("pr_cross_segment", False)),
+            "Whether PR spans multiple major segments/subsystems.",
+        ),
+        (
+            "PR segment summary",
+            audit_summary.get("pr_segment_summary", "none"),
+            "Compact hierarchical PR segmentation summary.",
+        ),
+        (
+            "PR segment file counts",
+            audit_summary.get("pr_segment_file_counts", "none"),
+            "File counts per segment class in this PR.",
+        ),
+        (
+            "PR segment candidate counts",
+            audit_summary.get("pr_segment_candidate_counts", "none"),
+            "Selected candidate/evidence counts per segment class.",
+        ),
+        (
+            "PR segmentation fallback reason",
+            audit_summary.get("pr_segmentation_fallback_reason", "none"),
+            "Reason for deterministic segmentation fallback when applicable.",
         ),
         (
             "Incremental retrieval used",
@@ -1281,6 +1355,7 @@ def render_answer_markdown(
                 "### 📊 Evidence (What I used)",
                 *evidence_block,
                 *_touched_files_lines(audit_summary),
+                *_pr_segments_lines(audit_summary),
                 "",
                 *_verification_lines(audit_summary),
                 "",
@@ -1530,6 +1605,7 @@ def render_review_markdown(
         "### 🗂️ Touched files",
         *(files_block[:10] if files_block else ["- No changed files detected."]),
         *([f"- +{len(files_block) - 10} more"] if len(files_block) > 10 else []),
+        *_pr_segments_lines(audit_summary),
         *confirmed_section,
         "",
         "### 🟡 Possible signals",
@@ -1609,6 +1685,7 @@ def render_patch_markdown(
         f"- Patch targeting reason: {patch_targeting_reason}",
         f"- Localized patch evidence: {localized_patch_evidence}",
         f"- Patch grounding mode: {patch_grounding_mode}",
+        *_pr_segments_lines(audit_summary),
         "",
         "### ✅ Patch validation",
         f"- Patch generation result: `{patch_generation_result}`",

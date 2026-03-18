@@ -117,3 +117,32 @@ def test_budget_planner_is_deterministic() -> None:
     assert first.evidence_budget_mode == second.evidence_budget_mode
     assert first.evidence_budget_bucket_counts == second.evidence_budget_bucket_counts
     assert first.evidence_budget_cutoffs == second.evidence_budget_cutoffs
+
+
+def test_budget_planner_can_consume_segment_hints() -> None:
+    candidates = [
+        _chunk("repobrain/github_flow.py", 0),
+        _chunk("repobrain/output_md.py", 1),
+        _chunk("tests/test_cli.py", 2),
+        _chunk("docs/e2e.md", 3),
+    ]
+    plan = plan_evidence_budget(
+        candidates,
+        command="review",
+        github_context={"changed_files": ["repobrain/github_flow.py"]},
+        limit_hint=8,
+        incremental_scope_mode="changed_files_first",
+        segment_hints={
+            "file_segment_class_map": {
+                "repobrain/github_flow.py": "core_code",
+                "repobrain/output_md.py": "core_code",
+                "tests/test_cli.py": "tests",
+                "docs/e2e.md": "docs",
+            }
+        },
+    )
+
+    assert plan.evidence_budget_used > 0
+    assert plan.evidence_budget_bucket_counts["changed_primary"] >= 1
+    assert plan.evidence_budget_bucket_counts["tests"] >= 1
+    assert plan.evidence_budget_bucket_counts["docs"] >= 1

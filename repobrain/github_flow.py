@@ -60,6 +60,7 @@ from repobrain.retrieval.hybrid import rank_hybrid_candidates
 from repobrain.retrieval.hybrid_ranker import rerank_candidates
 from repobrain.retrieval.evidence_budget_planner import plan_evidence_budget
 from repobrain.retrieval.incremental_index import scope_chunks_incremental
+from repobrain.pr_segmenter import build_pr_segmentation, segmentation_defaults
 from repobrain.review import build_pr_review
 from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
@@ -4144,12 +4145,23 @@ def _retrieve_candidates_with_runtime(
         query=question,
         max_items=max(1, int(topk)),
     )
+    segment_hints: dict[str, Any] | None = None
+    file_map_raw = (github_context or {}).get("pr_segmentation_file_map", {})
+    if isinstance(file_map_raw, dict) and file_map_raw:
+        segment_hints = {
+            "file_segment_class_map": {
+                str(path).strip(): str(segment_class).strip()
+                for path, segment_class in file_map_raw.items()
+                if str(path).strip()
+            }
+        }
     budget_plan = plan_evidence_budget(
         filtered.candidates,
         command=cmd,
         github_context=github_context,
         limit_hint=max(1, int(topk)),
         incremental_scope_mode=str(retrieval_runtime.get("incremental_scope_mode", "fallback_full")),
+        segment_hints=segment_hints,
     )
     retrieval_runtime["hybrid_rerank_used"] = bool(rerank.hybrid_rerank_used)
     mode_suffix = rerank.retrieval_ranking_mode
@@ -4826,10 +4838,16 @@ def _prepend_pr_metadata_to_answer(
     *,
     answer_text: str,
     changed_files: list[str],
+    primary_segments: str = "none",
+    segment_summary: str = "none",
 ) -> str:
     if not changed_files:
         return answer_text
     lines = ["PR metadata (changed files):"]
+    if str(primary_segments or "none") != "none":
+        lines.append(f"- Primary segments: {primary_segments}")
+    if str(segment_summary or "none") != "none":
+        lines.append(f"- Segment summary: {segment_summary}")
     for path in changed_files[:12]:
         lines.append(f"- `{path}`")
     if len(changed_files) > 12:
@@ -4881,6 +4899,12 @@ def _build_qa_markdown(
     qa_github_context = _enrich_github_context_with_pr_metadata(
         github_context_seed=github_context_seed,
     )
+    changed_files_seed = _collect_pr_changed_files_from_context(qa_github_context)
+    pr_segmentation_seed = build_pr_segmentation(
+        changed_files=changed_files_seed,
+        candidate_paths=[],
+    )
+    qa_github_context["pr_segmentation_file_map"] = dict(pr_segmentation_seed.file_segment_class_map)
     chunks, index_source, index_elapsed_ms, chunk_vectors_by_id, vectors_meta = _normalize_chunks_meta(
         load_or_build_chunks_with_meta(resolved_repo_root, index_path, governor=governor)
     )
@@ -4970,6 +4994,8 @@ def _build_qa_markdown(
     audit_summary.setdefault("evidence_budget_overflow", 0)
     audit_summary.setdefault("evidence_budget_primary_selected", 0)
     audit_summary.setdefault("evidence_budget_support_selected", 0)
+    for key, value in segmentation_defaults(fallback_reason="missing_changed_files").items():
+        audit_summary.setdefault(key, value)
     audit_summary["remote_skipped_reason"] = remote_skipped_reason or "n/a"
     audit_summary["config_loaded"] = bool(getattr(cfg, "config_loaded", False))
     audit_summary["config_path"] = str(getattr(cfg, "config_path", "<missing>") or "<missing>")
@@ -5095,6 +5121,13 @@ def _build_qa_markdown(
         }
     )
     audit_summary["evidence_filter_reason_codes"] = ",".join(merged_filter_codes) if merged_filter_codes else "none"
+    pr_segmentation = build_pr_segmentation(
+        changed_files=changed_files_from_pr,
+        candidate_paths=[str(item.file_path or "").strip() for item in evidence_out if str(item.file_path or "").strip()],
+    )
+    audit_summary.update(pr_segmentation.as_audit_fields())
+    if isinstance(qa_github_context, dict):
+        qa_github_context["pr_segmentation_file_map"] = dict(pr_segmentation.file_segment_class_map)
 
     llm_text, llm_meta = _maybe_generate_llm_text(
         cmd=cmd,
@@ -5123,6 +5156,8 @@ def _build_qa_markdown(
         answer_text_out = _prepend_pr_metadata_to_answer(
             answer_text=answer_text_out,
             changed_files=changed_files_from_pr,
+            primary_segments=str(audit_summary.get("pr_primary_segments", "none") or "none"),
+            segment_summary=str(audit_summary.get("pr_segment_summary", "none") or "none"),
         )
     llm_meta["pr_changed_files_count"] = int(audit_summary.get("pr_changed_files_count", 0) or 0)
     llm_meta["pr_metadata_used"] = bool(audit_summary.get("pr_metadata_used", False))
@@ -5218,6 +5253,19 @@ def _build_qa_markdown(
         )
         audit["evidence_budget_support_selected"] = int(
             audit_summary.get("evidence_budget_support_selected", 0) or 0
+        )
+        audit["pr_segmentation_used"] = bool(audit_summary.get("pr_segmentation_used", False))
+        audit["pr_segment_count"] = int(audit_summary.get("pr_segment_count", 0) or 0)
+        audit["pr_primary_segments"] = str(audit_summary.get("pr_primary_segments", "none") or "none")
+        audit["pr_support_segments"] = str(audit_summary.get("pr_support_segments", "none") or "none")
+        audit["pr_cross_segment"] = bool(audit_summary.get("pr_cross_segment", False))
+        audit["pr_segment_summary"] = str(audit_summary.get("pr_segment_summary", "none") or "none")
+        audit["pr_segment_file_counts"] = str(audit_summary.get("pr_segment_file_counts", "none") or "none")
+        audit["pr_segment_candidate_counts"] = str(
+            audit_summary.get("pr_segment_candidate_counts", "none") or "none"
+        )
+        audit["pr_segmentation_fallback_reason"] = str(
+            audit_summary.get("pr_segmentation_fallback_reason", "none") or "none"
         )
         audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
         audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
@@ -5499,16 +5547,22 @@ def _build_review_markdown(
         for item in files
         if isinstance(item, dict) and str(item.get("patch", "")).strip()
     ]
+    review_segmentation_seed = build_pr_segmentation(
+        changed_files=all_pr_changed_files,
+        candidate_paths=[],
+    )
     review_candidates = _review_candidates_from_files(files)
     planner_context = dict(github_context_seed or {})
     if all_pr_changed_files:
         planner_context["changed_files"] = list(all_pr_changed_files)
+    planner_context["pr_segmentation_file_map"] = dict(review_segmentation_seed.file_segment_class_map)
     review_budget_plan = plan_evidence_budget(
         review_candidates,
         command=cmd,
         github_context=planner_context,
         limit_hint=min(80, max(10, len(review_candidates))),
         incremental_scope_mode="review_pr_files",
+        segment_hints={"file_segment_class_map": review_segmentation_seed.file_segment_class_map},
     )
     review_candidates = review_budget_plan.candidates
     verification_context = dict(verification_context_seed or {})
@@ -5628,6 +5682,7 @@ def _build_review_markdown(
         "evidence_budget_primary_selected": int(review_budget_plan.evidence_budget_primary_selected),
         "evidence_budget_support_selected": int(review_budget_plan.evidence_budget_support_selected),
     }
+    audit_summary.update(review_segmentation_seed.as_audit_fields())
     audit_summary.update(_execution_from_tky_result(tky_result.tky))
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
     validation_raw = review.get("validation", {})
@@ -5757,6 +5812,11 @@ def _build_review_markdown(
     review_candidates = filtered_review_candidates.candidates
     audit_summary["evidence_filtered_count"] = int(filtered_review_candidates.filtered_count)
     audit_summary["evidence_filter_reason_codes"] = ",".join(filtered_review_candidates.reason_codes) or "none"
+    review_segmentation = build_pr_segmentation(
+        changed_files=all_pr_changed_files,
+        candidate_paths=[str(item.file_path or "").strip() for item in review_candidates if str(item.file_path or "").strip()],
+    )
+    audit_summary.update(review_segmentation.as_audit_fields())
     review_locators = [
         EvidenceItem(
             file_path=item.file_path,
@@ -6364,6 +6424,19 @@ def _build_review_markdown(
             audit["evidence_budget_support_selected"] = int(
                 audit_summary.get("evidence_budget_support_selected", 0) or 0
             )
+            audit["pr_segmentation_used"] = bool(audit_summary.get("pr_segmentation_used", False))
+            audit["pr_segment_count"] = int(audit_summary.get("pr_segment_count", 0) or 0)
+            audit["pr_primary_segments"] = str(audit_summary.get("pr_primary_segments", "none") or "none")
+            audit["pr_support_segments"] = str(audit_summary.get("pr_support_segments", "none") or "none")
+            audit["pr_cross_segment"] = bool(audit_summary.get("pr_cross_segment", False))
+            audit["pr_segment_summary"] = str(audit_summary.get("pr_segment_summary", "none") or "none")
+            audit["pr_segment_file_counts"] = str(audit_summary.get("pr_segment_file_counts", "none") or "none")
+            audit["pr_segment_candidate_counts"] = str(
+                audit_summary.get("pr_segment_candidate_counts", "none") or "none"
+            )
+            audit["pr_segmentation_fallback_reason"] = str(
+                audit_summary.get("pr_segmentation_fallback_reason", "none") or "none"
+            )
             audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
             audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
             audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
@@ -6765,6 +6838,19 @@ def _build_review_markdown(
         )
         audit["evidence_budget_support_selected"] = int(
             audit_summary.get("evidence_budget_support_selected", 0) or 0
+        )
+        audit["pr_segmentation_used"] = bool(audit_summary.get("pr_segmentation_used", False))
+        audit["pr_segment_count"] = int(audit_summary.get("pr_segment_count", 0) or 0)
+        audit["pr_primary_segments"] = str(audit_summary.get("pr_primary_segments", "none") or "none")
+        audit["pr_support_segments"] = str(audit_summary.get("pr_support_segments", "none") or "none")
+        audit["pr_cross_segment"] = bool(audit_summary.get("pr_cross_segment", False))
+        audit["pr_segment_summary"] = str(audit_summary.get("pr_segment_summary", "none") or "none")
+        audit["pr_segment_file_counts"] = str(audit_summary.get("pr_segment_file_counts", "none") or "none")
+        audit["pr_segment_candidate_counts"] = str(
+            audit_summary.get("pr_segment_candidate_counts", "none") or "none"
+        )
+        audit["pr_segmentation_fallback_reason"] = str(
+            audit_summary.get("pr_segmentation_fallback_reason", "none") or "none"
         )
         audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
         audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))

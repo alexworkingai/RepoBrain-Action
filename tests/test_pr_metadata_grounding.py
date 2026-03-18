@@ -29,10 +29,14 @@ def test_prepend_pr_metadata_places_changed_files_first() -> None:
     text = _prepend_pr_metadata_to_answer(
         answer_text="Short synthesized answer.",
         changed_files=["repobrain/github_flow.py", "repobrain/output_md.py"],
+        primary_segments="core_code:repobrain/github_flow",
+        segment_summary="primary=core_code:repobrain/github_flow; support=docs:docs; cross_segment=no",
     )
 
     first_line = text.splitlines()[0]
     assert first_line == "PR metadata (changed files):"
+    assert "Primary segments: core_code:repobrain/github_flow" in text
+    assert "Segment summary: primary=core_code:repobrain/github_flow" in text
     assert "- `repobrain/github_flow.py`" in text
     assert "Short synthesized answer." in text
 

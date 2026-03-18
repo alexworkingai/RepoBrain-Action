@@ -64,6 +64,15 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "evidence_budget_overflow": 0,
         "evidence_budget_primary_selected": 0,
         "evidence_budget_support_selected": 0,
+        "pr_segmentation_used": False,
+        "pr_segment_count": 0,
+        "pr_primary_segments": "none",
+        "pr_support_segments": "none",
+        "pr_cross_segment": False,
+        "pr_segment_summary": "none",
+        "pr_segment_file_counts": "none",
+        "pr_segment_candidate_counts": "none",
+        "pr_segmentation_fallback_reason": "not_applicable",
         "top_score_pass1": None,
         "top_score_pass2": None,
         "rd": {
@@ -207,6 +216,22 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
         )
     except (TypeError, ValueError):
         normalized["evidence_budget_support_selected"] = 0
+    normalized["pr_segmentation_used"] = bool(normalized.get("pr_segmentation_used", False))
+    try:
+        normalized["pr_segment_count"] = int(normalized.get("pr_segment_count", 0) or 0)
+    except (TypeError, ValueError):
+        normalized["pr_segment_count"] = 0
+    normalized["pr_primary_segments"] = str(normalized.get("pr_primary_segments", "none") or "none")
+    normalized["pr_support_segments"] = str(normalized.get("pr_support_segments", "none") or "none")
+    normalized["pr_cross_segment"] = bool(normalized.get("pr_cross_segment", False))
+    normalized["pr_segment_summary"] = str(normalized.get("pr_segment_summary", "none") or "none")
+    normalized["pr_segment_file_counts"] = str(normalized.get("pr_segment_file_counts", "none") or "none")
+    normalized["pr_segment_candidate_counts"] = str(
+        normalized.get("pr_segment_candidate_counts", "none") or "none"
+    )
+    normalized["pr_segmentation_fallback_reason"] = str(
+        normalized.get("pr_segmentation_fallback_reason", "not_applicable") or "not_applicable"
+    )
 
     rd_raw = normalized.get("rd", {})
     rd_payload: dict[str, Any] = dict(rd_raw) if isinstance(rd_raw, dict) else {}

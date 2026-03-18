@@ -191,6 +191,31 @@ def _bucket_for(path: str, changed_files: set[str]) -> str:
     return "support_context"
 
 
+def _bucket_with_segment_hint(
+    path: str,
+    *,
+    changed_files: set[str],
+    file_segment_class_map: dict[str, str],
+) -> str:
+    normalized = str(path or "").strip()
+    hinted_class = str(file_segment_class_map.get(normalized, "")).strip().lower()
+    if hinted_class in {"docs"}:
+        return "docs"
+    if hinted_class in {"tests"}:
+        return "tests"
+    if hinted_class in {"workflow_ci", "config_build"}:
+        return "workflow_config"
+    if hinted_class in {"generated_or_vendor"}:
+        return "support_context"
+    if hinted_class in {"tooling_scripts"}:
+        return "support_context"
+    if hinted_class in {"core_code", "mixed_or_other"}:
+        if normalized in changed_files:
+            return "changed_primary"
+        return "support_context"
+    return _bucket_for(normalized, changed_files)
+
+
 def plan_evidence_budget(
     candidates: list[CandidateChunk],
     *,
@@ -198,6 +223,7 @@ def plan_evidence_budget(
     github_context: dict[str, Any] | None = None,
     limit_hint: int | None = None,
     incremental_scope_mode: str = "fallback_full",
+    segment_hints: dict[str, Any] | None = None,
 ) -> EvidenceBudgetPlanResult:
     if not candidates:
         return EvidenceBudgetPlanResult(
@@ -224,10 +250,30 @@ def plan_evidence_budget(
     )
     budget_limit = max(1, min(len(candidates), int(limit)))
     changed_files = _changed_files_from_context(github_context)
+    segment_hints_map = dict(segment_hints or {})
+    file_segment_class_map_raw = segment_hints_map.get("file_segment_class_map", {})
+    file_segment_class_map = (
+        {
+            str(path).strip(): str(segment_class).strip().lower()
+            for path, segment_class in file_segment_class_map_raw.items()
+            if str(path).strip()
+        }
+        if isinstance(file_segment_class_map_raw, dict)
+        else {}
+    )
 
     bucketed: dict[str, list[CandidateChunk]] = {bucket: [] for bucket in _BUCKET_ORDER}
     for item in candidates:
-        bucketed[_bucket_for(item.file_path, changed_files)].append(item)
+        bucket = (
+            _bucket_with_segment_hint(
+                item.file_path,
+                changed_files=changed_files,
+                file_segment_class_map=file_segment_class_map,
+            )
+            if file_segment_class_map
+            else _bucket_for(item.file_path, changed_files)
+        )
+        bucketed[bucket].append(item)
 
     selected: list[CandidateChunk] = []
     selected_ids: set[str] = set()
@@ -259,7 +305,15 @@ def plan_evidence_budget(
                 break
             if item.chunk_id in selected_ids:
                 continue
-            bucket = _bucket_for(item.file_path, changed_files)
+            bucket = (
+                _bucket_with_segment_hint(
+                    item.file_path,
+                    changed_files=changed_files,
+                    file_segment_class_map=file_segment_class_map,
+                )
+                if file_segment_class_map
+                else _bucket_for(item.file_path, changed_files)
+            )
             selected.append(item)
             selected_ids.add(item.chunk_id)
             selected_counts[bucket] = selected_counts.get(bucket, 0) + 1

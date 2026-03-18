@@ -28,6 +28,15 @@ def test_audit_base_contains_incremental_observability_fields() -> None:
     assert "evidence_budget_overflow" in audit
     assert "evidence_budget_primary_selected" in audit
     assert "evidence_budget_support_selected" in audit
+    assert "pr_segmentation_used" in audit
+    assert "pr_segment_count" in audit
+    assert "pr_primary_segments" in audit
+    assert "pr_support_segments" in audit
+    assert "pr_cross_segment" in audit
+    assert "pr_segment_summary" in audit
+    assert "pr_segment_file_counts" in audit
+    assert "pr_segment_candidate_counts" in audit
+    assert "pr_segmentation_fallback_reason" in audit
 
 
 def test_finalize_audit_preserves_incremental_observability_values() -> None:
@@ -53,6 +62,15 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
             "evidence_budget_overflow": 6,
             "evidence_budget_primary_selected": 10,
             "evidence_budget_support_selected": 4,
+            "pr_segmentation_used": True,
+            "pr_segment_count": 3,
+            "pr_primary_segments": "core_code:repobrain/github_flow",
+            "pr_support_segments": "tests:tests, docs:docs",
+            "pr_cross_segment": True,
+            "pr_segment_summary": "primary=core_code:repobrain/github_flow; support=tests:tests, docs:docs; cross_segment=yes",
+            "pr_segment_file_counts": "core_code=4; docs=1; tests=2",
+            "pr_segment_candidate_counts": "core_code=3; tests=1",
+            "pr_segmentation_fallback_reason": "none",
         }
     )
     finalized = finalize_audit(audit)
@@ -74,6 +92,12 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     assert finalized["evidence_budget_overflow"] == 6
     assert finalized["evidence_budget_primary_selected"] == 10
     assert finalized["evidence_budget_support_selected"] == 4
+    assert finalized["pr_segmentation_used"] is True
+    assert finalized["pr_segment_count"] == 3
+    assert finalized["pr_primary_segments"] == "core_code:repobrain/github_flow"
+    assert finalized["pr_support_segments"] == "tests:tests, docs:docs"
+    assert finalized["pr_cross_segment"] is True
+    assert finalized["pr_segmentation_fallback_reason"] == "none"
 
 
 def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> None:
@@ -96,6 +120,15 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "evidence_budget_overflow" in audit
     assert "evidence_budget_primary_selected" in audit
     assert "evidence_budget_support_selected" in audit
+    assert "pr_segmentation_used" in audit
+    assert "pr_segment_count" in audit
+    assert "pr_primary_segments" in audit
+    assert "pr_support_segments" in audit
+    assert "pr_cross_segment" in audit
+    assert "pr_segment_summary" in audit
+    assert "pr_segment_file_counts" in audit
+    assert "pr_segment_candidate_counts" in audit
+    assert "pr_segmentation_fallback_reason" in audit
 
     audit_path = tmp_path / "audit.json"
     write_audit(audit, audit_path)
@@ -108,6 +141,15 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "evidence_budget_overflow" in payload
     assert "evidence_budget_primary_selected" in payload
     assert "evidence_budget_support_selected" in payload
+    assert "pr_segmentation_used" in payload
+    assert "pr_segment_count" in payload
+    assert "pr_primary_segments" in payload
+    assert "pr_support_segments" in payload
+    assert "pr_cross_segment" in payload
+    assert "pr_segment_summary" in payload
+    assert "pr_segment_file_counts" in payload
+    assert "pr_segment_candidate_counts" in payload
+    assert "pr_segmentation_fallback_reason" in payload
 
 
 def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
@@ -137,3 +179,12 @@ def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
         assert "evidence_budget_overflow" in audit
         assert "evidence_budget_primary_selected" in audit
         assert "evidence_budget_support_selected" in audit
+        assert "pr_segmentation_used" in audit
+        assert "pr_segment_count" in audit
+        assert "pr_primary_segments" in audit
+        assert "pr_support_segments" in audit
+        assert "pr_cross_segment" in audit
+        assert "pr_segment_summary" in audit
+        assert "pr_segment_file_counts" in audit
+        assert "pr_segment_candidate_counts" in audit
+        assert "pr_segmentation_fallback_reason" in audit
