@@ -54,6 +54,16 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "retrieval_cache_hits": 0,
         "retrieval_cache_misses": 0,
         "incremental_fallback_reason": "none",
+        "evidence_budget_used": 0,
+        "evidence_budget_limit": 0,
+        "evidence_budget_mode": "not_applied",
+        "evidence_budget_bucket_counts": (
+            "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0"
+        ),
+        "evidence_budget_cutoffs": "no_cutoff",
+        "evidence_budget_overflow": 0,
+        "evidence_budget_primary_selected": 0,
+        "evidence_budget_support_selected": 0,
         "top_score_pass1": None,
         "top_score_pass2": None,
         "rd": {
@@ -159,6 +169,44 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
             normalized["tky_remote_status"] = int(remote_status)
         except (TypeError, ValueError):
             normalized["tky_remote_status"] = None
+
+    try:
+        normalized["evidence_budget_used"] = int(normalized.get("evidence_budget_used", 0) or 0)
+    except (TypeError, ValueError):
+        normalized["evidence_budget_used"] = 0
+    try:
+        normalized["evidence_budget_limit"] = int(normalized.get("evidence_budget_limit", 0) or 0)
+    except (TypeError, ValueError):
+        normalized["evidence_budget_limit"] = 0
+    normalized["evidence_budget_mode"] = str(
+        normalized.get("evidence_budget_mode", "not_applied") or "not_applied"
+    )
+    normalized["evidence_budget_bucket_counts"] = str(
+        normalized.get(
+            "evidence_budget_bucket_counts",
+            "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+        )
+        or "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0"
+    )
+    normalized["evidence_budget_cutoffs"] = str(
+        normalized.get("evidence_budget_cutoffs", "no_cutoff") or "no_cutoff"
+    )
+    try:
+        normalized["evidence_budget_overflow"] = int(normalized.get("evidence_budget_overflow", 0) or 0)
+    except (TypeError, ValueError):
+        normalized["evidence_budget_overflow"] = 0
+    try:
+        normalized["evidence_budget_primary_selected"] = int(
+            normalized.get("evidence_budget_primary_selected", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["evidence_budget_primary_selected"] = 0
+    try:
+        normalized["evidence_budget_support_selected"] = int(
+            normalized.get("evidence_budget_support_selected", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["evidence_budget_support_selected"] = 0
 
     rd_raw = normalized.get("rd", {})
     rd_payload: dict[str, Any] = dict(rd_raw) if isinstance(rd_raw, dict) else {}
