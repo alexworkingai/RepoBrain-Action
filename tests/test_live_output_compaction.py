@@ -136,3 +136,51 @@ def test_ask_primary_hides_next_steps_and_audit_anchors() -> None:
     assert "Next steps" not in primary
     assert "Audit anchors" not in primary
     assert "<summary>Evidence and diagnostics</summary>" in md
+    assert "Next steps" in md
+    assert "Audit anchors" in md
+
+
+def test_review_primary_hides_audit_anchors_but_keeps_them_in_details() -> None:
+    md = render_review_markdown(
+        review={
+            "summary_text": "Review summary.",
+            "risk_level": "low",
+            "confirmed_findings": [],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": ["Run CI checks"],
+            "files_block": ["- `repobrain/output_md.py`"],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={"command": "review", "route_final": "FAST"},
+    )
+    primary = _primary(md)
+    assert "Audit anchors" not in primary
+    assert "<summary>Evidence and diagnostics</summary>" in md
+    assert "Audit anchors" in md
+
+
+def test_fix_primary_hides_audit_anchors_but_keeps_them_in_details() -> None:
+    md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 2,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "localized_patch_evidence_count": 0,
+        },
+    )
+    primary = _primary(md)
+    assert "Audit anchors" not in primary
+    assert "<summary>Evidence and diagnostics</summary>" in md
+    assert "Audit anchors" in md
