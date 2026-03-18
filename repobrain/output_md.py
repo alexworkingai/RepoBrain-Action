@@ -1390,6 +1390,66 @@ def render_diagnostic_summary_markdown(audit_summary: dict[str, Any]) -> str:
     return "\n".join(_render_diagnostic_table(audit_summary))
 
 
+def _compact_segment_summary(audit_summary: dict[str, Any]) -> str:
+    summary = str(audit_summary.get("pr_segment_summary", "none") or "none").strip()
+    if summary and summary.lower() != "none":
+        return summary
+    primary = str(audit_summary.get("pr_primary_segments", "none") or "none").strip()
+    support = str(audit_summary.get("pr_support_segments", "none") or "none").strip()
+    cross_segment = "yes" if bool(audit_summary.get("pr_cross_segment", False)) else "no"
+    if primary.lower() == "none" and support.lower() == "none":
+        return "not_available"
+    return f"primary={primary}; support={support}; cross_segment={cross_segment}"
+
+
+def _has_meaningful_budget(audit_summary: dict[str, Any]) -> bool:
+    mode = str(audit_summary.get("evidence_budget_mode", "not_applied") or "not_applied").strip().lower()
+    used = _int(audit_summary.get("evidence_budget_used", 0))
+    return mode not in {"", "not_applied"} or used > 0
+
+
+def _has_meaningful_incremental(audit_summary: dict[str, Any]) -> bool:
+    used = bool(audit_summary.get("incremental_retrieval_used", False))
+    mode = str(audit_summary.get("incremental_scope_mode", "fallback_full") or "fallback_full").strip().lower()
+    return used or mode not in {"", "fallback_full", "not_applicable"}
+
+
+def _render_secondary_diagnostics_details(audit_summary: dict[str, Any]) -> list[str]:
+    _, secondary_rows = _render_compact_diagnostic_groups(audit_summary)
+    if not secondary_rows:
+        return []
+    secondary_rows.sort(key=lambda item: (item[0].lower(), item[1].lower()))
+    lines: list[str] = [
+        "### Secondary diagnostics",
+        "",
+    ]
+    current_group = ""
+    max_rows = 40
+    for group_name, parameter, value_text, state, _meaning in secondary_rows[:max_rows]:
+        if group_name != current_group:
+            current_group = group_name
+            lines.append(f"**{group_name}**")
+        lines.append(f"- {parameter}: `{value_text}` ({state})")
+    if len(secondary_rows) > max_rows:
+        lines.append(f"- +{len(secondary_rows) - max_rows} additional rows omitted.")
+    lines.append("")
+    return lines
+
+
+def _render_runtime_details_block(*, title: str, lines: list[str]) -> list[str]:
+    compact_lines = [str(line) for line in lines if str(line).strip()]
+    if not compact_lines:
+        return []
+    return [
+        "<details>",
+        f"<summary>{title}</summary>",
+        "",
+        *compact_lines,
+        "",
+        "</details>",
+    ]
+
+
 def render_answer_markdown(
     *,
     answer_text: str,
@@ -1410,59 +1470,89 @@ def render_answer_markdown(
     elif route == "BLOCK":
         route_header = "### 🛑 Blocked"
 
+    verification_status = _verification_status(audit_summary)
+    selected_evidence = _int(audit_summary.get("selected", len(evidence)))
+    grounding_mode = str(audit_summary.get("answer_grounding_mode", "retrieval") or "retrieval")
+    segment_summary = _compact_segment_summary(audit_summary)
+
     sections: list[str] = [route_header]
     if command == "locate":
         sections.extend(
             [
                 "Top locations found for the query:",
                 "",
-                "### 📊 Evidence",
-                *evidence_block,
+                "### 🧭 Run summary",
+                f"- Route: `{route}`",
+                f"- Selected evidence: `{selected_evidence}`",
+                f"- Verification: `{verification_status}`",
                 "",
-                *_verification_lines(audit_summary),
-                "",
-                *_llm_lines(audit_summary),
-                "",
-                *_embeddings_lines(audit_summary),
-                "",
-                "### 🧭 Route details",
-                *_mode_lines(audit_summary),
             ]
         )
+        detail_lines = [
+            "### 📊 Evidence",
+            *evidence_block,
+            "",
+            *_verification_lines(audit_summary),
+            "",
+            *_llm_lines(audit_summary),
+            "",
+            *_embeddings_lines(audit_summary),
+            "",
+            "### 🧭 Route details",
+            *_mode_lines(audit_summary),
+            "",
+            *_render_diagnostic_table(audit_summary),
+        ]
+        sections.extend(_render_runtime_details_block(title="Details and diagnostics", lines=detail_lines))
     else:
         sections.extend(
             [
                 answer_text.strip() or "No answer generated.",
                 "",
-                "### 📊 Evidence (What I used)",
-                *evidence_block,
-                *_pr_segments_lines(audit_summary),
-                "",
-                *_verification_lines(audit_summary),
-                "",
-                *_llm_lines(audit_summary),
-                "",
-                *_embeddings_lines(audit_summary),
-                "",
-                "### 🧭 Route details",
-                *_mode_lines(audit_summary),
+                "### 🧭 Run summary",
+                f"- Route: `{route}`",
+                f"- Grounding: `{grounding_mode}`",
+                f"- Segment summary: `{segment_summary}`",
+                f"- Selected evidence: `{selected_evidence}`",
+                f"- Verification: `{verification_status}`",
+            ]
+        )
+        if _has_meaningful_incremental(audit_summary):
+            sections.append(
+                f"- Incremental scope: `{str(audit_summary.get('incremental_scope_mode', 'fallback_full') or 'fallback_full')}`"
+            )
+        if _has_meaningful_budget(audit_summary):
+            sections.append(
+                "- Evidence budget: "
+                f"`{str(audit_summary.get('evidence_budget_mode', 'not_applied') or 'not_applied')}` "
+                f"(used={_int(audit_summary.get('evidence_budget_used', 0))})"
+            )
+        sections.extend(
+            [
                 "",
                 "### ✅ Next steps",
                 f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
+                "",
             ]
         )
-
-    sections.extend(
-        [
+        detail_lines = [
+            "### 📊 Evidence",
+            *evidence_block,
             "",
-            "### 🧾 Audit anchors",
-            *_version_backend_lines(audit_summary),
+            *_verification_lines(audit_summary),
+            "",
+            *_llm_lines(audit_summary),
+            "",
+            *_embeddings_lines(audit_summary),
+            "",
+            "### 🧭 Route details",
+            *_mode_lines(audit_summary),
             "",
             *_render_diagnostic_table(audit_summary),
-            "",
-            _audit_note(),
         ]
-    )
+        sections.extend(_render_runtime_details_block(title="Details and diagnostics", lines=detail_lines))
+
+    sections.extend(["", "### 🧾 Audit anchors", *_version_backend_lines(audit_summary), "", _audit_note()])
     return "\n".join(sections)
 
 
@@ -1667,17 +1757,42 @@ def render_review_markdown(
         if risk_level == "LOW" and not confirmed_block
         else "- Run standard CI checks before merge."
     )
+    segment_summary = _compact_segment_summary(audit_summary)
+    verification_status = str(
+        verification_report.get("summary", verification_report.get("overall", _verification_status(audit_summary)))
+        or _verification_status(audit_summary)
+    ).strip()
     sections = [
         "### ✅ PR Review",
         f"TL;DR: {summary_text}",
         f"Risk level: **{risk_level}**",
+        "- Findings: "
+        f"confirmed={len(confirmed_block)} / possible={len(possible_signals)} / informational={len(informational_notes)}",
+        f"- Segment summary: `{segment_summary}`",
+        f"- Verification: `{verification_status}`",
+    ]
+    if _has_meaningful_budget(audit_summary):
+        sections.append(
+            "- Evidence budget: "
+            f"`{str(audit_summary.get('evidence_budget_mode', 'not_applied') or 'not_applied')}` "
+            f"(used={_int(audit_summary.get('evidence_budget_used', 0))})"
+        )
+    sections.extend(
+        [
+            "",
+            "### ✅ Recommendations",
+            *([f"- {item}" for item in recommendations[:3]] if recommendations else [default_recommendation]),
+            "",
+        ]
+    )
+
+    detail_lines = [
         "Risk drivers:",
         *risk_driver_block,
         "",
         "### 🗂️ Touched files",
         *(files_block[:6] if files_block else ["- No changed files detected."]),
         *([f"- +{len(files_block) - 6} more"] if len(files_block) > 6 else []),
-        *_pr_segments_lines(audit_summary),
         *confirmed_section,
         "",
         "### 🟡 Possible signals",
@@ -1685,9 +1800,6 @@ def render_review_markdown(
         "",
         "### ℹ️ Informational notes",
         *([f"- {item}" for item in informational_notes[:6]] if informational_notes else ["- None."]),
-        "",
-        "### ✅ Recommendations",
-        *([f"- {item}" for item in recommendations[:8]] if recommendations else [default_recommendation]),
         "",
         *_verification_report_lines(verification_report),
         "",
@@ -1698,13 +1810,10 @@ def render_review_markdown(
         "### 🧭 Route details",
         *_mode_lines(audit_summary),
         "",
-        "### 🧾 Audit anchors",
-        *_version_backend_lines(audit_summary),
-        "",
         *_render_diagnostic_table(audit_summary),
-        "",
-        _audit_note(),
     ]
+    sections.extend(_render_runtime_details_block(title="Details and diagnostics", lines=detail_lines))
+    sections.extend(["", "### 🧾 Audit anchors", *_version_backend_lines(audit_summary), "", _audit_note()])
     return "\n".join(sections)
 
 
@@ -1738,18 +1847,38 @@ def render_patch_markdown(
         )
     elif not summary_text:
         summary_text = "Patch proposal generated from localized PR context."
+    patch_validation_result = str(audit_summary.get("patch_validation_result", "n/a") or "n/a")
+    segment_summary = _compact_segment_summary(audit_summary)
+    verification_status = str(
+        verification_report.get("summary", verification_report.get("overall", _verification_status(audit_summary)))
+        or _verification_status(audit_summary)
+    ).strip()
     sections = [
         "### 🛠️ Patch operation",
         f"Summary: {summary_text}",
         "",
         "### 🧾 Patch result",
-        f"- Patch generation result: `{patch_generation_result}`",
+        f"- Result: `{patch_generation_result}`",
         (
             "- Outcome: safe no_patch (no grounded localized target)."
             if no_patch_result
             else "- Outcome: patch candidate generated."
         ),
-        "",
+        f"- Targeting reason: {patch_targeting_reason}",
+        f"- Localized evidence: `{localized_patch_evidence}`",
+        f"- Validation result: `{patch_validation_result}`",
+        f"- Segment summary: `{segment_summary}`",
+        f"- Verification: `{verification_status}`",
+    ]
+    if _has_meaningful_budget(audit_summary):
+        sections.append(
+            "- Evidence budget: "
+            f"`{str(audit_summary.get('evidence_budget_mode', 'not_applied') or 'not_applied')}` "
+            f"(used={_int(audit_summary.get('evidence_budget_used', 0))})"
+        )
+    sections.append("")
+
+    detail_lines = [
         "### 🎯 Patch targeting",
         f"- Patch target files total: {patch_target_files_total}",
         f"- Patch target files selected: {patch_target_files}",
@@ -1757,11 +1886,10 @@ def render_patch_markdown(
         f"- Patch targeting reason: {patch_targeting_reason}",
         f"- Localized patch evidence: {localized_patch_evidence}",
         f"- Patch grounding mode: {patch_grounding_mode}",
-        *_pr_segments_lines(audit_summary),
         "",
         "### ✅ Patch validation",
         f"- Patch generation result: `{patch_generation_result}`",
-        f"- Patch validation result: `{str(audit_summary.get('patch_validation_result', 'n/a') or 'n/a')}`",
+        f"- Patch validation result: `{patch_validation_result}`",
         f"- Patch validation reason: {patch_validation_reason}",
         "",
         "### 📦 Patch artifact",
@@ -1781,11 +1909,8 @@ def render_patch_markdown(
         "",
         *_embeddings_lines(audit_summary),
         "",
-        "### 🧾 Audit anchors",
-        *_version_backend_lines(audit_summary),
-        "",
         *_render_diagnostic_table(audit_summary),
-        "",
-        _audit_note(),
     ]
+    sections.extend(_render_runtime_details_block(title="Details and diagnostics", lines=detail_lines))
+    sections.extend(["", "### 🧾 Audit anchors", *_version_backend_lines(audit_summary), "", _audit_note()])
     return "\n".join(sections)
