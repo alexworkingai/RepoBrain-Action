@@ -423,3 +423,101 @@ def test_evidence_budget_fields_render_in_fix_diagnostics() -> None:
     assert "| Evidence budget limit | `12` |" in md
     assert "| Evidence budget mode | `fix_localized_strict_incremental` |" in md
     assert "| Evidence budget overflow | `4` |" in md
+
+
+def test_pr_segmentation_fields_render_in_ask_diagnostics() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "DEEP",
+            "pass_count": 2,
+            "pr_segmentation_used": True,
+            "pr_segment_count": 3,
+            "pr_primary_segments": "core_code:repobrain/github_flow",
+            "pr_support_segments": "tests:tests, docs:docs",
+            "pr_cross_segment": True,
+            "pr_segment_summary": "primary=core_code:repobrain/github_flow; support=tests:tests, docs:docs; cross_segment=yes",
+            "pr_segment_file_counts": "core_code=4; docs=1; tests=2",
+            "pr_segment_candidate_counts": "core_code=3; tests=1",
+            "pr_segmentation_fallback_reason": "none",
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "| PR segmentation used | `yes` |" in md
+    assert "| PR segment count | `3` |" in md
+    assert "| PR primary segments | `core_code:repobrain/github_flow` |" in md
+    assert "| PR cross-segment | `yes` |" in md
+    assert "| PR segment file counts | `core_code=4; docs=1; tests=2` |" in md
+
+
+def test_pr_segmentation_fields_render_in_review_diagnostics() -> None:
+    review = {
+        "summary_text": "Review complete.",
+        "risk_level": "low",
+        "files_block": [],
+        "confirmed_findings": [],
+        "possible_signals": [],
+        "informational_notes": [],
+        "recommendations": [],
+    }
+    md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "pr_segmentation_used": True,
+            "pr_segment_count": 2,
+            "pr_primary_segments": "core_code:repobrain/github_flow",
+            "pr_support_segments": "workflow_ci:.github/workflows",
+            "pr_cross_segment": True,
+            "pr_segment_summary": "primary=core_code:repobrain/github_flow; support=workflow_ci:.github/workflows; cross_segment=yes",
+            "pr_segment_file_counts": "core_code=2; workflow_ci=1",
+            "pr_segment_candidate_counts": "core_code=2; workflow_ci=1",
+            "pr_segmentation_fallback_reason": "none",
+        },
+    )
+
+    assert "| PR segmentation used | `yes` |" in md
+    assert "| PR segment count | `2` |" in md
+    assert "| PR support segments | `workflow_ci:.github/workflows` |" in md
+
+
+def test_pr_segmentation_fields_render_in_fix_diagnostics() -> None:
+    md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 2,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+            "pr_segmentation_used": True,
+            "pr_segment_count": 2,
+            "pr_primary_segments": "core_code:repobrain/github_flow",
+            "pr_support_segments": "tests:tests",
+            "pr_cross_segment": False,
+            "pr_segment_summary": "primary=core_code:repobrain/github_flow; support=tests:tests; cross_segment=no",
+            "pr_segment_file_counts": "core_code=2; tests=1",
+            "pr_segment_candidate_counts": "core_code=1",
+            "pr_segmentation_fallback_reason": "none",
+        },
+    )
+
+    assert "| PR segmentation used | `yes` |" in md
+    assert "| PR segment summary | `primary=core_code:repobrain/github_flow; support=tests:tests; cross_segment=no` |" in md
