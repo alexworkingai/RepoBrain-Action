@@ -1575,13 +1575,15 @@ def _render_async_batch_lines(audit_summary: dict[str, Any], *, command: str) ->
     tasks_total = _int(audit_summary.get("async_batch_tasks_total", 0))
     mode = str(audit_summary.get("async_batch_mode", "sequential") or "sequential")
     has_relevant_batch_signal = (
-        review_batch_mode
-        or review_batch_count > 0
-        or llm_batch_used
+        llm_batch_used
         or planner_used
         or async_used
         or tasks_total > 0
         or planner_count > 0
+        or mode != "not_applicable"
+        or planner_mode != "not_applied"
+        or review_batch_mode
+        or review_batch_count > 0
     )
     if not has_relevant_batch_signal:
         return []

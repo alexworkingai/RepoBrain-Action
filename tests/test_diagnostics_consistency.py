@@ -658,6 +658,53 @@ def test_review_fix_async_subsection_stays_visible_with_review_batch_only_signal
         assert "- Batch planner used: `yes`" not in md
 
 
+def test_review_fix_async_subsection_stays_visible_with_low_default_batch_values() -> None:
+    review_md = render_review_markdown(
+        review={
+            "summary_text": "Review complete.",
+            "risk_level": "low",
+            "files_block": [],
+            "confirmed_findings": [],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": [],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "DEEP",
+        },
+    )
+
+    fix_md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 1,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+        },
+    )
+
+    for md in (review_md, fix_md):
+        assert "### Async batch orchestration" in md
+        assert "- Used: `no`" in md
+        assert "- Mode: `sequential`" in md
+        assert "- Tasks: `0/0`" in md
+        assert "- Async batch used: `no`" not in md
+        assert "- Batch planner used: `no`" not in md
+
+
 def test_fix_details_include_async_batch_subsection_for_sequential_fallback() -> None:
     md = render_patch_markdown(
         review={"summary_text": "Patch flow"},
