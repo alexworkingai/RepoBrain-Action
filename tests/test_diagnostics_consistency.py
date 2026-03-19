@@ -608,6 +608,56 @@ def test_review_details_include_async_batch_subsection() -> None:
     assert "- Tasks: `4/4`" in md
 
 
+def test_review_fix_async_subsection_stays_visible_with_review_batch_only_signals() -> None:
+    review_md = render_review_markdown(
+        review={
+            "summary_text": "Review complete.",
+            "risk_level": "low",
+            "files_block": [],
+            "confirmed_findings": [],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": [],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "DEEP",
+            "review_batch_mode": True,
+            "review_batch_count": 2,
+        },
+    )
+
+    fix_md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 1,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+            "review_batch_mode": True,
+            "review_batch_count": 2,
+        },
+    )
+
+    for md in (review_md, fix_md):
+        assert "### Async batch orchestration" in md
+        assert md.count("- Review batch mode: `yes`") == 1
+        assert md.count("- Review batch count: `2`") == 1
+        assert "- Async batch used: `yes`" not in md
+        assert "- Batch planner used: `yes`" not in md
+
+
 def test_fix_details_include_async_batch_subsection_for_sequential_fallback() -> None:
     md = render_patch_markdown(
         review={"summary_text": "Patch flow"},
@@ -713,10 +763,16 @@ def test_review_fix_generic_diagnostics_do_not_repeat_meaningful_async_rows() ->
             "async_batch_error_count": 0,
         },
     )
-    for md in (review_md, fix_md):
-        assert "### Async batch orchestration" in md
-        assert "- Async batch used: `yes`" not in md
-        assert "- Async batch mode: `async`" not in md
-        assert "- Batch planner used: `yes`" not in md
-        assert "- Review batch mode: `yes`" not in md
-        assert "- Review batch count:" not in md
+    assert "### Async batch orchestration" in review_md
+    assert "- Async batch used: `yes`" not in review_md
+    assert "- Async batch mode: `async`" not in review_md
+    assert "- Batch planner used: `yes`" not in review_md
+    assert "- Review batch mode: `yes`" not in review_md
+    assert "- Review batch count:" not in review_md
+
+    assert "### Async batch orchestration" in fix_md
+    assert "- Async batch used: `yes`" not in fix_md
+    assert "- Async batch mode: `async`" not in fix_md
+    assert "- Batch planner used: `yes`" not in fix_md
+    assert fix_md.count("- Review batch mode: `yes`") == 1
+    assert fix_md.count("- Review batch count: `2`") == 1
