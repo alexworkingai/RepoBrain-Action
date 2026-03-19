@@ -1570,23 +1570,9 @@ def _render_async_batch_lines(audit_summary: dict[str, Any], *, command: str) ->
     planner_primary = str(audit_summary.get("batch_primary_segments", "none") or "none")
     planner_support = str(audit_summary.get("batch_support_segments", "none") or "none")
     planner_fallback = str(audit_summary.get("batch_fallback_reason", "not_applicable") or "not_applicable")
-    llm_batch_used = bool(audit_summary.get("llm_batch_used", False))
     async_used = bool(audit_summary.get("async_batch_used", False))
     tasks_total = _int(audit_summary.get("async_batch_tasks_total", 0))
     mode = str(audit_summary.get("async_batch_mode", "sequential") or "sequential")
-    has_relevant_batch_signal = (
-        llm_batch_used
-        or planner_used
-        or async_used
-        or tasks_total > 0
-        or planner_count > 0
-        or mode != "not_applicable"
-        or planner_mode != "not_applied"
-        or review_batch_mode
-        or review_batch_count > 0
-    )
-    if not has_relevant_batch_signal:
-        return []
     tasks_completed = _int(audit_summary.get("async_batch_tasks_completed", 0))
     lines = ["### Async batch orchestration"]
     if review_batch_mode or review_batch_count > 0:
@@ -1612,10 +1598,8 @@ def _render_async_batch_lines(audit_summary: dict[str, Any], *, command: str) ->
         ]
     )
     async_fallback = str(audit_summary.get("async_batch_fallback_reason", "not_applicable") or "not_applicable")
-    if async_fallback not in {"none", "not_applicable"}:
-        lines.append(f"- Fallback reason: `{async_fallback}`")
-    if planner_fallback not in {"none", "not_applicable"}:
-        lines.append(f"- Planner fallback reason: `{planner_fallback}`")
+    lines.append(f"- Fallback reason: `{async_fallback}`")
+    lines.append(f"- Planner fallback reason: `{planner_fallback}`")
     lines.append("")
     return lines
 
