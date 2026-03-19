@@ -580,6 +580,8 @@ def test_review_details_include_async_batch_subsection() -> None:
             "command": "review",
             "route_final": "DEEP",
             "llm_batch_used": True,
+            "review_batch_mode": True,
+            "review_batch_count": 4,
             "batch_planner_used": True,
             "batch_plan_mode": "segment_primary_first",
             "batch_count_planned": 4,
@@ -697,6 +699,8 @@ def test_review_fix_generic_diagnostics_do_not_repeat_meaningful_async_rows() ->
             "patch_targeting_reason": "no_localized_evidence",
             "patch_grounding_mode": "pr_metadata",
             "llm_batch_used": True,
+            "review_batch_mode": True,
+            "review_batch_count": 2,
             "batch_planner_used": True,
             "batch_plan_mode": "segment_primary_first",
             "batch_count_planned": 2,
@@ -714,3 +718,5 @@ def test_review_fix_generic_diagnostics_do_not_repeat_meaningful_async_rows() ->
         assert "- Async batch used: `yes`" not in md
         assert "- Async batch mode: `async`" not in md
         assert "- Batch planner used: `yes`" not in md
+        assert "- Review batch mode: `yes`" not in md
+        assert "- Review batch count:" not in md
