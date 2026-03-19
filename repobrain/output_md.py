@@ -1562,6 +1562,8 @@ def _render_async_batch_lines(audit_summary: dict[str, Any], *, command: str) ->
     command_norm = str(command or "").strip().lower()
     if command_norm not in {"review", "fix"}:
         return []
+    review_batch_mode = bool(audit_summary.get("review_batch_mode", False))
+    review_batch_count = _int(audit_summary.get("review_batch_count", 0))
     planner_used = bool(audit_summary.get("batch_planner_used", False))
     planner_mode = str(audit_summary.get("batch_plan_mode", "not_applied") or "not_applied")
     planner_count = _int(audit_summary.get("batch_count_planned", 0))
@@ -1573,7 +1575,9 @@ def _render_async_batch_lines(audit_summary: dict[str, Any], *, command: str) ->
     tasks_total = _int(audit_summary.get("async_batch_tasks_total", 0))
     mode = str(audit_summary.get("async_batch_mode", "sequential") or "sequential")
     has_relevant_batch_signal = (
-        llm_batch_used
+        review_batch_mode
+        or review_batch_count > 0
+        or llm_batch_used
         or planner_used
         or async_used
         or tasks_total > 0
@@ -1582,20 +1586,29 @@ def _render_async_batch_lines(audit_summary: dict[str, Any], *, command: str) ->
     if not has_relevant_batch_signal:
         return []
     tasks_completed = _int(audit_summary.get("async_batch_tasks_completed", 0))
-    lines = [
-        "### Async batch orchestration",
-        f"- Planner used: `{'yes' if planner_used else 'no'}`",
-        f"- Plan mode: `{planner_mode}`",
-        f"- Planned batches: `{planner_count}`",
-        f"- Primary segments: `{planner_primary}`",
-        f"- Support segments: `{planner_support}`",
-        f"- Used: `{'yes' if async_used else 'no'}`",
-        f"- Mode: `{mode}`",
-        f"- Concurrency: `{_int(audit_summary.get('async_batch_concurrency', 1))}`",
-        f"- Tasks: `{tasks_completed}/{tasks_total}`",
-        f"- Order preserved: `{'yes' if bool(audit_summary.get('async_batch_order_preserved', True)) else 'no'}`",
-        f"- Error count: `{_int(audit_summary.get('async_batch_error_count', 0))}`",
-    ]
+    lines = ["### Async batch orchestration"]
+    if review_batch_mode or review_batch_count > 0:
+        lines.extend(
+            [
+                f"- Review batch mode: `{'yes' if review_batch_mode else 'no'}`",
+                f"- Review batch count: `{review_batch_count}`",
+            ]
+        )
+    lines.extend(
+        [
+            f"- Planner used: `{'yes' if planner_used else 'no'}`",
+            f"- Plan mode: `{planner_mode}`",
+            f"- Planned batches: `{planner_count}`",
+            f"- Primary segments: `{planner_primary}`",
+            f"- Support segments: `{planner_support}`",
+            f"- Used: `{'yes' if async_used else 'no'}`",
+            f"- Mode: `{mode}`",
+            f"- Concurrency: `{_int(audit_summary.get('async_batch_concurrency', 1))}`",
+            f"- Tasks: `{tasks_completed}/{tasks_total}`",
+            f"- Order preserved: `{'yes' if bool(audit_summary.get('async_batch_order_preserved', True)) else 'no'}`",
+            f"- Error count: `{_int(audit_summary.get('async_batch_error_count', 0))}`",
+        ]
+    )
     async_fallback = str(audit_summary.get("async_batch_fallback_reason", "not_applicable") or "not_applicable")
     if async_fallback not in {"none", "not_applicable"}:
         lines.append(f"- Fallback reason: `{async_fallback}`")
