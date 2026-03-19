@@ -741,20 +741,20 @@ def _is_low_value_diagnostic(*, parameter: str, value_text: str, state: str) -> 
 def _render_compact_diagnostic_groups(
     audit_summary: dict[str, Any],
     *,
-    suppress_meaningful_parameters: set[str] | None = None,
+    suppress_parameters: set[str] | None = None,
 ) -> tuple[list[str], list[tuple[str, str, str, str, str]]]:
     lines: list[str] = ["### 🧾 Runtime diagnostics"]
     secondary_rows: list[tuple[str, str, str, str, str]] = []
-    suppressed = set(suppress_meaningful_parameters or set())
+    suppressed = set(suppress_parameters or set())
     for group_name, rows in _diagnostic_groups(audit_summary):
         primary_rows: list[tuple[str, str]] = []
         for parameter, value, meaning in rows:
             state = _diag_state(value, parameter)
             value_text = _diag_value(value)
             parameter_norm = str(parameter or "").strip().lower()
-            low_value = _is_low_value_diagnostic(parameter=parameter, value_text=value_text, state=state)
-            if parameter_norm in suppressed and not low_value:
+            if parameter_norm in suppressed:
                 continue
+            low_value = _is_low_value_diagnostic(parameter=parameter, value_text=value_text, state=state)
             if low_value:
                 secondary_rows.append((group_name, parameter, value_text, state, meaning))
                 continue
@@ -1462,12 +1462,12 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
 def _render_diagnostic_table(
     audit_summary: dict[str, Any],
     *,
-    suppress_meaningful_async: bool = False,
+    suppress_async_planner_rows: bool = False,
 ) -> list[str]:
-    suppressed_parameters = _ASYNC_PLANNER_DIAGNOSTIC_PARAMETERS if suppress_meaningful_async else set()
+    suppressed_parameters = _ASYNC_PLANNER_DIAGNOSTIC_PARAMETERS if suppress_async_planner_rows else set()
     lines, secondary_rows = _render_compact_diagnostic_groups(
         audit_summary,
-        suppress_meaningful_parameters=suppressed_parameters,
+        suppress_parameters=suppressed_parameters,
     )
     if secondary_rows:
         secondary_rows.sort(key=lambda item: (item[0].lower(), item[1].lower()))
@@ -1576,14 +1576,12 @@ def _render_async_batch_lines(audit_summary: dict[str, Any], *, command: str) ->
         or async_used
         or tasks_total > 0
         or planner_count > 0
-        or mode != "not_applicable"
-        or planner_mode != "not_applied"
     )
     if not has_relevant_batch_signal:
         return []
     tasks_completed = _int(audit_summary.get("async_batch_tasks_completed", 0))
     lines = [
-        "### Async batch",
+        "### Async batch orchestration",
         f"- Planner used: `{'yes' if planner_used else 'no'}`",
         f"- Plan mode: `{planner_mode}`",
         f"- Planned batches: `{planner_count}`",
@@ -1978,7 +1976,7 @@ def render_review_markdown(
         "### 🧭 Route details",
         *_mode_lines(audit_summary),
         "",
-        *_render_diagnostic_table(audit_summary, suppress_meaningful_async=True),
+        *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
         "",
         "### 🧾 Audit anchors",
         *_version_backend_lines(audit_summary),
@@ -2076,7 +2074,7 @@ def render_patch_markdown(
         "",
         *_embeddings_lines(audit_summary),
         "",
-        *_render_diagnostic_table(audit_summary, suppress_meaningful_async=True),
+        *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
         "",
         "### 🧾 Audit anchors",
         *_version_backend_lines(audit_summary),

@@ -553,7 +553,7 @@ def test_async_batch_fields_render_in_dedicated_subsection_without_diagnostics_d
         },
     )
 
-    assert "### Async batch" in md
+    assert "### Async batch orchestration" in md
     assert "- Used: `yes`" in md
     assert "- Mode: `async`" in md
     assert "- Concurrency: `2`" in md
@@ -597,7 +597,7 @@ def test_review_details_include_async_batch_subsection() -> None:
         },
     )
 
-    assert "### Async batch" in md
+    assert "### Async batch orchestration" in md
     assert "- Planner used: `yes`" in md
     assert "- Plan mode: `segment_primary_first`" in md
     assert "- Planned batches: `4`" in md
@@ -642,10 +642,75 @@ def test_fix_details_include_async_batch_subsection_for_sequential_fallback() ->
         },
     )
 
-    assert "### Async batch" in md
+    assert "### Async batch orchestration" in md
     assert "- Planner used: `no`" in md
     assert "- Plan mode: `fallback_original_order`" in md
     assert "- Planner fallback reason: `missing_segmentation_map`" in md
     assert "- Used: `no`" in md
     assert "- Mode: `sequential_disabled`" in md
     assert "- Tasks: `3/3`" in md
+
+
+def test_review_fix_generic_diagnostics_do_not_repeat_meaningful_async_rows() -> None:
+    review_md = render_review_markdown(
+        review={
+            "summary_text": "Review complete.",
+            "risk_level": "low",
+            "files_block": [],
+            "confirmed_findings": [],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": [],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "DEEP",
+            "llm_batch_used": True,
+            "batch_planner_used": True,
+            "batch_plan_mode": "segment_primary_first",
+            "batch_count_planned": 4,
+            "async_batch_used": True,
+            "async_batch_mode": "async",
+            "async_batch_concurrency": 2,
+            "async_batch_tasks_total": 4,
+            "async_batch_tasks_completed": 4,
+            "async_batch_order_preserved": True,
+            "async_batch_error_count": 0,
+        },
+    )
+    fix_md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 2,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+            "llm_batch_used": True,
+            "batch_planner_used": True,
+            "batch_plan_mode": "segment_primary_first",
+            "batch_count_planned": 2,
+            "async_batch_used": True,
+            "async_batch_mode": "async",
+            "async_batch_concurrency": 2,
+            "async_batch_tasks_total": 2,
+            "async_batch_tasks_completed": 2,
+            "async_batch_order_preserved": True,
+            "async_batch_error_count": 0,
+        },
+    )
+    for md in (review_md, fix_md):
+        assert "### Async batch orchestration" in md
+        assert "- Async batch used: `yes`" not in md
+        assert "- Async batch mode: `async`" not in md
+        assert "- Batch planner used: `yes`" not in md
