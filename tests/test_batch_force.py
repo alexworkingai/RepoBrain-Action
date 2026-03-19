@@ -97,4 +97,6 @@ def test_batch_force_enables_batch_and_min_batches(monkeypatch, tmp_path: Path) 
     assert result["batch_used"] is True
     assert int(result["planned_batches"]) >= 2
     assert int(result["executed_batches"]) >= 2
+    assert "batch_planner_used" in result
+    assert "batch_plan_mode" in result
     assert int(llm_meta["llm_calls_this_run"]) >= 2

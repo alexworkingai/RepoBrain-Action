@@ -556,6 +556,12 @@ def _diag_state(value: Any, parameter: str) -> str:
         "async batch fallback reason",
         "async batch order preserved",
         "async batch error count",
+        "batch planner used",
+        "batch plan mode",
+        "batch count planned",
+        "batch primary segments",
+        "batch support segments",
+        "batch fallback reason",
         "evidence budget used",
         "evidence budget limit",
         "evidence budget mode",
@@ -698,6 +704,23 @@ _LOW_VALUE_DIAGNOSTIC_TEXT = {
     "no_cutoff",
 }
 
+_ASYNC_PLANNER_DIAGNOSTIC_PARAMETERS = {
+    "async batch used",
+    "async batch mode",
+    "async batch concurrency",
+    "async batch tasks total",
+    "async batch tasks completed",
+    "async batch fallback reason",
+    "async batch order preserved",
+    "async batch error count",
+    "batch planner used",
+    "batch plan mode",
+    "batch count planned",
+    "batch primary segments",
+    "batch support segments",
+    "batch fallback reason",
+}
+
 
 def _is_low_value_diagnostic(*, parameter: str, value_text: str, state: str) -> bool:
     parameter_norm = str(parameter or "").strip().lower()
@@ -715,15 +738,24 @@ def _is_low_value_diagnostic(*, parameter: str, value_text: str, state: str) -> 
     return False
 
 
-def _render_compact_diagnostic_groups(audit_summary: dict[str, Any]) -> tuple[list[str], list[tuple[str, str, str, str, str]]]:
+def _render_compact_diagnostic_groups(
+    audit_summary: dict[str, Any],
+    *,
+    suppress_meaningful_parameters: set[str] | None = None,
+) -> tuple[list[str], list[tuple[str, str, str, str, str]]]:
     lines: list[str] = ["### 🧾 Runtime diagnostics"]
     secondary_rows: list[tuple[str, str, str, str, str]] = []
+    suppressed = set(suppress_meaningful_parameters or set())
     for group_name, rows in _diagnostic_groups(audit_summary):
         primary_rows: list[tuple[str, str]] = []
         for parameter, value, meaning in rows:
             state = _diag_state(value, parameter)
             value_text = _diag_value(value)
-            if _is_low_value_diagnostic(parameter=parameter, value_text=value_text, state=state):
+            parameter_norm = str(parameter or "").strip().lower()
+            low_value = _is_low_value_diagnostic(parameter=parameter, value_text=value_text, state=state)
+            if parameter_norm in suppressed and not low_value:
+                continue
+            if low_value:
                 secondary_rows.append((group_name, parameter, value_text, state, meaning))
                 continue
             primary_rows.append((parameter, value_text))
@@ -951,6 +983,36 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             "Incremental fallback reason",
             audit_summary.get("incremental_fallback_reason", "none"),
             "Reason incremental scope fell back to full retrieval when applicable.",
+        ),
+        (
+            "Batch planner used",
+            bool(audit_summary.get("batch_planner_used", False)),
+            "Whether segment-aware batch planner was applied before batch execution.",
+        ),
+        (
+            "Batch plan mode",
+            audit_summary.get("batch_plan_mode", "not_applied"),
+            "Planner mode for deterministic batch ordering and grouping.",
+        ),
+        (
+            "Batch count planned",
+            _int(audit_summary.get("batch_count_planned", 0)),
+            "Total batches emitted by planner before execution caps.",
+        ),
+        (
+            "Batch primary segments",
+            audit_summary.get("batch_primary_segments", "none"),
+            "Primary segments prioritized by planner for early execution.",
+        ),
+        (
+            "Batch support segments",
+            audit_summary.get("batch_support_segments", "none"),
+            "Support segments scheduled after primary segments.",
+        ),
+        (
+            "Batch fallback reason",
+            audit_summary.get("batch_fallback_reason", "not_applicable"),
+            "Reason planner fell back to original ordering when segmentation was unavailable.",
         ),
         (
             "Async batch used",
@@ -1397,8 +1459,16 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
     ]
 
 
-def _render_diagnostic_table(audit_summary: dict[str, Any]) -> list[str]:
-    lines, secondary_rows = _render_compact_diagnostic_groups(audit_summary)
+def _render_diagnostic_table(
+    audit_summary: dict[str, Any],
+    *,
+    suppress_meaningful_async: bool = False,
+) -> list[str]:
+    suppressed_parameters = _ASYNC_PLANNER_DIAGNOSTIC_PARAMETERS if suppress_meaningful_async else set()
+    lines, secondary_rows = _render_compact_diagnostic_groups(
+        audit_summary,
+        suppress_meaningful_parameters=suppressed_parameters,
+    )
     if secondary_rows:
         secondary_rows.sort(key=lambda item: (item[0].lower(), item[1].lower()))
         lines.extend(["", "### Secondary diagnostics", ""])
@@ -1490,25 +1560,49 @@ def _render_async_batch_lines(audit_summary: dict[str, Any], *, command: str) ->
     command_norm = str(command or "").strip().lower()
     if command_norm not in {"review", "fix"}:
         return []
+    planner_used = bool(audit_summary.get("batch_planner_used", False))
+    planner_mode = str(audit_summary.get("batch_plan_mode", "not_applied") or "not_applied")
+    planner_count = _int(audit_summary.get("batch_count_planned", 0))
+    planner_primary = str(audit_summary.get("batch_primary_segments", "none") or "none")
+    planner_support = str(audit_summary.get("batch_support_segments", "none") or "none")
+    planner_fallback = str(audit_summary.get("batch_fallback_reason", "not_applicable") or "not_applicable")
     llm_batch_used = bool(audit_summary.get("llm_batch_used", False))
     async_used = bool(audit_summary.get("async_batch_used", False))
     tasks_total = _int(audit_summary.get("async_batch_tasks_total", 0))
     mode = str(audit_summary.get("async_batch_mode", "sequential") or "sequential")
-    has_relevant_batch_signal = llm_batch_used or async_used or tasks_total > 0 or mode != "not_applicable"
+    has_relevant_batch_signal = (
+        llm_batch_used
+        or planner_used
+        or async_used
+        or tasks_total > 0
+        or planner_count > 0
+        or mode != "not_applicable"
+        or planner_mode != "not_applied"
+    )
     if not has_relevant_batch_signal:
         return []
     tasks_completed = _int(audit_summary.get("async_batch_tasks_completed", 0))
-    return [
-        "### ⚡ Async batch orchestration",
+    lines = [
+        "### Async batch",
+        f"- Planner used: `{'yes' if planner_used else 'no'}`",
+        f"- Plan mode: `{planner_mode}`",
+        f"- Planned batches: `{planner_count}`",
+        f"- Primary segments: `{planner_primary}`",
+        f"- Support segments: `{planner_support}`",
         f"- Used: `{'yes' if async_used else 'no'}`",
         f"- Mode: `{mode}`",
         f"- Concurrency: `{_int(audit_summary.get('async_batch_concurrency', 1))}`",
         f"- Tasks: `{tasks_completed}/{tasks_total}`",
-        f"- Fallback reason: `{str(audit_summary.get('async_batch_fallback_reason', 'not_applicable') or 'not_applicable')}`",
         f"- Order preserved: `{'yes' if bool(audit_summary.get('async_batch_order_preserved', True)) else 'no'}`",
         f"- Error count: `{_int(audit_summary.get('async_batch_error_count', 0))}`",
-        "",
     ]
+    async_fallback = str(audit_summary.get("async_batch_fallback_reason", "not_applicable") or "not_applicable")
+    if async_fallback not in {"none", "not_applicable"}:
+        lines.append(f"- Fallback reason: `{async_fallback}`")
+    if planner_fallback not in {"none", "not_applicable"}:
+        lines.append(f"- Planner fallback reason: `{planner_fallback}`")
+    lines.append("")
+    return lines
 
 
 def _render_runtime_details_block(*, title: str, lines: list[str]) -> list[str]:
@@ -1884,7 +1978,7 @@ def render_review_markdown(
         "### 🧭 Route details",
         *_mode_lines(audit_summary),
         "",
-        *_render_diagnostic_table(audit_summary),
+        *_render_diagnostic_table(audit_summary, suppress_meaningful_async=True),
         "",
         "### 🧾 Audit anchors",
         *_version_backend_lines(audit_summary),
@@ -1982,7 +2076,7 @@ def render_patch_markdown(
         "",
         *_embeddings_lines(audit_summary),
         "",
-        *_render_diagnostic_table(audit_summary),
+        *_render_diagnostic_table(audit_summary, suppress_meaningful_async=True),
         "",
         "### 🧾 Audit anchors",
         *_version_backend_lines(audit_summary),

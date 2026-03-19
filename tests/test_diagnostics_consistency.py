@@ -526,7 +526,7 @@ def test_pr_segmentation_fields_render_in_fix_diagnostics() -> None:
     assert "- PR segment summary: `primary=core_code:repobrain/github_flow; support=tests:tests; cross_segment=no`" in md
 
 
-def test_async_batch_fields_render_in_diagnostics_when_meaningful() -> None:
+def test_async_batch_fields_render_in_dedicated_subsection_without_diagnostics_duplication() -> None:
     md = render_review_markdown(
         review={
             "summary_text": "Review complete.",
@@ -553,12 +553,14 @@ def test_async_batch_fields_render_in_diagnostics_when_meaningful() -> None:
         },
     )
 
-    assert "- Async batch used: `yes`" in md
-    assert "- Async batch mode: `async`" in md
-    assert "- Async batch concurrency: `2`" in md
-    assert "- Async batch tasks total: `3`" in md
-    assert "- Async batch tasks completed: `3`" in md
-    assert "- Async batch order preserved: `yes`" in md
+    assert "### Async batch" in md
+    assert "- Used: `yes`" in md
+    assert "- Mode: `async`" in md
+    assert "- Concurrency: `2`" in md
+    assert "- Tasks: `3/3`" in md
+    assert "- Order preserved: `yes`" in md
+    assert "- Async batch used: `yes`" not in md
+    assert "- Async batch mode: `async`" not in md
 
 
 def test_review_details_include_async_batch_subsection() -> None:
@@ -578,6 +580,12 @@ def test_review_details_include_async_batch_subsection() -> None:
             "command": "review",
             "route_final": "DEEP",
             "llm_batch_used": True,
+            "batch_planner_used": True,
+            "batch_plan_mode": "segment_primary_first",
+            "batch_count_planned": 4,
+            "batch_primary_segments": "core_code",
+            "batch_support_segments": "tests,docs",
+            "batch_fallback_reason": "none",
             "async_batch_used": True,
             "async_batch_mode": "async",
             "async_batch_concurrency": 2,
@@ -589,7 +597,10 @@ def test_review_details_include_async_batch_subsection() -> None:
         },
     )
 
-    assert "### ⚡ Async batch orchestration" in md
+    assert "### Async batch" in md
+    assert "- Planner used: `yes`" in md
+    assert "- Plan mode: `segment_primary_first`" in md
+    assert "- Planned batches: `4`" in md
     assert "- Used: `yes`" in md
     assert "- Mode: `async`" in md
     assert "- Tasks: `4/4`" in md
@@ -614,6 +625,12 @@ def test_fix_details_include_async_batch_subsection_for_sequential_fallback() ->
             "patch_targeting_reason": "no_localized_evidence",
             "patch_grounding_mode": "pr_metadata",
             "llm_batch_used": True,
+            "batch_planner_used": False,
+            "batch_plan_mode": "fallback_original_order",
+            "batch_count_planned": 3,
+            "batch_primary_segments": "none",
+            "batch_support_segments": "none",
+            "batch_fallback_reason": "missing_segmentation_map",
             "async_batch_used": False,
             "async_batch_mode": "sequential_disabled",
             "async_batch_concurrency": 1,
@@ -625,7 +642,10 @@ def test_fix_details_include_async_batch_subsection_for_sequential_fallback() ->
         },
     )
 
-    assert "### ⚡ Async batch orchestration" in md
+    assert "### Async batch" in md
+    assert "- Planner used: `no`" in md
+    assert "- Plan mode: `fallback_original_order`" in md
+    assert "- Planner fallback reason: `missing_segmentation_map`" in md
     assert "- Used: `no`" in md
     assert "- Mode: `sequential_disabled`" in md
     assert "- Tasks: `3/3`" in md

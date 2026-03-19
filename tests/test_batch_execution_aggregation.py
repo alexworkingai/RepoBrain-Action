@@ -117,3 +117,9 @@ def test_batch_execution_uses_reduce_and_aggregates(monkeypatch, tmp_path: Path)
     assert "async_batch_mode" in result
     assert "async_batch_tasks_total" in result
     assert result["async_batch_order_preserved"] is True
+    assert "batch_planner_used" in result
+    assert "batch_plan_mode" in result
+    assert "batch_count_planned" in result
+    assert "batch_primary_segments" in result
+    assert "batch_support_segments" in result
+    assert "batch_fallback_reason" in result
