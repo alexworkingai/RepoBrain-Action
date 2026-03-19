@@ -101,4 +101,6 @@ def test_batch_loop_is_capped_by_governor(monkeypatch, tmp_path: Path) -> None:
 
     assert result["planned_batches"] == 3
     assert result["executed_batches"] == 1
+    assert "batch_planner_used" in result
+    assert "batch_plan_mode" in result
     assert call_counter["n"] == 1

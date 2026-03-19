@@ -66,6 +66,7 @@ from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
 from repobrain.patch_targeting import select_patch_targets
 from repobrain.async_batch import run_bounded_batch_tasks
+from repobrain.review_batch_planner import plan_review_fix_batches
 from repobrain.security_policy import classify_security_scope
 from repobrain.tky_local import LocalTKYProvider
 from repobrain.tky_provider import CandidateChunk, TKYResult
@@ -2930,6 +2931,14 @@ def _run_batch_llm_review_fix(
         "async_batch_order_preserved": True,
         "async_batch_error_count": 0,
     }
+    planner_defaults = {
+        "batch_planner_used": False,
+        "batch_plan_mode": "not_applied",
+        "batch_count_planned": 0,
+        "batch_primary_segments": "none",
+        "batch_support_segments": "none",
+        "batch_fallback_reason": "not_applicable",
+    }
     execution_mode_norm = semantic.execution_mode
     llm_intent_norm = semantic.llm_intent
     llm_reason_short = semantic.reason_short
@@ -2948,6 +2957,7 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_decision_route"] = route_norm or "n/a"
         llm_meta["llm_request_mode"] = "patch" if _is_fix_intent(cmd, intent) else "normal"
         return {
+            **planner_defaults,
             **async_defaults,
             "batch_used": False,
             "summaries": [],
@@ -2978,6 +2988,7 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
         llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
         return {
+            **planner_defaults,
             **async_defaults,
             "batch_used": False,
             "summaries": [],
@@ -3019,6 +3030,17 @@ def _run_batch_llm_review_fix(
                 )
             )
         planned = split_planned
+    planner_plan = plan_review_fix_batches(
+        planned,
+        command=cmd,
+        pr_segmentation={
+            "file_segment_class_map": github_context.get("pr_segmentation_file_map", {}),
+        },
+        evidence_budget_state={"mode": github_context.get("evidence_budget_mode", "not_applied")},
+        runtime_limits={"max_calls": max_calls, "max_input_tokens": max_input_tokens},
+    )
+    planner_fields = planner_plan.as_audit_fields()
+    planned = list(planner_plan.ordered_batches)
     model_high = str(cfg.llm.model_high or "openai/gpt-4.1")
     model_low = str(cfg.llm.model_low or "openai/gpt-4.1-mini")
     overall_score = score_complexity(
@@ -3104,6 +3126,7 @@ def _run_batch_llm_review_fix(
             llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
             llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
             return {
+                **planner_fields,
                 **async_defaults,
                 "batch_used": False,
                 "summaries": [],
@@ -3186,6 +3209,7 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
         llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
         return {
+            **planner_fields,
             **async_defaults,
             "batch_used": False,
             "summaries": [],
@@ -3565,6 +3589,7 @@ def _run_batch_llm_review_fix(
     if llm_meta["llm_remaining_requests"] in {None, "", "n/a"}:
         _apply_remaining_fallback(llm_meta)
     return {
+        **planner_fields,
         **async_defaults,
         **async_meta,
         "batch_used": True,
@@ -6345,6 +6370,14 @@ def _build_review_markdown(
     audit_summary["llm_batch_calls"] = int(llm_meta.get("llm_calls_this_run", 0) or 0)
     audit_summary["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
     audit_summary["llm_batch_executed"] = int(batch_result.get("executed_batches", 0) or 0)
+    audit_summary["batch_planner_used"] = bool(batch_result.get("batch_planner_used", False))
+    audit_summary["batch_plan_mode"] = str(batch_result.get("batch_plan_mode", "not_applied") or "not_applied")
+    audit_summary["batch_count_planned"] = int(batch_result.get("batch_count_planned", 0) or 0)
+    audit_summary["batch_primary_segments"] = str(batch_result.get("batch_primary_segments", "none") or "none")
+    audit_summary["batch_support_segments"] = str(batch_result.get("batch_support_segments", "none") or "none")
+    audit_summary["batch_fallback_reason"] = str(
+        batch_result.get("batch_fallback_reason", "not_applicable") or "not_applicable"
+    )
     audit_summary["async_batch_used"] = bool(batch_result.get("async_batch_used", False))
     audit_summary["async_batch_mode"] = str(batch_result.get("async_batch_mode", "sequential") or "sequential")
     audit_summary["async_batch_concurrency"] = int(batch_result.get("async_batch_concurrency", 1) or 1)
@@ -6439,6 +6472,18 @@ def _build_review_markdown(
             audit["llm_batch_used"] = bool(batch_result.get("batch_used", False))
             audit["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
             audit["llm_batch_executed"] = int(batch_result.get("executed_batches", 0) or 0)
+            audit["batch_planner_used"] = bool(batch_result.get("batch_planner_used", False))
+            audit["batch_plan_mode"] = str(batch_result.get("batch_plan_mode", "not_applied") or "not_applied")
+            audit["batch_count_planned"] = int(batch_result.get("batch_count_planned", 0) or 0)
+            audit["batch_primary_segments"] = str(
+                batch_result.get("batch_primary_segments", "none") or "none"
+            )
+            audit["batch_support_segments"] = str(
+                batch_result.get("batch_support_segments", "none") or "none"
+            )
+            audit["batch_fallback_reason"] = str(
+                batch_result.get("batch_fallback_reason", "not_applicable") or "not_applicable"
+            )
             audit["async_batch_used"] = bool(batch_result.get("async_batch_used", False))
             audit["async_batch_mode"] = str(batch_result.get("async_batch_mode", "sequential") or "sequential")
             audit["async_batch_concurrency"] = int(batch_result.get("async_batch_concurrency", 1) or 1)
@@ -6855,6 +6900,14 @@ def _build_review_markdown(
         audit["llm_batch_used"] = bool(batch_result.get("batch_used", False))
         audit["llm_batch_planned"] = int(batch_result.get("planned_batches", 0) or 0)
         audit["llm_batch_executed"] = int(batch_result.get("executed_batches", 0) or 0)
+        audit["batch_planner_used"] = bool(batch_result.get("batch_planner_used", False))
+        audit["batch_plan_mode"] = str(batch_result.get("batch_plan_mode", "not_applied") or "not_applied")
+        audit["batch_count_planned"] = int(batch_result.get("batch_count_planned", 0) or 0)
+        audit["batch_primary_segments"] = str(batch_result.get("batch_primary_segments", "none") or "none")
+        audit["batch_support_segments"] = str(batch_result.get("batch_support_segments", "none") or "none")
+        audit["batch_fallback_reason"] = str(
+            batch_result.get("batch_fallback_reason", "not_applicable") or "not_applicable"
+        )
         audit["async_batch_used"] = bool(batch_result.get("async_batch_used", False))
         audit["async_batch_mode"] = str(batch_result.get("async_batch_mode", "sequential") or "sequential")
         audit["async_batch_concurrency"] = int(batch_result.get("async_batch_concurrency", 1) or 1)

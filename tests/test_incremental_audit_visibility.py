@@ -12,6 +12,12 @@ def test_audit_base_contains_incremental_observability_fields() -> None:
     audit = build_audit_base({"repo": "owner/repo", "sha": "abc", "run_id": "1"})
 
     assert "async_batch_used" in audit
+    assert "batch_planner_used" in audit
+    assert "batch_plan_mode" in audit
+    assert "batch_count_planned" in audit
+    assert "batch_primary_segments" in audit
+    assert "batch_support_segments" in audit
+    assert "batch_fallback_reason" in audit
     assert "async_batch_mode" in audit
     assert "async_batch_concurrency" in audit
     assert "async_batch_tasks_total" in audit
@@ -52,6 +58,12 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     audit.update(
         {
             "async_batch_used": True,
+            "batch_planner_used": True,
+            "batch_plan_mode": "segment_primary_first",
+            "batch_count_planned": 5,
+            "batch_primary_segments": "core_code",
+            "batch_support_segments": "tests,docs",
+            "batch_fallback_reason": "none",
             "async_batch_mode": "async",
             "async_batch_concurrency": 3,
             "async_batch_tasks_total": 5,
@@ -92,6 +104,12 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     finalized = finalize_audit(audit)
 
     assert finalized["async_batch_used"] is True
+    assert finalized["batch_planner_used"] is True
+    assert finalized["batch_plan_mode"] == "segment_primary_first"
+    assert finalized["batch_count_planned"] == 5
+    assert finalized["batch_primary_segments"] == "core_code"
+    assert finalized["batch_support_segments"] == "tests,docs"
+    assert finalized["batch_fallback_reason"] == "none"
     assert finalized["async_batch_mode"] == "async"
     assert finalized["async_batch_concurrency"] == 3
     assert finalized["async_batch_tasks_total"] == 5
@@ -154,6 +172,12 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "pr_segment_candidate_counts" in audit
     assert "pr_segmentation_fallback_reason" in audit
     assert "async_batch_used" in audit
+    assert "batch_planner_used" in audit
+    assert "batch_plan_mode" in audit
+    assert "batch_count_planned" in audit
+    assert "batch_primary_segments" in audit
+    assert "batch_support_segments" in audit
+    assert "batch_fallback_reason" in audit
     assert "async_batch_mode" in audit
     assert "async_batch_concurrency" in audit
     assert "async_batch_tasks_total" in audit
@@ -183,6 +207,12 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "pr_segment_candidate_counts" in payload
     assert "pr_segmentation_fallback_reason" in payload
     assert "async_batch_used" in payload
+    assert "batch_planner_used" in payload
+    assert "batch_plan_mode" in payload
+    assert "batch_count_planned" in payload
+    assert "batch_primary_segments" in payload
+    assert "batch_support_segments" in payload
+    assert "batch_fallback_reason" in payload
     assert "async_batch_mode" in payload
     assert "async_batch_concurrency" in payload
     assert "async_batch_tasks_total" in payload
@@ -229,6 +259,12 @@ def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
         assert "pr_segment_candidate_counts" in audit
         assert "pr_segmentation_fallback_reason" in audit
         assert "async_batch_used" in audit
+        assert "batch_planner_used" in audit
+        assert "batch_plan_mode" in audit
+        assert "batch_count_planned" in audit
+        assert "batch_primary_segments" in audit
+        assert "batch_support_segments" in audit
+        assert "batch_fallback_reason" in audit
         assert "async_batch_mode" in audit
         assert "async_batch_concurrency" in audit
         assert "async_batch_tasks_total" in audit

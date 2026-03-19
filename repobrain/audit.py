@@ -45,6 +45,12 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "pass_count": 0,
         "retrieved": 0,
         "selected": 0,
+        "batch_planner_used": False,
+        "batch_plan_mode": "not_applied",
+        "batch_count_planned": 0,
+        "batch_primary_segments": "none",
+        "batch_support_segments": "none",
+        "batch_fallback_reason": "not_applicable",
         "async_batch_used": False,
         "async_batch_mode": "sequential",
         "async_batch_concurrency": 1,
@@ -224,6 +230,21 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
         )
     except (TypeError, ValueError):
         normalized["evidence_budget_support_selected"] = 0
+    normalized["batch_planner_used"] = bool(normalized.get("batch_planner_used", False))
+    normalized["batch_plan_mode"] = str(normalized.get("batch_plan_mode", "not_applied") or "not_applied")
+    try:
+        normalized["batch_count_planned"] = int(normalized.get("batch_count_planned", 0) or 0)
+    except (TypeError, ValueError):
+        normalized["batch_count_planned"] = 0
+    normalized["batch_primary_segments"] = str(
+        normalized.get("batch_primary_segments", "none") or "none"
+    )
+    normalized["batch_support_segments"] = str(
+        normalized.get("batch_support_segments", "none") or "none"
+    )
+    normalized["batch_fallback_reason"] = str(
+        normalized.get("batch_fallback_reason", "not_applicable") or "not_applicable"
+    )
     normalized["async_batch_used"] = bool(normalized.get("async_batch_used", False))
     normalized["async_batch_mode"] = str(normalized.get("async_batch_mode", "sequential") or "sequential")
     try:
