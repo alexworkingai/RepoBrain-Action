@@ -1401,17 +1401,19 @@ def _render_diagnostic_table(audit_summary: dict[str, Any]) -> list[str]:
     lines, secondary_rows = _render_compact_diagnostic_groups(audit_summary)
     if secondary_rows:
         secondary_rows.sort(key=lambda item: (item[0].lower(), item[1].lower()))
-        lines.extend(["", "<details>", "<summary>Secondary diagnostics (defaults/noise)</summary>", ""])
+        lines.extend(["", "### Secondary diagnostics", ""])
         current_group = ""
         max_rows = 48
         for group_name, parameter, value_text, state, _meaning in secondary_rows[:max_rows]:
             if group_name != current_group:
                 current_group = group_name
+                if len(lines) > 0 and lines[-1] != "":
+                    lines.append("")
                 lines.append(f"**{group_name}**")
             lines.append(f"- {parameter}: `{value_text}` ({state})")
         if len(secondary_rows) > max_rows:
             lines.append(f"- +{len(secondary_rows) - max_rows} additional rows omitted for compactness.")
-        lines.extend(["", "</details>"])
+        lines.append("")
     return lines
 
 
@@ -1482,6 +1484,31 @@ def _render_secondary_diagnostics_details(audit_summary: dict[str, Any]) -> list
         lines.append(f"- +{len(secondary_rows) - max_rows} additional rows omitted.")
     lines.append("")
     return lines
+
+
+def _render_async_batch_lines(audit_summary: dict[str, Any], *, command: str) -> list[str]:
+    command_norm = str(command or "").strip().lower()
+    if command_norm not in {"review", "fix"}:
+        return []
+    llm_batch_used = bool(audit_summary.get("llm_batch_used", False))
+    async_used = bool(audit_summary.get("async_batch_used", False))
+    tasks_total = _int(audit_summary.get("async_batch_tasks_total", 0))
+    mode = str(audit_summary.get("async_batch_mode", "sequential") or "sequential")
+    has_relevant_batch_signal = llm_batch_used or async_used or tasks_total > 0 or mode != "not_applicable"
+    if not has_relevant_batch_signal:
+        return []
+    tasks_completed = _int(audit_summary.get("async_batch_tasks_completed", 0))
+    return [
+        "### ⚡ Async batch orchestration",
+        f"- Used: `{'yes' if async_used else 'no'}`",
+        f"- Mode: `{mode}`",
+        f"- Concurrency: `{_int(audit_summary.get('async_batch_concurrency', 1))}`",
+        f"- Tasks: `{tasks_completed}/{tasks_total}`",
+        f"- Fallback reason: `{str(audit_summary.get('async_batch_fallback_reason', 'not_applicable') or 'not_applicable')}`",
+        f"- Order preserved: `{'yes' if bool(audit_summary.get('async_batch_order_preserved', True)) else 'no'}`",
+        f"- Error count: `{_int(audit_summary.get('async_batch_error_count', 0))}`",
+        "",
+    ]
 
 
 def _render_runtime_details_block(*, title: str, lines: list[str]) -> list[str]:
@@ -1833,6 +1860,7 @@ def render_review_markdown(
     )
 
     detail_lines = [
+        *_render_async_batch_lines(audit_summary, command="review"),
         "Risk drivers:",
         *risk_driver_block,
         "",
@@ -1923,6 +1951,7 @@ def render_patch_markdown(
     sections.append("")
 
     detail_lines = [
+        *_render_async_batch_lines(audit_summary, command="fix"),
         "### 🎯 Patch targeting",
         f"- Patch target files total: {patch_target_files_total}",
         f"- Patch target files selected: {patch_target_files}",

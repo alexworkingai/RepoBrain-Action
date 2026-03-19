@@ -46,7 +46,7 @@ def test_low_value_diagnostics_are_suppressed_from_primary_view() -> None:
 
     primary = md.split("<details>", 1)[0]
     assert "- Remote skipped reason: `n/a`" not in primary
-    assert "<summary>Secondary diagnostics (defaults/noise)</summary>" in md
+    assert "### Secondary diagnostics" in md
 
 
 def test_fix_output_keeps_compact_patch_sections() -> None:

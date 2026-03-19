@@ -56,7 +56,7 @@ def test_diagnostic_output_is_compact_and_groups_primary_before_secondary() -> N
     assert "- TL;DR compressed: `no`" in md
 
     decision_idx = md.index("#### A. Decision summary")
-    secondary_idx = md.index("<summary>Secondary diagnostics (defaults/noise)</summary>")
+    secondary_idx = md.index("### Secondary diagnostics")
     assert decision_idx < secondary_idx
 
 
@@ -79,7 +79,7 @@ def test_secondary_diagnostics_and_audit_anchors_render_cleanly_inside_details()
     )
 
     assert "<summary>Evidence and diagnostics</summary>" in md
-    assert "<summary>Secondary diagnostics (defaults/noise)</summary>" in md
+    assert "### Secondary diagnostics" in md
     assert "### 🧾 Audit anchors" in md
-    assert "</details>\n\n### 🧾 Audit anchors" in md
-    assert "Secondary diagnostics</summary>### 🧾 Audit anchors" not in md
+    assert "### Secondary diagnostics\n\n**" in md
+    assert "### Secondary diagnostics### 🧾 Audit anchors" not in md
