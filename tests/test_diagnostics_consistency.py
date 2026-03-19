@@ -705,6 +705,70 @@ def test_review_fix_async_subsection_stays_visible_with_low_default_batch_values
         assert "- Batch planner used: `no`" not in md
 
 
+def test_final_review_fix_markdown_keeps_stable_async_subsection_without_diagnostics_duplication() -> None:
+    review_md = render_review_markdown(
+        review={
+            "summary_text": "Review complete.",
+            "risk_level": "low",
+            "files_block": [],
+            "confirmed_findings": [],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": [],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={"command": "review", "route_final": "DEEP"},
+    )
+    fix_md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 1,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+        },
+    )
+    ask_md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={"command": "ask", "route_final": "FAST"},
+        next_steps="n/a",
+        command="ask",
+    )
+
+    for md in (review_md, fix_md):
+        detail_start = md.index("<summary>Evidence and diagnostics</summary>")
+        detail_end = md.index("</details>", detail_start)
+        details_md = md[detail_start:detail_end]
+        assert "### Async batch orchestration" in details_md
+        assert details_md.count("### Async batch orchestration") == 1
+        assert details_md.index("### Async batch orchestration") < details_md.index("### 🧾 Runtime diagnostics")
+        assert "- Async batch used:" not in details_md
+        assert "- Async batch mode:" not in details_md
+        assert "- Batch planner used:" not in details_md
+        if "### Secondary diagnostics" in details_md and "### 🧾 Audit anchors" in details_md:
+            secondary_start = details_md.index("### Secondary diagnostics")
+            anchors_start = details_md.index("### 🧾 Audit anchors", secondary_start)
+            secondary_md = details_md[secondary_start:anchors_start]
+            assert "- Async batch used:" not in secondary_md
+            assert "- Async batch mode:" not in secondary_md
+            assert "- Batch planner used:" not in secondary_md
+            assert "- Review batch mode:" not in secondary_md
+            assert "- Review batch count:" not in secondary_md
+
+    assert "### Async batch orchestration" not in ask_md
+
+
 def test_fix_details_include_async_batch_subsection_for_sequential_fallback() -> None:
     md = render_patch_markdown(
         review={"summary_text": "Patch flow"},
