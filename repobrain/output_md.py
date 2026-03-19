@@ -719,6 +719,8 @@ _ASYNC_PLANNER_DIAGNOSTIC_PARAMETERS = {
     "batch primary segments",
     "batch support segments",
     "batch fallback reason",
+    "review batch mode",
+    "review batch count",
 }
 
 
