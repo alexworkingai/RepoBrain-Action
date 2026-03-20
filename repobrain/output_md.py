@@ -602,6 +602,33 @@ def _mode_lines(audit_summary: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _retrieval_snapshot_lines(audit_summary: dict[str, Any]) -> list[str]:
+    command = str(audit_summary.get("command", "ask") or "ask").strip().lower()
+    if command not in {"ask", "review", "fix"}:
+        return []
+    used = bool(audit_summary.get("retrieval_snapshot_cache_used", False))
+    hit = bool(audit_summary.get("retrieval_snapshot_cache_hit", False))
+    key_kind = str(audit_summary.get("retrieval_snapshot_cache_key_kind", "not_applicable") or "not_applicable")
+    miss_reason = str(
+        audit_summary.get("retrieval_snapshot_cache_miss_reason", "not_applicable")
+        or "not_applicable"
+    )
+    age_s = _int(audit_summary.get("retrieval_snapshot_cache_age_s", 0))
+    status = "hit" if used and hit else ("miss" if used else "not_applicable")
+    lines = [
+        "### 🗃️ Retrieval snapshot cache",
+        f"- Status: `{status}`",
+    ]
+    if key_kind != "not_applicable":
+        lines.append(f"- Key kind: `{key_kind}`")
+    if status == "hit":
+        lines.append(f"- Snapshot age (s): `{age_s}`")
+    else:
+        lines.append(f"- Reason: `{miss_reason}`")
+    lines.append("")
+    return lines
+
+
 def _touched_files_lines(audit_summary: dict[str, Any]) -> list[str]:
     raw = audit_summary.get("touched_files", [])
     if not isinstance(raw, list):
@@ -1109,6 +1136,31 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             "Incremental fallback reason",
             audit_summary.get("incremental_fallback_reason", "none"),
             "Reason incremental scope fell back to full retrieval when applicable.",
+        ),
+        (
+            "Retrieval snapshot cache used",
+            bool(audit_summary.get("retrieval_snapshot_cache_used", False)),
+            "Whether PR-state retrieval snapshot cache was eligible for this run.",
+        ),
+        (
+            "Retrieval snapshot cache hit",
+            bool(audit_summary.get("retrieval_snapshot_cache_hit", False)),
+            "Whether a retrieval snapshot was reused for this PR state.",
+        ),
+        (
+            "Retrieval snapshot key kind",
+            audit_summary.get("retrieval_snapshot_cache_key_kind", "not_applicable"),
+            "Authoritative PR-state identity used for snapshot cache keying.",
+        ),
+        (
+            "Retrieval snapshot miss reason",
+            audit_summary.get("retrieval_snapshot_cache_miss_reason", "not_applicable"),
+            "Deterministic reason snapshot reuse was not applied.",
+        ),
+        (
+            "Retrieval snapshot age (s)",
+            _int(audit_summary.get("retrieval_snapshot_cache_age_s", 0)),
+            "Age in seconds of reused retrieval snapshot (0 for misses/new snapshots).",
         ),
         (
             "Batch planner used",
@@ -1801,6 +1853,7 @@ def render_answer_markdown(
             "### 🧭 Route details",
             *_mode_lines(audit_summary),
             "",
+            *_retrieval_snapshot_lines(audit_summary),
             *_render_diagnostic_table(audit_summary),
             "",
             "### 🧾 Audit anchors",
@@ -1840,6 +1893,7 @@ def render_answer_markdown(
             "### 🧭 Route details",
             *_mode_lines(audit_summary),
             "",
+            *_retrieval_snapshot_lines(audit_summary),
             *_pr_segments_lines(audit_summary),
             "",
             *_render_diagnostic_table(audit_summary),
@@ -2106,6 +2160,7 @@ def render_review_markdown(
         "### 🧭 Route details",
         *_mode_lines(audit_summary),
         "",
+        *_retrieval_snapshot_lines(audit_summary),
         *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
         "",
         "### 🧾 Audit anchors",
@@ -2205,6 +2260,7 @@ def render_patch_markdown(
         "",
         *_embeddings_lines(audit_summary),
         "",
+        *_retrieval_snapshot_lines(audit_summary),
         *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
         "",
         "### 🧾 Audit anchors",

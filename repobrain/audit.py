@@ -68,6 +68,11 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "retrieval_cache_hits": 0,
         "retrieval_cache_misses": 0,
         "incremental_fallback_reason": "none",
+        "retrieval_snapshot_cache_used": False,
+        "retrieval_snapshot_cache_hit": False,
+        "retrieval_snapshot_cache_key_kind": "not_applicable",
+        "retrieval_snapshot_cache_miss_reason": "not_applicable",
+        "retrieval_snapshot_cache_age_s": 0,
         "evidence_budget_used": 0,
         "evidence_budget_limit": 0,
         "evidence_budget_mode": "not_applied",
@@ -287,6 +292,26 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
     normalized["pr_segmentation_fallback_reason"] = str(
         normalized.get("pr_segmentation_fallback_reason", "not_applicable") or "not_applicable"
     )
+    normalized["retrieval_snapshot_cache_used"] = bool(
+        normalized.get("retrieval_snapshot_cache_used", False)
+    )
+    normalized["retrieval_snapshot_cache_hit"] = bool(
+        normalized.get("retrieval_snapshot_cache_hit", False)
+    )
+    normalized["retrieval_snapshot_cache_key_kind"] = str(
+        normalized.get("retrieval_snapshot_cache_key_kind", "not_applicable")
+        or "not_applicable"
+    )
+    normalized["retrieval_snapshot_cache_miss_reason"] = str(
+        normalized.get("retrieval_snapshot_cache_miss_reason", "not_applicable")
+        or "not_applicable"
+    )
+    try:
+        normalized["retrieval_snapshot_cache_age_s"] = int(
+            normalized.get("retrieval_snapshot_cache_age_s", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["retrieval_snapshot_cache_age_s"] = 0
 
     rd_raw = normalized.get("rd", {})
     rd_payload: dict[str, Any] = dict(rd_raw) if isinstance(rd_raw, dict) else {}

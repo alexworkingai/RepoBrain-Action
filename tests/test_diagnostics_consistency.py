@@ -224,6 +224,139 @@ def test_incremental_retrieval_diagnostics_fields_render() -> None:
     assert "- Retrieval cache hits: `24`" in md
 
 
+def test_retrieval_snapshot_cache_fields_render_in_ask_diagnostics() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": True,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "none",
+            "retrieval_snapshot_cache_age_s": 6,
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "- Retrieval snapshot cache used: `yes`" in md
+    assert "- Retrieval snapshot cache hit: `yes`" in md
+    assert "- Retrieval snapshot key kind: `pr_number_head_sha`" in md
+    assert "- Retrieval snapshot age (s): `6`" in md
+
+
+def test_retrieval_snapshot_cache_fields_render_in_review_diagnostics() -> None:
+    review = {
+        "summary_text": "Review complete.",
+        "risk_level": "low",
+        "files_block": [],
+        "confirmed_findings": [],
+        "possible_signals": [],
+        "informational_notes": [],
+        "recommendations": [],
+    }
+    md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": False,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "cache_key_miss",
+            "retrieval_snapshot_cache_age_s": 0,
+        },
+    )
+
+    assert "- Retrieval snapshot cache used: `yes`" in md
+    assert "- Retrieval snapshot miss reason: `cache_key_miss`" in md
+
+
+def test_ask_final_markdown_details_include_snapshot_cache_miss_and_hit_states() -> None:
+    miss_md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": False,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "cache_key_miss",
+            "retrieval_snapshot_cache_age_s": 0,
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+    hit_md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": True,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "none",
+            "retrieval_snapshot_cache_age_s": 9,
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    miss_primary = miss_md.split("<details>", 1)[0]
+    hit_primary = hit_md.split("<details>", 1)[0]
+    assert "### 🗃️ Retrieval snapshot cache" not in miss_primary
+    assert "### 🗃️ Retrieval snapshot cache" not in hit_primary
+
+    miss_details = miss_md.split("<details>", 1)[1]
+    hit_details = hit_md.split("<details>", 1)[1]
+    assert "### 🗃️ Retrieval snapshot cache" in miss_details
+    assert "- Status: `miss`" in miss_details
+    assert "- Reason: `cache_key_miss`" in miss_details
+    assert "### 🗃️ Retrieval snapshot cache" in hit_details
+    assert "- Status: `hit`" in hit_details
+    assert "- Snapshot age (s): `9`" in hit_details
+
+
+def test_review_final_markdown_details_include_snapshot_cache_status() -> None:
+    review = {
+        "summary_text": "Review complete.",
+        "risk_level": "low",
+        "files_block": [],
+        "confirmed_findings": [],
+        "possible_signals": [],
+        "informational_notes": [],
+        "recommendations": [],
+    }
+    md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": True,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "none",
+            "retrieval_snapshot_cache_age_s": 3,
+        },
+    )
+
+    details_md = md.split("<details>", 1)[1]
+    assert "### 🗃️ Retrieval snapshot cache" in details_md
+    assert "- Status: `hit`" in details_md
+    assert "- Key kind: `pr_number_head_sha`" in details_md
+
+
 def test_incremental_retrieval_fields_render_in_review_diagnostics() -> None:
     review = {
         "summary_text": "Review complete.",

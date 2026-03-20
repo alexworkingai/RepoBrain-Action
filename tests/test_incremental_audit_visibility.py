@@ -8,6 +8,31 @@ from repobrain.audit import build_audit_base, finalize_audit, write_audit
 from repobrain.github_flow import _build_review_markdown, get_last_audit, run_github_flow
 
 
+class _SnapshotTestClient:
+    repo = "owner/repo"
+    token = "token"
+
+    def get_pull(self, pull_number: int) -> dict[str, object]:
+        return {
+            "state": "open",
+            "merged": False,
+            "head": {"sha": "head-sha-1"},
+            "base": {"sha": "base-sha-1"},
+        }
+
+    def get_pull_files(self, pull_number: int) -> list[dict[str, object]]:
+        return [
+            {
+                "filename": "repobrain/github_flow.py",
+                "status": "modified",
+                "changes": 5,
+                "additions": 3,
+                "deletions": 2,
+                "patch": "@@ -1 +1 @@\n+line",
+            }
+        ]
+
+
 def test_audit_base_contains_incremental_observability_fields() -> None:
     audit = build_audit_base({"repo": "owner/repo", "sha": "abc", "run_id": "1"})
 
@@ -34,6 +59,11 @@ def test_audit_base_contains_incremental_observability_fields() -> None:
     assert "retrieval_cache_hits" in audit
     assert "retrieval_cache_misses" in audit
     assert "incremental_fallback_reason" in audit
+    assert "retrieval_snapshot_cache_used" in audit
+    assert "retrieval_snapshot_cache_hit" in audit
+    assert "retrieval_snapshot_cache_key_kind" in audit
+    assert "retrieval_snapshot_cache_miss_reason" in audit
+    assert "retrieval_snapshot_cache_age_s" in audit
     assert "evidence_budget_used" in audit
     assert "evidence_budget_limit" in audit
     assert "evidence_budget_mode" in audit
@@ -80,6 +110,11 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
             "retrieval_cache_hits": 120,
             "retrieval_cache_misses": 15,
             "incremental_fallback_reason": "none",
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": True,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "none",
+            "retrieval_snapshot_cache_age_s": 4,
             "evidence_budget_used": 14,
             "evidence_budget_limit": 18,
             "evidence_budget_mode": "ask_dense_incremental",
@@ -126,6 +161,11 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     assert finalized["retrieval_cache_hits"] == 120
     assert finalized["retrieval_cache_misses"] == 15
     assert finalized["incremental_fallback_reason"] == "none"
+    assert finalized["retrieval_snapshot_cache_used"] is True
+    assert finalized["retrieval_snapshot_cache_hit"] is True
+    assert finalized["retrieval_snapshot_cache_key_kind"] == "pr_number_head_sha"
+    assert finalized["retrieval_snapshot_cache_miss_reason"] == "none"
+    assert finalized["retrieval_snapshot_cache_age_s"] == 4
     assert finalized["evidence_budget_used"] == 14
     assert finalized["evidence_budget_limit"] == 18
     assert finalized["evidence_budget_mode"] == "ask_dense_incremental"
@@ -185,6 +225,11 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "async_batch_fallback_reason" in audit
     assert "async_batch_order_preserved" in audit
     assert "async_batch_error_count" in audit
+    assert "retrieval_snapshot_cache_used" in audit
+    assert "retrieval_snapshot_cache_hit" in audit
+    assert "retrieval_snapshot_cache_key_kind" in audit
+    assert "retrieval_snapshot_cache_miss_reason" in audit
+    assert "retrieval_snapshot_cache_age_s" in audit
 
     audit_path = tmp_path / "audit.json"
     write_audit(audit, audit_path)
@@ -220,6 +265,11 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "async_batch_fallback_reason" in payload
     assert "async_batch_order_preserved" in payload
     assert "async_batch_error_count" in payload
+    assert "retrieval_snapshot_cache_used" in payload
+    assert "retrieval_snapshot_cache_hit" in payload
+    assert "retrieval_snapshot_cache_key_kind" in payload
+    assert "retrieval_snapshot_cache_miss_reason" in payload
+    assert "retrieval_snapshot_cache_age_s" in payload
 
 
 def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
@@ -272,3 +322,54 @@ def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
         assert "async_batch_fallback_reason" in audit
         assert "async_batch_order_preserved" in audit
         assert "async_batch_error_count" in audit
+        assert "retrieval_snapshot_cache_used" in audit
+        assert "retrieval_snapshot_cache_hit" in audit
+        assert "retrieval_snapshot_cache_key_kind" in audit
+        assert "retrieval_snapshot_cache_miss_reason" in audit
+        assert "retrieval_snapshot_cache_age_s" in audit
+
+
+def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path) -> None:
+    first_audit: dict[str, object] = {}
+    second_audit: dict[str, object] = {}
+    client = _SnapshotTestClient()
+
+    _build_review_markdown(
+        repo_root=tmp_path,
+        cmd="review",
+        query="",
+        is_pull_request=True,
+        issue_number=1,
+        dry_run=False,
+        client=client,  # type: ignore[arg-type]
+        tky_mode="baseline",
+        remote_url="",
+        api_key="",
+        hmac_secret="",
+        enable_hmac=False,
+        github_context_seed={"is_pr": True, "pr_number": 1},
+        audit=first_audit,
+    )
+    second_markdown = _build_review_markdown(
+        repo_root=tmp_path,
+        cmd="review",
+        query="",
+        is_pull_request=True,
+        issue_number=1,
+        dry_run=False,
+        client=client,  # type: ignore[arg-type]
+        tky_mode="baseline",
+        remote_url="",
+        api_key="",
+        hmac_secret="",
+        enable_hmac=False,
+        github_context_seed={"is_pr": True, "pr_number": 1},
+        audit=second_audit,
+    )
+
+    assert first_audit["retrieval_snapshot_cache_used"] is True
+    assert first_audit["retrieval_snapshot_cache_hit"] is False
+    assert second_audit["retrieval_snapshot_cache_used"] is True
+    assert second_audit["retrieval_snapshot_cache_hit"] is True
+    assert "### 🗃️ Retrieval snapshot cache" in second_markdown
+    assert "- Status: `hit`" in second_markdown
