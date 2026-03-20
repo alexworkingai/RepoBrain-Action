@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from repobrain.github_flow import (
+    _collect_pr_changed_file_entries_from_context,
     _prepend_pr_metadata_to_answer,
     _resolve_answer_grounding_mode,
     _should_use_pr_metadata_grounding,
@@ -29,6 +30,10 @@ def test_prepend_pr_metadata_places_changed_files_first() -> None:
     text = _prepend_pr_metadata_to_answer(
         answer_text="Short synthesized answer.",
         changed_files=["repobrain/github_flow.py", "repobrain/output_md.py"],
+        changed_file_entries=[
+            {"path": "repobrain/github_flow.py", "operation": "modified"},
+            {"path": "repobrain/output_md.py", "operation": "modified"},
+        ],
         primary_segments="core_code:repobrain/github_flow",
         segment_summary="primary=core_code:repobrain/github_flow; support=docs:docs; cross_segment=no",
     )
@@ -37,8 +42,53 @@ def test_prepend_pr_metadata_places_changed_files_first() -> None:
     assert first_line == "PR metadata: 2 changed files in current PR."
     assert "Primary segments: core_code:repobrain/github_flow" in text
     assert "Segment summary: primary=core_code:repobrain/github_flow" in text
-    assert "- `repobrain/github_flow.py`" in text
+    assert "- Modified: `repobrain/github_flow.py`" in text
     assert "Short synthesized answer." in text
+
+
+def test_collect_pr_changed_file_entries_from_context_uses_authoritative_status() -> None:
+    entries = _collect_pr_changed_file_entries_from_context(
+        {
+            "files": [
+                {"filename": "PRODUCTION_READINESS_ASSESSMENT.md", "status": "removed"},
+                {"filename": "docs/topocore_v5_phase0_phase1_parity.md", "status": "removed"},
+            ],
+            "changed_files": [
+                "PRODUCTION_READINESS_ASSESSMENT.md",
+                "docs/topocore_v5_phase0_phase1_parity.md",
+            ],
+        }
+    )
+
+    assert entries == [
+        {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
+        {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+    ]
+
+
+def test_prepend_pr_metadata_filters_untrusted_changed_file_claims_from_llm_text() -> None:
+    text = _prepend_pr_metadata_to_answer(
+        answer_text=(
+            "This PR made the following changes:\n"
+            "- Updated `repobrain/ask.py`\n"
+            "- Updated `tests/test_pr_review.py`\n\n"
+            "Supporting context: retrieval ranked `repobrain/ask.py` as related to the question."
+        ),
+        changed_files=[
+            "PRODUCTION_READINESS_ASSESSMENT.md",
+            "docs/topocore_v5_phase0_phase1_parity.md",
+        ],
+        changed_file_entries=[
+            {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
+            {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+        ],
+    )
+
+    assert "- Removed: `PRODUCTION_READINESS_ASSESSMENT.md`" in text
+    assert "- Removed: `docs/topocore_v5_phase0_phase1_parity.md`" in text
+    assert "Updated `repobrain/ask.py`" not in text
+    assert "Updated `tests/test_pr_review.py`" not in text
+    assert "Supporting context: retrieval ranked `repobrain/ask.py`" in text
 
 
 def test_review_prompt_assembles_changed_files_before_diff_context() -> None:
