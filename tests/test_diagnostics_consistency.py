@@ -224,6 +224,59 @@ def test_incremental_retrieval_diagnostics_fields_render() -> None:
     assert "- Retrieval cache hits: `24`" in md
 
 
+def test_retrieval_snapshot_cache_fields_render_in_ask_diagnostics() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": True,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "none",
+            "retrieval_snapshot_cache_age_s": 6,
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "- Retrieval snapshot cache used: `yes`" in md
+    assert "- Retrieval snapshot cache hit: `yes`" in md
+    assert "- Retrieval snapshot key kind: `pr_number_head_sha`" in md
+    assert "- Retrieval snapshot age (s): `6`" in md
+
+
+def test_retrieval_snapshot_cache_fields_render_in_review_diagnostics() -> None:
+    review = {
+        "summary_text": "Review complete.",
+        "risk_level": "low",
+        "files_block": [],
+        "confirmed_findings": [],
+        "possible_signals": [],
+        "informational_notes": [],
+        "recommendations": [],
+    }
+    md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": False,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "cache_key_miss",
+            "retrieval_snapshot_cache_age_s": 0,
+        },
+    )
+
+    assert "- Retrieval snapshot cache used: `yes`" in md
+    assert "- Retrieval snapshot miss reason: `cache_key_miss`" in md
+
+
 def test_incremental_retrieval_fields_render_in_review_diagnostics() -> None:
     review = {
         "summary_text": "Review complete.",

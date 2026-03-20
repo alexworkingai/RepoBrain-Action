@@ -1111,6 +1111,31 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             "Reason incremental scope fell back to full retrieval when applicable.",
         ),
         (
+            "Retrieval snapshot cache used",
+            bool(audit_summary.get("retrieval_snapshot_cache_used", False)),
+            "Whether PR-state retrieval snapshot cache was eligible for this run.",
+        ),
+        (
+            "Retrieval snapshot cache hit",
+            bool(audit_summary.get("retrieval_snapshot_cache_hit", False)),
+            "Whether a retrieval snapshot was reused for this PR state.",
+        ),
+        (
+            "Retrieval snapshot key kind",
+            audit_summary.get("retrieval_snapshot_cache_key_kind", "not_applicable"),
+            "Authoritative PR-state identity used for snapshot cache keying.",
+        ),
+        (
+            "Retrieval snapshot miss reason",
+            audit_summary.get("retrieval_snapshot_cache_miss_reason", "not_applicable"),
+            "Deterministic reason snapshot reuse was not applied.",
+        ),
+        (
+            "Retrieval snapshot age (s)",
+            _int(audit_summary.get("retrieval_snapshot_cache_age_s", 0)),
+            "Age in seconds of reused retrieval snapshot (0 for misses/new snapshots).",
+        ),
+        (
             "Batch planner used",
             bool(audit_summary.get("batch_planner_used", False)),
             "Whether segment-aware batch planner was applied before batch execution.",

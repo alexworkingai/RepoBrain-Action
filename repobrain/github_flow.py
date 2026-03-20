@@ -60,6 +60,11 @@ from repobrain.retrieval.hybrid import rank_hybrid_candidates
 from repobrain.retrieval.hybrid_ranker import rerank_candidates
 from repobrain.retrieval.evidence_budget_planner import plan_evidence_budget
 from repobrain.retrieval.incremental_index import scope_chunks_incremental
+from repobrain.retrieval.snapshot_cache import (
+    load_retrieval_snapshot,
+    snapshot_cache_defaults,
+    store_retrieval_snapshot,
+)
 from repobrain.pr_segmenter import build_pr_segmentation, segmentation_defaults
 from repobrain.review import build_pr_review
 from repobrain.review_validator import validate_review_findings
@@ -4215,6 +4220,19 @@ def _retrieve_candidates_with_runtime(
     repo_root: Path | None = None,
 ) -> tuple[list[CandidateChunk], dict[str, Any]]:
     vectors = chunk_vectors_by_id or {}
+    snapshot_load = load_retrieval_snapshot(
+        question=question,
+        command=cmd,
+        topk=topk,
+        github_context=github_context,
+        repo_root=repo_root,
+    )
+    snapshot_runtime = snapshot_load.as_runtime_fields()
+    if snapshot_load.cache_hit and snapshot_load.candidates:
+        cached_runtime = dict(snapshot_load.retrieval_runtime or {})
+        cached_runtime.update(snapshot_runtime)
+        return list(snapshot_load.candidates), cached_runtime
+
     incremental_scope = scope_chunks_incremental(
         question=question,
         command=cmd,
@@ -4235,6 +4253,7 @@ def _retrieve_candidates_with_runtime(
         "retrieval_cache_misses": int(incremental_scope.retrieval_cache_misses),
         "incremental_fallback_reason": str(incremental_scope.incremental_fallback_reason or "none"),
     }
+    retrieval_runtime.update(snapshot_runtime)
     if vectors and query_vector:
         env_cfg = _runtime_env_cfg()
         vector_topk = int(env_cfg.embeddings.vector_topk)
@@ -4345,6 +4364,16 @@ def _retrieve_candidates_with_runtime(
     retrieval_runtime["evidence_budget_overflow"] = int(budget_plan.evidence_budget_overflow)
     retrieval_runtime["evidence_budget_primary_selected"] = int(budget_plan.evidence_budget_primary_selected)
     retrieval_runtime["evidence_budget_support_selected"] = int(budget_plan.evidence_budget_support_selected)
+    if bool(snapshot_runtime.get("retrieval_snapshot_cache_used", False)):
+        store_retrieval_snapshot(
+            question=question,
+            command=cmd,
+            topk=topk,
+            github_context=github_context,
+            repo_root=repo_root,
+            candidates=budget_plan.candidates,
+            retrieval_runtime=retrieval_runtime,
+        )
     return budget_plan.candidates, retrieval_runtime
 
 
@@ -4744,6 +4773,23 @@ def run_qa_two_pass(
     )
     audit_extra["incremental_fallback_reason"] = str(
         final_retrieval_runtime.get("incremental_fallback_reason", "none") or "none"
+    )
+    audit_extra["retrieval_snapshot_cache_used"] = bool(
+        final_retrieval_runtime.get("retrieval_snapshot_cache_used", False)
+    )
+    audit_extra["retrieval_snapshot_cache_hit"] = bool(
+        final_retrieval_runtime.get("retrieval_snapshot_cache_hit", False)
+    )
+    audit_extra["retrieval_snapshot_cache_key_kind"] = str(
+        final_retrieval_runtime.get("retrieval_snapshot_cache_key_kind", "not_applicable")
+        or "not_applicable"
+    )
+    audit_extra["retrieval_snapshot_cache_miss_reason"] = str(
+        final_retrieval_runtime.get("retrieval_snapshot_cache_miss_reason", "not_applicable")
+        or "not_applicable"
+    )
+    audit_extra["retrieval_snapshot_cache_age_s"] = int(
+        final_retrieval_runtime.get("retrieval_snapshot_cache_age_s", 0) or 0
     )
     audit_extra["evidence_budget_used"] = int(final_retrieval_runtime.get("evidence_budget_used", 0) or 0)
     audit_extra["evidence_budget_limit"] = int(final_retrieval_runtime.get("evidence_budget_limit", 0) or 0)
@@ -5305,6 +5351,11 @@ def _build_qa_markdown(
     audit_summary.setdefault("retrieval_cache_hits", 0)
     audit_summary.setdefault("retrieval_cache_misses", 0)
     audit_summary.setdefault("incremental_fallback_reason", "none")
+    audit_summary.setdefault("retrieval_snapshot_cache_used", False)
+    audit_summary.setdefault("retrieval_snapshot_cache_hit", False)
+    audit_summary.setdefault("retrieval_snapshot_cache_key_kind", "not_applicable")
+    audit_summary.setdefault("retrieval_snapshot_cache_miss_reason", "not_applicable")
+    audit_summary.setdefault("retrieval_snapshot_cache_age_s", 0)
     audit_summary.setdefault("evidence_budget_used", 0)
     audit_summary.setdefault("evidence_budget_limit", 0)
     audit_summary.setdefault("evidence_budget_mode", "not_applied")
@@ -5556,6 +5607,23 @@ def _build_qa_markdown(
         audit["incremental_fallback_reason"] = str(
             audit_summary.get("incremental_fallback_reason", "none") or "none"
         )
+        audit["retrieval_snapshot_cache_used"] = bool(
+            audit_summary.get("retrieval_snapshot_cache_used", False)
+        )
+        audit["retrieval_snapshot_cache_hit"] = bool(
+            audit_summary.get("retrieval_snapshot_cache_hit", False)
+        )
+        audit["retrieval_snapshot_cache_key_kind"] = str(
+            audit_summary.get("retrieval_snapshot_cache_key_kind", "not_applicable")
+            or "not_applicable"
+        )
+        audit["retrieval_snapshot_cache_miss_reason"] = str(
+            audit_summary.get("retrieval_snapshot_cache_miss_reason", "not_applicable")
+            or "not_applicable"
+        )
+        audit["retrieval_snapshot_cache_age_s"] = int(
+            audit_summary.get("retrieval_snapshot_cache_age_s", 0) or 0
+        )
         audit["evidence_budget_used"] = int(audit_summary.get("evidence_budget_used", 0) or 0)
         audit["evidence_budget_limit"] = int(audit_summary.get("evidence_budget_limit", 0) or 0)
         audit["evidence_budget_mode"] = str(
@@ -5699,6 +5767,51 @@ def _review_candidates_from_files(files: list[dict[str, Any]]) -> list[Candidate
             text=None,
         )
     ]
+
+
+def _review_retrieval_runtime_defaults() -> dict[str, Any]:
+    runtime = {
+        "incremental_retrieval_used": False,
+        "incremental_scope_mode": "not_applicable",
+        "changed_files_considered": 0,
+        "changed_regions_considered": 0,
+        "unchanged_files_skipped": 0,
+        "unchanged_chunks_skipped": 0,
+        "retrieval_cache_hits": 0,
+        "retrieval_cache_misses": 0,
+        "incremental_fallback_reason": "not_applicable",
+        "evidence_budget_used": 0,
+        "evidence_budget_limit": 0,
+        "evidence_budget_mode": "not_applied",
+        "evidence_budget_bucket_counts": (
+            "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0"
+        ),
+        "evidence_budget_cutoffs": "no_cutoff",
+        "evidence_budget_overflow": 0,
+        "evidence_budget_primary_selected": 0,
+        "evidence_budget_support_selected": 0,
+    }
+    runtime.update(snapshot_cache_defaults(miss_reason="not_applicable"))
+    return runtime
+
+
+def _review_budget_runtime_from_plan(review_budget_plan: Any) -> dict[str, Any]:
+    return {
+        "evidence_budget_used": int(review_budget_plan.evidence_budget_used),
+        "evidence_budget_limit": int(review_budget_plan.evidence_budget_limit),
+        "evidence_budget_mode": str(review_budget_plan.evidence_budget_mode or "not_applied"),
+        "evidence_budget_bucket_counts": ",".join(
+            f"{bucket}:{int(count)}"
+            for bucket, count in review_budget_plan.evidence_budget_bucket_counts.items()
+        )
+        or "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+        "evidence_budget_cutoffs": ",".join(review_budget_plan.evidence_budget_cutoffs)
+        if review_budget_plan.evidence_budget_cutoffs
+        else "no_cutoff",
+        "evidence_budget_overflow": int(review_budget_plan.evidence_budget_overflow),
+        "evidence_budget_primary_selected": int(review_budget_plan.evidence_budget_primary_selected),
+        "evidence_budget_support_selected": int(review_budget_plan.evidence_budget_support_selected),
+    }
 
 
 def _count_confirmed_localized_findings(
@@ -5871,24 +5984,60 @@ def _build_review_markdown(
         for item in files
         if isinstance(item, dict) and str(item.get("patch", "")).strip()
     ]
+    question = (
+        f"Generate safe patch guidance: {query.strip()}"
+        if cmd == "fix" and query.strip()
+        else ("Generate safe patch guidance for PR changes." if cmd == "fix" else "Review PR changes.")
+    )
     review_segmentation_seed = build_pr_segmentation(
         changed_files=all_pr_changed_files,
         candidate_paths=[],
     )
-    review_candidates = _review_candidates_from_files(files)
     planner_context = dict(github_context_seed or {})
     if all_pr_changed_files:
         planner_context["changed_files"] = list(all_pr_changed_files)
     planner_context["pr_segmentation_file_map"] = dict(review_segmentation_seed.file_segment_class_map)
-    review_budget_plan = plan_evidence_budget(
-        review_candidates,
+    review_candidates_seed = _review_candidates_from_files(files)
+    review_limit_hint = min(80, max(10, len(review_candidates_seed)))
+    review_retrieval_runtime = _review_retrieval_runtime_defaults()
+    snapshot_load = load_retrieval_snapshot(
+        question=question,
         command=cmd,
+        topk=review_limit_hint,
         github_context=planner_context,
-        limit_hint=min(80, max(10, len(review_candidates))),
-        incremental_scope_mode="review_pr_files",
-        segment_hints={"file_segment_class_map": review_segmentation_seed.file_segment_class_map},
+        repo_root=repo_root,
     )
-    review_candidates = review_budget_plan.candidates
+    review_retrieval_runtime.update(snapshot_load.as_runtime_fields())
+    if snapshot_load.cache_hit and snapshot_load.candidates:
+        review_candidates = list(snapshot_load.candidates)
+        cached_runtime = (
+            dict(snapshot_load.retrieval_runtime)
+            if isinstance(snapshot_load.retrieval_runtime, dict)
+            else {}
+        )
+        review_retrieval_runtime.update(cached_runtime)
+    else:
+        review_budget_plan = plan_evidence_budget(
+            review_candidates_seed,
+            command=cmd,
+            github_context=planner_context,
+            limit_hint=review_limit_hint,
+            incremental_scope_mode="review_pr_files",
+            segment_hints={"file_segment_class_map": review_segmentation_seed.file_segment_class_map},
+        )
+        review_candidates = review_budget_plan.candidates
+        review_retrieval_runtime.update(_review_budget_runtime_from_plan(review_budget_plan))
+        if bool(review_retrieval_runtime.get("retrieval_snapshot_cache_used", False)):
+            store_retrieval_snapshot(
+                question=question,
+                command=cmd,
+                topk=review_limit_hint,
+                github_context=planner_context,
+                repo_root=repo_root,
+                candidates=review_candidates,
+                retrieval_runtime=review_retrieval_runtime,
+            )
+
     verification_context = dict(verification_context_seed or {})
     verification_context.update(_verification_context_from_report(verification_report))
     policy = {
@@ -5923,11 +6072,6 @@ def _build_review_markdown(
         verification_context=policy["verification_context"],
     )
     limits["policy"] = policy
-    question = (
-        f"Generate safe patch guidance: {query.strip()}"
-        if cmd == "fix" and query.strip()
-        else ("Generate safe patch guidance for PR changes." if cmd == "fix" else "Review PR changes.")
-    )
     tky_result, _, tky_meta = _answer_with_remote_fallback(
         question=question,
         candidates=review_candidates,
@@ -5982,29 +6126,76 @@ def _build_review_markdown(
         "signal_calibration_used": False,
         "patch_guard_triggered": False,
         "tldr_compressed": False,
-        "incremental_retrieval_used": False,
-        "incremental_scope_mode": "fallback_full",
-        "changed_files_considered": 0,
-        "changed_regions_considered": 0,
-        "unchanged_files_skipped": 0,
-        "unchanged_chunks_skipped": 0,
-        "retrieval_cache_hits": 0,
-        "retrieval_cache_misses": 0,
-        "incremental_fallback_reason": "not_applicable",
-        "evidence_budget_used": int(review_budget_plan.evidence_budget_used),
-        "evidence_budget_limit": int(review_budget_plan.evidence_budget_limit),
-        "evidence_budget_mode": str(review_budget_plan.evidence_budget_mode or "not_applied"),
-        "evidence_budget_bucket_counts": ",".join(
-            f"{bucket}:{int(count)}"
-            for bucket, count in review_budget_plan.evidence_budget_bucket_counts.items()
-        )
-        or "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
-        "evidence_budget_cutoffs": ",".join(review_budget_plan.evidence_budget_cutoffs)
-        if review_budget_plan.evidence_budget_cutoffs
-        else "no_cutoff",
-        "evidence_budget_overflow": int(review_budget_plan.evidence_budget_overflow),
-        "evidence_budget_primary_selected": int(review_budget_plan.evidence_budget_primary_selected),
-        "evidence_budget_support_selected": int(review_budget_plan.evidence_budget_support_selected),
+        "incremental_retrieval_used": bool(
+            review_retrieval_runtime.get("incremental_retrieval_used", False)
+        ),
+        "incremental_scope_mode": str(
+            review_retrieval_runtime.get("incremental_scope_mode", "not_applicable")
+            or "not_applicable"
+        ),
+        "changed_files_considered": int(
+            review_retrieval_runtime.get("changed_files_considered", 0) or 0
+        ),
+        "changed_regions_considered": int(
+            review_retrieval_runtime.get("changed_regions_considered", 0) or 0
+        ),
+        "unchanged_files_skipped": int(
+            review_retrieval_runtime.get("unchanged_files_skipped", 0) or 0
+        ),
+        "unchanged_chunks_skipped": int(
+            review_retrieval_runtime.get("unchanged_chunks_skipped", 0) or 0
+        ),
+        "retrieval_cache_hits": int(
+            review_retrieval_runtime.get("retrieval_cache_hits", 0) or 0
+        ),
+        "retrieval_cache_misses": int(
+            review_retrieval_runtime.get("retrieval_cache_misses", 0) or 0
+        ),
+        "incremental_fallback_reason": str(
+            review_retrieval_runtime.get("incremental_fallback_reason", "not_applicable")
+            or "not_applicable"
+        ),
+        "retrieval_snapshot_cache_used": bool(
+            review_retrieval_runtime.get("retrieval_snapshot_cache_used", False)
+        ),
+        "retrieval_snapshot_cache_hit": bool(
+            review_retrieval_runtime.get("retrieval_snapshot_cache_hit", False)
+        ),
+        "retrieval_snapshot_cache_key_kind": str(
+            review_retrieval_runtime.get("retrieval_snapshot_cache_key_kind", "not_applicable")
+            or "not_applicable"
+        ),
+        "retrieval_snapshot_cache_miss_reason": str(
+            review_retrieval_runtime.get("retrieval_snapshot_cache_miss_reason", "not_applicable")
+            or "not_applicable"
+        ),
+        "retrieval_snapshot_cache_age_s": int(
+            review_retrieval_runtime.get("retrieval_snapshot_cache_age_s", 0) or 0
+        ),
+        "evidence_budget_used": int(review_retrieval_runtime.get("evidence_budget_used", 0) or 0),
+        "evidence_budget_limit": int(review_retrieval_runtime.get("evidence_budget_limit", 0) or 0),
+        "evidence_budget_mode": str(
+            review_retrieval_runtime.get("evidence_budget_mode", "not_applied") or "not_applied"
+        ),
+        "evidence_budget_bucket_counts": str(
+            review_retrieval_runtime.get(
+                "evidence_budget_bucket_counts",
+                "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0",
+            )
+            or "changed_primary:0,changed_secondary:0,support_context:0,tests:0,docs:0,workflow_config:0"
+        ),
+        "evidence_budget_cutoffs": str(
+            review_retrieval_runtime.get("evidence_budget_cutoffs", "no_cutoff") or "no_cutoff"
+        ),
+        "evidence_budget_overflow": int(
+            review_retrieval_runtime.get("evidence_budget_overflow", 0) or 0
+        ),
+        "evidence_budget_primary_selected": int(
+            review_retrieval_runtime.get("evidence_budget_primary_selected", 0) or 0
+        ),
+        "evidence_budget_support_selected": int(
+            review_retrieval_runtime.get("evidence_budget_support_selected", 0) or 0
+        ),
     }
     audit_summary.update(review_segmentation_seed.as_audit_fields())
     audit_summary.update(_execution_from_tky_result(tky_result.tky))
@@ -6774,6 +6965,23 @@ def _build_review_markdown(
             audit["incremental_fallback_reason"] = str(
                 audit_summary.get("incremental_fallback_reason", "none") or "none"
             )
+            audit["retrieval_snapshot_cache_used"] = bool(
+                audit_summary.get("retrieval_snapshot_cache_used", False)
+            )
+            audit["retrieval_snapshot_cache_hit"] = bool(
+                audit_summary.get("retrieval_snapshot_cache_hit", False)
+            )
+            audit["retrieval_snapshot_cache_key_kind"] = str(
+                audit_summary.get("retrieval_snapshot_cache_key_kind", "not_applicable")
+                or "not_applicable"
+            )
+            audit["retrieval_snapshot_cache_miss_reason"] = str(
+                audit_summary.get("retrieval_snapshot_cache_miss_reason", "not_applicable")
+                or "not_applicable"
+            )
+            audit["retrieval_snapshot_cache_age_s"] = int(
+                audit_summary.get("retrieval_snapshot_cache_age_s", 0) or 0
+            )
             audit["evidence_budget_used"] = int(audit_summary.get("evidence_budget_used", 0) or 0)
             audit["evidence_budget_limit"] = int(audit_summary.get("evidence_budget_limit", 0) or 0)
             audit["evidence_budget_mode"] = str(
@@ -7208,6 +7416,23 @@ def _build_review_markdown(
         )
         audit["incremental_fallback_reason"] = str(
             audit_summary.get("incremental_fallback_reason", "none") or "none"
+        )
+        audit["retrieval_snapshot_cache_used"] = bool(
+            audit_summary.get("retrieval_snapshot_cache_used", False)
+        )
+        audit["retrieval_snapshot_cache_hit"] = bool(
+            audit_summary.get("retrieval_snapshot_cache_hit", False)
+        )
+        audit["retrieval_snapshot_cache_key_kind"] = str(
+            audit_summary.get("retrieval_snapshot_cache_key_kind", "not_applicable")
+            or "not_applicable"
+        )
+        audit["retrieval_snapshot_cache_miss_reason"] = str(
+            audit_summary.get("retrieval_snapshot_cache_miss_reason", "not_applicable")
+            or "not_applicable"
+        )
+        audit["retrieval_snapshot_cache_age_s"] = int(
+            audit_summary.get("retrieval_snapshot_cache_age_s", 0) or 0
         )
         audit["evidence_budget_used"] = int(audit_summary.get("evidence_budget_used", 0) or 0)
         audit["evidence_budget_limit"] = int(audit_summary.get("evidence_budget_limit", 0) or 0)

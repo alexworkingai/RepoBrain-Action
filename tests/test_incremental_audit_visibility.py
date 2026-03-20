@@ -34,6 +34,11 @@ def test_audit_base_contains_incremental_observability_fields() -> None:
     assert "retrieval_cache_hits" in audit
     assert "retrieval_cache_misses" in audit
     assert "incremental_fallback_reason" in audit
+    assert "retrieval_snapshot_cache_used" in audit
+    assert "retrieval_snapshot_cache_hit" in audit
+    assert "retrieval_snapshot_cache_key_kind" in audit
+    assert "retrieval_snapshot_cache_miss_reason" in audit
+    assert "retrieval_snapshot_cache_age_s" in audit
     assert "evidence_budget_used" in audit
     assert "evidence_budget_limit" in audit
     assert "evidence_budget_mode" in audit
@@ -80,6 +85,11 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
             "retrieval_cache_hits": 120,
             "retrieval_cache_misses": 15,
             "incremental_fallback_reason": "none",
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": True,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "none",
+            "retrieval_snapshot_cache_age_s": 4,
             "evidence_budget_used": 14,
             "evidence_budget_limit": 18,
             "evidence_budget_mode": "ask_dense_incremental",
@@ -126,6 +136,11 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     assert finalized["retrieval_cache_hits"] == 120
     assert finalized["retrieval_cache_misses"] == 15
     assert finalized["incremental_fallback_reason"] == "none"
+    assert finalized["retrieval_snapshot_cache_used"] is True
+    assert finalized["retrieval_snapshot_cache_hit"] is True
+    assert finalized["retrieval_snapshot_cache_key_kind"] == "pr_number_head_sha"
+    assert finalized["retrieval_snapshot_cache_miss_reason"] == "none"
+    assert finalized["retrieval_snapshot_cache_age_s"] == 4
     assert finalized["evidence_budget_used"] == 14
     assert finalized["evidence_budget_limit"] == 18
     assert finalized["evidence_budget_mode"] == "ask_dense_incremental"
@@ -185,6 +200,11 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "async_batch_fallback_reason" in audit
     assert "async_batch_order_preserved" in audit
     assert "async_batch_error_count" in audit
+    assert "retrieval_snapshot_cache_used" in audit
+    assert "retrieval_snapshot_cache_hit" in audit
+    assert "retrieval_snapshot_cache_key_kind" in audit
+    assert "retrieval_snapshot_cache_miss_reason" in audit
+    assert "retrieval_snapshot_cache_age_s" in audit
 
     audit_path = tmp_path / "audit.json"
     write_audit(audit, audit_path)
@@ -220,6 +240,11 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "async_batch_fallback_reason" in payload
     assert "async_batch_order_preserved" in payload
     assert "async_batch_error_count" in payload
+    assert "retrieval_snapshot_cache_used" in payload
+    assert "retrieval_snapshot_cache_hit" in payload
+    assert "retrieval_snapshot_cache_key_kind" in payload
+    assert "retrieval_snapshot_cache_miss_reason" in payload
+    assert "retrieval_snapshot_cache_age_s" in payload
 
 
 def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
@@ -272,3 +297,8 @@ def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
         assert "async_batch_fallback_reason" in audit
         assert "async_batch_order_preserved" in audit
         assert "async_batch_error_count" in audit
+        assert "retrieval_snapshot_cache_used" in audit
+        assert "retrieval_snapshot_cache_hit" in audit
+        assert "retrieval_snapshot_cache_key_kind" in audit
+        assert "retrieval_snapshot_cache_miss_reason" in audit
+        assert "retrieval_snapshot_cache_age_s" in audit
