@@ -164,6 +164,41 @@ def test_ask_final_markdown_doc_only_truth_binding_removes_conflicting_llm_claim
     assert "Supporting context: retrieval selected related implementation snippets." in md
 
 
+def test_ask_final_markdown_removes_conflicting_authoritative_modified_duplicate_block() -> None:
+    answer_text = _prepend_pr_metadata_to_answer(
+        answer_text=(
+            "Changed files in this PR (authoritative):\n"
+            "- PRODUCTION_READINESS_ASSESSMENT.md (modified)\n"
+            "- docs/topocore_v5_phase0_phase1_parity.md (modified)\n"
+            "\n"
+            "Supporting context: evidence includes repo internals for reasoning."
+        ),
+        changed_files=[
+            "PRODUCTION_READINESS_ASSESSMENT.md",
+            "docs/topocore_v5_phase0_phase1_parity.md",
+        ],
+        changed_file_entries=[
+            {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
+            {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+        ],
+    )
+
+    md = render_answer_markdown(
+        answer_text=answer_text,
+        evidence=[],
+        audit_summary={"route_final": "FAST", "command": "ask"},
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "- Removed: `PRODUCTION_READINESS_ASSESSMENT.md`" in md
+    assert "- Removed: `docs/topocore_v5_phase0_phase1_parity.md`" in md
+    assert "Changed files in this PR (authoritative):" not in md
+    assert "PRODUCTION_READINESS_ASSESSMENT.md (modified)" not in md
+    assert "docs/topocore_v5_phase0_phase1_parity.md (modified)" not in md
+    assert "Supporting context: evidence includes repo internals for reasoning." in md
+
+
 def test_review_prompt_assembles_changed_files_before_diff_context() -> None:
     messages, _stats = build_messages_for_review(
         query="Review this PR",

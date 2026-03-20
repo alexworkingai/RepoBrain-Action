@@ -5088,12 +5088,16 @@ _UNTRUSTED_PR_CLAIMS_HEADER_RE = re.compile(
     re.IGNORECASE,
 )
 _UNTRUSTED_PR_FILES_HEADER_RE = re.compile(
-    r"^\s*(?:changed\s+files|files\s+changed|file\s+changes|references)\s*:?\s*$",
+    r"^\s*(?:changed\s+files\b.*|files\s+changed\b.*|file\s+changes\b.*|references\b.*)\s*:?\s*$",
     re.IGNORECASE,
 )
 _UNTRUSTED_PR_CLAIMS_BULLET_RE = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+")
 _UNTRUSTED_PR_CHANGE_LINE_RE = re.compile(
     r"^\s*(?:[-*]|\d+[.)])?\s*(?:updated?|modified?|added?|removed?|deleted|renamed)\b(?P<rest>.*)$",
+    re.IGNORECASE,
+)
+_UNTRUSTED_PR_STATUS_LABELED_PATH_RE = re.compile(
+    r"^(?P<path>\S+)\s*\((?P<op>modified|added|removed|deleted|renamed)\)\.?\s*$",
     re.IGNORECASE,
 )
 
@@ -5133,6 +5137,17 @@ def _line_looks_like_path_only_reference(line: str) -> bool:
     return _looks_like_repo_path_token(token)
 
 
+def _line_looks_like_status_labeled_path_claim(line: str) -> bool:
+    stripped = str(line or "").strip()
+    bullet = _UNTRUSTED_PR_CLAIMS_BULLET_RE.match(stripped)
+    if bullet:
+        stripped = stripped[bullet.end() :].strip()
+    match = _UNTRUSTED_PR_STATUS_LABELED_PATH_RE.match(stripped)
+    if not match:
+        return False
+    return _looks_like_repo_path_token(str(match.group("path") or ""))
+
+
 def _strip_untrusted_pr_change_claims(answer_text: str) -> str:
     raw_lines = str(answer_text or "").splitlines()
     if not raw_lines:
@@ -5150,11 +5165,15 @@ def _strip_untrusted_pr_change_claims(answer_text: str) -> str:
             if not line.strip():
                 index += 1
                 continue
-            if _line_looks_like_untrusted_file_change_claim(line) or _line_looks_like_path_only_reference(line):
+            if (
+                _line_looks_like_untrusted_file_change_claim(line)
+                or _line_looks_like_path_only_reference(line)
+                or _line_looks_like_status_labeled_path_claim(line)
+            ):
                 index += 1
                 continue
             drop_claim_block = False
-        if _line_looks_like_untrusted_file_change_claim(line):
+        if _line_looks_like_untrusted_file_change_claim(line) or _line_looks_like_status_labeled_path_claim(line):
             index += 1
             continue
         kept.append(line)
