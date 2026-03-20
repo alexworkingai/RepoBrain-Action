@@ -5087,7 +5087,50 @@ _UNTRUSTED_PR_CLAIMS_HEADER_RE = re.compile(
     r"^\s*(?:this|the)\s+pr\b.*\b(?:change|changes|changed|modified|updated|added|removed|renamed)\b.*$",
     re.IGNORECASE,
 )
-_UNTRUSTED_PR_CLAIMS_BULLET_RE = re.compile(r"^\s*[-*]\s+")
+_UNTRUSTED_PR_FILES_HEADER_RE = re.compile(
+    r"^\s*(?:changed\s+files|files\s+changed|file\s+changes|references)\s*:?\s*$",
+    re.IGNORECASE,
+)
+_UNTRUSTED_PR_CLAIMS_BULLET_RE = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+")
+_UNTRUSTED_PR_CHANGE_LINE_RE = re.compile(
+    r"^\s*(?:[-*]|\d+[.)])?\s*(?:updated?|modified?|added?|removed?|deleted|renamed)\b(?P<rest>.*)$",
+    re.IGNORECASE,
+)
+
+
+def _normalize_claim_path_token(token: str) -> str:
+    return str(token or "").strip().strip("`\"'()[]{}<>.,;:")
+
+
+def _looks_like_repo_path_token(token: str) -> bool:
+    path = _normalize_claim_path_token(token)
+    if not path or " " in path:
+        return False
+    if path.startswith("http://") or path.startswith("https://"):
+        return False
+    return "/" in path or "\\" in path or "." in path
+
+
+def _line_looks_like_untrusted_file_change_claim(line: str) -> bool:
+    match = _UNTRUSTED_PR_CHANGE_LINE_RE.match(line)
+    if not match:
+        return False
+    rest = str(match.group("rest") or "").strip()
+    if not rest:
+        return False
+    token = _normalize_claim_path_token(rest.split()[0])
+    return _looks_like_repo_path_token(token)
+
+
+def _line_looks_like_path_only_reference(line: str) -> bool:
+    bullet = _UNTRUSTED_PR_CLAIMS_BULLET_RE.match(line)
+    if not bullet:
+        return False
+    remainder = str(line[bullet.end() :]).strip()
+    if not remainder:
+        return False
+    token = _normalize_claim_path_token(remainder.split()[0])
+    return _looks_like_repo_path_token(token)
 
 
 def _strip_untrusted_pr_change_claims(answer_text: str) -> str:
@@ -5096,16 +5139,23 @@ def _strip_untrusted_pr_change_claims(answer_text: str) -> str:
         return ""
     kept: list[str] = []
     index = 0
+    drop_claim_block = False
     while index < len(raw_lines):
         line = raw_lines[index]
-        if _UNTRUSTED_PR_CLAIMS_HEADER_RE.match(line):
+        if _UNTRUSTED_PR_CLAIMS_HEADER_RE.match(line) or _UNTRUSTED_PR_FILES_HEADER_RE.match(line):
+            drop_claim_block = True
             index += 1
-            while index < len(raw_lines):
-                next_line = raw_lines[index]
-                if not next_line.strip() or _UNTRUSTED_PR_CLAIMS_BULLET_RE.match(next_line):
-                    index += 1
-                    continue
-                break
+            continue
+        if drop_claim_block:
+            if not line.strip():
+                index += 1
+                continue
+            if _line_looks_like_untrusted_file_change_claim(line) or _line_looks_like_path_only_reference(line):
+                index += 1
+                continue
+            drop_claim_block = False
+        if _line_looks_like_untrusted_file_change_claim(line):
+            index += 1
             continue
         kept.append(line)
         index += 1
