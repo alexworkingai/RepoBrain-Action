@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from repobrain.evidence import EvidenceItem
-from repobrain.output_md import render_answer_markdown, render_patch_markdown, render_review_markdown
+from repobrain.output_md import (
+    enforce_comment_limit,
+    render_answer_markdown,
+    render_patch_markdown,
+    render_review_markdown,
+)
 
 
 def test_retained_preferred_model_does_not_render_downgrade_budget_action() -> None:
@@ -355,6 +360,135 @@ def test_review_final_markdown_details_include_snapshot_cache_status() -> None:
     assert "### 🗃️ Retrieval snapshot cache" in details_md
     assert "- Status: `hit`" in details_md
     assert "- Key kind: `pr_number_head_sha`" in details_md
+
+
+def test_ask_truncated_output_keeps_snapshot_cache_miss_then_hit_visible() -> None:
+    miss_md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": False,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "cache_key_miss",
+            "retrieval_snapshot_cache_age_s": 0,
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+    hit_md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": True,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "none",
+            "retrieval_snapshot_cache_age_s": 7,
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    miss_truncated, miss_cut = enforce_comment_limit(miss_md, max_bytes=220)
+    hit_truncated, hit_cut = enforce_comment_limit(hit_md, max_bytes=220)
+
+    assert miss_cut is True
+    assert hit_cut is True
+    assert "Retrieval snapshot cache" in miss_truncated
+    assert "- Status: `miss`" in miss_truncated
+    assert "Retrieval snapshot cache" in hit_truncated
+    assert "- Status: `hit`" in hit_truncated
+
+
+def test_review_truncated_output_keeps_snapshot_cache_miss_then_hit_visible() -> None:
+    review = {
+        "summary_text": "Review complete.",
+        "risk_level": "low",
+        "files_block": [],
+        "confirmed_findings": [],
+        "possible_signals": [],
+        "informational_notes": [],
+        "recommendations": [],
+    }
+    miss_md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "review_batch_mode": False,
+            "review_batch_count": 1,
+            "batch_planner_used": False,
+            "batch_plan_mode": "not_applied",
+            "batch_count_planned": 1,
+            "batch_primary_segments": "none",
+            "batch_support_segments": "none",
+            "batch_fallback_reason": "not_applicable",
+            "async_batch_used": False,
+            "async_batch_mode": "sequential_disabled",
+            "async_batch_concurrency": 1,
+            "async_batch_tasks_total": 1,
+            "async_batch_tasks_completed": 1,
+            "async_batch_order_preserved": True,
+            "async_batch_error_count": 0,
+            "async_batch_fallback_reason": "disabled",
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": False,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "cache_key_miss",
+            "retrieval_snapshot_cache_age_s": 0,
+        },
+    )
+    hit_md = render_review_markdown(
+        review=review,
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "pass_count": 1,
+            "review_batch_mode": False,
+            "review_batch_count": 1,
+            "batch_planner_used": False,
+            "batch_plan_mode": "not_applied",
+            "batch_count_planned": 1,
+            "batch_primary_segments": "none",
+            "batch_support_segments": "none",
+            "batch_fallback_reason": "not_applicable",
+            "async_batch_used": False,
+            "async_batch_mode": "sequential_disabled",
+            "async_batch_concurrency": 1,
+            "async_batch_tasks_total": 1,
+            "async_batch_tasks_completed": 1,
+            "async_batch_order_preserved": True,
+            "async_batch_error_count": 0,
+            "async_batch_fallback_reason": "disabled",
+            "retrieval_snapshot_cache_used": True,
+            "retrieval_snapshot_cache_hit": True,
+            "retrieval_snapshot_cache_key_kind": "pr_number_head_sha",
+            "retrieval_snapshot_cache_miss_reason": "none",
+            "retrieval_snapshot_cache_age_s": 5,
+        },
+    )
+
+    miss_truncated, miss_cut = enforce_comment_limit(miss_md, max_bytes=260)
+    hit_truncated, hit_cut = enforce_comment_limit(hit_md, max_bytes=260)
+
+    assert miss_cut is True
+    assert hit_cut is True
+    assert "Retrieval snapshot cache" in miss_truncated
+    assert "- Status: `miss`" in miss_truncated
+    assert "### Async batch orchestration" in miss_truncated
+    assert "Retrieval snapshot cache" in hit_truncated
+    assert "- Status: `hit`" in hit_truncated
+    assert "### Async batch orchestration" in hit_truncated
 
 
 def test_incremental_retrieval_fields_render_in_review_diagnostics() -> None:
