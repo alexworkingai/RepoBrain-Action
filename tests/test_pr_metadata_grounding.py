@@ -7,6 +7,7 @@ from repobrain.github_flow import (
     _should_use_pr_metadata_grounding,
 )
 from repobrain.llm.prompts import build_messages_for_review
+from repobrain.output_md import render_answer_markdown
 
 
 def test_pr_metadata_grounding_selected_for_pr_semantic_context() -> None:
@@ -89,6 +90,78 @@ def test_prepend_pr_metadata_filters_untrusted_changed_file_claims_from_llm_text
     assert "Updated `repobrain/ask.py`" not in text
     assert "Updated `tests/test_pr_review.py`" not in text
     assert "Supporting context: retrieval ranked `repobrain/ask.py`" in text
+
+
+def test_prepend_pr_metadata_strips_conflicting_doc_only_claim_lines_without_header() -> None:
+    text = _prepend_pr_metadata_to_answer(
+        answer_text=(
+            "Updated PRODUCTION_READINESS_ASSESSMENT.md.\n"
+            "Updated docs/topocore_v5_phase0_phase1_parity.md.\n"
+            "Modified tests/test_pr_review.py (lines 10-20).\n"
+            "Modified repobrain/__init__.py.\n"
+            "Modified repobrain/ask.py."
+        ),
+        changed_files=[
+            "PRODUCTION_READINESS_ASSESSMENT.md",
+            "docs/topocore_v5_phase0_phase1_parity.md",
+        ],
+        changed_file_entries=[
+            {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
+            {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+        ],
+    )
+
+    assert "- Removed: `PRODUCTION_READINESS_ASSESSMENT.md`" in text
+    assert "- Removed: `docs/topocore_v5_phase0_phase1_parity.md`" in text
+    assert "Updated PRODUCTION_READINESS_ASSESSMENT.md." not in text
+    assert "Updated docs/topocore_v5_phase0_phase1_parity.md." not in text
+    assert "Modified tests/test_pr_review.py" not in text
+    assert "Modified repobrain/__init__.py" not in text
+    assert "Modified repobrain/ask.py" not in text
+
+
+def test_ask_final_markdown_doc_only_truth_binding_removes_conflicting_llm_claims() -> None:
+    answer_text = _prepend_pr_metadata_to_answer(
+        answer_text=(
+            "This PR made changes to the following files:\n"
+            "- Updated PRODUCTION_READINESS_ASSESSMENT.md.\n"
+            "- Updated docs/topocore_v5_phase0_phase1_parity.md.\n"
+            "- Modified tests/test_pr_review.py (lines 11-42).\n"
+            "- Modified repobrain/__init__.py.\n"
+            "- Modified repobrain/ask.py.\n"
+            "References:\n"
+            "- repobrain/ask.py\n"
+            "- tests/test_pr_review.py\n"
+            "\n"
+            "Supporting context: retrieval selected related implementation snippets."
+        ),
+        changed_files=[
+            "PRODUCTION_READINESS_ASSESSMENT.md",
+            "docs/topocore_v5_phase0_phase1_parity.md",
+        ],
+        changed_file_entries=[
+            {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
+            {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+        ],
+    )
+
+    md = render_answer_markdown(
+        answer_text=answer_text,
+        evidence=[],
+        audit_summary={"route_final": "FAST", "command": "ask"},
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "- Removed: `PRODUCTION_READINESS_ASSESSMENT.md`" in md
+    assert "- Removed: `docs/topocore_v5_phase0_phase1_parity.md`" in md
+    assert "Updated PRODUCTION_READINESS_ASSESSMENT.md." not in md
+    assert "Updated docs/topocore_v5_phase0_phase1_parity.md." not in md
+    assert "Modified tests/test_pr_review.py" not in md
+    assert "Modified repobrain/__init__.py" not in md
+    assert "Modified repobrain/ask.py" not in md
+    assert "### Async batch orchestration" not in md
+    assert "Supporting context: retrieval selected related implementation snippets." in md
 
 
 def test_review_prompt_assembles_changed_files_before_diff_context() -> None:
