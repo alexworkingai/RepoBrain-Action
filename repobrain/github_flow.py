@@ -478,6 +478,54 @@ def _extract_changed_files(payload: dict[str, Any]) -> list[str]:
     return sorted(set(changed))
 
 
+def _normalize_pr_file_operation(value: object) -> str:
+    status = str(value or "").strip().lower()
+    if status in {"added", "removed", "renamed", "modified"}:
+        return status
+    if status in {"deleted"}:
+        return "removed"
+    return "modified"
+
+
+def _extract_changed_file_entries(payload: dict[str, Any]) -> list[dict[str, str]]:
+    file_ops: dict[str, str] = {}
+    ordered_paths: list[str] = []
+
+    files_raw = payload.get("files", [])
+    if isinstance(files_raw, list):
+        for item in files_raw:
+            filename = ""
+            operation = "modified"
+            if isinstance(item, dict):
+                filename = str(item.get("filename", "") or "").strip()
+                operation = _normalize_pr_file_operation(item.get("status", "modified"))
+            else:
+                filename = str(item).strip()
+            if not filename:
+                continue
+            if filename not in file_ops:
+                ordered_paths.append(filename)
+            file_ops[filename] = operation
+
+    changed_files_raw = payload.get("changed_files", [])
+    if isinstance(changed_files_raw, list):
+        for item in changed_files_raw:
+            filename = ""
+            operation = "modified"
+            if isinstance(item, dict):
+                filename = str(item.get("filename", "") or "").strip()
+                operation = _normalize_pr_file_operation(item.get("status", "modified"))
+            else:
+                filename = str(item).strip()
+            if not filename:
+                continue
+            if filename not in file_ops:
+                ordered_paths.append(filename)
+                file_ops[filename] = operation
+
+    return [{"filename": path, "status": file_ops.get(path, "modified")} for path in ordered_paths]
+
+
 def _extract_diff_hunks(payload: dict[str, Any]) -> list[str]:
     hunks_raw = payload.get("diff_hunks", [])
     if not isinstance(hunks_raw, list):
@@ -522,6 +570,7 @@ def _build_github_context_seed(
             head_sha = str(head.get("sha", "") or "")
             head_ref = str(head.get("ref", "") or "")
 
+    file_entries = _extract_changed_file_entries(payload)
     return {
         "event_name": event_name,
         "repository": repository,
@@ -536,6 +585,7 @@ def _build_github_context_seed(
         "head_sha": head_sha,
         "base_ref": base_ref,
         "head_ref": head_ref,
+        "files": file_entries,
         "changed_files": _extract_changed_files(payload),
         "diff_hunks": _extract_diff_hunks(payload),
     }
@@ -579,7 +629,12 @@ def _build_dispatch_pr_payload(*, repo: str, pr_number: int | None) -> dict[str,
             continue
         filename = str(item.get("filename", "") or "").strip()
         if filename:
-            files.append({"filename": filename})
+            files.append(
+                {
+                    "filename": filename,
+                    "status": _normalize_pr_file_operation(item.get("status", "modified")),
+                }
+            )
             changed_files.append(filename)
         patch = item.get("patch")
         if isinstance(patch, str):
@@ -4829,13 +4884,50 @@ def _build_explain_answer(evidence: list[EvidenceItem], question: str) -> str:
 
 
 def _collect_pr_changed_files_from_context(github_context: dict[str, Any] | None) -> list[str]:
+    return [item["path"] for item in _collect_pr_changed_file_entries_from_context(github_context)]
+
+
+def _collect_pr_changed_file_entries_from_context(
+    github_context: dict[str, Any] | None,
+) -> list[dict[str, str]]:
     if not isinstance(github_context, dict):
         return []
-    raw = github_context.get("changed_files", [])
-    if not isinstance(raw, list):
-        return []
-    files = [str(item).strip() for item in raw if str(item).strip()]
-    return sorted(set(files))
+    file_ops: dict[str, str] = {}
+    ordered_paths: list[str] = []
+
+    files_raw = github_context.get("files", [])
+    if isinstance(files_raw, list):
+        for item in files_raw:
+            filename = ""
+            operation = "modified"
+            if isinstance(item, dict):
+                filename = str(item.get("filename", "") or "").strip()
+                operation = _normalize_pr_file_operation(item.get("status", "modified"))
+            else:
+                filename = str(item).strip()
+            if not filename:
+                continue
+            if filename not in file_ops:
+                ordered_paths.append(filename)
+            file_ops[filename] = operation
+
+    changed_files_raw = github_context.get("changed_files", [])
+    if isinstance(changed_files_raw, list):
+        for item in changed_files_raw:
+            filename = ""
+            operation = "modified"
+            if isinstance(item, dict):
+                filename = str(item.get("filename", "") or "").strip()
+                operation = _normalize_pr_file_operation(item.get("status", "modified"))
+            else:
+                filename = str(item).strip()
+            if not filename:
+                continue
+            if filename not in file_ops:
+                ordered_paths.append(filename)
+                file_ops[filename] = operation
+
+    return [{"path": path, "operation": file_ops.get(path, "modified")} for path in ordered_paths]
 
 
 def _enrich_github_context_with_pr_metadata(
@@ -4865,6 +4957,7 @@ def _enrich_github_context_with_pr_metadata(
     if needs_files:
         files_payload = client.get_pull_files(pr_number)
         files: list[str] = []
+        file_entries: list[dict[str, str]] = []
         diff_hunks: list[str] = []
         for item in files_payload:
             if not isinstance(item, dict):
@@ -4872,6 +4965,12 @@ def _enrich_github_context_with_pr_metadata(
             filename = str(item.get("filename", "") or "").strip()
             if filename:
                 files.append(filename)
+                file_entries.append(
+                    {
+                        "filename": filename,
+                        "status": _normalize_pr_file_operation(item.get("status", "modified")),
+                    }
+                )
             patch = item.get("patch")
             if isinstance(patch, str):
                 patch_clean = patch.strip()
@@ -4879,6 +4978,7 @@ def _enrich_github_context_with_pr_metadata(
                     diff_hunks.append(patch_clean)
         if files:
             context["changed_files"] = sorted(set(files))
+            context["files"] = file_entries
         existing_hunks = context.get("diff_hunks")
         has_hunks = isinstance(existing_hunks, list) and any(str(item).strip() for item in existing_hunks)
         if diff_hunks and not has_hunks:
@@ -4945,25 +5045,71 @@ def _prepend_pr_metadata_to_answer(
     *,
     answer_text: str,
     changed_files: list[str],
+    changed_file_entries: list[dict[str, str]] | None = None,
     primary_segments: str = "none",
     segment_summary: str = "none",
 ) -> str:
     if not changed_files:
         return answer_text
+
+    def _status_label(operation: str) -> str:
+        normalized = _normalize_pr_file_operation(operation)
+        if normalized == "added":
+            return "Added"
+        if normalized == "removed":
+            return "Removed"
+        if normalized == "renamed":
+            return "Renamed"
+        return "Modified"
+
+    metadata_by_path: dict[str, str] = {
+        str(item.get("path", "")).strip(): str(item.get("operation", "modified"))
+        for item in (changed_file_entries or [])
+        if isinstance(item, dict) and str(item.get("path", "")).strip()
+    }
     lines = [f"PR metadata: {len(changed_files)} changed files in current PR."]
     if str(primary_segments or "none") != "none":
         lines.append(f"- Primary segments: {primary_segments}")
     if str(segment_summary or "none") != "none":
         lines.append(f"- Segment summary: {segment_summary}")
     for path in changed_files[:3]:
-        lines.append(f"- `{path}`")
+        lines.append(f"- {_status_label(metadata_by_path.get(path, 'modified'))}: `{path}`")
     if len(changed_files) > 3:
         lines.append(f"- +{len(changed_files) - 3} more")
     prefix = "\n".join(lines)
-    clean_answer = answer_text.strip()
+    clean_answer = _strip_untrusted_pr_change_claims(answer_text).strip()
     if not clean_answer:
         return prefix
     return f"{prefix}\n\n{clean_answer}"
+
+
+_UNTRUSTED_PR_CLAIMS_HEADER_RE = re.compile(
+    r"^\s*(?:this|the)\s+pr\b.*\b(?:change|changes|changed|modified|updated|added|removed|renamed)\b.*$",
+    re.IGNORECASE,
+)
+_UNTRUSTED_PR_CLAIMS_BULLET_RE = re.compile(r"^\s*[-*]\s+")
+
+
+def _strip_untrusted_pr_change_claims(answer_text: str) -> str:
+    raw_lines = str(answer_text or "").splitlines()
+    if not raw_lines:
+        return ""
+    kept: list[str] = []
+    index = 0
+    while index < len(raw_lines):
+        line = raw_lines[index]
+        if _UNTRUSTED_PR_CLAIMS_HEADER_RE.match(line):
+            index += 1
+            while index < len(raw_lines):
+                next_line = raw_lines[index]
+                if not next_line.strip() or _UNTRUSTED_PR_CLAIMS_BULLET_RE.match(next_line):
+                    index += 1
+                    continue
+                break
+            continue
+        kept.append(line)
+        index += 1
+    return "\n".join(kept)
 
 
 def _resolve_answer_grounding_mode(*, pr_metadata_used: bool, evidence_count: int) -> str:
@@ -5181,7 +5327,8 @@ def _build_qa_markdown(
         audit_summary["embed_used"] = False
     if "embed_reason" not in audit_summary:
         audit_summary["embed_reason"] = "n/a"
-    changed_files_from_pr = _collect_pr_changed_files_from_context(qa_github_context)
+    changed_file_entries_from_pr = _collect_pr_changed_file_entries_from_context(qa_github_context)
+    changed_files_from_pr = [item["path"] for item in changed_file_entries_from_pr]
     if changed_files_from_pr:
         audit_summary["touched_files"] = changed_files_from_pr
         audit_summary["pr_changed_files_count"] = len(changed_files_from_pr)
@@ -5263,6 +5410,7 @@ def _build_qa_markdown(
         answer_text_out = _prepend_pr_metadata_to_answer(
             answer_text=answer_text_out,
             changed_files=changed_files_from_pr,
+            changed_file_entries=changed_file_entries_from_pr,
             primary_segments=str(audit_summary.get("pr_primary_segments", "none") or "none"),
             segment_summary=str(audit_summary.get("pr_segment_summary", "none") or "none"),
         )
