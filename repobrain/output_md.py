@@ -1837,6 +1837,7 @@ def render_answer_markdown(
             ]
         )
         detail_lines = [
+            *_retrieval_snapshot_lines(audit_summary),
             "### 📊 Evidence",
             *evidence_block,
             "",
@@ -1852,8 +1853,6 @@ def render_answer_markdown(
             "",
             "### 🧭 Route details",
             *_mode_lines(audit_summary),
-            "",
-            *_retrieval_snapshot_lines(audit_summary),
             *_render_diagnostic_table(audit_summary),
             "",
             "### 🧾 Audit anchors",
@@ -1877,6 +1876,7 @@ def render_answer_markdown(
         )
         sections.append("")
         detail_lines = [
+            *_retrieval_snapshot_lines(audit_summary),
             "### 📊 Evidence",
             *evidence_block,
             "",
@@ -1893,7 +1893,6 @@ def render_answer_markdown(
             "### 🧭 Route details",
             *_mode_lines(audit_summary),
             "",
-            *_retrieval_snapshot_lines(audit_summary),
             *_pr_segments_lines(audit_summary),
             "",
             *_render_diagnostic_table(audit_summary),
@@ -2134,6 +2133,7 @@ def render_review_markdown(
     )
 
     detail_lines = [
+        *_retrieval_snapshot_lines(audit_summary),
         *_render_async_batch_lines(audit_summary, command="review"),
         "Risk drivers:",
         *risk_driver_block,
@@ -2160,7 +2160,6 @@ def render_review_markdown(
         "### 🧭 Route details",
         *_mode_lines(audit_summary),
         "",
-        *_retrieval_snapshot_lines(audit_summary),
         *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
         "",
         "### 🧾 Audit anchors",
@@ -2228,6 +2227,7 @@ def render_patch_markdown(
     sections.append("")
 
     detail_lines = [
+        *_retrieval_snapshot_lines(audit_summary),
         *_render_async_batch_lines(audit_summary, command="fix"),
         "### 🎯 Patch targeting",
         f"- Patch target files total: {patch_target_files_total}",
@@ -2260,7 +2260,6 @@ def render_patch_markdown(
         "",
         *_embeddings_lines(audit_summary),
         "",
-        *_retrieval_snapshot_lines(audit_summary),
         *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
         "",
         "### 🧾 Audit anchors",
