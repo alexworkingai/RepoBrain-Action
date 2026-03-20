@@ -5892,6 +5892,7 @@ def _build_review_markdown(
 
     files: list[dict[str, Any]]
     head_sha = ""
+    base_sha = ""
     pull: dict[str, Any] = {}
     repo_name = extract_repo_from_env() or (client.repo if client is not None else "")
     if dry_run:
@@ -5929,6 +5930,9 @@ def _build_review_markdown(
         head = pull.get("head", {})
         if isinstance(head, dict):
             head_sha = str(head.get("sha", "") or "")
+        base = pull.get("base", {})
+        if isinstance(base, dict):
+            base_sha = str(base.get("sha", "") or "")
         files = client.get_pull_files(pull_number=issue_number)
 
     if not head_sha:
@@ -5994,6 +5998,13 @@ def _build_review_markdown(
         candidate_paths=[],
     )
     planner_context = dict(github_context_seed or {})
+    planner_context["is_pr"] = True
+    if issue_number is not None:
+        planner_context["pr_number"] = issue_number
+    if head_sha:
+        planner_context["head_sha"] = head_sha
+    if base_sha:
+        planner_context["base_sha"] = base_sha
     if all_pr_changed_files:
         planner_context["changed_files"] = list(all_pr_changed_files)
     planner_context["pr_segmentation_file_map"] = dict(review_segmentation_seed.file_segment_class_map)

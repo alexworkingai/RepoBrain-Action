@@ -135,7 +135,7 @@ def _build_cache_key(
         "base_sha": base_sha or "n/a",
         "changed_digest": changed_digest,
         "command": str(command or "").strip().lower(),
-        "question_hash": _sha256_text(str(question or "").strip()),
+        "question_hash": _sha256_text(" ".join(str(question or "").split())),
         "topk": int(topk or 0),
     }
     key = _sha256_text(orjson.dumps(key_payload, option=orjson.OPT_SORT_KEYS).decode("utf-8"))
