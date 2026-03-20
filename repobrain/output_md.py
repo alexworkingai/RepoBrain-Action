@@ -180,13 +180,137 @@ def _evidence_lines(
     *,
     repo: str | None,
     sha: str | None,
+    audit_summary: dict[str, Any] | None = None,
 ) -> list[str]:
     if not evidence:
         return ["- No source locators selected."]
     return [
-        f"- {make_line_link(repo, sha, item.file_path, item.line_start, item.line_end)} "
-        f"(score={item.score:.4f})"
+        (
+            f"- [{_evidence_context_label_for_path(item.file_path, audit_summary)}] "
+            f"{make_line_link(repo, sha, item.file_path, item.line_start, item.line_end)} "
+            f"(score={item.score:.4f})"
+        )
         for item in evidence
+    ]
+
+
+def _changed_files_set(audit_summary: dict[str, Any] | None) -> set[str]:
+    if not isinstance(audit_summary, dict):
+        return set()
+    raw = audit_summary.get("touched_files", [])
+    if not isinstance(raw, list):
+        return set()
+    return {str(item).strip() for item in raw if str(item).strip()}
+
+
+def _is_test_context_path(path: str) -> bool:
+    normalized = str(path or "").strip().lower()
+    if not normalized:
+        return False
+    return (
+        normalized.startswith("tests/")
+        or "/tests/" in normalized
+        or normalized.endswith("_test.py")
+        or normalized.endswith("_spec.py")
+    )
+
+
+def _is_reference_context_path(path: str) -> bool:
+    normalized = str(path or "").strip().lower()
+    if not normalized:
+        return False
+    if normalized.startswith("docs/") or normalized.startswith(".github/workflows/"):
+        return True
+    if normalized.endswith(".md") or normalized.endswith(".rst"):
+        return True
+    if normalized.endswith((".toml", ".yaml", ".yml", ".json", ".ini", ".cfg")):
+        return True
+    basename = normalized.rsplit("/", 1)[-1]
+    return basename in {
+        "pyproject.toml",
+        "poetry.lock",
+        "requirements.txt",
+        "setup.cfg",
+        "setup.py",
+        "tox.ini",
+        "package.json",
+        "package-lock.json",
+    }
+
+
+def _evidence_context_label_for_path(path: str, audit_summary: dict[str, Any] | None) -> str:
+    changed_paths = _changed_files_set(audit_summary)
+    normalized_path = str(path or "").strip()
+    if normalized_path and normalized_path in changed_paths:
+        return "Changed in PR"
+    if _is_test_context_path(normalized_path):
+        return "Test context"
+    if _is_reference_context_path(normalized_path):
+        return "Reference"
+    return "Support context"
+
+
+_TOUCHED_FILE_PATH_RE = re.compile(r"`([^`]+)`")
+
+
+def _label_touched_file_lines(files_block: list[str], audit_summary: dict[str, Any]) -> list[str]:
+    labeled: list[str] = []
+    for raw in files_block:
+        line = str(raw or "").strip()
+        if not line or not line.startswith("- "):
+            labeled.append(line)
+            continue
+        if line.startswith("- +") or "No changed files detected." in line:
+            labeled.append(line)
+            continue
+        match = _TOUCHED_FILE_PATH_RE.search(line)
+        path = str(match.group(1)).strip() if match else ""
+        label = _evidence_context_label_for_path(path, audit_summary) if path else "Support context"
+        labeled.append(f"- [{label}] {line[2:].strip()}")
+    return labeled
+
+
+def _parse_evidence_bucket_counts(audit_summary: dict[str, Any]) -> dict[str, int]:
+    counts = {
+        "changed_primary": 0,
+        "changed_secondary": 0,
+        "support_context": 0,
+        "tests": 0,
+        "docs": 0,
+        "workflow_config": 0,
+    }
+    raw = str(audit_summary.get("evidence_budget_bucket_counts", "") or "").strip()
+    if not raw:
+        return counts
+    for token in raw.split(","):
+        key, sep, value = token.partition(":")
+        if not sep:
+            continue
+        key_norm = key.strip().lower()
+        if key_norm not in counts:
+            continue
+        counts[key_norm] = _int(value.strip(), 0)
+    return counts
+
+
+def _evidence_context_summary_lines(audit_summary: dict[str, Any]) -> list[str]:
+    counts = _parse_evidence_bucket_counts(audit_summary)
+    changed_count = counts["changed_primary"] + counts["changed_secondary"]
+    support_count = counts["support_context"]
+    tests_count = counts["tests"]
+    reference_count = counts["docs"] + counts["workflow_config"]
+    if changed_count == 0:
+        changed_count = len(_changed_files_set(audit_summary))
+    selected = _int(audit_summary.get("selected", 0))
+    if changed_count == 0 and support_count == 0 and tests_count == 0 and reference_count == 0 and selected == 0:
+        return []
+    return [
+        "### 🏷️ Evidence context",
+        f"- Changed in PR: `{changed_count}`",
+        f"- Support context: `{support_count}`",
+        f"- Test context: `{tests_count}`",
+        f"- Reference: `{reference_count}`",
+        "",
     ]
 
 
@@ -1633,7 +1757,7 @@ def render_answer_markdown(
     sha: str | None = None,
 ) -> str:
     route = _route(audit_summary)
-    evidence_block = _evidence_lines(evidence, repo=repo, sha=sha)
+    evidence_block = _evidence_lines(evidence, repo=repo, sha=sha, audit_summary=audit_summary)
     route_header = "### ✅ Answer"
     if route == "WAIT":
         route_header = "### ⏳ Needs verification"
@@ -1664,6 +1788,7 @@ def render_answer_markdown(
             "### 📊 Evidence",
             *evidence_block,
             "",
+            *_evidence_context_summary_lines(audit_summary),
             "### ✅ Next steps",
             f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
             "",
@@ -1702,6 +1827,7 @@ def render_answer_markdown(
             "### 📊 Evidence",
             *evidence_block,
             "",
+            *_evidence_context_summary_lines(audit_summary),
             "### ✅ Next steps",
             f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
             "",
@@ -1864,6 +1990,7 @@ def render_review_markdown(
     files_block = review.get("files_block", [])
     if not isinstance(files_block, list):
         files_block = []
+    files_block = _label_touched_file_lines(files_block, audit_summary)
     confirmed_findings = review.get("confirmed_findings", [])
     if not isinstance(confirmed_findings, list):
         confirmed_findings = []
@@ -1960,6 +2087,8 @@ def render_review_markdown(
         "### 🗂️ Touched files",
         *(files_block[:6] if files_block else ["- No changed files detected."]),
         *([f"- +{len(files_block) - 6} more"] if len(files_block) > 6 else []),
+        "",
+        *_evidence_context_summary_lines(audit_summary),
         *confirmed_section,
         "",
         "### 🟡 Possible signals",
@@ -2053,6 +2182,7 @@ def render_patch_markdown(
         f"- Localized patch evidence: {localized_patch_evidence}",
         f"- Patch grounding mode: {patch_grounding_mode}",
         "",
+        *_evidence_context_summary_lines(audit_summary),
         "### ✅ Patch validation",
         f"- Patch generation result: `{patch_generation_result}`",
         f"- Patch validation result: `{patch_validation_result}`",

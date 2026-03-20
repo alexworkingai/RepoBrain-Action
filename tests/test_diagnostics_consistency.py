@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from repobrain.evidence import EvidenceItem
 from repobrain.output_md import render_answer_markdown, render_patch_markdown, render_review_markdown
 
 
@@ -887,3 +888,97 @@ def test_review_fix_generic_diagnostics_do_not_repeat_meaningful_async_rows() ->
     assert "- Batch planner used: `yes`" not in fix_md
     assert fix_md.count("- Review batch mode: `yes`") == 1
     assert fix_md.count("- Review batch count: `2`") == 1
+
+
+def test_ask_evidence_lines_include_context_role_labels_without_changing_truth_binding() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[
+            EvidenceItem(file_path="docs/guide.md", line_start=1, line_end=5, score=0.9),
+            EvidenceItem(file_path="repobrain/ask.py", line_start=10, line_end=20, score=0.6),
+            EvidenceItem(file_path="tests/test_pr_review.py", line_start=3, line_end=9, score=0.5),
+        ],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "selected": 3,
+            "touched_files": ["docs/guide.md"],
+            "evidence_budget_bucket_counts": (
+                "changed_primary:1,changed_secondary:0,support_context:1,tests:1,docs:0,workflow_config:0"
+            ),
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "- [Changed in PR]" in md
+    assert "- [Support context]" in md
+    assert "- [Test context]" in md
+    assert "### 🏷️ Evidence context" in md
+    assert "### Async batch orchestration" not in md
+
+
+def test_review_touched_files_show_changed_vs_support_context_labels() -> None:
+    md = render_review_markdown(
+        review={
+            "summary_text": "Review complete.",
+            "risk_level": "low",
+            "files_block": [
+                "- `repobrain/github_flow.py` (+4 -2)",
+                "- `tests/test_pr_review.py` (+12 -0)",
+                "- `repobrain/ask.py` (+3 -1)",
+            ],
+            "confirmed_findings": [],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": [],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "selected": 3,
+            "touched_files": ["repobrain/github_flow.py", "tests/test_pr_review.py"],
+            "evidence_budget_bucket_counts": (
+                "changed_primary:2,changed_secondary:0,support_context:1,tests:1,docs:0,workflow_config:0"
+            ),
+        },
+    )
+
+    assert "- [Changed in PR] `repobrain/github_flow.py` (+4 -2)" in md
+    assert "- [Changed in PR] `tests/test_pr_review.py` (+12 -0)" in md
+    assert "- [Support context] `repobrain/ask.py` (+3 -1)" in md
+    assert "### Async batch orchestration" in md
+
+
+def test_fix_details_include_evidence_context_summary_labels() -> None:
+    md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 2,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+            "touched_files": ["repobrain/github_flow.py", "repobrain/output_md.py"],
+            "selected": 2,
+            "evidence_budget_bucket_counts": (
+                "changed_primary:2,changed_secondary:0,support_context:1,tests:0,docs:0,workflow_config:1"
+            ),
+        },
+    )
+
+    assert "### 🏷️ Evidence context" in md
+    assert "- Changed in PR: `2`" in md
+    assert "- Support context: `1`" in md
+    assert "- Reference: `1`" in md
+    assert "### Async batch orchestration" in md
