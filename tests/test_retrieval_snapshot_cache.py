@@ -102,3 +102,31 @@ def test_snapshot_cache_misses_when_pr_head_changes(tmp_path: Path) -> None:
     assert changed_head.cache_used is True
     assert changed_head.cache_hit is False
     assert changed_head.cache_miss_reason == "cache_key_miss"
+
+
+def test_snapshot_cache_hits_when_only_base_sha_changes(tmp_path: Path) -> None:
+    context_a = _context(head_sha="head-a")
+    context_b = dict(context_a)
+    context_b["base_sha"] = "base-2"
+
+    store_retrieval_snapshot(
+        question="Review PR changes.",
+        command="review",
+        topk=16,
+        github_context=context_a,
+        repo_root=tmp_path,
+        candidates=[_candidate("docs/a.md", 0)],
+        retrieval_runtime={"evidence_budget_mode": "review_default"},
+    )
+
+    loaded = load_retrieval_snapshot(
+        question="Review PR changes.",
+        command="review",
+        topk=16,
+        github_context=context_b,
+        repo_root=tmp_path,
+    )
+
+    assert loaded.cache_used is True
+    assert loaded.cache_hit is True
+    assert loaded.cache_miss_reason == "none"

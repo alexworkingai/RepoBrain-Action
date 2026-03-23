@@ -129,9 +129,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: artifacts/.repobrain_cache/retrieval_snapshot_cache.json
-          key: repobrain-snapshot-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: repobrain-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            repobrain-snapshot-${{ github.sha }}-
             repobrain-snapshot-
       - name: Apply workflow_dispatch toggles
         if: github.event_name == 'workflow_dispatch'

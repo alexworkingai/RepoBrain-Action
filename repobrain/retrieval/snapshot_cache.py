@@ -111,7 +111,6 @@ def _build_cache_key(
 
     pr_number = _normalize_pr_number(github_context.get("pr_number"))
     head_sha = str(github_context.get("head_sha", "") or "").strip()
-    base_sha = str(github_context.get("base_sha", "") or "").strip()
     changed_rows = _normalize_changed_file_rows(github_context)
     changed_digest = _sha256_text("\n".join(changed_rows)) if changed_rows else ""
 
@@ -132,7 +131,6 @@ def _build_cache_key(
         "key_kind": key_kind,
         "pr_number": pr_number or "n/a",
         "head_sha": head_sha or "n/a",
-        "base_sha": base_sha or "n/a",
         "changed_digest": changed_digest,
         "command": str(command or "").strip().lower(),
         "question_hash": _sha256_text(" ".join(str(question or "").split())),
