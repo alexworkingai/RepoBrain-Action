@@ -120,12 +120,19 @@ jobs:
         id: index_cache
         uses: actions/cache@v4
         with:
-          path: |
-            artifacts/index-package.zip
-            artifacts/.repobrain_cache/retrieval_snapshot_cache.json
+          path: artifacts/index-package.zip
           key: repobrain-index-main-${{ github.sha }}
           restore-keys: |
             repobrain-index-main-
+      - name: Restore RepoBrain retrieval snapshot cache
+        id: snapshot_cache_restore
+        uses: actions/cache/restore@v4
+        with:
+          path: artifacts/.repobrain_cache/retrieval_snapshot_cache.json
+          key: repobrain-snapshot-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            repobrain-snapshot-${{ github.sha }}-
+            repobrain-snapshot-
       - name: Apply workflow_dispatch toggles
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -179,6 +186,12 @@ jobs:
           dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
           comment_text: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.comment_text || '' }}
           issue_number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.issue_number || '' }}
+      - name: Save RepoBrain retrieval snapshot cache
+        if: always() && hashFiles('artifacts/.repobrain_cache/retrieval_snapshot_cache.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: artifacts/.repobrain_cache/retrieval_snapshot_cache.json
+          key: ${{ steps.snapshot_cache_restore.outputs.cache-primary-key }}
       - uses: actions/github-script@v7
         if: always() && github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain')
         env:

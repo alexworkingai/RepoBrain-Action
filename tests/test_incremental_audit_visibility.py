@@ -334,7 +334,7 @@ def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path) -> Non
     second_audit: dict[str, object] = {}
     client = _SnapshotTestClient()
 
-    _build_review_markdown(
+    first_markdown = _build_review_markdown(
         repo_root=tmp_path,
         cmd="review",
         query="",
@@ -371,5 +371,7 @@ def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path) -> Non
     assert first_audit["retrieval_snapshot_cache_hit"] is False
     assert second_audit["retrieval_snapshot_cache_used"] is True
     assert second_audit["retrieval_snapshot_cache_hit"] is True
-    assert "### 🗃️ Retrieval snapshot cache" in second_markdown
+    assert "Retrieval snapshot cache" in first_markdown
+    assert "- Status: `miss`" in first_markdown
+    assert "Retrieval snapshot cache" in second_markdown
     assert "- Status: `hit`" in second_markdown
