@@ -242,6 +242,14 @@ jobs:
           name: repobrain-diagnostic-summary
           path: artifacts/diagnostic_summary.md
           if-no-files-found: ignore
+      - name: Generate RepoBrain stability benchmark artifacts
+        if: always()
+        shell: bash
+        run: |
+          python scripts/gen_stability_benchmark.py \
+            --audit-dir artifacts/audit \
+            --output-json artifacts/benchmarks/repobrain_stability_benchmark.json \
+            --output-md artifacts/benchmarks/repobrain_stability_benchmark.md
       - name: Upload RepoBrain stability benchmark artifacts
         if: always()
         uses: actions/upload-artifact@v4
