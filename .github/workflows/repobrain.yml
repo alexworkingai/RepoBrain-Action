@@ -242,6 +242,15 @@ jobs:
           name: repobrain-diagnostic-summary
           path: artifacts/diagnostic_summary.md
           if-no-files-found: ignore
+      - name: Upload RepoBrain stability benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-stability-benchmark
+          path: |
+            artifacts/benchmarks/repobrain_stability_benchmark.json
+            artifacts/benchmarks/repobrain_stability_benchmark.md
+          if-no-files-found: ignore
       - name: Upload RepoBrain patch artifact
         if: always()
         uses: actions/upload-artifact@v4

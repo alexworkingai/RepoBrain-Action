@@ -7,6 +7,7 @@ import time
 
 from repobrain.audit import write_audit
 from repobrain.github_flow import get_last_audit, parse_issue_number, run_github_flow
+from repobrain.stability_benchmark import write_stability_benchmark_artifacts
 
 
 def _parse_bool(value: str) -> bool:
@@ -50,6 +51,19 @@ def main() -> int:
     audit_path = Path("artifacts") / "audit" / f"audit_{run_id}_{issue_tag}.json"
     write_audit(audit or {}, audit_path)
     print(f"AUDIT_PATH={audit_path.as_posix()}")
+    try:
+        benchmark_json = Path("artifacts") / "benchmarks" / "repobrain_stability_benchmark.json"
+        benchmark_md = Path("artifacts") / "benchmarks" / "repobrain_stability_benchmark.md"
+        payload = write_stability_benchmark_artifacts(
+            audit_dir=Path("artifacts") / "audit",
+            output_json_path=benchmark_json,
+            output_markdown_path=benchmark_md,
+        )
+        print(f"BENCHMARK_JSON_PATH={benchmark_json.as_posix()}")
+        print(f"BENCHMARK_MD_PATH={benchmark_md.as_posix()}")
+        print(f"BENCHMARK_STATUS={str(payload.get('overall_status', 'not_enough_data'))}")
+    except Exception as exc:  # pragma: no cover - benchmark must not block main workflow
+        print(f"BENCHMARK_GENERATION_FAILED={exc}")
     return 0
 
 
