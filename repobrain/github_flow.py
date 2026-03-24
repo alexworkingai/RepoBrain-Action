@@ -70,6 +70,7 @@ from repobrain.review import build_pr_review
 from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
 from repobrain.patch_targeting import select_patch_targets
+from repobrain.patch_governance import build_patch_governance_contract
 from repobrain.async_batch import run_bounded_batch_tasks
 from repobrain.review_batch_planner import plan_review_fix_batches
 from repobrain.security_policy import classify_security_scope
@@ -6247,6 +6248,15 @@ def _build_review_markdown(
     )
     audit_summary["review_validation_artifact"] = "artifacts/review_validation.json"
     audit_summary["patch_validation_result"] = "n/a"
+    audit_summary["patch_governance_class"] = "not_applicable"
+    audit_summary["patch_risk_class"] = "n/a"
+    audit_summary["patch_proof_threshold_status"] = "not_applicable"
+    audit_summary["patch_verification_preconditions"] = "not_applicable"
+    audit_summary["patch_governance_reason"] = "not_applicable"
+    audit_summary["patch_governance_why_now"] = "not_applicable"
+    audit_summary["patch_governance_why_not"] = "not_applicable"
+    audit_summary["patch_governance_uncertainty"] = "not_applicable"
+    audit_summary["patch_governance_next_safe_step"] = "not_applicable"
     changed_files = list(all_pr_changed_files)
     changed_file_hunks = list(all_pr_changed_hunks)
     pr_metadata_available = bool(all_pr_changed_files)
@@ -7292,6 +7302,42 @@ def _build_review_markdown(
     )
     audit_summary["patch_generation_reason_code"] = str(
         patch_validation_payload.get("reason_code", "n/a") or "n/a"
+    )
+    patch_governance = build_patch_governance_contract(
+        patch_generation_result=str(audit_summary.get("patch_generation_result", "n/a") or "n/a"),
+        patch_validation_result=str(audit_summary.get("patch_validation_result", "n/a") or "n/a"),
+        patch_targeting_mode=str(audit_summary.get("patch_targeting_mode", "n/a") or "n/a"),
+        patch_targeting_reason=str(audit_summary.get("patch_targeting_reason", "n/a") or "n/a"),
+        localized_patch_evidence_count=int(audit_summary.get("localized_patch_evidence_count", 0) or 0),
+        patch_target_files_selected=int(audit_summary.get("patch_target_files_selected", 0) or 0),
+        patch_guard_triggered=bool(audit_summary.get("patch_guard_triggered", False)),
+        verification_summary=str(verification_report.get("summary", verification_report.get("overall", "NOT_RUN"))),
+        evidence_verdicts=review.get("evidence_verdicts", []),
+    )
+    audit_summary["patch_governance_class"] = str(
+        patch_governance.get("patchability_class", "no_patch_safe_default") or "no_patch_safe_default"
+    )
+    audit_summary["patch_risk_class"] = str(patch_governance.get("patch_risk_class", "n/a") or "n/a")
+    audit_summary["patch_proof_threshold_status"] = str(
+        patch_governance.get("minimum_proof_threshold_status", "not_applicable") or "not_applicable"
+    )
+    audit_summary["patch_verification_preconditions"] = str(
+        patch_governance.get("verification_preconditions", "not_applicable") or "not_applicable"
+    )
+    audit_summary["patch_governance_reason"] = str(
+        patch_governance.get("governance_reason", "not_applicable") or "not_applicable"
+    )
+    audit_summary["patch_governance_why_now"] = str(
+        patch_governance.get("why_now", "not_applicable") or "not_applicable"
+    )
+    audit_summary["patch_governance_why_not"] = str(
+        patch_governance.get("why_not", "not_applicable") or "not_applicable"
+    )
+    audit_summary["patch_governance_uncertainty"] = str(
+        patch_governance.get("uncertainty", "not_applicable") or "not_applicable"
+    )
+    audit_summary["patch_governance_next_safe_step"] = str(
+        patch_governance.get("next_safe_step", "not_applicable") or "not_applicable"
     )
     audit_summary["patch_validation_artifact"] = "artifacts/patch_validation.json"
     combined_patch_message = f"{patch_apply_message}; {patch_pr_message}"

@@ -6,6 +6,7 @@ from typing import Any
 
 from repobrain.evidence import EvidenceItem
 from repobrain.links import make_line_link
+from repobrain.patch_governance import build_patch_governance_contract
 
 MAX_COMMENT_BYTES = 60 * 1024
 
@@ -216,32 +217,81 @@ def _evidence_verdict_lines(review: dict[str, Any]) -> list[str]:
     ]
 
 
-def _patch_verdict_lines(audit_summary: dict[str, Any]) -> list[str]:
-    patch_generation_result = str(audit_summary.get("patch_generation_result", "n/a") or "n/a").strip().lower()
-    patch_validation_result = str(audit_summary.get("patch_validation_result", "n/a") or "n/a").strip().lower()
-    patch_targeting_reason = str(audit_summary.get("patch_targeting_reason", "n/a") or "n/a").strip() or "n/a"
-    localized_patch_evidence = _int(audit_summary.get("localized_patch_evidence_count", 0))
-    patch_target_files = _int(
-        audit_summary.get("patch_target_files_selected", audit_summary.get("patch_target_files_count", 0))
+def _resolve_patch_governance_contract(
+    *,
+    review: dict[str, Any],
+    verification_report: dict[str, Any],
+    audit_summary: dict[str, Any],
+) -> dict[str, str]:
+    existing_class = str(audit_summary.get("patch_governance_class", "") or "").strip()
+    if existing_class and existing_class not in {"n/a", "not_applicable"}:
+        return {
+            "patchability_class": existing_class,
+            "patch_risk_class": str(audit_summary.get("patch_risk_class", "n/a") or "n/a"),
+            "minimum_proof_threshold_status": str(
+                audit_summary.get("patch_proof_threshold_status", "not_applicable") or "not_applicable"
+            ),
+            "verification_preconditions": str(
+                audit_summary.get("patch_verification_preconditions", "not_applicable") or "not_applicable"
+            ),
+            "governance_reason": str(
+                audit_summary.get("patch_governance_reason", "not_applicable") or "not_applicable"
+            ),
+            "why_now": str(audit_summary.get("patch_governance_why_now", "not_applicable") or "not_applicable"),
+            "why_not": str(audit_summary.get("patch_governance_why_not", "not_applicable") or "not_applicable"),
+            "uncertainty": str(
+                audit_summary.get("patch_governance_uncertainty", "not_applicable") or "not_applicable"
+            ),
+            "next_safe_step": str(
+                audit_summary.get("patch_governance_next_safe_step", "not_applicable") or "not_applicable"
+            ),
+        }
+    verification_summary = str(
+        verification_report.get("summary", verification_report.get("overall", "NOT_RUN")) or "NOT_RUN"
     )
-    if patch_generation_result == "no_patch":
-        return [
-            (
-                "- Claim: No patch was generated. "
-                f"| Evidence anchors: localized_signals={localized_patch_evidence}, selected_targets={patch_target_files} "
-                "| Confidence: `high` | Impact: `medium` | Patchability: `blocked` "
-                "| Why now: Governance requires localized evidence-backed targets before patch synthesis. "
-                f"| Why not: {patch_targeting_reason} | Uncertainty: bounded_to_available_localization"
-            )
-        ]
+    return build_patch_governance_contract(
+        patch_generation_result=str(audit_summary.get("patch_generation_result", "n/a") or "n/a"),
+        patch_validation_result=str(audit_summary.get("patch_validation_result", "n/a") or "n/a"),
+        patch_targeting_mode=str(audit_summary.get("patch_targeting_mode", "n/a") or "n/a"),
+        patch_targeting_reason=str(audit_summary.get("patch_targeting_reason", "n/a") or "n/a"),
+        localized_patch_evidence_count=_int(audit_summary.get("localized_patch_evidence_count", 0)),
+        patch_target_files_selected=_int(
+            audit_summary.get("patch_target_files_selected", audit_summary.get("patch_target_files_count", 0))
+        ),
+        patch_guard_triggered=bool(audit_summary.get("patch_guard_triggered", False)),
+        verification_summary=verification_summary,
+        evidence_verdicts=review.get("evidence_verdicts", []),
+    )
+
+
+def _patch_governance_lines(
+    *,
+    review: dict[str, Any],
+    verification_report: dict[str, Any],
+    audit_summary: dict[str, Any],
+) -> list[str]:
+    contract = _resolve_patch_governance_contract(
+        review=review,
+        verification_report=verification_report,
+        audit_summary=audit_summary,
+    )
+    evidence_verdicts = review.get("evidence_verdicts", [])
+    evidence_verdicts_count = len(evidence_verdicts) if isinstance(evidence_verdicts, list) else 0
     return [
         (
-            "- Claim: Patch candidate generated for localized target set. "
-            f"| Evidence anchors: localized_signals={localized_patch_evidence}, selected_targets={patch_target_files} "
-            f"| Confidence: `{'high' if patch_validation_result == 'pass' else 'medium'}` | Impact: `medium` "
-            "| Patchability: `patchable` | Why now: Localized evidence met patch-targeting gate. "
-            "| Why not: n/a | Uncertainty: review_patch_before_apply"
-        )
+            f"- Patchability class: `{contract.get('patchability_class', 'no_patch_safe_default')}` "
+            f"| Patch risk class: `{contract.get('patch_risk_class', 'n/a')}` "
+            f"| Minimum proof threshold: `{contract.get('minimum_proof_threshold_status', 'not_applicable')}` "
+            f"| Verification preconditions: `{contract.get('verification_preconditions', 'not_applicable')}`"
+        ),
+        (
+            f"- Governance reason: {contract.get('governance_reason', 'not_applicable')} "
+            f"| Why now: {contract.get('why_now', 'not_applicable')} "
+            f"| Why not: {contract.get('why_not', 'not_applicable')}"
+        ),
+        f"- Uncertainty: `{contract.get('uncertainty', 'not_applicable')}`",
+        f"- Next safe step: {contract.get('next_safe_step', 'not_applicable')}",
+        f"- Evidence verdicts considered: `{evidence_verdicts_count}`",
     ]
 
 
@@ -1358,6 +1408,26 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     audit_summary.get("patch_validation_result", "n/a"),
                     "Patch validation classification before publication.",
                 ),
+                (
+                    "Patch governance class",
+                    audit_summary.get("patch_governance_class", "not_applicable"),
+                    "Governed remediation class for patch/no_patch decision.",
+                ),
+                (
+                    "Patch risk class",
+                    audit_summary.get("patch_risk_class", "n/a"),
+                    "Aggregated remediation risk class from evidence verdict context.",
+                ),
+                (
+                    "Patch proof threshold",
+                    audit_summary.get("patch_proof_threshold_status", "not_applicable"),
+                    "Whether minimum localized proof threshold was met for patching.",
+                ),
+                (
+                    "Patch verification preconditions",
+                    audit_summary.get("patch_verification_preconditions", "not_applicable"),
+                    "Verification gate status required before safe patch proposal.",
+                ),
             ]
         )
     elif command == "review":
@@ -2318,8 +2388,12 @@ def render_patch_markdown(
         f"- Patch grounding mode: {patch_grounding_mode}",
         "",
         *_evidence_context_summary_lines(audit_summary),
-        "### 📌 Evidence verdict",
-        *_patch_verdict_lines(audit_summary),
+        "### 📌 Patch governance",
+        *_patch_governance_lines(
+            review=review,
+            verification_report=verification_report,
+            audit_summary=audit_summary,
+        ),
         "",
         "### ✅ Patch validation",
         f"- Patch generation result: `{patch_generation_result}`",
