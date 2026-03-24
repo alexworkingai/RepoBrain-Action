@@ -20,6 +20,20 @@ class AuditEntry:
     audit: dict[str, Any]
 
 
+def _as_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _run_id_int(value: str) -> int:
+    try:
+        return int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return 0
+
+
 def _skip_meta(audit: dict[str, Any]) -> tuple[str, str] | None:
     reason_code = str(audit.get("skip_reason_code", "") or "").strip().lower()
     if not reason_code or reason_code == "n/a":
@@ -79,6 +93,130 @@ def _load_audit_entries(audit_dir: Path) -> list[AuditEntry]:
         )
     entries.sort(key=lambda item: (item.mtime_s, item.path))
     return entries
+
+
+def _load_history_entries(history_path: Path) -> list[AuditEntry]:
+    if not history_path.exists():
+        return []
+    try:
+        payload = orjson.loads(history_path.read_bytes())
+    except (OSError, ValueError):
+        return []
+    records = payload.get("entries", []) if isinstance(payload, dict) else []
+    if not isinstance(records, list):
+        return []
+    entries: list[AuditEntry] = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        audit_raw = item.get("audit", {})
+        audit = dict(audit_raw) if isinstance(audit_raw, dict) else {}
+        command = str(item.get("command", "") or "").strip().lower()
+        run_id = str(item.get("run_id", "") or "").strip()
+        path = str(item.get("path", "") or "").strip()
+        if not path:
+            path = f"history:{run_id or 'na'}:{command or 'na'}"
+        mtime_s = 0.0
+        try:
+            mtime_s = float(item.get("mtime_s", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            mtime_s = 0.0
+        entries.append(
+            AuditEntry(
+                path=path,
+                mtime_s=mtime_s,
+                command=command,
+                run_id=run_id,
+                audit=audit,
+            )
+        )
+    entries.sort(key=lambda item: (_run_id_int(item.run_id), item.mtime_s, item.path))
+    return entries
+
+
+def _entry_key(entry: AuditEntry) -> tuple[str, str, int, int]:
+    return (
+        str(entry.run_id or ""),
+        str(entry.command or ""),
+        _as_int(entry.audit.get("pr_number", 0)),
+        _as_int(entry.audit.get("issue_number", 0)),
+    )
+
+
+def _merge_entries(existing: list[AuditEntry], current: list[AuditEntry]) -> list[AuditEntry]:
+    merged: dict[tuple[str, str, int, int], AuditEntry] = {}
+    for entry in existing + current:
+        key = _entry_key(entry)
+        prior = merged.get(key)
+        if prior is None:
+            merged[key] = entry
+            continue
+        if (
+            _run_id_int(entry.run_id),
+            entry.mtime_s,
+            entry.path,
+        ) >= (
+            _run_id_int(prior.run_id),
+            prior.mtime_s,
+            prior.path,
+        ):
+            merged[key] = entry
+    result = list(merged.values())
+    result.sort(key=lambda item: (_run_id_int(item.run_id), item.mtime_s, item.path))
+    return result
+
+
+def _write_history_entries(history_path: Path, entries: list[AuditEntry], *, keep_last: int = 400) -> None:
+    bounded = list(entries[-keep_last:])
+    payload = {
+        "schema_version": 1,
+        "generated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "entries": [
+            {
+                "path": entry.path,
+                "mtime_s": float(entry.mtime_s),
+                "command": entry.command,
+                "run_id": entry.run_id,
+                "audit": entry.audit,
+            }
+            for entry in bounded
+        ],
+    }
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS))
+
+
+def _scope_entries_to_current_pr(entries: list[AuditEntry], current_entries: list[AuditEntry]) -> list[AuditEntry]:
+    if not entries:
+        return []
+    if not current_entries:
+        return list(entries)
+    latest_current = current_entries[-1]
+    latest_audit = latest_current.audit
+    target_repo = str(latest_audit.get("repo", "") or "").strip().lower()
+    target_pr = _as_int(latest_audit.get("pr_number", 0))
+    target_issue = _as_int(latest_audit.get("issue_number", 0))
+
+    scoped = list(entries)
+    if target_repo:
+        repo_scoped = [
+            item
+            for item in scoped
+            if str(item.audit.get("repo", "") or "").strip().lower() == target_repo
+        ]
+        if repo_scoped:
+            scoped = repo_scoped
+    if target_pr > 0:
+        pr_scoped = [item for item in scoped if _as_int(item.audit.get("pr_number", 0)) == target_pr]
+        if pr_scoped:
+            scoped = pr_scoped
+    elif target_issue > 0:
+        issue_scoped = [item for item in scoped if _as_int(item.audit.get("issue_number", 0)) == target_issue]
+        if issue_scoped:
+            scoped = issue_scoped
+
+    scoped.sort(key=lambda item: (_run_id_int(item.run_id), item.mtime_s, item.path))
+    return scoped
 
 
 def _latest_for(entries: list[AuditEntry], command: str) -> AuditEntry | None:
@@ -298,7 +436,25 @@ def _status_weight(status: str) -> int:
 
 
 def build_stability_benchmark_payload(*, audit_dir: Path) -> dict[str, Any]:
-    entries = _load_audit_entries(audit_dir)
+    return build_stability_benchmark_payload_with_history(
+        audit_dir=audit_dir,
+        history_path=None,
+    )
+
+
+def build_stability_benchmark_payload_with_history(
+    *,
+    audit_dir: Path,
+    history_path: Path | None,
+) -> dict[str, Any]:
+    current_entries = _load_audit_entries(audit_dir)
+    history_entries = _load_history_entries(history_path) if history_path is not None else []
+    combined_entries = _merge_entries(history_entries, current_entries)
+    scoped_entries = _scope_entries_to_current_pr(combined_entries, current_entries)
+    if history_path is not None:
+        _write_history_entries(history_path, combined_entries)
+
+    entries = scoped_entries or current_entries
     scenarios = {
         "ask_snapshot_transition": _transition_for(entries, "ask"),
         "review_snapshot_transition": _transition_for(entries, "review"),
@@ -315,6 +471,9 @@ def build_stability_benchmark_payload(*, audit_dir: Path) -> dict[str, Any]:
     return {
         "generated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "audit_dir": audit_dir.as_posix(),
+        "history_path": history_path.as_posix() if history_path is not None else "disabled",
+        "history_entries_loaded": len(history_entries),
+        "audit_files_current_run": len(current_entries),
         "audit_files_scanned": len(entries),
         "overall_status": overall_status,
         "scenarios": scenarios,
@@ -411,8 +570,12 @@ def write_stability_benchmark_artifacts(
     audit_dir: Path,
     output_json_path: Path,
     output_markdown_path: Path,
+    history_path: Path | None = None,
 ) -> dict[str, Any]:
-    payload = build_stability_benchmark_payload(audit_dir=audit_dir)
+    payload = build_stability_benchmark_payload_with_history(
+        audit_dir=audit_dir,
+        history_path=history_path,
+    )
     output_json_path.parent.mkdir(parents=True, exist_ok=True)
     output_markdown_path.parent.mkdir(parents=True, exist_ok=True)
     output_json_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS))

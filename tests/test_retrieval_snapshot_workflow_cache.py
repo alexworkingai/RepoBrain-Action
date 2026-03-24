@@ -8,8 +8,10 @@ def test_workflow_uses_restore_and_save_for_retrieval_snapshot_cache() -> None:
 
     assert "Restore RepoBrain retrieval snapshot cache" in workflow
     assert "uses: actions/cache/restore@v4" in workflow
+    assert "path: artifacts/.repobrain_cache" in workflow
     assert "repobrain-snapshot-${{ github.run_id }}-${{ github.run_attempt }}" in workflow
     assert "Save RepoBrain retrieval snapshot cache" in workflow
+    assert "hashFiles('artifacts/.repobrain_cache/*') != ''" in workflow
     assert "uses: actions/cache/save@v4" in workflow
     assert "steps.snapshot_cache_restore.outputs.cache-primary-key" in workflow
 

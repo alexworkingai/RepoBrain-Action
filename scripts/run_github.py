@@ -58,6 +58,7 @@ def main() -> int:
             audit_dir=Path("artifacts") / "audit",
             output_json_path=benchmark_json,
             output_markdown_path=benchmark_md,
+            history_path=Path("artifacts") / ".repobrain_cache" / "stability_benchmark_history.json",
         )
         print(f"BENCHMARK_JSON_PATH={benchmark_json.as_posix()}")
         print(f"BENCHMARK_MD_PATH={benchmark_md.as_posix()}")
