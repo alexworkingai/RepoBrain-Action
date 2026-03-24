@@ -84,9 +84,10 @@ def test_fix_no_patch_renders_governed_evidence_verdict() -> None:
         },
     )
 
-    assert "### 📌 Evidence verdict" in md
-    assert "Claim: No patch was generated." in md
-    assert "Patchability: `blocked`" in md
-    assert "Why now: Governance requires localized evidence-backed targets before patch synthesis." in md
+    assert "### 📌 Patch governance" in md
+    assert "Patchability class: `patch_blocked_not_localized`" in md
+    assert "Minimum proof threshold: `not_met`" in md
+    assert "Verification preconditions: `missing`" in md
     assert "Why not: no_localized_evidence_backed_patch_target" in md
-    assert "### 📌 Evidence verdict" not in _primary(md)
+    assert "Next safe step: Narrow request to concrete files/hunks and rerun /repobrain fix." in md
+    assert "### 📌 Patch governance" not in _primary(md)
