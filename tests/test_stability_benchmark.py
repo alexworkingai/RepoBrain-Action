@@ -209,3 +209,54 @@ def test_stability_benchmark_distinguishes_skipped_from_needs_data_for_closed_pr
     assert "- Skipped: `pr_closed_or_merged_review`" in markdown
     assert "### FIX" in markdown
     assert "- Skipped: `pr_closed_or_merged_fix`" in markdown
+
+
+def test_stability_benchmark_aggregates_multi_run_pr_history_for_snapshot_transitions(
+    tmp_path: Path,
+) -> None:
+    history_path = tmp_path / ".repobrain_cache" / "stability_benchmark_history.json"
+    output_json = tmp_path / "benchmarks" / "repobrain_stability_benchmark.json"
+    output_md = tmp_path / "benchmarks" / "repobrain_stability_benchmark.md"
+
+    runs = [
+        ("001", "ask", "miss"),
+        ("002", "ask", "hit"),
+        ("003", "review", "miss"),
+        ("004", "review", "hit"),
+    ]
+
+    payload: dict[str, object] = {}
+    for run_id, command, snapshot in runs:
+        audit_dir = tmp_path / f"audit_{run_id}"
+        _write_audit(
+            audit_dir / f"audit_{run_id}_17.json",
+            {
+                "command": command,
+                "run_id": run_id,
+                "repo": "acme/repo",
+                "issue_number": 17,
+                "pr_number": 17,
+                "route_final": "REVIEW" if command == "review" else "FAST",
+                "retrieved": 6,
+                "selected": 3,
+                "pr_changed_files_count": 2,
+                "pr_metadata_used": True,
+                "answer_grounding_mode": "hybrid",
+                **_snapshot_fields(snapshot),
+            },
+        )
+        payload = write_stability_benchmark_artifacts(
+            audit_dir=audit_dir,
+            output_json_path=output_json,
+            output_markdown_path=output_md,
+            history_path=history_path,
+        )
+
+    assert payload["scenarios"]["ask_snapshot_transition"]["status"] == "pass"
+    assert payload["scenarios"]["review_snapshot_transition"]["status"] == "pass"
+    assert payload["audit_files_current_run"] == 1
+    assert int(payload["history_entries_loaded"]) >= 3
+    assert int(payload["audit_files_scanned"]) >= 4
+    markdown = output_md.read_text(encoding="utf-8")
+    assert "Ask snapshot transition (miss -> hit): **PASS**" in markdown
+    assert "Review snapshot transition (miss -> hit): **PASS**" in markdown
