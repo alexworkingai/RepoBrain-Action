@@ -7573,12 +7573,6 @@ def _resolve_pr_head_sha(
     audit: dict[str, Any],
     github_context_seed: dict[str, Any],
 ) -> str:
-    sha = str(audit.get("pr_head_sha", "") or "").strip()
-    if sha:
-        return sha
-    sha = str(github_context_seed.get("head_sha", "") or "").strip()
-    if sha:
-        return sha
     if client is not None and issue_number is not None:
         pull = client.get_pull(issue_number)
         head = pull.get("head", {})
@@ -7586,6 +7580,12 @@ def _resolve_pr_head_sha(
             sha = str(head.get("sha", "") or "").strip()
             if sha:
                 return sha
+    sha = str(audit.get("pr_head_sha", "") or "").strip()
+    if sha:
+        return sha
+    sha = str(github_context_seed.get("head_sha", "") or "").strip()
+    if sha:
+        return sha
     return extract_sha_from_env()
 
 
@@ -7711,6 +7711,8 @@ def _publish_pr_check_run(
         summary_md=summary_md,
         text_md=text_md,
         annotations=annotations,
+        pr_number=issue_number,
+        command=cmd,
     )
     _write_check_run_payload(repo_root, payload)
     if publish_mode == "deferred":

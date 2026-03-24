@@ -123,6 +123,8 @@ def build_check_run_payload(
     summary_md: str,
     text_md: str,
     annotations: list[dict[str, Any]],
+    pr_number: int | None = None,
+    command: str | None = None,
 ) -> dict[str, Any]:
     safe_conclusion = str(conclusion or "neutral").strip().lower()
     if safe_conclusion not in {"success", "neutral", "failure", "cancelled"}:
@@ -133,7 +135,7 @@ def build_check_run_payload(
     if hidden > 0:
         summary = f"{summary}\n\n+{hidden} more annotations omitted."
 
-    return {
+    payload: dict[str, Any] = {
         "name": str(name or "RepoBrain"),
         "head_sha": str(head_sha),
         "status": "completed",
@@ -145,6 +147,12 @@ def build_check_run_payload(
             "annotations": trimmed_annotations,
         },
     }
+    if isinstance(pr_number, int) and pr_number > 0:
+        payload["pr_number"] = pr_number
+    safe_command = str(command or "").strip().lower()
+    if safe_command:
+        payload["command"] = safe_command
+    return payload
 
 
 def publish_check_run(
