@@ -22,9 +22,13 @@ def test_check_run_payload_annotation_limit_and_fields() -> None:
         summary_md="Summary",
         text_md="Body",
         annotations=annotations,
+        pr_number=42,
+        command="review",
     )
     assert payload["name"] == "RepoBrain Review"
     assert payload["head_sha"] == "abc123"
+    assert payload["pr_number"] == 42
+    assert payload["command"] == "review"
     output = payload["output"]
     assert isinstance(output, dict)
     emitted = output["annotations"]

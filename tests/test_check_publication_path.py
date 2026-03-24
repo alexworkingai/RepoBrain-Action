@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import repobrain.github_flow as gf
@@ -9,6 +10,10 @@ class _FakeClient:
     def __init__(self) -> None:
         self.repo = "owner/repo"
         self.token = "token"
+        self._head_sha = "abc123"
+
+    def get_pull(self, issue_number: int) -> dict[str, object]:
+        return {"number": issue_number, "head": {"sha": self._head_sha}}
 
 
 def test_publish_pr_check_run_uses_command_specific_names(monkeypatch, tmp_path: Path) -> None:
@@ -96,6 +101,38 @@ def test_publish_pr_check_run_defers_for_issue_comment(monkeypatch, tmp_path: Pa
     assert audit["check_run_token_source"] == "workflow_run_github_token"
 
 
+def test_deferred_review_payload_uses_live_pr_head_and_includes_context(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "issue_comment")
+    client = _FakeClient()
+    client._head_sha = "live-head-xyz"
+    audit = {
+        "route_final": "FAST",
+        "check_intent": "review",
+        "verification_report": {"overall": "NOT_RUN"},
+        "pr_head_sha": "stale-head",
+    }
+
+    gf._publish_pr_check_run(
+        repo_root=tmp_path,
+        client=client,
+        cmd="review",
+        issue_number=15,
+        body_markdown="body",
+        audit=audit,
+        github_context_seed={"head_sha": "seed-head"},
+    )
+
+    payload_path = tmp_path / "artifacts" / "check_run_payload.json"
+    payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    assert payload["head_sha"] == "live-head-xyz"
+    assert payload["pr_number"] == 15
+    assert payload["command"] == "review"
+    assert audit["check_run_skip_reason"] == "deferred_workflow_publisher"
+
+
 def test_publish_pr_check_run_records_permissions_header_on_failure(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
 
@@ -141,5 +178,13 @@ def test_privileged_checks_publisher_workflow_is_sanitized() -> None:
     workflow = Path(".github/workflows/repobrain_checks_publisher.yml").read_text(encoding="utf-8")
     assert "workflow_run:" in workflow
     assert "checks: write" in workflow
+    assert "statuses: write" in workflow
+    assert "pull-requests: read" in workflow
     assert "actions: read" in workflow
+    assert "statusCheckRollup" in workflow
+    assert "POST /repos/{owner}/{repo}/statuses/{sha}" in workflow
+    assert "raw.pr_number" in workflow
+    assert "raw.command" in workflow
+    assert "if (visible) {" in workflow
+    assert "Published status-context fallback" in workflow
     assert "actions/checkout" not in workflow

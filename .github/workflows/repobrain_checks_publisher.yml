@@ -9,6 +9,8 @@ permissions:
   actions: read
   checks: write
   contents: read
+  pull-requests: read
+  statuses: write
 
 jobs:
   publish-check:
@@ -30,6 +32,54 @@ jobs:
         with:
           script: |
             const fs = require("fs");
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            async function isReviewCheckVisibleInPullRequest({ owner, repo, pullNumber, checkName }) {
+              const query = `
+                query($owner: String!, $repo: String!, $pullNumber: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $pullNumber) {
+                      statusCheckRollup {
+                        contexts(first: 100) {
+                          nodes {
+                            __typename
+                            ... on CheckRun {
+                              name
+                            }
+                            ... on StatusContext {
+                              context
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              try {
+                const result = await github.graphql(query, {
+                  owner,
+                  repo,
+                  pullNumber,
+                });
+                const nodes =
+                  result?.repository?.pullRequest?.statusCheckRollup?.contexts?.nodes || [];
+                for (const node of nodes) {
+                  if (!node || typeof node !== "object") continue;
+                  const checkRunName =
+                    node.__typename === "CheckRun" ? String(node.name || "").trim() : "";
+                  const statusContext =
+                    node.__typename === "StatusContext" ? String(node.context || "").trim() : "";
+                  if (checkRunName === checkName || statusContext === checkName) {
+                    return true;
+                  }
+                }
+              } catch (err) {
+                core.notice(`Rollup visibility probe failed: ${String(err)}`);
+              }
+              return false;
+            }
+
             const payloadPath = "artifacts/check-payload/check_run_payload.json";
             if (!fs.existsSync(payloadPath)) {
               core.notice("check_run_payload.json not found, nothing to publish.");
@@ -37,8 +87,29 @@ jobs:
             }
 
             const raw = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
-            const headSha = String(raw.head_sha || "").trim();
+            const payloadHeadSha = String(raw.head_sha || "").trim();
             const name = String(raw.name || "RepoBrain").trim() || "RepoBrain";
+            const command = String(raw.command || "").trim().toLowerCase();
+            const prNumberRaw = Number.parseInt(String(raw.pr_number || "").trim(), 10);
+            const prNumber = Number.isInteger(prNumberRaw) && prNumberRaw > 0 ? prNumberRaw : null;
+
+            let headSha = payloadHeadSha;
+            if (prNumber) {
+              try {
+                const pull = await github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                });
+                const liveHeadSha = String(pull?.data?.head?.sha || "").trim();
+                if (liveHeadSha) {
+                  headSha = liveHeadSha;
+                }
+              } catch (err) {
+                core.notice(`Failed to resolve live PR head for #${prNumber}: ${String(err)}`);
+              }
+            }
+
             if (!headSha) {
               core.notice("Missing head_sha in check payload, skipping publish.");
               return;
@@ -56,7 +127,7 @@ jobs:
             const title = String(output.title || name).slice(0, 255);
             const annotations = Array.isArray(output.annotations) ? output.annotations.slice(0, 50) : [];
 
-            await github.request("POST /repos/{owner}/{repo}/check-runs", {
+            const checkRun = await github.request("POST /repos/{owner}/{repo}/check-runs", {
               owner: context.repo.owner,
               repo: context.repo.repo,
               name,
@@ -70,3 +141,46 @@ jobs:
                 annotations,
               },
             });
+
+            if (command !== "review" || !prNumber) {
+              return;
+            }
+
+            let visible = false;
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+              visible = await isReviewCheckVisibleInPullRequest({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pullNumber: prNumber,
+                checkName: name,
+              });
+              if (visible) {
+                break;
+              }
+              if (attempt < 2) {
+                await sleep(1200);
+              }
+            }
+            if (visible) {
+              return;
+            }
+
+            const statusState = conclusion === "failure" || conclusion === "cancelled"
+              ? "failure"
+              : "success";
+            const targetUrl =
+              String(checkRun?.data?.details_url || checkRun?.data?.html_url || "").trim() ||
+              `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${prNumber}`;
+
+            await github.request("POST /repos/{owner}/{repo}/statuses/{sha}", {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: headSha,
+              state: statusState,
+              context: name,
+              description: "RepoBrain review completed.",
+              target_url: targetUrl,
+            });
+            core.notice(
+              `Published status-context fallback for ${name} on PR #${prNumber} at ${headSha}.`,
+            );
