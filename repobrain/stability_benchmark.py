@@ -20,6 +20,14 @@ class AuditEntry:
     audit: dict[str, Any]
 
 
+def _skip_meta(audit: dict[str, Any]) -> tuple[str, str] | None:
+    reason_code = str(audit.get("skip_reason_code", "") or "").strip().lower()
+    if not reason_code or reason_code == "n/a":
+        return None
+    reason_short = str(audit.get("skip_reason_short", "") or "").strip()
+    return reason_code, (reason_short or reason_code)
+
+
 def _snapshot_status(audit: dict[str, Any]) -> str:
     used = bool(audit.get("retrieval_snapshot_cache_used", False))
     hit = bool(audit.get("retrieval_snapshot_cache_hit", False))
@@ -80,6 +88,20 @@ def _latest_for(entries: list[AuditEntry], command: str) -> AuditEntry | None:
 
 def _transition_for(entries: list[AuditEntry], command: str) -> dict[str, Any]:
     filtered = [entry for entry in entries if entry.command == command]
+    if filtered:
+        latest = filtered[-1]
+        skip = _skip_meta(latest.audit)
+        if skip is not None:
+            reason_code, reason_short = skip
+            return {
+                "status": "skipped",
+                "reason": reason_code,
+                "skip_reason_short": reason_short,
+                "first_status": "not_applicable",
+                "second_status": "not_applicable",
+                "run_ids": [latest.run_id],
+                "paths": [latest.path],
+            }
     if len(filtered) < 2:
         return {
             "status": "not_enough_data",
@@ -107,6 +129,14 @@ def _ask_truth_binding_contract(entries: list[AuditEntry]) -> dict[str, Any]:
     latest = _latest_for(entries, "ask")
     if latest is None:
         return {"status": "not_enough_data", "reason": "ask_missing"}
+    skip = _skip_meta(latest.audit)
+    if skip is not None:
+        reason_code, reason_short = skip
+        return {
+            "status": "skipped",
+            "reason": reason_code,
+            "skip_reason_short": reason_short,
+        }
     audit = latest.audit
     pr_changed_count = int(audit.get("pr_changed_files_count", 0) or 0)
     if pr_changed_count <= 0:
@@ -131,6 +161,14 @@ def _review_async_subsection_contract(entries: list[AuditEntry]) -> dict[str, An
     latest = _latest_for(entries, "review")
     if latest is None:
         return {"status": "not_enough_data", "reason": "review_missing"}
+    skip = _skip_meta(latest.audit)
+    if skip is not None:
+        reason_code, reason_short = skip
+        return {
+            "status": "skipped",
+            "reason": reason_code,
+            "skip_reason_short": reason_short,
+        }
     rendered = render_review_markdown(
         review={
             "summary_text": "Review complete.",
@@ -155,6 +193,14 @@ def _fix_no_patch_contract(entries: list[AuditEntry]) -> dict[str, Any]:
     latest = _latest_for(entries, "fix")
     if latest is None:
         return {"status": "not_enough_data", "reason": "fix_missing"}
+    skip = _skip_meta(latest.audit)
+    if skip is not None:
+        reason_code, reason_short = skip
+        return {
+            "status": "skipped",
+            "reason": reason_code,
+            "skip_reason_short": reason_short,
+        }
     generation_result = str(latest.audit.get("patch_generation_result", "n/a") or "n/a")
     validation_result = str(latest.audit.get("patch_validation_result", "n/a") or "n/a")
     if generation_result != "no_patch":
@@ -210,8 +256,7 @@ def _latest_runtime_summary(entries: list[AuditEntry], command: str) -> dict[str
     if latest is None:
         return {"status": "not_enough_data"}
     audit = latest.audit
-    return {
-        "status": "available",
+    summary = {
         "run_id": latest.run_id,
         "path": latest.path,
         "route_final": str(audit.get("route_final", "") or ""),
@@ -230,6 +275,15 @@ def _latest_runtime_summary(entries: list[AuditEntry], command: str) -> dict[str
         "answer_grounding_mode": str(audit.get("answer_grounding_mode", "n/a") or "n/a"),
         "verification_overall": str(audit.get("verification_overall", "n/a") or "n/a"),
     }
+    skip = _skip_meta(audit)
+    if skip is not None:
+        reason_code, reason_short = skip
+        summary["status"] = "skipped"
+        summary["skip_reason_code"] = reason_code
+        summary["skip_reason_short"] = reason_short
+        return summary
+    summary["status"] = "available"
+    return summary
 
 
 def _status_weight(status: str) -> int:
@@ -238,7 +292,7 @@ def _status_weight(status: str) -> int:
         return 3
     if normalized == "not_enough_data":
         return 2
-    if normalized == "not_applicable":
+    if normalized in {"not_applicable", "skipped"}:
         return 1
     return 0
 
@@ -278,6 +332,8 @@ def _status_label(status: str) -> str:
         return "PASS"
     if normalized == "fail":
         return "FAIL"
+    if normalized == "skipped":
+        return "SKIPPED"
     if normalized == "not_applicable":
         return "N/A"
     return "NEEDS_DATA"
@@ -291,7 +347,12 @@ def build_stability_benchmark_markdown(payload: dict[str, Any]) -> str:
     def _scenario_line(name: str, key: str) -> str:
         scenario_raw = scenarios.get(key, {})
         scenario = dict(scenario_raw) if isinstance(scenario_raw, dict) else {}
-        return f"- {name}: **{_status_label(str(scenario.get('status', 'not_enough_data')))}**"
+        status = str(scenario.get("status", "not_enough_data") or "not_enough_data")
+        line = f"- {name}: **{_status_label(status)}**"
+        reason = str(scenario.get("reason", "") or "").strip()
+        if reason and reason != "ok":
+            line += f" (`{reason}`)"
+        return line
 
     latest_raw = payload.get("latest", {})
     latest = dict(latest_raw) if isinstance(latest_raw, dict) else {}
@@ -315,6 +376,16 @@ def build_stability_benchmark_markdown(payload: dict[str, Any]) -> str:
     for command in ("ask", "review", "fix"):
         summary_raw = latest.get(command, {})
         summary = dict(summary_raw) if isinstance(summary_raw, dict) else {}
+        if summary.get("status") == "skipped":
+            lines.extend(
+                [
+                    f"### {command.upper()}",
+                    f"- Skipped: `{summary.get('skip_reason_code', 'skipped')}`",
+                    f"- Reason: {summary.get('skip_reason_short', 'n/a')}",
+                    "",
+                ]
+            )
+            continue
         if summary.get("status") != "available":
             lines.extend([f"### {command.upper()}", "- No data.", ""])
             continue
