@@ -116,6 +116,75 @@ def _compose_summary_text(base_summary: str, risk_level: str) -> str:
     return summary
 
 
+def _verdict_confidence(*, evidence_count: int) -> str:
+    if evidence_count >= 2:
+        return "high"
+    if evidence_count == 1:
+        return "medium"
+    return "low"
+
+
+def _verdict_patchability(evidence_paths: list[str]) -> tuple[str, str]:
+    if not evidence_paths:
+        return "blocked", "no_localized_evidence"
+    normalized = [str(path or "").strip().lower() for path in evidence_paths if str(path or "").strip()]
+    if not normalized:
+        return "blocked", "no_localized_evidence"
+    only_reference_or_tests = all(
+        path.startswith("docs/")
+        or path.startswith("tests/")
+        or path.endswith(".md")
+        or path.endswith(".rst")
+        or path.startswith(".github/workflows/")
+        for path in normalized
+    )
+    if only_reference_or_tests:
+        return "review_only", "reference_or_test_context_only"
+    return "patchable", "localized_code_evidence_present"
+
+
+def _build_evidence_verdicts(confirmed_risk_entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    verdicts: list[dict[str, Any]] = []
+    for item in confirmed_risk_entries:
+        claim = str(item.get("message", "") or "").strip()
+        if not claim:
+            continue
+        impact = str(item.get("severity", "low") or "low").strip().lower()
+        if impact not in {"low", "medium", "high"}:
+            impact = _severity_from_message(claim)
+        evidence_paths = [
+            str(path).strip() for path in item.get("evidence_paths", []) if str(path).strip()
+        ]
+        confidence = _verdict_confidence(evidence_count=len(evidence_paths))
+        patchability, patchability_reason = _verdict_patchability(evidence_paths)
+        if patchability == "patchable":
+            why_now = "Localized evidence supports immediate corrective action."
+            why_not = "n/a"
+            uncertainty = "bounded_to_visible_evidence"
+        elif patchability == "review_only":
+            why_now = "Evidence indicates risk, but context is primarily reference/test scoped."
+            why_not = patchability_reason
+            uncertainty = "patch_scope_intent_mismatch"
+        else:
+            why_now = "Risk noted for governance tracking."
+            why_not = patchability_reason
+            uncertainty = "insufficient_localized_patch_target"
+
+        verdicts.append(
+            {
+                "claim": claim,
+                "evidence_anchors": evidence_paths,
+                "confidence": confidence,
+                "impact": impact,
+                "patchability": patchability,
+                "why_now": why_now,
+                "why_not": why_not,
+                "uncertainty": uncertainty,
+            }
+        )
+    return verdicts
+
+
 def _aggregate_risk_items(risk_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: dict[tuple[str, str], dict[str, Any]] = {}
     for item in risk_items:
@@ -322,6 +391,7 @@ def validate_review_findings(review: dict[str, Any]) -> dict[str, Any]:
         )
     validated["notes"] = informational_notes_final
     validated["informational_notes"] = informational_notes_final
+    validated["evidence_verdicts"] = _build_evidence_verdicts(confirmed_risk_entries)
     validated["validation"] = {
         "confirmed_findings_count": len(confirmed_findings),
         "possible_signals_count": len(validated["possible_signals"]),
