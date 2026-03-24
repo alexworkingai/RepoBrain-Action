@@ -142,7 +142,8 @@ jobs:
               },
             });
 
-            if (command !== "review" || !prNumber) {
+            const fallbackCommands = new Set(["review", "fix"]);
+            if (!fallbackCommands.has(command) || !prNumber) {
               return;
             }
 
@@ -172,13 +173,14 @@ jobs:
               String(checkRun?.data?.details_url || checkRun?.data?.html_url || "").trim() ||
               `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${prNumber}`;
 
+            const commandLabel = command === "fix" ? "fix" : "review";
             await github.request("POST /repos/{owner}/{repo}/statuses/{sha}", {
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: headSha,
               state: statusState,
               context: name,
-              description: "RepoBrain review completed.",
+              description: `RepoBrain ${commandLabel} completed.`,
               target_url: targetUrl,
             });
             core.notice(

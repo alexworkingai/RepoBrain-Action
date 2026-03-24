@@ -185,6 +185,8 @@ def test_privileged_checks_publisher_workflow_is_sanitized() -> None:
     assert "POST /repos/{owner}/{repo}/statuses/{sha}" in workflow
     assert "raw.pr_number" in workflow
     assert "raw.command" in workflow
+    assert 'new Set(["review", "fix"])' in workflow
+    assert "RepoBrain ${commandLabel} completed." in workflow
     assert "if (visible) {" in workflow
     assert "Published status-context fallback" in workflow
     assert "actions/checkout" not in workflow
