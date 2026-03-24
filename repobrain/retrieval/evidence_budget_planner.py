@@ -110,12 +110,16 @@ def _profile_for(
     *,
     limit_hint: int,
     incremental_scope_mode: str,
+    ultra_large_mode: bool = False,
 ) -> tuple[int, str, dict[str, int], list[str]]:
     cmd = _normalize_command(command)
     scope_mode = str(incremental_scope_mode or "fallback_full")
     if cmd in {"ask", "explain", "locate"}:
         base_limit = max(3, min(18, int(limit_hint * 0.60) if limit_hint > 0 else 10))
         mode = "ask_dense_incremental" if scope_mode != "fallback_full" else "ask_dense"
+        if ultra_large_mode:
+            base_limit = min(base_limit, 10)
+            mode = "ultra_large_ask_capped"
         caps = {
             "changed_primary": max(3, int(base_limit * 0.45)),
             "changed_secondary": max(1, int(base_limit * 0.15)),
@@ -136,6 +140,9 @@ def _profile_for(
     if cmd == "review":
         base_limit = max(6, min(30, int(limit_hint * 0.75) if limit_hint > 0 else 20))
         mode = "review_risk_weighted_incremental" if scope_mode != "fallback_full" else "review_risk_weighted"
+        if ultra_large_mode:
+            base_limit = min(base_limit, 18)
+            mode = "ultra_large_review_capped"
         caps = {
             "changed_primary": max(6, int(base_limit * 0.45)),
             "changed_secondary": max(2, int(base_limit * 0.20)),
@@ -156,6 +163,9 @@ def _profile_for(
 
     base_limit = max(4, min(20, int(limit_hint * 0.50) if limit_hint > 0 else 12))
     mode = "fix_localized_strict_incremental" if scope_mode != "fallback_full" else "fix_localized_strict"
+    if ultra_large_mode:
+        base_limit = min(base_limit, 14)
+        mode = "ultra_large_fix_capped"
     caps = {
         "changed_primary": max(4, int(base_limit * 0.60)),
         "changed_secondary": max(1, int(base_limit * 0.20)),
@@ -224,6 +234,7 @@ def plan_evidence_budget(
     limit_hint: int | None = None,
     incremental_scope_mode: str = "fallback_full",
     segment_hints: dict[str, Any] | None = None,
+    ultra_large_mode: bool = False,
 ) -> EvidenceBudgetPlanResult:
     if not candidates:
         return EvidenceBudgetPlanResult(
@@ -247,6 +258,7 @@ def plan_evidence_budget(
         command,
         limit_hint=safe_hint,
         incremental_scope_mode=incremental_scope_mode,
+        ultra_large_mode=bool(ultra_large_mode),
     )
     budget_limit = max(1, min(len(candidates), int(limit)))
     changed_files = _changed_files_from_context(github_context)

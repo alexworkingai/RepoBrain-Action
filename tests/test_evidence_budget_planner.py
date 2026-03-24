@@ -146,3 +146,27 @@ def test_budget_planner_can_consume_segment_hints() -> None:
     assert plan.evidence_budget_bucket_counts["changed_primary"] >= 1
     assert plan.evidence_budget_bucket_counts["tests"] >= 1
     assert plan.evidence_budget_bucket_counts["docs"] >= 1
+
+
+def test_budget_planner_ultra_large_mode_uses_capped_profiles() -> None:
+    candidates = [_chunk(f"src/module_{idx}.py", idx) for idx in range(60)]
+    context = {"changed_files": [f"src/module_{idx}.py" for idx in range(30)]}
+
+    review_normal = plan_evidence_budget(
+        candidates,
+        command="review",
+        github_context=context,
+        limit_hint=40,
+        incremental_scope_mode="changed_files_first",
+    )
+    review_ultra = plan_evidence_budget(
+        candidates,
+        command="review",
+        github_context=context,
+        limit_hint=40,
+        incremental_scope_mode="changed_files_first",
+        ultra_large_mode=True,
+    )
+
+    assert review_ultra.evidence_budget_mode == "ultra_large_review_capped"
+    assert review_ultra.evidence_budget_limit < review_normal.evidence_budget_limit

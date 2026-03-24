@@ -756,6 +756,48 @@ def _retrieval_snapshot_lines(audit_summary: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _ultra_large_pr_mode_lines(audit_summary: dict[str, Any], *, command: str) -> list[str]:
+    cmd = str(command or audit_summary.get("command", "ask") or "ask").strip().lower()
+    if cmd not in {"ask", "review", "fix"}:
+        return []
+    active = bool(audit_summary.get("ultra_large_pr_mode_active", False))
+    if not active:
+        return []
+    level = str(audit_summary.get("ultra_large_pr_mode_level", "large") or "large")
+    reason = str(audit_summary.get("ultra_large_pr_mode_reason", "none") or "none")
+    strategy = str(audit_summary.get("ultra_large_pr_depth_strategy", "primary_first_capped") or "primary_first_capped")
+    budget_mode = str(audit_summary.get("evidence_budget_mode", "not_applied") or "not_applied")
+    synthesis_cap = _int(audit_summary.get("ultra_large_pr_synthesis_window_cap", 0))
+    primary = str(audit_summary.get("ultra_large_pr_primary_coverage_summary", "none") or "none")
+    bounded = str(audit_summary.get("ultra_large_pr_bounded_coverage_summary", "none") or "none")
+    coverage_statement = str(
+        audit_summary.get("ultra_large_pr_coverage_statement", "Bounded coverage active.")
+        or "Bounded coverage active."
+    )
+    lines = [
+        "### 🧱 Ultra-large PR mode",
+        "- Status: `active`",
+        f"- Level: `{level}`",
+        f"- Activation reason: `{reason}`",
+        f"- Depth strategy: `{strategy}`",
+        f"- Evidence budget mode: `{budget_mode}`",
+        f"- Synthesis window cap: `{synthesis_cap}`",
+        f"- Primary coverage: `{primary}`",
+        f"- Bounded coverage: `{bounded}`",
+        f"- Coverage statement: {coverage_statement}",
+    ]
+    if cmd == "fix":
+        downgraded = bool(audit_summary.get("ultra_large_pr_patch_governance_downgraded", False))
+        downgrade_reason = str(
+            audit_summary.get("ultra_large_pr_patch_governance_reason", "n/a") or "n/a"
+        )
+        lines.append(f"- Patch governance downgraded: `{'yes' if downgraded else 'no'}`")
+        if downgraded:
+            lines.append(f"- Patch governance reason: `{downgrade_reason}`")
+    lines.append("")
+    return lines
+
+
 def _touched_files_lines(audit_summary: dict[str, Any]) -> list[str]:
     raw = audit_summary.get("touched_files", [])
     if not isinstance(raw, list):
@@ -1155,6 +1197,46 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
             "Selected evidence retained as supporting context.",
         ),
         (
+            "Ultra-large PR mode active",
+            bool(audit_summary.get("ultra_large_pr_mode_active", False)),
+            "Whether deterministic ultra-large PR bounded-coverage mode was activated.",
+        ),
+        (
+            "Ultra-large PR mode level",
+            audit_summary.get("ultra_large_pr_mode_level", "normal"),
+            "Activation severity level for ultra-large PR handling.",
+        ),
+        (
+            "Ultra-large PR activation reason",
+            audit_summary.get("ultra_large_pr_mode_reason", "none"),
+            "Deterministic trigger reason(s) for ultra-large PR mode activation.",
+        ),
+        (
+            "Ultra-large PR depth strategy",
+            audit_summary.get("ultra_large_pr_depth_strategy", "standard"),
+            "Depth strategy used when ultra-large PR mode is active.",
+        ),
+        (
+            "Ultra-large PR synthesis window cap",
+            _int(audit_summary.get("ultra_large_pr_synthesis_window_cap", 0)),
+            "Per-command synthesis window cap applied under ultra-large PR mode.",
+        ),
+        (
+            "Ultra-large PR primary coverage",
+            audit_summary.get("ultra_large_pr_primary_coverage_summary", "none"),
+            "Primary/deep coverage summary under ultra-large PR mode.",
+        ),
+        (
+            "Ultra-large PR bounded coverage",
+            audit_summary.get("ultra_large_pr_bounded_coverage_summary", "none"),
+            "Bounded/secondary coverage summary under ultra-large PR mode.",
+        ),
+        (
+            "Ultra-large PR coverage statement",
+            audit_summary.get("ultra_large_pr_coverage_statement", "n/a"),
+            "Human-readable bounded-coverage statement for ultra-large PR mode.",
+        ),
+        (
             "Signal calibration used",
             bool(audit_summary.get("signal_calibration_used", False)),
             "Whether review security-like signals were calibrated before final buckets.",
@@ -1427,6 +1509,16 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     "Patch verification preconditions",
                     audit_summary.get("patch_verification_preconditions", "not_applicable"),
                     "Verification gate status required before safe patch proposal.",
+                ),
+                (
+                    "Ultra-large PR patch governance downgraded",
+                    bool(audit_summary.get("ultra_large_pr_patch_governance_downgraded", False)),
+                    "Whether patch governance was downgraded due to bounded ultra-large PR coverage.",
+                ),
+                (
+                    "Ultra-large PR patch governance reason",
+                    audit_summary.get("ultra_large_pr_patch_governance_reason", "n/a"),
+                    "Reason patch governance was downgraded under ultra-large PR constraints.",
                 ),
             ]
         )
@@ -1985,6 +2077,7 @@ def render_answer_markdown(
         )
         detail_lines = [
             *_retrieval_snapshot_lines(audit_summary),
+            *_ultra_large_pr_mode_lines(audit_summary, command=command),
             "### 📊 Evidence",
             *evidence_block,
             "",
@@ -2024,6 +2117,7 @@ def render_answer_markdown(
         sections.append("")
         detail_lines = [
             *_retrieval_snapshot_lines(audit_summary),
+            *_ultra_large_pr_mode_lines(audit_summary, command=command),
             "### 📊 Evidence",
             *evidence_block,
             "",
@@ -2281,6 +2375,7 @@ def render_review_markdown(
 
     detail_lines = [
         *_retrieval_snapshot_lines(audit_summary),
+        *_ultra_large_pr_mode_lines(audit_summary, command="review"),
         *_render_async_batch_lines(audit_summary, command="review"),
         "Risk drivers:",
         *risk_driver_block,
@@ -2378,6 +2473,7 @@ def render_patch_markdown(
 
     detail_lines = [
         *_retrieval_snapshot_lines(audit_summary),
+        *_ultra_large_pr_mode_lines(audit_summary, command="fix"),
         *_render_async_batch_lines(audit_summary, command="fix"),
         "### 🎯 Patch targeting",
         f"- Patch target files total: {patch_target_files_total}",
