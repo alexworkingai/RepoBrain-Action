@@ -168,6 +168,83 @@ def _render_confirmed_finding_with_evidence(
     return f"{base} (evidence: {len(evidence_paths)} files; sample: `{evidence_paths[0]}`)"
 
 
+def _compact_anchor_list(paths: list[str], *, max_items: int = 3) -> str:
+    anchors = [str(path).strip() for path in paths if str(path).strip()]
+    if not anchors:
+        return "none"
+    unique = list(dict.fromkeys(anchors))
+    if len(unique) <= max_items:
+        return ", ".join(f"`{item}`" for item in unique)
+    kept = ", ".join(f"`{item}`" for item in unique[:max_items])
+    return f"{kept} (+{len(unique) - max_items} more)"
+
+
+def _evidence_verdict_lines(review: dict[str, Any]) -> list[str]:
+    raw = review.get("evidence_verdicts", [])
+    if not isinstance(raw, list):
+        raw = []
+    verdict_lines: list[str] = []
+    for idx, item in enumerate(raw, start=1):
+        if not isinstance(item, dict):
+            continue
+        claim = str(item.get("claim", "") or "").strip()
+        if not claim:
+            continue
+        anchors_raw = item.get("evidence_anchors", [])
+        anchors = (
+            [str(path).strip() for path in anchors_raw if str(path).strip()]
+            if isinstance(anchors_raw, list)
+            else []
+        )
+        confidence = str(item.get("confidence", "n/a") or "n/a").strip().lower() or "n/a"
+        impact = str(item.get("impact", "n/a") or "n/a").strip().lower() or "n/a"
+        patchability = str(item.get("patchability", "n/a") or "n/a").strip().lower() or "n/a"
+        why_now = str(item.get("why_now", "n/a") or "n/a").strip() or "n/a"
+        why_not = str(item.get("why_not", "n/a") or "n/a").strip() or "n/a"
+        uncertainty = str(item.get("uncertainty", "n/a") or "n/a").strip() or "n/a"
+        verdict_lines.append(
+            (
+                f"- V{idx} Claim: {claim} | Evidence anchors: {_compact_anchor_list(anchors)} "
+                f"| Confidence: `{confidence}` | Impact: `{impact}` | Patchability: `{patchability}` "
+                f"| Why now: {why_now} | Why not: {why_not} | Uncertainty: {uncertainty}"
+            )
+        )
+    if verdict_lines:
+        return verdict_lines
+    return [
+        "- No evidence-backed verdicts were emitted in this run (no confirmed findings).",
+    ]
+
+
+def _patch_verdict_lines(audit_summary: dict[str, Any]) -> list[str]:
+    patch_generation_result = str(audit_summary.get("patch_generation_result", "n/a") or "n/a").strip().lower()
+    patch_validation_result = str(audit_summary.get("patch_validation_result", "n/a") or "n/a").strip().lower()
+    patch_targeting_reason = str(audit_summary.get("patch_targeting_reason", "n/a") or "n/a").strip() or "n/a"
+    localized_patch_evidence = _int(audit_summary.get("localized_patch_evidence_count", 0))
+    patch_target_files = _int(
+        audit_summary.get("patch_target_files_selected", audit_summary.get("patch_target_files_count", 0))
+    )
+    if patch_generation_result == "no_patch":
+        return [
+            (
+                "- Claim: No patch was generated. "
+                f"| Evidence anchors: localized_signals={localized_patch_evidence}, selected_targets={patch_target_files} "
+                "| Confidence: `high` | Impact: `medium` | Patchability: `blocked` "
+                "| Why now: Governance requires localized evidence-backed targets before patch synthesis. "
+                f"| Why not: {patch_targeting_reason} | Uncertainty: bounded_to_available_localization"
+            )
+        ]
+    return [
+        (
+            "- Claim: Patch candidate generated for localized target set. "
+            f"| Evidence anchors: localized_signals={localized_patch_evidence}, selected_targets={patch_target_files} "
+            f"| Confidence: `{'high' if patch_validation_result == 'pass' else 'medium'}` | Impact: `medium` "
+            "| Patchability: `patchable` | Why now: Localized evidence met patch-targeting gate. "
+            "| Why not: n/a | Uncertainty: review_patch_before_apply"
+        )
+    ]
+
+
 def _int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
@@ -2145,6 +2222,9 @@ def render_review_markdown(
         *_evidence_context_summary_lines(audit_summary),
         *confirmed_section,
         "",
+        "### 📌 Evidence verdicts",
+        *_evidence_verdict_lines(review),
+        "",
         "### 🟡 Possible signals",
         *possible_block,
         "",
@@ -2238,6 +2318,9 @@ def render_patch_markdown(
         f"- Patch grounding mode: {patch_grounding_mode}",
         "",
         *_evidence_context_summary_lines(audit_summary),
+        "### 📌 Evidence verdict",
+        *_patch_verdict_lines(audit_summary),
+        "",
         "### ✅ Patch validation",
         f"- Patch generation result: `{patch_generation_result}`",
         f"- Patch validation result: `{patch_validation_result}`",
