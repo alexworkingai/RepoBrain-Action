@@ -32,22 +32,81 @@ jobs:
         with:
           script: |
             const fs = require("fs");
+            const path = require("path");
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const diagnosticPath = "artifacts/check-visibility/repobrain_check_visibility_diagnostic.json";
 
-            async function isReviewCheckVisibleInPullRequest({ owner, repo, pullNumber, checkName }) {
+            function ensureDiagnosticDir() {
+              fs.mkdirSync(path.dirname(diagnosticPath), { recursive: true });
+            }
+
+            function summarizeRollupNodes(nodes) {
+              const summary = [];
+              for (const node of nodes || []) {
+                if (!node || typeof node !== "object") continue;
+                const typeName = String(node.__typename || "").trim() || "unknown";
+                if (typeName === "CheckRun") {
+                  summary.push({
+                    node_type: "CheckRun",
+                    name: String(node.name || "").trim() || "n/a",
+                    database_id: Number.isInteger(node.databaseId) ? node.databaseId : null,
+                    app_slug: String(node?.app?.slug || "").trim() || "n/a",
+                    app_name: String(node?.app?.name || "").trim() || "n/a",
+                    check_suite_id: Number.isInteger(node?.checkSuite?.databaseId)
+                      ? node.checkSuite.databaseId
+                      : null,
+                    status: String(node.status || "").trim() || "n/a",
+                    conclusion: String(node.conclusion || "").trim() || "n/a",
+                    details_url: String(node.detailsUrl || "").trim() || "n/a",
+                  });
+                  continue;
+                }
+                if (typeName === "StatusContext") {
+                  summary.push({
+                    node_type: "StatusContext",
+                    context: String(node.context || "").trim() || "n/a",
+                    state: String(node.state || "").trim() || "n/a",
+                    creator: String(node?.creator?.login || "").trim() || "n/a",
+                    target_url: String(node.targetUrl || "").trim() || "n/a",
+                  });
+                }
+              }
+              return summary;
+            }
+
+            async function fetchPrRollup({ owner, repo, pullNumber }) {
               const query = `
                 query($owner: String!, $repo: String!, $pullNumber: Int!) {
                   repository(owner: $owner, name: $repo) {
                     pullRequest(number: $pullNumber) {
+                      number
+                      headRefName
+                      headRefOid
                       statusCheckRollup {
                         contexts(first: 100) {
                           nodes {
                             __typename
                             ... on CheckRun {
+                              databaseId
                               name
+                              status
+                              conclusion
+                              detailsUrl
+                              app {
+                                slug
+                                name
+                              }
+                              checkSuite {
+                                databaseId
+                              }
                             }
                             ... on StatusContext {
                               context
+                              state
+                              targetUrl
+                              creator {
+                                login
+                              }
                             }
                           }
                         }
@@ -56,133 +115,386 @@ jobs:
                   }
                 }
               `;
-              try {
-                const result = await github.graphql(query, {
-                  owner,
-                  repo,
-                  pullNumber,
-                });
-                const nodes =
-                  result?.repository?.pullRequest?.statusCheckRollup?.contexts?.nodes || [];
-                for (const node of nodes) {
-                  if (!node || typeof node !== "object") continue;
-                  const checkRunName =
-                    node.__typename === "CheckRun" ? String(node.name || "").trim() : "";
-                  const statusContext =
-                    node.__typename === "StatusContext" ? String(node.context || "").trim() : "";
-                  if (checkRunName === checkName || statusContext === checkName) {
-                    return true;
-                  }
-                }
-              } catch (err) {
-                core.notice(`Rollup visibility probe failed: ${String(err)}`);
-              }
-              return false;
+              const result = await github.graphql(query, { owner, repo, pullNumber });
+              const pr = result?.repository?.pullRequest || null;
+              const nodes = pr?.statusCheckRollup?.contexts?.nodes || [];
+              return {
+                pr_number: Number.isInteger(pr?.number) ? pr.number : pullNumber,
+                head_ref_name: String(pr?.headRefName || "").trim() || "n/a",
+                head_ref_oid: String(pr?.headRefOid || "").trim() || "n/a",
+                nodes_summary: summarizeRollupNodes(nodes),
+              };
             }
 
-            const payloadPath = "artifacts/check-payload/check_run_payload.json";
-            if (!fs.existsSync(payloadPath)) {
-              core.notice("check_run_payload.json not found, nothing to publish.");
-              return;
+            async function collectHeadState({ owner, repo, headSha }) {
+              const checkRunsResponse = await github.request(
+                "GET /repos/{owner}/{repo}/commits/{ref}/check-runs",
+                { owner, repo, ref: headSha, per_page: 100 },
+              );
+              const checkRuns = Array.isArray(checkRunsResponse?.data?.check_runs)
+                ? checkRunsResponse.data.check_runs
+                : [];
+              const checkRunsSummary = checkRuns.map((run) => ({
+                name: String(run?.name || "").trim() || "n/a",
+                id: Number.isInteger(run?.id) ? run.id : null,
+                app_slug: String(run?.app?.slug || "").trim() || "n/a",
+                app_name: String(run?.app?.name || "").trim() || "n/a",
+                status: String(run?.status || "").trim() || "n/a",
+                conclusion: String(run?.conclusion || "").trim() || "n/a",
+                check_suite_id: Number.isInteger(run?.check_suite?.id) ? run.check_suite.id : null,
+                details_url: String(run?.details_url || run?.html_url || "").trim() || "n/a",
+              }));
+
+              const checkSuitesResponse = await github.request(
+                "GET /repos/{owner}/{repo}/commits/{ref}/check-suites",
+                { owner, repo, ref: headSha, per_page: 100 },
+              );
+              const checkSuites = Array.isArray(checkSuitesResponse?.data?.check_suites)
+                ? checkSuitesResponse.data.check_suites
+                : [];
+              const checkSuitesSummary = checkSuites.map((suite) => ({
+                id: Number.isInteger(suite?.id) ? suite.id : null,
+                app_slug: String(suite?.app?.slug || "").trim() || "n/a",
+                app_name: String(suite?.app?.name || "").trim() || "n/a",
+                status: String(suite?.status || "").trim() || "n/a",
+                conclusion: String(suite?.conclusion || "").trim() || "n/a",
+                head_sha: String(suite?.head_sha || "").trim() || "n/a",
+              }));
+
+              const statusesResponse = await github.request(
+                "GET /repos/{owner}/{repo}/commits/{ref}/status",
+                { owner, repo, ref: headSha },
+              );
+              const statuses = Array.isArray(statusesResponse?.data?.statuses)
+                ? statusesResponse.data.statuses
+                : [];
+              const statusesSummary = statuses.map((status) => ({
+                context: String(status?.context || "").trim() || "n/a",
+                state: String(status?.state || "").trim() || "n/a",
+                creator: String(status?.creator?.login || "").trim() || "n/a",
+                target_url: String(status?.target_url || "").trim() || "n/a",
+              }));
+
+              return {
+                check_runs_summary: checkRunsSummary,
+                check_suites_summary: checkSuitesSummary,
+                commit_statuses_summary: statusesSummary,
+              };
             }
 
-            const raw = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
-            const payloadHeadSha = String(raw.head_sha || "").trim();
-            const name = String(raw.name || "RepoBrain").trim() || "RepoBrain";
-            const command = String(raw.command || "").trim().toLowerCase();
-            const prNumberRaw = Number.parseInt(String(raw.pr_number || "").trim(), 10);
-            const prNumber = Number.isInteger(prNumberRaw) && prNumberRaw > 0 ? prNumberRaw : null;
-
-            let headSha = payloadHeadSha;
-            if (prNumber) {
-              try {
-                const pull = await github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: prNumber,
-                });
-                const liveHeadSha = String(pull?.data?.head?.sha || "").trim();
-                if (liveHeadSha) {
-                  headSha = liveHeadSha;
-                }
-              } catch (err) {
-                core.notice(`Failed to resolve live PR head for #${prNumber}: ${String(err)}`);
-              }
-            }
-
-            if (!headSha) {
-              core.notice("Missing head_sha in check payload, skipping publish.");
-              return;
-            }
-
-            const allowedConclusions = new Set(["success", "neutral", "failure", "cancelled"]);
-            const requestedConclusion = String(raw.conclusion || "neutral").trim().toLowerCase();
-            const conclusion = allowedConclusions.has(requestedConclusion)
-              ? requestedConclusion
-              : "neutral";
-
-            const output = raw.output && typeof raw.output === "object" ? raw.output : {};
-            const summary = String(output.summary || "RepoBrain check summary.").slice(0, 65000);
-            const text = String(output.text || "").slice(0, 65000);
-            const title = String(output.title || name).slice(0, 255);
-            const annotations = Array.isArray(output.annotations) ? output.annotations.slice(0, 50) : [];
-
-            const checkRun = await github.request("POST /repos/{owner}/{repo}/check-runs", {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name,
-              head_sha: headSha,
-              status: "completed",
-              conclusion,
-              output: {
-                title,
-                summary,
-                text,
-                annotations,
+            const diagnostic = {
+              publication_request_identity: {
+                pr_number: null,
+                command: "n/a",
+                requested_check_name: "n/a",
+                issue_comment_source_run_id: String(context?.payload?.workflow_run?.id || "").trim() || "n/a",
+                publisher_run_id: String(process.env.GITHUB_RUN_ID || "").trim() || "n/a",
               },
-            });
+              resolved_target: {
+                payload_sha: "n/a",
+                live_resolved_head_sha_before_publish: "n/a",
+                live_resolved_head_sha_after_publish_probe: "n/a",
+                head_ref_name: "n/a",
+              },
+              publish_decision: {
+                intended_publish_mode: "deferred",
+                actual_publish_mode: "deferred",
+                check_run_creation_attempted: false,
+                status_context_creation_attempted: false,
+                fallback_logic_triggered: false,
+                fallback_reason: "n/a",
+                diagnostic_error: "n/a",
+              },
+              created_outputs: {
+                created_check_run_ids: [],
+                created_check_run_names: [],
+                created_check_suite_ids: [],
+                created_status_contexts: [],
+              },
+              post_publish_commit_state: {
+                resolved_head_sha: "n/a",
+                check_runs_summary: [],
+                check_suites_summary: [],
+                commit_statuses_summary: [],
+              },
+              post_publish_pr_rollup_state: {
+                pr_number: null,
+                head_ref_oid: "n/a",
+                head_ref_name: "n/a",
+                status_check_rollup_nodes: [],
+              },
+              comparison_hints: {
+                requested_name_present_in_head_sha_check_runs: false,
+                requested_name_present_in_head_sha_statuses: false,
+                requested_name_present_in_pr_rollup: false,
+                head_sha_vs_pr_rollup_mismatch: false,
+              },
+            };
 
-            const fallbackCommands = new Set(["review", "fix"]);
-            if (!fallbackCommands.has(command) || !prNumber) {
-              return;
+            function finalizeComparisonHints() {
+              const requested = String(
+                diagnostic.publication_request_identity.requested_check_name || "n/a",
+              ).trim();
+              if (!requested || requested === "n/a") {
+                return;
+              }
+              const inCheckRuns = diagnostic.post_publish_commit_state.check_runs_summary.some(
+                (run) => String(run?.name || "").trim() === requested,
+              );
+              const inStatuses = diagnostic.post_publish_commit_state.commit_statuses_summary.some(
+                (status) => String(status?.context || "").trim() === requested,
+              );
+              const inRollup = diagnostic.post_publish_pr_rollup_state.status_check_rollup_nodes.some(
+                (node) =>
+                  (String(node?.node_type || "").trim() === "CheckRun" &&
+                    String(node?.name || "").trim() === requested) ||
+                  (String(node?.node_type || "").trim() === "StatusContext" &&
+                    String(node?.context || "").trim() === requested),
+              );
+              diagnostic.comparison_hints.requested_name_present_in_head_sha_check_runs = inCheckRuns;
+              diagnostic.comparison_hints.requested_name_present_in_head_sha_statuses = inStatuses;
+              diagnostic.comparison_hints.requested_name_present_in_pr_rollup = inRollup;
+              diagnostic.comparison_hints.head_sha_vs_pr_rollup_mismatch = inCheckRuns && !inRollup;
             }
 
-            let visible = false;
-            for (let attempt = 0; attempt < 3; attempt += 1) {
-              visible = await isReviewCheckVisibleInPullRequest({
+            function persistDiagnostic() {
+              finalizeComparisonHints();
+              ensureDiagnosticDir();
+              fs.writeFileSync(diagnosticPath, `${JSON.stringify(diagnostic, null, 2)}\n`, "utf8");
+              core.notice(`Wrote check visibility diagnostic: ${diagnosticPath}`);
+            }
+
+            try {
+              const payloadPath = "artifacts/check-payload/check_run_payload.json";
+              if (!fs.existsSync(payloadPath)) {
+                diagnostic.publish_decision.fallback_reason = "payload_missing";
+                core.notice("check_run_payload.json not found, nothing to publish.");
+                persistDiagnostic();
+                return;
+              }
+
+              const raw = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
+              const payloadHeadSha = String(raw.head_sha || "").trim();
+              const name = String(raw.name || "RepoBrain").trim() || "RepoBrain";
+              const command = String(raw.command || "").trim().toLowerCase();
+              const prNumberRaw = Number.parseInt(String(raw.pr_number || "").trim(), 10);
+              const prNumber = Number.isInteger(prNumberRaw) && prNumberRaw > 0 ? prNumberRaw : null;
+
+              diagnostic.publication_request_identity.pr_number = prNumber;
+              diagnostic.publication_request_identity.command = command || "n/a";
+              diagnostic.publication_request_identity.requested_check_name = name;
+              diagnostic.resolved_target.payload_sha = payloadHeadSha || "n/a";
+
+              let headSha = payloadHeadSha;
+              let headRefName = "n/a";
+              if (prNumber) {
+                try {
+                  const pull = await github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: prNumber,
+                  });
+                  const liveHeadSha = String(pull?.data?.head?.sha || "").trim();
+                  const liveHeadRefName = String(pull?.data?.head?.ref || "").trim();
+                  if (liveHeadSha) {
+                    headSha = liveHeadSha;
+                  }
+                  if (liveHeadRefName) {
+                    headRefName = liveHeadRefName;
+                  }
+                } catch (err) {
+                  core.notice(`Failed to resolve live PR head for #${prNumber}: ${String(err)}`);
+                }
+              }
+              diagnostic.resolved_target.live_resolved_head_sha_before_publish = headSha || "n/a";
+              diagnostic.resolved_target.head_ref_name = headRefName;
+
+              if (!headSha) {
+                diagnostic.publish_decision.fallback_reason = "head_sha_missing";
+                core.notice("Missing head_sha in check payload, skipping publish.");
+                persistDiagnostic();
+                return;
+              }
+
+              const allowedConclusions = new Set(["success", "neutral", "failure", "cancelled"]);
+              const requestedConclusion = String(raw.conclusion || "neutral").trim().toLowerCase();
+              const conclusion = allowedConclusions.has(requestedConclusion)
+                ? requestedConclusion
+                : "neutral";
+
+              const output = raw.output && typeof raw.output === "object" ? raw.output : {};
+              const summary = String(output.summary || "RepoBrain check summary.").slice(0, 65000);
+              const text = String(output.text || "").slice(0, 65000);
+              const title = String(output.title || name).slice(0, 255);
+              const annotations = Array.isArray(output.annotations) ? output.annotations.slice(0, 50) : [];
+
+              diagnostic.publish_decision.check_run_creation_attempted = true;
+              const checkRun = await github.request("POST /repos/{owner}/{repo}/check-runs", {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                pullNumber: prNumber,
-                checkName: name,
+                name,
+                head_sha: headSha,
+                status: "completed",
+                conclusion,
+                output: {
+                  title,
+                  summary,
+                  text,
+                  annotations,
+                },
               });
-              if (visible) {
-                break;
+
+              const createdCheckRunId = Number.isInteger(checkRun?.data?.id) ? checkRun.data.id : null;
+              const createdCheckSuiteId = Number.isInteger(checkRun?.data?.check_suite?.id)
+                ? checkRun.data.check_suite.id
+                : null;
+              diagnostic.created_outputs.created_check_run_ids = createdCheckRunId ? [createdCheckRunId] : [];
+              diagnostic.created_outputs.created_check_run_names = [name];
+              diagnostic.created_outputs.created_check_suite_ids = createdCheckSuiteId
+                ? [createdCheckSuiteId]
+                : [];
+
+              const fallbackCommands = new Set(["review", "fix"]);
+              if (!fallbackCommands.has(command) || !prNumber) {
+                diagnostic.publish_decision.fallback_reason = !fallbackCommands.has(command)
+                  ? "command_not_fallback_eligible"
+                  : "pr_number_missing";
+              } else {
+                let visible = false;
+                for (let attempt = 0; attempt < 3; attempt += 1) {
+                  try {
+                    const rollupProbe = await fetchPrRollup({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      pullNumber: prNumber,
+                    });
+                    visible = (rollupProbe.nodes_summary || []).some(
+                      (node) =>
+                        (node.node_type === "CheckRun" && String(node.name || "").trim() === name) ||
+                        (node.node_type === "StatusContext" &&
+                          String(node.context || "").trim() === name),
+                    );
+                  } catch (err) {
+                    core.notice(`Rollup visibility probe failed: ${String(err)}`);
+                  }
+                  if (visible) {
+                    break;
+                  }
+                  if (attempt < 2) {
+                    await sleep(1200);
+                  }
+                }
+
+                if (visible) {
+                  diagnostic.publish_decision.fallback_reason = "rollup_contains_requested_check";
+                } else {
+                  diagnostic.publish_decision.fallback_logic_triggered = true;
+                  diagnostic.publish_decision.fallback_reason = "rollup_missing_requested_check";
+                  diagnostic.publish_decision.status_context_creation_attempted = true;
+                  const statusState = conclusion === "failure" || conclusion === "cancelled"
+                    ? "failure"
+                    : "success";
+                  const targetUrl =
+                    String(checkRun?.data?.details_url || checkRun?.data?.html_url || "").trim() ||
+                    `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${prNumber}`;
+                  const commandLabel = command === "fix" ? "fix" : "review";
+                  await github.request("POST /repos/{owner}/{repo}/statuses/{sha}", {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    sha: headSha,
+                    state: statusState,
+                    context: name,
+                    description: `RepoBrain ${commandLabel} completed.`,
+                    target_url: targetUrl,
+                  });
+                  diagnostic.created_outputs.created_status_contexts = [
+                    {
+                      context: name,
+                      state: statusState,
+                      target_url: targetUrl,
+                    },
+                  ];
+                  core.notice(
+                    `Published status-context fallback for ${name} on PR #${prNumber} at ${headSha}.`,
+                  );
+                }
               }
-              if (attempt < 2) {
-                await sleep(1200);
+
+              if (prNumber) {
+                try {
+                  const pullAfter = await github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: prNumber,
+                  });
+                  const headAfter = String(pullAfter?.data?.head?.sha || "").trim();
+                  if (headAfter) {
+                    diagnostic.resolved_target.live_resolved_head_sha_after_publish_probe = headAfter;
+                  }
+                  const headRefAfter = String(pullAfter?.data?.head?.ref || "").trim();
+                  if (headRefAfter) {
+                    diagnostic.resolved_target.head_ref_name = headRefAfter;
+                  }
+                } catch (err) {
+                  core.notice(`Failed post-publish PR head probe for #${prNumber}: ${String(err)}`);
+                }
               }
-            }
-            if (visible) {
-              return;
+              if (
+                String(diagnostic.resolved_target.live_resolved_head_sha_after_publish_probe || "").trim() ===
+                "n/a"
+              ) {
+                diagnostic.resolved_target.live_resolved_head_sha_after_publish_probe = headSha;
+              }
+
+              const postHead = String(
+                diagnostic.resolved_target.live_resolved_head_sha_after_publish_probe || headSha,
+              ).trim();
+              diagnostic.post_publish_commit_state.resolved_head_sha = postHead || "n/a";
+              if (postHead) {
+                try {
+                  const commitState = await collectHeadState({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    headSha: postHead,
+                  });
+                  diagnostic.post_publish_commit_state.check_runs_summary = commitState.check_runs_summary;
+                  diagnostic.post_publish_commit_state.check_suites_summary = commitState.check_suites_summary;
+                  diagnostic.post_publish_commit_state.commit_statuses_summary =
+                    commitState.commit_statuses_summary;
+                } catch (err) {
+                  core.notice(`Failed post-publish head state probe for ${postHead}: ${String(err)}`);
+                  diagnostic.publish_decision.diagnostic_error = "post_publish_head_probe_failed";
+                }
+              }
+
+              if (prNumber) {
+                try {
+                  const rollup = await fetchPrRollup({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pullNumber: prNumber,
+                  });
+                  diagnostic.post_publish_pr_rollup_state.pr_number = rollup.pr_number;
+                  diagnostic.post_publish_pr_rollup_state.head_ref_oid = rollup.head_ref_oid;
+                  diagnostic.post_publish_pr_rollup_state.head_ref_name = rollup.head_ref_name;
+                  diagnostic.post_publish_pr_rollup_state.status_check_rollup_nodes = rollup.nodes_summary;
+                } catch (err) {
+                  core.notice(`Failed post-publish rollup probe for PR #${prNumber}: ${String(err)}`);
+                  diagnostic.publish_decision.diagnostic_error = "post_publish_rollup_probe_failed";
+                }
+              }
+
+              persistDiagnostic();
+            } catch (err) {
+              diagnostic.publish_decision.diagnostic_error = String(err);
+              persistDiagnostic();
+              throw err;
             }
 
-            const statusState = conclusion === "failure" || conclusion === "cancelled"
-              ? "failure"
-              : "success";
-            const targetUrl =
-              String(checkRun?.data?.details_url || checkRun?.data?.html_url || "").trim() ||
-              `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${prNumber}`;
-
-            const commandLabel = command === "fix" ? "fix" : "review";
-            await github.request("POST /repos/{owner}/{repo}/statuses/{sha}", {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: headSha,
-              state: statusState,
-              context: name,
-              description: `RepoBrain ${commandLabel} completed.`,
-              target_url: targetUrl,
-            });
-            core.notice(
-              `Published status-context fallback for ${name} on PR #${prNumber} at ${headSha}.`,
-            );
+      - name: Upload RepoBrain check visibility diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-check-visibility-diagnostic
+          path: artifacts/check-visibility/repobrain_check_visibility_diagnostic.json
+          if-no-files-found: ignore
