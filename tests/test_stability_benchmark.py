@@ -153,3 +153,59 @@ def test_stability_benchmark_marks_missing_data_when_repeated_runs_absent(tmp_pa
     assert payload["scenarios"]["ask_snapshot_transition"]["status"] == "not_enough_data"
     assert payload["scenarios"]["review_snapshot_transition"]["status"] == "not_enough_data"
     assert "NEEDS_DATA" in output_md.read_text(encoding="utf-8")
+
+
+def test_stability_benchmark_distinguishes_skipped_from_needs_data_for_closed_pr_runs(
+    tmp_path: Path,
+) -> None:
+    audit_dir = tmp_path / "audit"
+    _write_audit(
+        audit_dir / "audit_001_7.json",
+        {
+            "command": "review",
+            "run_id": "001",
+            "route_final": "WAIT",
+            "skip_reason_code": "pr_closed_or_merged_review",
+            "skip_reason_short": "Skipped: `/repobrain review` runs only on open PRs.",
+            "pr_state": "closed",
+            "pr_merged": True,
+            **_snapshot_fields("not_applicable"),
+        },
+    )
+    _write_audit(
+        audit_dir / "audit_002_7.json",
+        {
+            "command": "fix",
+            "run_id": "002",
+            "route_final": "WAIT",
+            "skip_reason_code": "pr_closed_or_merged_fix",
+            "skip_reason_short": "Skipped: `/repobrain fix` runs only on open PRs with an active diff context.",
+            "pr_state": "closed",
+            "pr_merged": True,
+            **_snapshot_fields("not_applicable"),
+        },
+    )
+
+    output_json = tmp_path / "benchmarks" / "repobrain_stability_benchmark.json"
+    output_md = tmp_path / "benchmarks" / "repobrain_stability_benchmark.md"
+    payload = write_stability_benchmark_artifacts(
+        audit_dir=audit_dir,
+        output_json_path=output_json,
+        output_markdown_path=output_md,
+    )
+
+    assert payload["scenarios"]["review_snapshot_transition"]["status"] == "skipped"
+    assert payload["scenarios"]["review_snapshot_transition"]["reason"] == "pr_closed_or_merged_review"
+    assert payload["scenarios"]["review_async_subsection_contract"]["status"] == "skipped"
+    assert payload["scenarios"]["fix_no_patch_contract"]["status"] == "skipped"
+    assert payload["scenarios"]["ask_snapshot_transition"]["status"] == "not_enough_data"
+    assert payload["latest"]["review"]["status"] == "skipped"
+    assert payload["latest"]["fix"]["status"] == "skipped"
+    markdown = output_md.read_text(encoding="utf-8")
+    assert "Review snapshot transition (miss -> hit): **SKIPPED** (`pr_closed_or_merged_review`)" in markdown
+    assert "Review async subsection contract: **SKIPPED** (`pr_closed_or_merged_review`)" in markdown
+    assert "Fix safe no_patch contract: **SKIPPED** (`pr_closed_or_merged_fix`)" in markdown
+    assert "### REVIEW" in markdown
+    assert "- Skipped: `pr_closed_or_merged_review`" in markdown
+    assert "### FIX" in markdown
+    assert "- Skipped: `pr_closed_or_merged_fix`" in markdown
