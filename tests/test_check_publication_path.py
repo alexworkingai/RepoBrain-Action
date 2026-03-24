@@ -183,10 +183,17 @@ def test_privileged_checks_publisher_workflow_is_sanitized() -> None:
     assert "actions: read" in workflow
     assert "statusCheckRollup" in workflow
     assert "POST /repos/{owner}/{repo}/statuses/{sha}" in workflow
+    assert "GET /repos/{owner}/{repo}/commits/{ref}/check-runs" in workflow
+    assert "GET /repos/{owner}/{repo}/commits/{ref}/check-suites" in workflow
+    assert "GET /repos/{owner}/{repo}/commits/{ref}/status" in workflow
     assert "raw.pr_number" in workflow
     assert "raw.command" in workflow
     assert 'new Set(["review", "fix"])' in workflow
     assert "RepoBrain ${commandLabel} completed." in workflow
     assert "if (visible) {" in workflow
+    assert "repobrain_check_visibility_diagnostic.json" in workflow
+    assert "repobrain-check-visibility-diagnostic" in workflow
+    assert "status_check_rollup_nodes" in workflow
+    assert "head_sha_vs_pr_rollup_mismatch" in workflow
     assert "Published status-context fallback" in workflow
     assert "actions/checkout" not in workflow
