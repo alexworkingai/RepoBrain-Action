@@ -50,8 +50,8 @@ jobs:
                     node_type: "CheckRun",
                     name: String(node.name || "").trim() || "n/a",
                     database_id: Number.isInteger(node.databaseId) ? node.databaseId : null,
-                    app_slug: String(node?.app?.slug || "").trim() || "n/a",
-                    app_name: String(node?.app?.name || "").trim() || "n/a",
+                    app_slug: String(node?.checkSuite?.app?.slug || "").trim() || "n/a",
+                    app_name: String(node?.checkSuite?.app?.name || "").trim() || "n/a",
                     check_suite_id: Number.isInteger(node?.checkSuite?.databaseId)
                       ? node.checkSuite.databaseId
                       : null,
@@ -92,12 +92,12 @@ jobs:
                               status
                               conclusion
                               detailsUrl
-                              app {
-                                slug
-                                name
-                              }
                               checkSuite {
                                 databaseId
+                                app {
+                                  slug
+                                  name
+                                }
                               }
                             }
                             ... on StatusContext {
