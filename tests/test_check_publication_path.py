@@ -186,6 +186,8 @@ def test_privileged_checks_publisher_workflow_is_sanitized() -> None:
     assert "GET /repos/{owner}/{repo}/commits/{ref}/check-runs" in workflow
     assert "GET /repos/{owner}/{repo}/commits/{ref}/check-suites" in workflow
     assert "GET /repos/{owner}/{repo}/commits/{ref}/status" in workflow
+    assert "contexts(first: 100)" in workflow
+    assert "checkSuite {" in workflow
     assert "raw.pr_number" in workflow
     assert "raw.command" in workflow
     assert 'new Set(["review", "fix"])' in workflow
