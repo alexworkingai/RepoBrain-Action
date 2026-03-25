@@ -25,7 +25,7 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
-  checks: read
+  checks: write
   statuses: read
   actions: read
 
@@ -51,6 +51,9 @@ jobs:
         uses: OWNER/REPO@v0.1.0
         env:
           RB_INDEX_CACHE_RESTORED: ${{ steps.index_cache.outputs.cache-hit == 'true' && '1' || '' }}
+          # App-first onboarding defaults (foundation)
+          RB_GH_APP_REPOSITORY_SELECTION: selected
+          RB_GH_APP_SELECTED_REPOS: owner/repo
         with:
           tky_mode: baseline
           dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}

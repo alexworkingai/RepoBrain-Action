@@ -71,6 +71,10 @@ from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
 from repobrain.patch_targeting import select_patch_targets
 from repobrain.patch_governance import build_patch_governance_contract
+from repobrain.ultra_large_pr_mode import (
+    build_ultra_large_pr_mode_contract,
+    ultra_large_mode_precheck,
+)
 from repobrain.async_batch import run_bounded_batch_tasks
 from repobrain.review_batch_planner import plan_review_fix_batches
 from repobrain.security_policy import classify_security_scope
@@ -4337,6 +4341,7 @@ def _retrieve_candidates_with_runtime(
                 if str(path).strip()
             }
         }
+    ultra_large_mode_active, _ultra_precheck_reasons = ultra_large_mode_precheck(github_context)
     budget_plan = plan_evidence_budget(
         filtered.candidates,
         command=cmd,
@@ -4344,6 +4349,7 @@ def _retrieve_candidates_with_runtime(
         limit_hint=max(1, int(topk)),
         incremental_scope_mode=str(retrieval_runtime.get("incremental_scope_mode", "fallback_full")),
         segment_hints=segment_hints,
+        ultra_large_mode=ultra_large_mode_active,
     )
     retrieval_runtime["hybrid_rerank_used"] = bool(rerank.hybrid_rerank_used)
     mode_suffix = rerank.retrieval_ranking_mode
@@ -5274,6 +5280,8 @@ def _build_qa_markdown(
         candidate_paths=[],
     )
     qa_github_context["pr_segmentation_file_map"] = dict(pr_segmentation_seed.file_segment_class_map)
+    qa_github_context["pr_segment_count"] = int(pr_segmentation_seed.pr_segment_count)
+    qa_github_context["pr_cross_segment"] = bool(pr_segmentation_seed.pr_cross_segment)
     chunks, index_source, index_elapsed_ms, chunk_vectors_by_id, vectors_meta = _normalize_chunks_meta(
         load_or_build_chunks_with_meta(resolved_repo_root, index_path, governor=governor)
     )
@@ -5503,6 +5511,11 @@ def _build_qa_markdown(
     audit_summary.update(pr_segmentation.as_audit_fields())
     if isinstance(qa_github_context, dict):
         qa_github_context["pr_segmentation_file_map"] = dict(pr_segmentation.file_segment_class_map)
+    _apply_ultra_large_pr_mode_contract(
+        audit_summary=audit_summary,
+        command=cmd,
+        selected_items_count=len(evidence_out),
+    )
 
     llm_text, llm_meta = _maybe_generate_llm_text(
         cmd=cmd,
@@ -5659,6 +5672,36 @@ def _build_qa_markdown(
         )
         audit["pr_segmentation_fallback_reason"] = str(
             audit_summary.get("pr_segmentation_fallback_reason", "none") or "none"
+        )
+        audit["ultra_large_pr_mode_active"] = bool(
+            audit_summary.get("ultra_large_pr_mode_active", False)
+        )
+        audit["ultra_large_pr_mode_level"] = str(
+            audit_summary.get("ultra_large_pr_mode_level", "normal") or "normal"
+        )
+        audit["ultra_large_pr_mode_reason"] = str(
+            audit_summary.get("ultra_large_pr_mode_reason", "none") or "none"
+        )
+        audit["ultra_large_pr_depth_strategy"] = str(
+            audit_summary.get("ultra_large_pr_depth_strategy", "standard") or "standard"
+        )
+        audit["ultra_large_pr_synthesis_window_cap"] = int(
+            audit_summary.get("ultra_large_pr_synthesis_window_cap", 0) or 0
+        )
+        audit["ultra_large_pr_primary_coverage_summary"] = str(
+            audit_summary.get("ultra_large_pr_primary_coverage_summary", "none") or "none"
+        )
+        audit["ultra_large_pr_bounded_coverage_summary"] = str(
+            audit_summary.get("ultra_large_pr_bounded_coverage_summary", "none") or "none"
+        )
+        audit["ultra_large_pr_coverage_statement"] = str(
+            audit_summary.get("ultra_large_pr_coverage_statement", "n/a") or "n/a"
+        )
+        audit["ultra_large_pr_patch_governance_downgraded"] = bool(
+            audit_summary.get("ultra_large_pr_patch_governance_downgraded", False)
+        )
+        audit["ultra_large_pr_patch_governance_reason"] = str(
+            audit_summary.get("ultra_large_pr_patch_governance_reason", "n/a") or "n/a"
         )
         audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
         audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
@@ -5858,6 +5901,60 @@ def _should_block_fix_patch_without_localized_evidence(
     return int(confirmed_localized_findings) <= 0
 
 
+def _apply_ultra_large_pr_mode_contract(
+    *,
+    audit_summary: dict[str, Any],
+    command: str,
+    selected_items_count: int,
+    patch_generation_result: str = "n/a",
+    patch_target_files_selected: int = 0,
+    localized_patch_evidence_count: int = 0,
+) -> dict[str, Any]:
+    contract = build_ultra_large_pr_mode_contract(
+        command=command,
+        pr_changed_files_count=int(audit_summary.get("pr_changed_files_count", 0) or 0),
+        changed_regions_considered=int(audit_summary.get("changed_regions_considered", 0) or 0),
+        pr_segment_count=int(audit_summary.get("pr_segment_count", 0) or 0),
+        pr_cross_segment=bool(audit_summary.get("pr_cross_segment", False)),
+        evidence_budget_overflow=int(audit_summary.get("evidence_budget_overflow", 0) or 0),
+        evidence_budget_mode=str(audit_summary.get("evidence_budget_mode", "not_applied") or "not_applied"),
+        pr_primary_segments=str(audit_summary.get("pr_primary_segments", "none") or "none"),
+        pr_support_segments=str(audit_summary.get("pr_support_segments", "none") or "none"),
+        selected_items_count=int(selected_items_count),
+        patch_generation_result=patch_generation_result,
+        patch_target_files_selected=int(patch_target_files_selected),
+        localized_patch_evidence_count=int(localized_patch_evidence_count),
+    )
+    audit_summary["ultra_large_pr_mode_active"] = bool(contract.get("ultra_large_pr_mode_active", False))
+    audit_summary["ultra_large_pr_mode_level"] = str(contract.get("ultra_large_pr_mode_level", "normal") or "normal")
+    audit_summary["ultra_large_pr_mode_reason"] = str(contract.get("ultra_large_pr_mode_reason", "none") or "none")
+    audit_summary["ultra_large_pr_depth_strategy"] = str(
+        contract.get("ultra_large_pr_depth_strategy", "standard") or "standard"
+    )
+    audit_summary["ultra_large_pr_synthesis_window_cap"] = int(
+        contract.get("ultra_large_pr_synthesis_window_cap", 0) or 0
+    )
+    audit_summary["ultra_large_pr_primary_coverage_summary"] = str(
+        contract.get("ultra_large_pr_primary_coverage_summary", "none") or "none"
+    )
+    audit_summary["ultra_large_pr_bounded_coverage_summary"] = str(
+        contract.get("ultra_large_pr_bounded_coverage_summary", "none") or "none"
+    )
+    audit_summary["ultra_large_pr_coverage_statement"] = str(
+        contract.get("ultra_large_pr_coverage_statement", "n/a") or "n/a"
+    )
+    audit_summary["ultra_large_pr_patch_governance_downgraded"] = bool(
+        contract.get("ultra_large_pr_patch_governance_downgraded", False)
+    )
+    audit_summary["ultra_large_pr_patch_governance_reason"] = str(
+        contract.get("ultra_large_pr_patch_governance_reason", "n/a") or "n/a"
+    )
+    suggested_budget_mode = str(contract.get("ultra_large_pr_evidence_budget_mode", "") or "").strip()
+    if suggested_budget_mode:
+        audit_summary["evidence_budget_mode"] = suggested_budget_mode
+    return contract
+
+
 def _build_review_markdown(
     *,
     repo_root: Path,
@@ -6009,6 +6106,8 @@ def _build_review_markdown(
     if all_pr_changed_files:
         planner_context["changed_files"] = list(all_pr_changed_files)
     planner_context["pr_segmentation_file_map"] = dict(review_segmentation_seed.file_segment_class_map)
+    planner_context["pr_segment_count"] = int(review_segmentation_seed.pr_segment_count)
+    planner_context["pr_cross_segment"] = bool(review_segmentation_seed.pr_cross_segment)
     review_candidates_seed = _review_candidates_from_files(files)
     review_limit_hint = min(80, max(10, len(review_candidates_seed)))
     review_retrieval_runtime = _review_retrieval_runtime_defaults()
@@ -6029,6 +6128,7 @@ def _build_review_markdown(
         )
         review_retrieval_runtime.update(cached_runtime)
     else:
+        review_ultra_large_mode_active, _review_ultra_reasons = ultra_large_mode_precheck(planner_context)
         review_budget_plan = plan_evidence_budget(
             review_candidates_seed,
             command=cmd,
@@ -6036,6 +6136,7 @@ def _build_review_markdown(
             limit_hint=review_limit_hint,
             incremental_scope_mode="review_pr_files",
             segment_hints={"file_segment_class_map": review_segmentation_seed.file_segment_class_map},
+            ultra_large_mode=review_ultra_large_mode_active,
         )
         review_candidates = review_budget_plan.candidates
         review_retrieval_runtime.update(_review_budget_runtime_from_plan(review_budget_plan))
@@ -6353,6 +6454,14 @@ def _build_review_markdown(
         candidate_paths=[str(item.file_path or "").strip() for item in review_candidates if str(item.file_path or "").strip()],
     )
     audit_summary.update(review_segmentation.as_audit_fields())
+    _apply_ultra_large_pr_mode_contract(
+        audit_summary=audit_summary,
+        command=cmd,
+        selected_items_count=len(review_candidates),
+        patch_generation_result=str(audit_summary.get("patch_generation_result", "n/a") or "n/a"),
+        patch_target_files_selected=int(audit_summary.get("patch_target_files_selected", 0) or 0),
+        localized_patch_evidence_count=int(audit_summary.get("localized_patch_evidence_count", 0) or 0),
+    )
     review_locators = [
         EvidenceItem(
             file_path=item.file_path,
@@ -7038,6 +7147,36 @@ def _build_review_markdown(
             audit["pr_segmentation_fallback_reason"] = str(
                 audit_summary.get("pr_segmentation_fallback_reason", "none") or "none"
             )
+            audit["ultra_large_pr_mode_active"] = bool(
+                audit_summary.get("ultra_large_pr_mode_active", False)
+            )
+            audit["ultra_large_pr_mode_level"] = str(
+                audit_summary.get("ultra_large_pr_mode_level", "normal") or "normal"
+            )
+            audit["ultra_large_pr_mode_reason"] = str(
+                audit_summary.get("ultra_large_pr_mode_reason", "none") or "none"
+            )
+            audit["ultra_large_pr_depth_strategy"] = str(
+                audit_summary.get("ultra_large_pr_depth_strategy", "standard") or "standard"
+            )
+            audit["ultra_large_pr_synthesis_window_cap"] = int(
+                audit_summary.get("ultra_large_pr_synthesis_window_cap", 0) or 0
+            )
+            audit["ultra_large_pr_primary_coverage_summary"] = str(
+                audit_summary.get("ultra_large_pr_primary_coverage_summary", "none") or "none"
+            )
+            audit["ultra_large_pr_bounded_coverage_summary"] = str(
+                audit_summary.get("ultra_large_pr_bounded_coverage_summary", "none") or "none"
+            )
+            audit["ultra_large_pr_coverage_statement"] = str(
+                audit_summary.get("ultra_large_pr_coverage_statement", "n/a") or "n/a"
+            )
+            audit["ultra_large_pr_patch_governance_downgraded"] = bool(
+                audit_summary.get("ultra_large_pr_patch_governance_downgraded", False)
+            )
+            audit["ultra_large_pr_patch_governance_reason"] = str(
+                audit_summary.get("ultra_large_pr_patch_governance_reason", "n/a") or "n/a"
+            )
             audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
             audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
             audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
@@ -7339,6 +7478,14 @@ def _build_review_markdown(
     audit_summary["patch_governance_next_safe_step"] = str(
         patch_governance.get("next_safe_step", "not_applicable") or "not_applicable"
     )
+    _apply_ultra_large_pr_mode_contract(
+        audit_summary=audit_summary,
+        command=cmd,
+        selected_items_count=len(review_candidates),
+        patch_generation_result=str(audit_summary.get("patch_generation_result", "n/a") or "n/a"),
+        patch_target_files_selected=int(audit_summary.get("patch_target_files_selected", 0) or 0),
+        localized_patch_evidence_count=int(audit_summary.get("localized_patch_evidence_count", 0) or 0),
+    )
     audit_summary["patch_validation_artifact"] = "artifacts/patch_validation.json"
     combined_patch_message = f"{patch_apply_message}; {patch_pr_message}"
 
@@ -7525,6 +7672,36 @@ def _build_review_markdown(
         )
         audit["pr_segmentation_fallback_reason"] = str(
             audit_summary.get("pr_segmentation_fallback_reason", "none") or "none"
+        )
+        audit["ultra_large_pr_mode_active"] = bool(
+            audit_summary.get("ultra_large_pr_mode_active", False)
+        )
+        audit["ultra_large_pr_mode_level"] = str(
+            audit_summary.get("ultra_large_pr_mode_level", "normal") or "normal"
+        )
+        audit["ultra_large_pr_mode_reason"] = str(
+            audit_summary.get("ultra_large_pr_mode_reason", "none") or "none"
+        )
+        audit["ultra_large_pr_depth_strategy"] = str(
+            audit_summary.get("ultra_large_pr_depth_strategy", "standard") or "standard"
+        )
+        audit["ultra_large_pr_synthesis_window_cap"] = int(
+            audit_summary.get("ultra_large_pr_synthesis_window_cap", 0) or 0
+        )
+        audit["ultra_large_pr_primary_coverage_summary"] = str(
+            audit_summary.get("ultra_large_pr_primary_coverage_summary", "none") or "none"
+        )
+        audit["ultra_large_pr_bounded_coverage_summary"] = str(
+            audit_summary.get("ultra_large_pr_bounded_coverage_summary", "none") or "none"
+        )
+        audit["ultra_large_pr_coverage_statement"] = str(
+            audit_summary.get("ultra_large_pr_coverage_statement", "n/a") or "n/a"
+        )
+        audit["ultra_large_pr_patch_governance_downgraded"] = bool(
+            audit_summary.get("ultra_large_pr_patch_governance_downgraded", False)
+        )
+        audit["ultra_large_pr_patch_governance_reason"] = str(
+            audit_summary.get("ultra_large_pr_patch_governance_reason", "n/a") or "n/a"
         )
         audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
         audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))

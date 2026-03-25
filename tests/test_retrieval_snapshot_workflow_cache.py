@@ -28,3 +28,17 @@ def test_workflow_generates_and_uploads_stability_benchmark_artifact() -> None:
     assert "name: repobrain-stability-benchmark" in workflow
     assert "artifacts/benchmarks/repobrain_stability_benchmark.json" in workflow
     assert "artifacts/benchmarks/repobrain_stability_benchmark.md" in workflow
+
+
+def test_workflow_generates_and_uploads_install_readiness_artifact() -> None:
+    workflow = Path(".github/workflows/repobrain.yml").read_text(encoding="utf-8")
+
+    assert "Generate RepoBrain install readiness artifacts" in workflow
+    assert "python scripts/check_install_readiness.py \\" in workflow
+    assert "--workflow .github/workflows/repobrain.yml \\" in workflow
+    assert "--output-json artifacts/onboarding/repobrain_install_readiness.json \\" in workflow
+    assert "--output-md artifacts/onboarding/repobrain_install_readiness.md" in workflow
+    assert "Upload RepoBrain install readiness artifacts" in workflow
+    assert "name: repobrain-install-readiness" in workflow
+    assert "artifacts/onboarding/repobrain_install_readiness.json" in workflow
+    assert "artifacts/onboarding/repobrain_install_readiness.md" in workflow

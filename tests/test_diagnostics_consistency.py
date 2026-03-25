@@ -1249,3 +1249,105 @@ def test_fix_details_include_evidence_context_summary_labels() -> None:
     assert "- Support context: `1`" in md
     assert "- Reference: `1`" in md
     assert "### Async batch orchestration" in md
+
+
+def test_ask_ultra_large_pr_mode_renders_in_details_only_when_active() -> None:
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "ultra_large_pr_mode_active": True,
+            "ultra_large_pr_mode_level": "large",
+            "ultra_large_pr_mode_reason": "changed_files_threshold,cross_segment_spread_threshold",
+            "ultra_large_pr_depth_strategy": "primary_first_capped",
+            "ultra_large_pr_synthesis_window_cap": 10,
+            "evidence_budget_mode": "ultra_large_ask_capped",
+            "ultra_large_pr_primary_coverage_summary": "deep_primary=core_code:repobrain/github_flow",
+            "ultra_large_pr_bounded_coverage_summary": "support=tests:tests, docs:docs; bounded_files_est=67",
+            "ultra_large_pr_coverage_statement": (
+                "Bounded coverage active: deep focus on primary segments; secondary/support treated as bounded context."
+            ),
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    primary = md.split("<details>", 1)[0]
+    details = md.split("<details>", 1)[1]
+    assert "### 🧱 Ultra-large PR mode" not in primary
+    assert "### 🧱 Ultra-large PR mode" in details
+    assert "- Status: `active`" in details
+    assert "- Evidence budget mode: `ultra_large_ask_capped`" in details
+
+
+def test_review_ultra_large_pr_mode_renders_coverage_block_when_active() -> None:
+    md = render_review_markdown(
+        review={
+            "summary_text": "Review complete.",
+            "risk_level": "medium",
+            "files_block": [],
+            "confirmed_findings": [],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": [],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "ultra_large_pr_mode_active": True,
+            "ultra_large_pr_mode_level": "extreme",
+            "ultra_large_pr_mode_reason": "changed_files_threshold",
+            "ultra_large_pr_depth_strategy": "primary_first_extreme_cap",
+            "ultra_large_pr_synthesis_window_cap": 14,
+            "evidence_budget_mode": "ultra_large_review_capped",
+            "ultra_large_pr_primary_coverage_summary": "deep_primary=core_code:repobrain/github_flow",
+            "ultra_large_pr_bounded_coverage_summary": "support=tests:tests; bounded_files_est=122",
+            "ultra_large_pr_coverage_statement": "Bounded coverage active.",
+        },
+    )
+
+    details = md.split("<details>", 1)[1]
+    assert "### 🧱 Ultra-large PR mode" in details
+    assert "- Level: `extreme`" in details
+    assert "- Synthesis window cap: `14`" in details
+
+
+def test_fix_ultra_large_pr_mode_renders_scale_governance_downgrade_reason() -> None:
+    md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 120,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "patch_grounding_mode": "pr_metadata",
+            "ultra_large_pr_mode_active": True,
+            "ultra_large_pr_mode_level": "large",
+            "ultra_large_pr_mode_reason": "changed_regions_threshold",
+            "ultra_large_pr_depth_strategy": "primary_first_capped",
+            "ultra_large_pr_synthesis_window_cap": 14,
+            "evidence_budget_mode": "ultra_large_fix_capped",
+            "ultra_large_pr_primary_coverage_summary": "deep_primary=core_code:repobrain/github_flow",
+            "ultra_large_pr_bounded_coverage_summary": "support=tests:tests; bounded_files_est=106",
+            "ultra_large_pr_coverage_statement": "Bounded coverage active.",
+            "ultra_large_pr_patch_governance_downgraded": True,
+            "ultra_large_pr_patch_governance_reason": "scale_bounded_localization_gap",
+        },
+    )
+
+    details = md.split("<details>", 1)[1]
+    assert "### 🧱 Ultra-large PR mode" in details
+    assert "- Patch governance downgraded: `yes`" in details
+    assert "- Patch governance reason: `scale_bounded_localization_gap`" in details

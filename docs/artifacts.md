@@ -95,6 +95,8 @@ When review/fix verification runs:
 - `artifacts/review_validation.json` stores evidence-backed review validation output (confirmed findings vs possible signals)
 - `artifacts/review_generation_debug.json` stores review synthesis fallback diagnostics (compaction/batching/provider status)
 - `artifacts/patch_validation.json` stores patch grounding validation result before publication
+- `artifacts/onboarding/repobrain_install_readiness.json` stores GitHub App-first onboarding readiness status
+- `artifacts/onboarding/repobrain_install_readiness.md` stores compact operator-facing readiness summary
 - `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
 - `artifacts/llm_http_debug.json` is written for workflow_dispatch fix failures with usersafe provider diagnostics
 - `artifacts/embeddings_usage.json` is written when embeddings are enabled

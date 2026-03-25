@@ -92,6 +92,16 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "pr_segment_file_counts": "none",
         "pr_segment_candidate_counts": "none",
         "pr_segmentation_fallback_reason": "not_applicable",
+        "ultra_large_pr_mode_active": False,
+        "ultra_large_pr_mode_level": "normal",
+        "ultra_large_pr_mode_reason": "none",
+        "ultra_large_pr_depth_strategy": "standard",
+        "ultra_large_pr_synthesis_window_cap": 0,
+        "ultra_large_pr_primary_coverage_summary": "none",
+        "ultra_large_pr_bounded_coverage_summary": "none",
+        "ultra_large_pr_coverage_statement": "n/a",
+        "ultra_large_pr_patch_governance_downgraded": False,
+        "ultra_large_pr_patch_governance_reason": "n/a",
         "top_score_pass1": None,
         "top_score_pass2": None,
         "rd": {
@@ -291,6 +301,39 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
     )
     normalized["pr_segmentation_fallback_reason"] = str(
         normalized.get("pr_segmentation_fallback_reason", "not_applicable") or "not_applicable"
+    )
+    normalized["ultra_large_pr_mode_active"] = bool(
+        normalized.get("ultra_large_pr_mode_active", False)
+    )
+    normalized["ultra_large_pr_mode_level"] = str(
+        normalized.get("ultra_large_pr_mode_level", "normal") or "normal"
+    )
+    normalized["ultra_large_pr_mode_reason"] = str(
+        normalized.get("ultra_large_pr_mode_reason", "none") or "none"
+    )
+    normalized["ultra_large_pr_depth_strategy"] = str(
+        normalized.get("ultra_large_pr_depth_strategy", "standard") or "standard"
+    )
+    try:
+        normalized["ultra_large_pr_synthesis_window_cap"] = int(
+            normalized.get("ultra_large_pr_synthesis_window_cap", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["ultra_large_pr_synthesis_window_cap"] = 0
+    normalized["ultra_large_pr_primary_coverage_summary"] = str(
+        normalized.get("ultra_large_pr_primary_coverage_summary", "none") or "none"
+    )
+    normalized["ultra_large_pr_bounded_coverage_summary"] = str(
+        normalized.get("ultra_large_pr_bounded_coverage_summary", "none") or "none"
+    )
+    normalized["ultra_large_pr_coverage_statement"] = str(
+        normalized.get("ultra_large_pr_coverage_statement", "n/a") or "n/a"
+    )
+    normalized["ultra_large_pr_patch_governance_downgraded"] = bool(
+        normalized.get("ultra_large_pr_patch_governance_downgraded", False)
+    )
+    normalized["ultra_large_pr_patch_governance_reason"] = str(
+        normalized.get("ultra_large_pr_patch_governance_reason", "n/a") or "n/a"
     )
     normalized["retrieval_snapshot_cache_used"] = bool(
         normalized.get("retrieval_snapshot_cache_used", False)

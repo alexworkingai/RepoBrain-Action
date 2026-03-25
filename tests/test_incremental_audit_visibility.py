@@ -81,6 +81,16 @@ def test_audit_base_contains_incremental_observability_fields() -> None:
     assert "pr_segment_file_counts" in audit
     assert "pr_segment_candidate_counts" in audit
     assert "pr_segmentation_fallback_reason" in audit
+    assert "ultra_large_pr_mode_active" in audit
+    assert "ultra_large_pr_mode_level" in audit
+    assert "ultra_large_pr_mode_reason" in audit
+    assert "ultra_large_pr_depth_strategy" in audit
+    assert "ultra_large_pr_synthesis_window_cap" in audit
+    assert "ultra_large_pr_primary_coverage_summary" in audit
+    assert "ultra_large_pr_bounded_coverage_summary" in audit
+    assert "ultra_large_pr_coverage_statement" in audit
+    assert "ultra_large_pr_patch_governance_downgraded" in audit
+    assert "ultra_large_pr_patch_governance_reason" in audit
 
 
 def test_finalize_audit_preserves_incremental_observability_values() -> None:
@@ -134,6 +144,16 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
             "pr_segment_file_counts": "core_code=4; docs=1; tests=2",
             "pr_segment_candidate_counts": "core_code=3; tests=1",
             "pr_segmentation_fallback_reason": "none",
+            "ultra_large_pr_mode_active": True,
+            "ultra_large_pr_mode_level": "large",
+            "ultra_large_pr_mode_reason": "changed_files_threshold",
+            "ultra_large_pr_depth_strategy": "primary_first_capped",
+            "ultra_large_pr_synthesis_window_cap": 18,
+            "ultra_large_pr_primary_coverage_summary": "deep_primary=core_code:repobrain/github_flow",
+            "ultra_large_pr_bounded_coverage_summary": "support=tests:tests, docs:docs; bounded_files_est=71",
+            "ultra_large_pr_coverage_statement": "Bounded coverage active.",
+            "ultra_large_pr_patch_governance_downgraded": True,
+            "ultra_large_pr_patch_governance_reason": "scale_bounded_localization_gap",
         }
     )
     finalized = finalize_audit(audit)
@@ -180,6 +200,14 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     assert finalized["pr_support_segments"] == "tests:tests, docs:docs"
     assert finalized["pr_cross_segment"] is True
     assert finalized["pr_segmentation_fallback_reason"] == "none"
+    assert finalized["ultra_large_pr_mode_active"] is True
+    assert finalized["ultra_large_pr_mode_level"] == "large"
+    assert finalized["ultra_large_pr_mode_reason"] == "changed_files_threshold"
+    assert finalized["ultra_large_pr_depth_strategy"] == "primary_first_capped"
+    assert finalized["ultra_large_pr_synthesis_window_cap"] == 18
+    assert finalized["ultra_large_pr_primary_coverage_summary"] == "deep_primary=core_code:repobrain/github_flow"
+    assert finalized["ultra_large_pr_patch_governance_downgraded"] is True
+    assert finalized["ultra_large_pr_patch_governance_reason"] == "scale_bounded_localization_gap"
 
 
 def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> None:
@@ -211,6 +239,16 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "pr_segment_file_counts" in audit
     assert "pr_segment_candidate_counts" in audit
     assert "pr_segmentation_fallback_reason" in audit
+    assert "ultra_large_pr_mode_active" in audit
+    assert "ultra_large_pr_mode_level" in audit
+    assert "ultra_large_pr_mode_reason" in audit
+    assert "ultra_large_pr_depth_strategy" in audit
+    assert "ultra_large_pr_synthesis_window_cap" in audit
+    assert "ultra_large_pr_primary_coverage_summary" in audit
+    assert "ultra_large_pr_bounded_coverage_summary" in audit
+    assert "ultra_large_pr_coverage_statement" in audit
+    assert "ultra_large_pr_patch_governance_downgraded" in audit
+    assert "ultra_large_pr_patch_governance_reason" in audit
     assert "async_batch_used" in audit
     assert "batch_planner_used" in audit
     assert "batch_plan_mode" in audit
@@ -251,6 +289,16 @@ def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> Non
     assert "pr_segment_file_counts" in payload
     assert "pr_segment_candidate_counts" in payload
     assert "pr_segmentation_fallback_reason" in payload
+    assert "ultra_large_pr_mode_active" in payload
+    assert "ultra_large_pr_mode_level" in payload
+    assert "ultra_large_pr_mode_reason" in payload
+    assert "ultra_large_pr_depth_strategy" in payload
+    assert "ultra_large_pr_synthesis_window_cap" in payload
+    assert "ultra_large_pr_primary_coverage_summary" in payload
+    assert "ultra_large_pr_bounded_coverage_summary" in payload
+    assert "ultra_large_pr_coverage_statement" in payload
+    assert "ultra_large_pr_patch_governance_downgraded" in payload
+    assert "ultra_large_pr_patch_governance_reason" in payload
     assert "async_batch_used" in payload
     assert "batch_planner_used" in payload
     assert "batch_plan_mode" in payload
@@ -308,6 +356,16 @@ def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
         assert "pr_segment_file_counts" in audit
         assert "pr_segment_candidate_counts" in audit
         assert "pr_segmentation_fallback_reason" in audit
+        assert "ultra_large_pr_mode_active" in audit
+        assert "ultra_large_pr_mode_level" in audit
+        assert "ultra_large_pr_mode_reason" in audit
+        assert "ultra_large_pr_depth_strategy" in audit
+        assert "ultra_large_pr_synthesis_window_cap" in audit
+        assert "ultra_large_pr_primary_coverage_summary" in audit
+        assert "ultra_large_pr_bounded_coverage_summary" in audit
+        assert "ultra_large_pr_coverage_statement" in audit
+        assert "ultra_large_pr_patch_governance_downgraded" in audit
+        assert "ultra_large_pr_patch_governance_reason" in audit
         assert "async_batch_used" in audit
         assert "batch_planner_used" in audit
         assert "batch_plan_mode" in audit

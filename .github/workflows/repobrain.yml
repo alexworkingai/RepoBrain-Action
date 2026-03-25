@@ -259,6 +259,31 @@ jobs:
             artifacts/benchmarks/repobrain_stability_benchmark.json
             artifacts/benchmarks/repobrain_stability_benchmark.md
           if-no-files-found: ignore
+      - name: Generate RepoBrain install readiness artifacts
+        if: always()
+        shell: bash
+        env:
+          RB_GH_APP_ID: ${{ secrets.RB_GH_APP_ID }}
+          RB_GH_APP_INSTALLATION_ID: ${{ secrets.RB_GH_APP_INSTALLATION_ID }}
+          RB_GH_APP_PRIVATE_KEY: ${{ secrets.RB_GH_APP_PRIVATE_KEY }}
+          RB_GH_APP_PRIVATE_KEY_PATH: ${{ vars.RB_GH_APP_PRIVATE_KEY_PATH }}
+          RB_GH_APP_WEBHOOK_SECRET: ${{ secrets.RB_GH_APP_WEBHOOK_SECRET }}
+          RB_GH_APP_REPOSITORY_SELECTION: ${{ vars.RB_GH_APP_REPOSITORY_SELECTION }}
+          RB_GH_APP_SELECTED_REPOS: ${{ vars.RB_GH_APP_SELECTED_REPOS }}
+        run: |
+          python scripts/check_install_readiness.py \
+            --workflow .github/workflows/repobrain.yml \
+            --output-json artifacts/onboarding/repobrain_install_readiness.json \
+            --output-md artifacts/onboarding/repobrain_install_readiness.md
+      - name: Upload RepoBrain install readiness artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-install-readiness
+          path: |
+            artifacts/onboarding/repobrain_install_readiness.json
+            artifacts/onboarding/repobrain_install_readiness.md
+          if-no-files-found: ignore
       - name: Upload RepoBrain patch artifact
         if: always()
         uses: actions/upload-artifact@v4
