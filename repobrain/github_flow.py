@@ -67,6 +67,7 @@ from repobrain.retrieval.snapshot_cache import (
 )
 from repobrain.pr_segmenter import build_pr_segmentation, segmentation_defaults
 from repobrain.review import build_pr_review
+from repobrain.review_delta_memory import compute_review_delta_and_store
 from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
 from repobrain.patch_targeting import select_patch_targets
@@ -6038,6 +6039,15 @@ def _build_review_markdown(
 
     review = build_pr_review(files, head_sha=head_sha or None, repo=repo_name or None)
     review = validate_review_findings(review)
+    review_delta = compute_review_delta_and_store(
+        repo_root=repo_root,
+        pr_number=issue_number,
+        command=cmd,
+        review=review,
+        head_sha=head_sha,
+        run_id=str(audit.get("run_id", "")) if isinstance(audit, dict) else "",
+        persist_state=not dry_run,
+    )
     review_validation_payload = {
         "validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "risk_level": str(review.get("risk_level", "low") or "low"),
@@ -6311,6 +6321,7 @@ def _build_review_markdown(
         ),
     }
     audit_summary.update(review_segmentation_seed.as_audit_fields())
+    audit_summary.update(review_delta)
     audit_summary.update(_execution_from_tky_result(tky_result.tky))
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
     validation_raw = review.get("validation", {})
@@ -7180,6 +7191,57 @@ def _build_review_markdown(
             audit["signal_calibration_used"] = bool(audit_summary.get("signal_calibration_used", False))
             audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
             audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
+            audit["review_delta_memory_active"] = bool(
+                audit_summary.get("review_delta_memory_active", False)
+            )
+            audit["review_delta_prior_state_available"] = bool(
+                audit_summary.get("review_delta_prior_state_available", False)
+            )
+            audit["review_delta_status"] = str(
+                audit_summary.get("review_delta_status", "inactive") or "inactive"
+            )
+            audit["review_delta_matching_mode"] = str(
+                audit_summary.get("review_delta_matching_mode", "not_applicable")
+                or "not_applicable"
+            )
+            audit["review_delta_current_vs_prior_summary"] = str(
+                audit_summary.get("review_delta_current_vs_prior_summary", "not_applicable")
+                or "not_applicable"
+            )
+            audit["review_delta_new_count"] = int(audit_summary.get("review_delta_new_count", 0) or 0)
+            audit["review_delta_persisted_count"] = int(
+                audit_summary.get("review_delta_persisted_count", 0) or 0
+            )
+            audit["review_delta_resolved_count"] = int(
+                audit_summary.get("review_delta_resolved_count", 0) or 0
+            )
+            audit["review_delta_reclassified_count"] = int(
+                audit_summary.get("review_delta_reclassified_count", 0) or 0
+            )
+            audit["review_delta_prior_run_id"] = str(
+                audit_summary.get("review_delta_prior_run_id", "not_applicable")
+                or "not_applicable"
+            )
+            audit["review_delta_prior_head_sha"] = str(
+                audit_summary.get("review_delta_prior_head_sha", "not_applicable")
+                or "not_applicable"
+            )
+            audit["review_delta_new_summary"] = str(
+                audit_summary.get("review_delta_new_summary", "none") or "none"
+            )
+            audit["review_delta_persisted_summary"] = str(
+                audit_summary.get("review_delta_persisted_summary", "none") or "none"
+            )
+            audit["review_delta_resolved_summary"] = str(
+                audit_summary.get("review_delta_resolved_summary", "none") or "none"
+            )
+            audit["review_delta_reclassified_summary"] = str(
+                audit_summary.get("review_delta_reclassified_summary", "none") or "none"
+            )
+            audit["review_delta_uncertainty_level"] = str(
+                audit_summary.get("review_delta_uncertainty_level", "not_applicable")
+                or "not_applicable"
+            )
             _merge_llm_meta(audit, llm_meta)
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
         return body

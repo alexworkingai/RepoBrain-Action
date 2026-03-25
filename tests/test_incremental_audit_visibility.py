@@ -91,6 +91,16 @@ def test_audit_base_contains_incremental_observability_fields() -> None:
     assert "ultra_large_pr_coverage_statement" in audit
     assert "ultra_large_pr_patch_governance_downgraded" in audit
     assert "ultra_large_pr_patch_governance_reason" in audit
+    assert "review_delta_memory_active" in audit
+    assert "review_delta_prior_state_available" in audit
+    assert "review_delta_status" in audit
+    assert "review_delta_matching_mode" in audit
+    assert "review_delta_current_vs_prior_summary" in audit
+    assert "review_delta_new_count" in audit
+    assert "review_delta_persisted_count" in audit
+    assert "review_delta_resolved_count" in audit
+    assert "review_delta_reclassified_count" in audit
+    assert "review_delta_uncertainty_level" in audit
 
 
 def test_finalize_audit_preserves_incremental_observability_values() -> None:
@@ -154,6 +164,22 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
             "ultra_large_pr_coverage_statement": "Bounded coverage active.",
             "ultra_large_pr_patch_governance_downgraded": True,
             "ultra_large_pr_patch_governance_reason": "scale_bounded_localization_gap",
+            "review_delta_memory_active": True,
+            "review_delta_prior_state_available": True,
+            "review_delta_status": "prior_state_present",
+            "review_delta_matching_mode": "verdict_anchor_identity",
+            "review_delta_current_vs_prior_summary": "new=1; persisted=2; resolved=0; reclassified=0",
+            "review_delta_new_count": 1,
+            "review_delta_persisted_count": 2,
+            "review_delta_resolved_count": 0,
+            "review_delta_reclassified_count": 0,
+            "review_delta_prior_run_id": "123",
+            "review_delta_prior_head_sha": "abc123",
+            "review_delta_new_summary": "Unchecked env var usage",
+            "review_delta_persisted_summary": "Merge conflict markers present",
+            "review_delta_resolved_summary": "none",
+            "review_delta_reclassified_summary": "none",
+            "review_delta_uncertainty_level": "low",
         }
     )
     finalized = finalize_audit(audit)
@@ -208,6 +234,15 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     assert finalized["ultra_large_pr_primary_coverage_summary"] == "deep_primary=core_code:repobrain/github_flow"
     assert finalized["ultra_large_pr_patch_governance_downgraded"] is True
     assert finalized["ultra_large_pr_patch_governance_reason"] == "scale_bounded_localization_gap"
+    assert finalized["review_delta_memory_active"] is True
+    assert finalized["review_delta_prior_state_available"] is True
+    assert finalized["review_delta_status"] == "prior_state_present"
+    assert finalized["review_delta_matching_mode"] == "verdict_anchor_identity"
+    assert finalized["review_delta_new_count"] == 1
+    assert finalized["review_delta_persisted_count"] == 2
+    assert finalized["review_delta_resolved_count"] == 0
+    assert finalized["review_delta_reclassified_count"] == 0
+    assert finalized["review_delta_uncertainty_level"] == "low"
 
 
 def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> None:
@@ -427,9 +462,19 @@ def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path) -> Non
 
     assert first_audit["retrieval_snapshot_cache_used"] is True
     assert first_audit["retrieval_snapshot_cache_hit"] is False
+    assert first_audit["review_delta_memory_active"] is True
+    assert first_audit["review_delta_prior_state_available"] is False
+    assert first_audit["review_delta_status"] == "first_run"
     assert second_audit["retrieval_snapshot_cache_used"] is True
     assert second_audit["retrieval_snapshot_cache_hit"] is True
+    assert second_audit["review_delta_memory_active"] is True
+    assert second_audit["review_delta_prior_state_available"] is True
+    assert second_audit["review_delta_status"] == "prior_state_present"
     assert "Retrieval snapshot cache" in first_markdown
     assert "- Status: `miss`" in first_markdown
     assert "Retrieval snapshot cache" in second_markdown
     assert "- Status: `hit`" in second_markdown
+    assert "### 🔄 Review delta" in first_markdown
+    assert "- Prior state available: `no`" in first_markdown
+    assert "### 🔄 Review delta" in second_markdown
+    assert "- Prior state available: `yes`" in second_markdown
