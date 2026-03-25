@@ -1046,6 +1046,44 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec("RB_REQUIRE_VERIFY_FOR_PATCH", "bool", "0", "Require verification pass for patch success."),
     EnvVarSpec("RB_FAIL_ON_NOT_RUN", "bool", "0", "Treat NOT_RUN verification as failure."),
     EnvVarSpec("RB_DISABLE_INTERNAL_REACTIONS", "bool", "0", "Disable Python-side reactions."),
+    EnvVarSpec("RB_GH_APP_ID", "str", "", "GitHub App id for app-first onboarding/readiness checks."),
+    EnvVarSpec(
+        "RB_GH_APP_INSTALLATION_ID",
+        "str",
+        "",
+        "GitHub App installation id for selected/all repository rollout checks.",
+    ),
+    EnvVarSpec(
+        "RB_GH_APP_PRIVATE_KEY",
+        "str",
+        "",
+        "GitHub App private key PEM (secret) for app-first onboarding/readiness checks.",
+    ),
+    EnvVarSpec(
+        "RB_GH_APP_PRIVATE_KEY_PATH",
+        "str",
+        "",
+        "Optional path to GitHub App private key PEM used by readiness checker.",
+    ),
+    EnvVarSpec(
+        "RB_GH_APP_WEBHOOK_SECRET",
+        "str",
+        "",
+        "GitHub App webhook secret used by onboarding/readiness checks.",
+    ),
+    EnvVarSpec(
+        "RB_GH_APP_REPOSITORY_SELECTION",
+        "enum",
+        "selected",
+        "GitHub App repository rollout mode for onboarding (`selected` recommended, `all` allowed).",
+        ("selected", "all"),
+    ),
+    EnvVarSpec(
+        "RB_GH_APP_SELECTED_REPOS",
+        "str",
+        "",
+        "Comma-separated repository allowlist when `RB_GH_APP_REPOSITORY_SELECTION=selected`.",
+    ),
     EnvVarSpec("RB_INDEX_CACHE_RESTORED", "bool", "0", "Mark index cache hit from workflow."),
 )
 

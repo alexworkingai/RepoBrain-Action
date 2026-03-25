@@ -23,6 +23,13 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_EMBED_ENABLED` | bool | `0` | - | Enable embeddings pipeline. |
 | `RB_EMBED_MODEL` | str | `openai/text-embedding-3-small` | - | Embeddings model id. |
 | `RB_FAIL_ON_NOT_RUN` | bool | `0` | - | Treat NOT_RUN verification as failure. |
+| `RB_GH_APP_ID` | str | `` | - | GitHub App id for app-first onboarding/readiness checks. |
+| `RB_GH_APP_INSTALLATION_ID` | str | `` | - | GitHub App installation id for selected/all repository rollout checks. |
+| `RB_GH_APP_PRIVATE_KEY` | str | `` | - | GitHub App private key PEM (secret) for app-first onboarding/readiness checks. |
+| `RB_GH_APP_PRIVATE_KEY_PATH` | str | `` | - | Optional path to GitHub App private key PEM used by readiness checker. |
+| `RB_GH_APP_REPOSITORY_SELECTION` | enum | `selected` | selected, all | GitHub App repository rollout mode for onboarding (`selected` recommended, `all` allowed). |
+| `RB_GH_APP_SELECTED_REPOS` | str | `` | - | Comma-separated repository allowlist when `RB_GH_APP_REPOSITORY_SELECTION=selected`. |
+| `RB_GH_APP_WEBHOOK_SECRET` | str | `` | - | GitHub App webhook secret used by onboarding/readiness checks. |
 | `RB_INDEX_CACHE_RESTORED` | bool | `0` | - | Mark index cache hit from workflow. |
 | `RB_LLM_ALLOW_LOCATE` | bool | `0` | - | Allow LLM for locate command. |
 | `RB_LLM_BATCH_ENABLE` | bool | `0` | - | Enable batch map-reduce LLM mode. |
