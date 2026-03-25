@@ -17,6 +17,7 @@ def _review_with_verdicts(items: list[tuple[str, list[str], str, str, str]]) -> 
         )
     return {"evidence_verdicts": verdicts, "confirmed_findings": [item[0] for item in items]}
 
+# Repeated-run delta memory must stay deterministic for the same PR state.
 
 def test_review_delta_memory_distinguishes_first_run_then_persisted_new_resolved(
     tmp_path,
