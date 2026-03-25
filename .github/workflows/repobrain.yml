@@ -115,7 +115,41 @@ jobs:
               owner, repo, comment_id, content: "eyes"
             });
             core.setOutput("reaction_id", String(res.data.id));
+      - uses: actions/github-script@v7
+        id: checkout_ref
+        with:
+          script: |
+            let ref = context.sha;
+            let reason = "default_workflow_sha";
+            if (context.eventName === "issue_comment" && context.payload.issue?.pull_request) {
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const pullNumber = Number(context.payload.issue.number);
+              const { data: pull } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pullNumber,
+              });
+              const baseRepo = `${owner}/${repo}`.toLowerCase();
+              const headRepo = String(pull.head?.repo?.full_name || "").toLowerCase();
+              const headSha = String(pull.head?.sha || "").trim();
+              if (headRepo === baseRepo && headSha && String(pull.state || "").toLowerCase() === "open") {
+                ref = headSha;
+                reason = "same_repo_pr_head_sha";
+              } else if (headRepo !== baseRepo) {
+                reason = "fork_pr_uses_default_branch_runtime";
+              } else if (String(pull.state || "").toLowerCase() !== "open") {
+                reason = "closed_pr_uses_default_branch_runtime";
+              } else {
+                reason = "missing_pr_head_sha";
+              }
+            }
+            core.info(`RepoBrain checkout ref resolution: ${reason} -> ${ref}`);
+            core.setOutput("ref", ref);
+            core.setOutput("reason", reason);
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.checkout_ref.outputs.ref }}
       - name: Restore RepoBrain index cache
         id: index_cache
         uses: actions/cache@v4
