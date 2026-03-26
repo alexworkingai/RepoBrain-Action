@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from repobrain.review_delta_memory import compute_review_delta_and_store
 
+# Validation PR for post-merge review delta acceptance check.
+# Second validation commit for repeated-run delta check.
 
 def _review_with_verdicts(items: list[tuple[str, list[str], str, str, str]]) -> dict[str, object]:
     verdicts = []

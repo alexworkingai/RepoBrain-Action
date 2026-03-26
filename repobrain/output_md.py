@@ -180,6 +180,16 @@ def _compact_anchor_list(paths: list[str], *, max_items: int = 3) -> str:
     return f"{kept} (+{len(unique) - max_items} more)"
 
 
+def _decision_card_lines(title: str, rows: list[str]) -> list[str]:
+    cleaned = [str(row).strip() for row in rows if str(row).strip()]
+    if not cleaned:
+        return []
+    lines = [f"#### {title}"]
+    lines.extend(f"- {row}" for row in cleaned)
+    lines.append("")
+    return lines
+
+
 def _evidence_verdict_lines(review: dict[str, Any]) -> list[str]:
     raw = review.get("evidence_verdicts", [])
     if not isinstance(raw, list):
@@ -203,11 +213,19 @@ def _evidence_verdict_lines(review: dict[str, Any]) -> list[str]:
         why_now = str(item.get("why_now", "n/a") or "n/a").strip() or "n/a"
         why_not = str(item.get("why_not", "n/a") or "n/a").strip() or "n/a"
         uncertainty = str(item.get("uncertainty", "n/a") or "n/a").strip() or "n/a"
-        verdict_lines.append(
-            (
-                f"- V{idx} Claim: {claim} | Evidence anchors: {_compact_anchor_list(anchors)} "
-                f"| Confidence: `{confidence}` | Impact: `{impact}` | Patchability: `{patchability}` "
-                f"| Why now: {why_now} | Why not: {why_not} | Uncertainty: {uncertainty}"
+        verdict_lines.extend(
+            _decision_card_lines(
+                f"Verdict {idx}",
+                [
+                    f"Claim: {claim}",
+                    f"Evidence anchors: {_compact_anchor_list(anchors)}",
+                    f"Confidence: `{confidence}`",
+                    f"Impact: `{impact}`",
+                    f"Patchability: `{patchability}`",
+                    f"Why now: {why_now}",
+                    f"Why not: {why_not}",
+                    f"Uncertainty: {uncertainty}",
+                ],
             )
         )
     if verdict_lines:
@@ -277,22 +295,21 @@ def _patch_governance_lines(
     )
     evidence_verdicts = review.get("evidence_verdicts", [])
     evidence_verdicts_count = len(evidence_verdicts) if isinstance(evidence_verdicts, list) else 0
-    return [
-        (
-            f"- Patchability class: `{contract.get('patchability_class', 'no_patch_safe_default')}` "
-            f"| Patch risk class: `{contract.get('patch_risk_class', 'n/a')}` "
-            f"| Minimum proof threshold: `{contract.get('minimum_proof_threshold_status', 'not_applicable')}` "
-            f"| Verification preconditions: `{contract.get('verification_preconditions', 'not_applicable')}`"
-        ),
-        (
-            f"- Governance reason: {contract.get('governance_reason', 'not_applicable')} "
-            f"| Why now: {contract.get('why_now', 'not_applicable')} "
-            f"| Why not: {contract.get('why_not', 'not_applicable')}"
-        ),
-        f"- Uncertainty: `{contract.get('uncertainty', 'not_applicable')}`",
-        f"- Next safe step: {contract.get('next_safe_step', 'not_applicable')}",
-        f"- Evidence verdicts considered: `{evidence_verdicts_count}`",
-    ]
+    return _decision_card_lines(
+        "Patch governance decision",
+        [
+            f"Patchability class: `{contract.get('patchability_class', 'no_patch_safe_default')}`",
+            f"Patch risk class: `{contract.get('patch_risk_class', 'n/a')}`",
+            f"Minimum proof threshold: `{contract.get('minimum_proof_threshold_status', 'not_applicable')}`",
+            f"Verification preconditions: `{contract.get('verification_preconditions', 'not_applicable')}`",
+            f"Governance reason: {contract.get('governance_reason', 'not_applicable')}",
+            f"Why now: {contract.get('why_now', 'not_applicable')}",
+            f"Why not: {contract.get('why_not', 'not_applicable')}",
+            f"Uncertainty: `{contract.get('uncertainty', 'not_applicable')}`",
+            f"Next safe step: {contract.get('next_safe_step', 'not_applicable')}",
+            f"Evidence verdicts considered: `{evidence_verdicts_count}`",
+        ],
+    )
 
 
 def _int(value: Any, default: int = 0) -> int:
@@ -853,6 +870,30 @@ def _ultra_large_pr_mode_lines(audit_summary: dict[str, Any], *, command: str) -
             lines.append(f"- Patch governance reason: `{downgrade_reason}`")
     lines.append("")
     return lines
+
+
+def _runtime_provenance_lines(audit_summary: dict[str, Any], *, command: str) -> list[str]:
+    cmd = str(command or audit_summary.get("command", "ask") or "ask").strip().lower()
+    if cmd not in {"review", "fix"}:
+        return []
+    status = str(audit_summary.get("runtime_provenance_status", "not_applicable") or "not_applicable")
+    if status == "not_applicable":
+        return []
+    runtime_sha = str(audit_summary.get("runtime_provenance_runtime_sha", "n/a") or "n/a")
+    pr_head_sha = str(audit_summary.get("runtime_provenance_pr_head_sha", "n/a") or "n/a")
+    reason_code = str(audit_summary.get("runtime_provenance_reason_code", "n/a") or "n/a")
+    explanation = str(audit_summary.get("runtime_provenance_explanation", "n/a") or "n/a")
+    sha_match = bool(audit_summary.get("runtime_provenance_sha_match", False))
+    return [
+        "### 🧬 Runtime provenance",
+        f"- Status: `{status}`",
+        f"- Runtime SHA: `{runtime_sha}`",
+        f"- PR head SHA: `{pr_head_sha}`",
+        f"- SHA match: `{'yes' if sha_match else 'no'}`",
+        f"- Reason code: `{reason_code}`",
+        f"- Explanation: {explanation}",
+        "",
+    ]
 
 
 def _touched_files_lines(audit_summary: dict[str, Any]) -> list[str]:
@@ -2415,9 +2456,10 @@ def render_review_markdown(
         "### ✅ PR Review",
         f"TL;DR: {summary_text}",
         f"Risk level: **{risk_level}**",
-        f"- Confirmed findings: `{len(confirmed_block)}`",
-        f"- Possible signals: `{len(possible_signals)}`",
-        f"- Informational notes: `{len(informational_notes)}`",
+        (
+            f"- Decision snapshot: findings `{len(confirmed_block)}` | "
+            f"signals `{len(possible_signals)}` | notes `{len(informational_notes)}`"
+        ),
         f"- Segment summary: `{segment_summary}`",
         f"- Verification: `{verification_status}`",
     ]
@@ -2432,9 +2474,12 @@ def render_review_markdown(
 
     detail_lines = [
         *_retrieval_snapshot_lines(audit_summary),
+        *_runtime_provenance_lines(audit_summary, command="review"),
         *_review_delta_lines(audit_summary),
         *_ultra_large_pr_mode_lines(audit_summary, command="review"),
         *_render_async_batch_lines(audit_summary, command="review"),
+        "### 🧩 Decision cards",
+        "",
         "Risk drivers:",
         *risk_driver_block,
         "",
@@ -2531,8 +2576,11 @@ def render_patch_markdown(
 
     detail_lines = [
         *_retrieval_snapshot_lines(audit_summary),
+        *_runtime_provenance_lines(audit_summary, command="fix"),
         *_ultra_large_pr_mode_lines(audit_summary, command="fix"),
         *_render_async_batch_lines(audit_summary, command="fix"),
+        "### 🧩 Decision cards",
+        "",
         "### 🎯 Patch targeting",
         f"- Patch target files total: {patch_target_files_total}",
         f"- Patch target files selected: {patch_target_files}",

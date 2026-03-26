@@ -89,6 +89,15 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "review_delta_resolved_summary": "none",
         "review_delta_reclassified_summary": "none",
         "review_delta_uncertainty_level": "not_applicable",
+        "runtime_provenance_status": "not_applicable",
+        "runtime_provenance_reason_code": "not_pr_context",
+        "runtime_provenance_explanation": "No PR context; runtime/PR-head SHA alignment is not applicable.",
+        "runtime_provenance_event_name": "unknown",
+        "runtime_provenance_runtime_sha": str(env_ctx.get("sha", "") or "n/a"),
+        "runtime_provenance_pr_head_sha": "n/a",
+        "runtime_provenance_sha_match": False,
+        "runtime_provenance_pr_state": "unknown",
+        "runtime_provenance_same_repo_pr": False,
         "evidence_budget_used": 0,
         "evidence_budget_limit": 0,
         "evidence_budget_mode": "not_applied",
@@ -428,6 +437,37 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
     )
     normalized["review_delta_uncertainty_level"] = str(
         normalized.get("review_delta_uncertainty_level", "not_applicable") or "not_applicable"
+    )
+    normalized["runtime_provenance_status"] = str(
+        normalized.get("runtime_provenance_status", "not_applicable") or "not_applicable"
+    )
+    normalized["runtime_provenance_reason_code"] = str(
+        normalized.get("runtime_provenance_reason_code", "not_pr_context") or "not_pr_context"
+    )
+    normalized["runtime_provenance_explanation"] = str(
+        normalized.get(
+            "runtime_provenance_explanation",
+            "No PR context; runtime/PR-head SHA alignment is not applicable.",
+        )
+        or "No PR context; runtime/PR-head SHA alignment is not applicable."
+    )
+    normalized["runtime_provenance_event_name"] = str(
+        normalized.get("runtime_provenance_event_name", "unknown") or "unknown"
+    )
+    normalized["runtime_provenance_runtime_sha"] = str(
+        normalized.get("runtime_provenance_runtime_sha", "n/a") or "n/a"
+    )
+    normalized["runtime_provenance_pr_head_sha"] = str(
+        normalized.get("runtime_provenance_pr_head_sha", "n/a") or "n/a"
+    )
+    normalized["runtime_provenance_sha_match"] = bool(
+        normalized.get("runtime_provenance_sha_match", False)
+    )
+    normalized["runtime_provenance_pr_state"] = str(
+        normalized.get("runtime_provenance_pr_state", "unknown") or "unknown"
+    )
+    normalized["runtime_provenance_same_repo_pr"] = bool(
+        normalized.get("runtime_provenance_same_repo_pr", False)
     )
 
     rd_raw = normalized.get("rd", {})
