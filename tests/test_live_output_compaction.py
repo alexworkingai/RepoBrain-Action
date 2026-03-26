@@ -61,6 +61,7 @@ def test_review_primary_output_is_tiered_and_non_duplicative() -> None:
 
     primary = _primary(md)
     assert "PR Review" in primary
+    assert "- Decision snapshot: findings `0` | signals `1` | notes `1`" in primary
     assert "- Segment summary: `primary=core_code:repobrain; support=docs:docs; cross_segment=yes`" in primary
     assert "Touched files" not in primary
     assert "Recommendations" in primary
@@ -296,3 +297,74 @@ def test_review_delta_block_stays_in_details_not_primary() -> None:
     assert "### 🔄 Review delta" in md
     assert "- Prior state available: `yes`" in md
     assert "- New findings: `1` (Unchecked env var usage)" in md
+
+def test_runtime_provenance_and_decision_cards_render_in_details_only() -> None:
+    review_md = render_review_markdown(
+        review={
+            "summary_text": "Review summary.",
+            "risk_level": "medium",
+            "confirmed_findings": ["Merge conflict markers present"],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": [],
+            "files_block": [],
+            "evidence_verdicts": [
+                {
+                    "claim": "Merge conflict markers present",
+                    "evidence_anchors": ["repobrain/github_flow.py"],
+                    "confidence": "high",
+                    "impact": "high",
+                    "patchability": "blocked",
+                    "why_now": "Merge blockers must be resolved before release.",
+                    "why_not": "Patch blocked until conflicting hunks are manually reconciled.",
+                    "uncertainty": "low",
+                }
+            ],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "runtime_provenance_status": "governed_divergent",
+            "runtime_provenance_reason_code": "same_repo_open_pr_runtime_sha_differs",
+            "runtime_provenance_explanation": "Runtime SHA differs from PR head SHA; provenance is explicit.",
+            "runtime_provenance_runtime_sha": "workflow-sha",
+            "runtime_provenance_pr_head_sha": "pr-head-sha",
+            "runtime_provenance_sha_match": False,
+        },
+    )
+    review_primary = _primary(review_md)
+    assert "Runtime provenance" not in review_primary
+    assert "### 🧬 Runtime provenance" in review_md
+    assert "### 🧩 Decision cards" in review_md
+    assert "#### Verdict 1" in review_md
+
+    fix_md = render_patch_markdown(
+        review={"summary_text": "Patch flow"},
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        patch_snippet="",
+        patch_written=False,
+        patch_apply_message="safe no_patch outcome",
+        audit_summary={
+            "command": "fix",
+            "route_final": "FAST",
+            "patch_generation_result": "no_patch",
+            "patch_validation_result": "no_patch",
+            "patch_validation_reason": "No patch generated.",
+            "patch_target_files_total": 2,
+            "patch_target_files_selected": 0,
+            "patch_targeting_mode": "none",
+            "patch_targeting_reason": "no_localized_evidence",
+            "localized_patch_evidence_count": 0,
+            "runtime_provenance_status": "aligned",
+            "runtime_provenance_reason_code": "runtime_sha_matches_pr_head",
+            "runtime_provenance_explanation": "Runtime SHA matches PR head SHA for this PR command run.",
+            "runtime_provenance_runtime_sha": "sha-a",
+            "runtime_provenance_pr_head_sha": "sha-a",
+            "runtime_provenance_sha_match": True,
+        },
+    )
+    fix_primary = _primary(fix_md)
+    assert "Runtime provenance" not in fix_primary
+    assert "### 🧬 Runtime provenance" in fix_md
+    assert "#### Patch governance decision" in fix_md

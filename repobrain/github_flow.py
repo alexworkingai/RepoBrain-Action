@@ -5956,6 +5956,74 @@ def _apply_ultra_large_pr_mode_contract(
     return contract
 
 
+def _runtime_provenance_fields(
+    *,
+    runtime_sha: str,
+    pr_head_sha: str,
+    issue_number: int | None,
+    pr_state: str,
+    same_repo_pr: bool | None,
+) -> dict[str, Any]:
+    runtime_sha_clean = str(runtime_sha or "").strip()
+    pr_head_sha_clean = str(pr_head_sha or "").strip()
+    pr_state_clean = str(pr_state or "unknown").strip().lower() or "unknown"
+    event_name = str(os.environ.get("GITHUB_EVENT_NAME", "") or "").strip().lower() or "unknown"
+    same_repo_known = same_repo_pr is not None
+    same_repo_value = bool(same_repo_pr) if same_repo_known else False
+    sha_match = bool(runtime_sha_clean and pr_head_sha_clean and runtime_sha_clean == pr_head_sha_clean)
+
+    status = "not_applicable"
+    reason_code = "not_pr_context"
+    explanation = "No PR context; runtime/PR-head SHA alignment is not applicable."
+
+    if issue_number is not None:
+        if not runtime_sha_clean:
+            status = "governed_divergent"
+            reason_code = "runtime_sha_missing"
+            explanation = "Runtime SHA is missing in environment; unable to compare against PR head SHA."
+        elif not pr_head_sha_clean:
+            status = "governed_divergent"
+            reason_code = "pr_head_sha_missing"
+            explanation = "PR head SHA could not be resolved; runtime provenance is explicit and guarded."
+        elif sha_match:
+            status = "aligned"
+            reason_code = "runtime_sha_matches_pr_head"
+            explanation = "Runtime SHA matches PR head SHA for this PR command run."
+        elif same_repo_known and same_repo_value and pr_state_clean == "open":
+            status = "governed_divergent"
+            reason_code = "same_repo_open_pr_runtime_sha_differs"
+            explanation = (
+                "Same-repo open PR command run where runtime SHA differs from PR head SHA; "
+                "workflow provenance remains explicit and governed."
+            )
+        elif same_repo_known and not same_repo_value:
+            status = "governed_divergent"
+            reason_code = "fork_or_cross_repo_runtime"
+            explanation = (
+                "PR head repo differs from base repo; runtime may execute on default branch context by design."
+            )
+        elif pr_state_clean != "open":
+            status = "governed_divergent"
+            reason_code = "pr_not_open_runtime_context"
+            explanation = "PR is not open; runtime SHA may differ from PR head SHA."
+        else:
+            status = "governed_divergent"
+            reason_code = "runtime_sha_differs_from_pr_head"
+            explanation = "Runtime SHA differs from resolved PR head SHA; provenance retained explicitly."
+
+    return {
+        "runtime_provenance_status": status,
+        "runtime_provenance_reason_code": reason_code,
+        "runtime_provenance_explanation": explanation,
+        "runtime_provenance_event_name": event_name,
+        "runtime_provenance_runtime_sha": runtime_sha_clean or "n/a",
+        "runtime_provenance_pr_head_sha": pr_head_sha_clean or "n/a",
+        "runtime_provenance_sha_match": sha_match,
+        "runtime_provenance_pr_state": pr_state_clean,
+        "runtime_provenance_same_repo_pr": same_repo_value,
+    }
+
+
 def _build_review_markdown(
     *,
     repo_root: Path,
@@ -5992,6 +6060,8 @@ def _build_review_markdown(
     files: list[dict[str, Any]]
     head_sha = ""
     base_sha = ""
+    pr_state = "unknown"
+    pr_same_repo: bool | None = None
     pull: dict[str, Any] = {}
     repo_name = extract_repo_from_env() or (client.repo if client is not None else "")
     if dry_run:
@@ -6000,8 +6070,16 @@ def _build_review_markdown(
         if client is None:
             raise ValueError("GitHub client is required for PR review/fix in post mode")
         pull = client.get_pull(pull_number=issue_number)
-        pr_state = str(pull.get("state", "") or "").strip().lower()
+        pr_state = str(pull.get("state", "") or "").strip().lower() or "unknown"
         pr_merged = bool(pull.get("merged", False))
+        head_raw = pull.get("head", {})
+        base_raw = pull.get("base", {})
+        head = head_raw if isinstance(head_raw, dict) else {}
+        base = base_raw if isinstance(base_raw, dict) else {}
+        head_repo_raw = head.get("repo", {})
+        head_repo = head_repo_raw if isinstance(head_repo_raw, dict) else {}
+        head_repo_full_name = str(head_repo.get("full_name", "") or "").strip().lower()
+        pr_same_repo = bool(head_repo_full_name and repo_name and head_repo_full_name == repo_name.lower())
         if pr_state == "closed" or pr_merged:
             status_label = "closed/merged" if pr_merged else "closed"
             if cmd == "fix":
@@ -6026,16 +6104,23 @@ def _build_review_markdown(
                 audit["pr_state"] = pr_state or "unknown"
                 audit["pr_merged"] = pr_merged
             return reason_short
-        head = pull.get("head", {})
         if isinstance(head, dict):
             head_sha = str(head.get("sha", "") or "")
-        base = pull.get("base", {})
         if isinstance(base, dict):
             base_sha = str(base.get("sha", "") or "")
         files = client.get_pull_files(pull_number=issue_number)
 
     if not head_sha:
         head_sha = extract_sha_from_env()
+    runtime_provenance = _runtime_provenance_fields(
+        runtime_sha=str(audit.get("sha", "") or "") if isinstance(audit, dict) else extract_sha_from_env(),
+        pr_head_sha=head_sha,
+        issue_number=issue_number,
+        pr_state=pr_state,
+        same_repo_pr=pr_same_repo,
+    )
+    if audit is not None:
+        audit.update(runtime_provenance)
 
     review = build_pr_review(files, head_sha=head_sha or None, repo=repo_name or None)
     review = validate_review_findings(review)
@@ -6322,6 +6407,7 @@ def _build_review_markdown(
     }
     audit_summary.update(review_segmentation_seed.as_audit_fields())
     audit_summary.update(review_delta)
+    audit_summary.update(runtime_provenance)
     audit_summary.update(_execution_from_tky_result(tky_result.tky))
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
     validation_raw = review.get("validation", {})

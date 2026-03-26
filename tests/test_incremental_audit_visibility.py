@@ -101,6 +101,15 @@ def test_audit_base_contains_incremental_observability_fields() -> None:
     assert "review_delta_resolved_count" in audit
     assert "review_delta_reclassified_count" in audit
     assert "review_delta_uncertainty_level" in audit
+    assert "runtime_provenance_status" in audit
+    assert "runtime_provenance_reason_code" in audit
+    assert "runtime_provenance_explanation" in audit
+    assert "runtime_provenance_event_name" in audit
+    assert "runtime_provenance_runtime_sha" in audit
+    assert "runtime_provenance_pr_head_sha" in audit
+    assert "runtime_provenance_sha_match" in audit
+    assert "runtime_provenance_pr_state" in audit
+    assert "runtime_provenance_same_repo_pr" in audit
 
 
 def test_finalize_audit_preserves_incremental_observability_values() -> None:
@@ -180,6 +189,15 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
             "review_delta_resolved_summary": "none",
             "review_delta_reclassified_summary": "none",
             "review_delta_uncertainty_level": "low",
+            "runtime_provenance_status": "aligned",
+            "runtime_provenance_reason_code": "runtime_sha_matches_pr_head",
+            "runtime_provenance_explanation": "Runtime SHA matches PR head SHA for this PR command run.",
+            "runtime_provenance_event_name": "issue_comment",
+            "runtime_provenance_runtime_sha": "abc123",
+            "runtime_provenance_pr_head_sha": "abc123",
+            "runtime_provenance_sha_match": True,
+            "runtime_provenance_pr_state": "open",
+            "runtime_provenance_same_repo_pr": True,
         }
     )
     finalized = finalize_audit(audit)
@@ -243,6 +261,13 @@ def test_finalize_audit_preserves_incremental_observability_values() -> None:
     assert finalized["review_delta_resolved_count"] == 0
     assert finalized["review_delta_reclassified_count"] == 0
     assert finalized["review_delta_uncertainty_level"] == "low"
+    assert finalized["runtime_provenance_status"] == "aligned"
+    assert finalized["runtime_provenance_reason_code"] == "runtime_sha_matches_pr_head"
+    assert finalized["runtime_provenance_runtime_sha"] == "abc123"
+    assert finalized["runtime_provenance_pr_head_sha"] == "abc123"
+    assert finalized["runtime_provenance_sha_match"] is True
+    assert finalized["runtime_provenance_pr_state"] == "open"
+    assert finalized["runtime_provenance_same_repo_pr"] is True
 
 
 def test_run_github_flow_ask_audit_contains_budget_fields(tmp_path: Path) -> None:
@@ -420,6 +445,12 @@ def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
         assert "retrieval_snapshot_cache_key_kind" in audit
         assert "retrieval_snapshot_cache_miss_reason" in audit
         assert "retrieval_snapshot_cache_age_s" in audit
+        assert "runtime_provenance_status" in audit
+        assert "runtime_provenance_reason_code" in audit
+        assert "runtime_provenance_explanation" in audit
+        assert "runtime_provenance_runtime_sha" in audit
+        assert "runtime_provenance_pr_head_sha" in audit
+        assert "runtime_provenance_sha_match" in audit
 
 
 def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path) -> None:
@@ -470,10 +501,13 @@ def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path) -> Non
     assert second_audit["review_delta_memory_active"] is True
     assert second_audit["review_delta_prior_state_available"] is True
     assert second_audit["review_delta_status"] == "prior_state_present"
+    assert second_audit["runtime_provenance_status"] in {"aligned", "governed_divergent"}
+    assert "runtime_provenance_reason_code" in second_audit
     assert "Retrieval snapshot cache" in first_markdown
     assert "- Status: `miss`" in first_markdown
     assert "Retrieval snapshot cache" in second_markdown
     assert "- Status: `hit`" in second_markdown
+    assert "### 🧬 Runtime provenance" in second_markdown
     assert "### 🔄 Review delta" in first_markdown
     assert "- Prior state available: `no`" in first_markdown
     assert "### 🔄 Review delta" in second_markdown
