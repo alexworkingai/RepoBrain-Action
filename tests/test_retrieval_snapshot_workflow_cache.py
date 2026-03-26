@@ -42,3 +42,13 @@ def test_workflow_generates_and_uploads_install_readiness_artifact() -> None:
     assert "name: repobrain-install-readiness" in workflow
     assert "artifacts/onboarding/repobrain_install_readiness.json" in workflow
     assert "artifacts/onboarding/repobrain_install_readiness.md" in workflow
+
+
+def test_issue_comment_workflow_resolves_same_repo_pr_head_checkout_ref() -> None:
+    workflow = Path(".github/workflows/repobrain.yml").read_text(encoding="utf-8")
+
+    assert "id: checkout_ref" in workflow
+    assert "github.rest.pulls.get" in workflow
+    assert "same_repo_pr_head_sha" in workflow
+    assert "fork_pr_uses_default_branch_runtime" in workflow
+    assert "ref: ${{ steps.checkout_ref.outputs.ref }}" in workflow

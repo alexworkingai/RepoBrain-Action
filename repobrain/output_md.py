@@ -756,6 +756,63 @@ def _retrieval_snapshot_lines(audit_summary: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _review_delta_lines(audit_summary: dict[str, Any]) -> list[str]:
+    command = str(audit_summary.get("command", "review") or "review").strip().lower()
+    if command != "review":
+        return []
+    active = bool(audit_summary.get("review_delta_memory_active", False))
+    if not active:
+        return []
+    prior_state_available = bool(audit_summary.get("review_delta_prior_state_available", False))
+    status = str(
+        audit_summary.get(
+            "review_delta_status",
+            "prior_state_present" if prior_state_available else "first_run",
+        )
+        or "first_run"
+    )
+    matching_mode = str(audit_summary.get("review_delta_matching_mode", "not_applicable") or "not_applicable")
+    summary = str(
+        audit_summary.get(
+            "review_delta_current_vs_prior_summary",
+            "first_run_no_prior_state" if not prior_state_available else "n/a",
+        )
+        or "n/a"
+    )
+    new_count = _int(audit_summary.get("review_delta_new_count", 0))
+    persisted_count = _int(audit_summary.get("review_delta_persisted_count", 0))
+    resolved_count = _int(audit_summary.get("review_delta_resolved_count", 0))
+    reclassified_count = _int(audit_summary.get("review_delta_reclassified_count", 0))
+    uncertainty_level = str(
+        audit_summary.get("review_delta_uncertainty_level", "not_applicable") or "not_applicable"
+    )
+    lines = [
+        "### 🔄 Review delta",
+        f"- Prior state available: `{'yes' if prior_state_available else 'no'}`",
+        f"- Status: `{status}`",
+        f"- Matching mode: `{matching_mode}`",
+        f"- Summary: `{summary}`",
+        f"- New findings: `{new_count}` ({str(audit_summary.get('review_delta_new_summary', 'none') or 'none')})",
+        (
+            f"- Persisted findings: `{persisted_count}` "
+            f"({str(audit_summary.get('review_delta_persisted_summary', 'none') or 'none')})"
+        ),
+        (
+            f"- Resolved findings: `{resolved_count}` "
+            f"({str(audit_summary.get('review_delta_resolved_summary', 'none') or 'none')})"
+        ),
+    ]
+    if reclassified_count > 0:
+        lines.append(
+            f"- Reclassified findings: `{reclassified_count}` "
+            f"({str(audit_summary.get('review_delta_reclassified_summary', 'none') or 'none')})"
+        )
+    if uncertainty_level != "not_applicable":
+        lines.append(f"- Uncertainty level: `{uncertainty_level}`")
+    lines.append("")
+    return lines
+
+
 def _ultra_large_pr_mode_lines(audit_summary: dict[str, Any], *, command: str) -> list[str]:
     cmd = str(command or audit_summary.get("command", "ask") or "ask").strip().lower()
     if cmd not in {"ask", "review", "fix"}:
@@ -2375,6 +2432,7 @@ def render_review_markdown(
 
     detail_lines = [
         *_retrieval_snapshot_lines(audit_summary),
+        *_review_delta_lines(audit_summary),
         *_ultra_large_pr_mode_lines(audit_summary, command="review"),
         *_render_async_batch_lines(audit_summary, command="review"),
         "Risk drivers:",

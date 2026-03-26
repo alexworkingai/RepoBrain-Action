@@ -260,3 +260,39 @@ def test_primary_surfaces_do_not_show_ultra_large_pr_mode_block() -> None:
     assert "Ultra-large PR mode" not in _primary(ask_md)
     assert "Ultra-large PR mode" not in _primary(review_md)
     assert "Ultra-large PR mode" not in _primary(fix_md)
+
+
+def test_review_delta_block_stays_in_details_not_primary() -> None:
+    md = render_review_markdown(
+        review={
+            "summary_text": "Review summary.",
+            "risk_level": "medium",
+            "confirmed_findings": [],
+            "possible_signals": [],
+            "informational_notes": [],
+            "recommendations": [],
+            "files_block": [],
+        },
+        verification_report={"summary": "NOT_RUN", "checks": []},
+        audit_summary={
+            "command": "review",
+            "route_final": "FAST",
+            "review_delta_memory_active": True,
+            "review_delta_prior_state_available": True,
+            "review_delta_status": "prior_state_present",
+            "review_delta_matching_mode": "verdict_anchor_identity",
+            "review_delta_current_vs_prior_summary": "new=1; persisted=1; resolved=0",
+            "review_delta_new_count": 1,
+            "review_delta_persisted_count": 1,
+            "review_delta_resolved_count": 0,
+            "review_delta_reclassified_count": 0,
+            "review_delta_new_summary": "Unchecked env var usage",
+            "review_delta_persisted_summary": "Merge conflict markers present",
+            "review_delta_resolved_summary": "none",
+            "review_delta_uncertainty_level": "low",
+        },
+    )
+    assert "Review delta" not in _primary(md)
+    assert "### 🔄 Review delta" in md
+    assert "- Prior state available: `yes`" in md
+    assert "- New findings: `1` (Unchecked env var usage)" in md

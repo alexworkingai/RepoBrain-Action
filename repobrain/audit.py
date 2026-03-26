@@ -73,6 +73,22 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "retrieval_snapshot_cache_key_kind": "not_applicable",
         "retrieval_snapshot_cache_miss_reason": "not_applicable",
         "retrieval_snapshot_cache_age_s": 0,
+        "review_delta_memory_active": False,
+        "review_delta_prior_state_available": False,
+        "review_delta_status": "inactive",
+        "review_delta_matching_mode": "not_applicable",
+        "review_delta_current_vs_prior_summary": "not_applicable",
+        "review_delta_new_count": 0,
+        "review_delta_persisted_count": 0,
+        "review_delta_resolved_count": 0,
+        "review_delta_reclassified_count": 0,
+        "review_delta_prior_run_id": "not_applicable",
+        "review_delta_prior_head_sha": "not_applicable",
+        "review_delta_new_summary": "none",
+        "review_delta_persisted_summary": "none",
+        "review_delta_resolved_summary": "none",
+        "review_delta_reclassified_summary": "none",
+        "review_delta_uncertainty_level": "not_applicable",
         "evidence_budget_used": 0,
         "evidence_budget_limit": 0,
         "evidence_budget_mode": "not_applied",
@@ -355,6 +371,64 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
         )
     except (TypeError, ValueError):
         normalized["retrieval_snapshot_cache_age_s"] = 0
+    normalized["review_delta_memory_active"] = bool(
+        normalized.get("review_delta_memory_active", False)
+    )
+    normalized["review_delta_prior_state_available"] = bool(
+        normalized.get("review_delta_prior_state_available", False)
+    )
+    normalized["review_delta_status"] = str(
+        normalized.get("review_delta_status", "inactive") or "inactive"
+    )
+    normalized["review_delta_matching_mode"] = str(
+        normalized.get("review_delta_matching_mode", "not_applicable") or "not_applicable"
+    )
+    normalized["review_delta_current_vs_prior_summary"] = str(
+        normalized.get("review_delta_current_vs_prior_summary", "not_applicable") or "not_applicable"
+    )
+    try:
+        normalized["review_delta_new_count"] = int(normalized.get("review_delta_new_count", 0) or 0)
+    except (TypeError, ValueError):
+        normalized["review_delta_new_count"] = 0
+    try:
+        normalized["review_delta_persisted_count"] = int(
+            normalized.get("review_delta_persisted_count", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["review_delta_persisted_count"] = 0
+    try:
+        normalized["review_delta_resolved_count"] = int(
+            normalized.get("review_delta_resolved_count", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["review_delta_resolved_count"] = 0
+    try:
+        normalized["review_delta_reclassified_count"] = int(
+            normalized.get("review_delta_reclassified_count", 0) or 0
+        )
+    except (TypeError, ValueError):
+        normalized["review_delta_reclassified_count"] = 0
+    normalized["review_delta_prior_run_id"] = str(
+        normalized.get("review_delta_prior_run_id", "not_applicable") or "not_applicable"
+    )
+    normalized["review_delta_prior_head_sha"] = str(
+        normalized.get("review_delta_prior_head_sha", "not_applicable") or "not_applicable"
+    )
+    normalized["review_delta_new_summary"] = str(
+        normalized.get("review_delta_new_summary", "none") or "none"
+    )
+    normalized["review_delta_persisted_summary"] = str(
+        normalized.get("review_delta_persisted_summary", "none") or "none"
+    )
+    normalized["review_delta_resolved_summary"] = str(
+        normalized.get("review_delta_resolved_summary", "none") or "none"
+    )
+    normalized["review_delta_reclassified_summary"] = str(
+        normalized.get("review_delta_reclassified_summary", "none") or "none"
+    )
+    normalized["review_delta_uncertainty_level"] = str(
+        normalized.get("review_delta_uncertainty_level", "not_applicable") or "not_applicable"
+    )
 
     rd_raw = normalized.get("rd", {})
     rd_payload: dict[str, Any] = dict(rd_raw) if isinstance(rd_raw, dict) else {}
