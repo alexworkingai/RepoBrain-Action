@@ -58,6 +58,16 @@ def test_workflow_generates_and_uploads_install_readiness_artifact() -> None:
     assert "artifacts/onboarding/repobrain_install_readiness.md" in workflow
 
 
+def test_workflow_uploads_tkya_evidence_pack_artifacts() -> None:
+    workflow = Path(".github/workflows/repobrain.yml").read_text(encoding="utf-8")
+
+    assert "Upload RepoBrain TKYA evidence pack artifact" in workflow
+    assert "name: repobrain-tkya-evidence-pack" in workflow
+    assert "artifacts/evidence_pack/repobrain_tkya_evidence_pack_internal.json" in workflow
+    assert "artifacts/evidence_pack/repobrain_tkya_evidence_pack_public_safe.json" in workflow
+    assert "artifacts/evidence_pack/repobrain_tkya_evidence_pack.md" in workflow
+
+
 def test_issue_comment_workflow_resolves_same_repo_pr_head_checkout_ref() -> None:
     workflow = Path(".github/workflows/repobrain.yml").read_text(encoding="utf-8")
 

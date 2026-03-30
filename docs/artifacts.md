@@ -97,6 +97,9 @@ When review/fix verification runs:
 - `artifacts/patch_validation.json` stores patch grounding validation result before publication
 - `artifacts/onboarding/repobrain_install_readiness.json` stores GitHub App-first onboarding readiness status
 - `artifacts/onboarding/repobrain_install_readiness.md` stores compact operator-facing readiness summary
+- `artifacts/evidence_pack/repobrain_tkya_evidence_pack_internal.json` stores richer canonical TKYA truth (operator-facing)
+- `artifacts/evidence_pack/repobrain_tkya_evidence_pack_public_safe.json` stores sanitized benchmark/comparison-friendly TKYA evidence
+- `artifacts/evidence_pack/repobrain_tkya_evidence_pack.md` stores compact human-readable Evidence Pack summary
 - `artifacts/llm_usage.json` is written when GitHub Models LLM is enabled
 - `artifacts/llm_http_debug.json` is written for workflow_dispatch fix failures with usersafe provider diagnostics
 - `artifacts/embeddings_usage.json` is written when embeddings are enabled

@@ -179,9 +179,7 @@ class TKYAConfig:
     allow_remote: bool = False
     strict: bool = False
     strict_v5: bool = False
-    strict_original: bool = False
     v5_path: str = ""
-    original_path: str = ""
     remote_enabled: bool = False
     remote_url: str = ""
     remote_allow_commands: list[str] = field(default_factory=lambda: ["ask", "explain"])
@@ -313,10 +311,7 @@ class RepoBrainConfig:
         warnings: list[str] = []
 
         backend_raw = env_str("RB_TKYA_BACKEND", "lite", source=env_source).strip().lower()
-        if backend_raw == "v2":
-            warnings.append("RB_TKYA_BACKEND=v2 is deprecated; normalized to 'original'.")
-            tkya_backend = "original"
-        elif backend_raw in {"lite", "v5", "original"}:
+        if backend_raw in {"lite", "v5"}:
             tkya_backend = backend_raw
         else:
             warnings.append(
@@ -329,14 +324,7 @@ class RepoBrainConfig:
             allow_remote=env_bool("RB_TKYA_ALLOW_REMOTE", False, source=env_source, warnings=warnings),
             strict=env_bool("RB_TKYA_STRICT", False, source=env_source, warnings=warnings),
             strict_v5=env_bool("RB_TKYA_STRICT_V5", False, source=env_source, warnings=warnings),
-            strict_original=env_bool(
-                "RB_TKYA_STRICT_ORIGINAL",
-                False,
-                source=env_source,
-                warnings=warnings,
-            ),
             v5_path=env_str("RB_TKYA_V5_PATH", "", source=env_source),
-            original_path=env_str("RB_TKYA_ORIGINAL_PATH", "", source=env_source),
         )
         llm = LLMConfig(
             enabled=env_bool("RB_LLM_ENABLED", False, source=env_source, warnings=warnings),
@@ -904,15 +892,13 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
         "RB_TKYA_BACKEND",
         "enum",
         "lite",
-        "TKYA backend selection (active: lite or v5; legacy aliases are normalized internally).",
-        ("lite", "v5", "original"),
+        "TKYA backend selection (active backends: lite or v5).",
+        ("lite", "v5"),
     ),
     EnvVarSpec("RB_TKYA_ALLOW_REMOTE", "bool", "0", "Allow remote/network operations in TKYA."),
     EnvVarSpec("RB_TKYA_STRICT", "bool", "0", "Strict TKYA load mode."),
     EnvVarSpec("RB_TKYA_STRICT_V5", "bool", "0", "Strict v5 vendor load mode."),
-    EnvVarSpec("RB_TKYA_STRICT_ORIGINAL", "bool", "0", "Strict original vendor load mode."),
     EnvVarSpec("RB_TKYA_V5_PATH", "str", "", "Optional override path for v5 vendor file."),
-    EnvVarSpec("RB_TKYA_ORIGINAL_PATH", "str", "", "Optional override path for original vendor file."),
     EnvVarSpec("RB_LLM_ENABLED", "bool", "0", "Enable LLM layer."),
     EnvVarSpec("RB_LLM_PROVIDER", "str", "", "LLM provider name (github_models)."),
     EnvVarSpec("RB_LLM_MODEL_HIGH", "str", "openai/gpt-4.1", "High-tier model id."),

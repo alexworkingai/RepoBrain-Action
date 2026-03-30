@@ -6,9 +6,9 @@ Phase coverage in this file:
 - Phase 2: diff-aware ranking and hash-only trace packing.
 - Phase 4: expanded MorseFlow confidence signals, verification ladder
   PASS/FAIL/PENDING/NOT_RUN states, and DS graph/vector/path kernels.
-- Phase 5: optional v2 compatibility shim and branch-protection verification profiles.
-- Phase 6: explicit shim adapter registry and versioned trace schema.
-- Phase 7: policy-controlled adapter allow/deny by task/branch/profile.
+- Phase 5: branch-protection verification profiles.
+- Phase 6: versioned trace schema.
+- Phase 7: policy-controlled verification routing by task/branch/profile.
 - Phase 8: production gate decision for verification ladder.
 - Phase 9: temporal/anomaly metrics for DS topology analytics.
 - Phase 10: calibration + performance budgets/truncation safeguards.
@@ -23,7 +23,6 @@ from dataclasses import dataclass
 import enum
 import fnmatch
 import hashlib
-import importlib.util
 import math
 import os
 from pathlib import Path
@@ -99,7 +98,6 @@ except Exception:  # pragma: no cover
         llm_decision_reason_short: str = "LLM not used: direct answer available from retrieved evidence."
         llm_decision_reason_code: str = "DEFAULT_RETRIEVAL_ONLY"
 
-
 _SECURITY_MARKERS = (
     "system prompt",
     "скрытые правила",
@@ -115,7 +113,6 @@ _SECURITY_MARKERS = (
 )
 TRACE_SCHEMA_VERSION = "1.1"
 
-
 def _to_bool(v: Any, default: bool = False) -> bool:
     if isinstance(v, bool):
         return v
@@ -125,13 +122,11 @@ def _to_bool(v: Any, default: bool = False) -> bool:
         return v.strip().lower() in {"1", "true", "yes", "y", "on"}
     return default
 
-
 def _to_float(v: Any, default: float) -> float:
     try:
         return float(v)
     except (TypeError, ValueError):
         return default
-
 
 def _to_int(v: Any, default: int) -> int:
     try:
@@ -139,10 +134,8 @@ def _to_int(v: Any, default: int) -> int:
     except (TypeError, ValueError):
         return default
 
-
 def _clip(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, x))
-
 
 def _semantic_execution(
     *,
@@ -198,19 +191,15 @@ def _semantic_execution(
         "llm_decision_reason_code": "DEFAULT_RETRIEVAL_ONLY",
     }
 
-
 def _tokens(text: str) -> list[str]:
     return [t for t in re.findall(r"\w+", (text or "").lower(), flags=re.UNICODE) if t]
-
 
 def _h(value: str, size: int = 10) -> str:
     return hashlib.blake2s(value.encode("utf-8"), digest_size=size).hexdigest()
 
-
 def _path_tokens(path: str) -> list[str]:
     normalized = str(path or "").replace("\\", "/").lower()
     return [token for token in re.split(r"[\/._\-]+", normalized) if token]
-
 
 def _to_int_tuple(value: Any) -> tuple[int, int] | None:
     if isinstance(value, (list, tuple)) and len(value) >= 2:
@@ -219,7 +208,6 @@ def _to_int_tuple(value: Any) -> tuple[int, int] | None:
         if a >= 0 and b >= 0:
             return min(a, b), max(a, b)
     return None
-
 
 @dataclass(frozen=True)
 class TopoCoreResponse:
@@ -230,7 +218,6 @@ class TopoCoreResponse:
     topo_rationale: str | None = None
     trace_hashes: dict[str, Any] | None = None
 
-
 @dataclass(frozen=True)
 class GitHubContext:
     is_pr: bool
@@ -239,362 +226,7 @@ class GitHubContext:
     diff_hunks_hash: str
 
 
-class V2CompatibilityShim:
-    """Optional compatibility shim for selected v2 adapters.
-
-    The shim is disabled by default and only enabled with `RB_TKYA_ENABLE_V2_SHIM=1`.
-    It never exposes raw outputs from v2 methods; all diagnostics are hash-only.
-    """
-
-    _ADAPTER_REGISTRY = {
-        "topology_calc": "run_topological_calculation",
-        "request_entry": "handle_request",
-        "remote_entry": "remote_call",
-    }
-
-    def __init__(self) -> None:
-        self.enabled = _to_bool(os.getenv("RB_TKYA_ENABLE_V2_SHIM", "0"))
-        self.strict = _to_bool(os.getenv("RB_TKYA_V2_SHIM_STRICT", "0"))
-        override = os.getenv("RB_TKYA_V2_SHIM_PATH", "").strip()
-        if override:
-            self.path = Path(override).expanduser().resolve()
-        else:
-            self.path = (Path(__file__).resolve().parent / "TopoCore_TCX_v2-CAS.py").resolve()
-
-        self._core: Any | None = None
-        self._state_reason = "disabled"
-        self._caps: list[str] = []
-        self._adapters: list[str] = []
-        self._adapter_methods: dict[str, Any] = {}
-        if self.enabled:
-            self._load()
-
-    def _load(self) -> None:
-        if not self.path.exists():
-            self._state_reason = "missing"
-            if self.strict:
-                raise RuntimeError(f"v2 compatibility shim enabled, but file is missing: {self.path}")
-            return
-
-        try:
-            spec = importlib.util.spec_from_file_location("repobrain_tkya_v2_compat", self.path)
-            if spec is None or spec.loader is None:
-                raise RuntimeError(f"Failed to build import spec for: {self.path}")
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            core_cls = getattr(module, "TopoCoreTCXv2CAS", None)
-            if core_cls is None:
-                raise RuntimeError("v2 module missing TopoCoreTCXv2CAS.")
-            self._core = core_cls()
-            self._adapter_methods = {}
-            self._adapters = []
-            self._caps = []
-            for adapter_name, method_name in self._ADAPTER_REGISTRY.items():
-                method = getattr(self._core, method_name, None)
-                if callable(method):
-                    self._adapter_methods[adapter_name] = method
-                    self._adapters.append(adapter_name)
-                    self._caps.append(method_name)
-            self._adapters.sort()
-            self._caps.sort()
-            self._state_reason = "loaded"
-        except Exception as exc:
-            self._state_reason = "load_error"
-            if self.strict:
-                raise RuntimeError("Failed to initialize v2 compatibility shim.") from exc
-
-    @staticmethod
-    def _hash_keys(raw: Any) -> str:
-        if isinstance(raw, dict):
-            payload = "|".join(sorted(map(str, raw.keys())))
-            return _h(payload, size=12)
-        return _h(type(raw).__name__, size=12)
-
-    def _run_topology_calc(
-        self,
-        method: Any,
-        *,
-        policy: dict[str, Any],
-        limits: dict[str, Any],
-    ) -> dict[str, Any]:
-        analytics_context = policy.get("analytics_context") or limits.get("analytics_context")
-        if not isinstance(analytics_context, dict):
-            return {"state": "skipped", "reason": "no_analytics_context"}
-        try:
-            raw = method(analytics_context)
-        except Exception:
-            return {"state": "error", "reason": "call_failed"}
-        return {
-            "state": "ok",
-            "result_hash": self._hash_keys(raw),
-            "result_keys_count": len(raw.keys()) if isinstance(raw, dict) else 0,
-        }
-
-    def _run_request_entry(
-        self,
-        method: Any,
-        *,
-        policy: dict[str, Any],
-        limits: dict[str, Any],
-    ) -> dict[str, Any]:
-        probe_text = str(
-            policy.get("shim_probe_query")
-            or limits.get("shim_probe_query")
-            or "compat_probe"
-        )
-        try:
-            raw = method(probe_text)
-        except Exception:
-            return {"state": "error", "reason": "call_failed"}
-        summary = str(getattr(raw, "summary", "") or "")
-        answer = str(getattr(raw, "answer", "") or "")
-        payload = f"{type(raw).__name__}|{len(summary)}|{len(answer)}"
-        return {"state": "ok", "result_hash": _h(payload, size=12)}
-
-    def _run_remote_entry(
-        self,
-        method: Any,
-        *,
-        policy: dict[str, Any],
-        limits: dict[str, Any],
-    ) -> dict[str, Any]:
-        del limits
-        if not _to_bool(os.getenv("RB_TKYA_ALLOW_REMOTE", "0")):
-            return {"state": "blocked", "reason": "remote_disabled"}
-        if not _to_bool(policy.get("allow_remote_shim"), False):
-            return {"state": "blocked", "reason": "policy_disallow_remote_shim"}
-        try:
-            raw = method({"probe": "compat"})
-        except Exception:
-            return {"state": "error", "reason": "call_failed"}
-        return {"state": "ok", "result_hash": self._hash_keys(raw)}
-
-    def _run_adapter(
-        self,
-        adapter_name: str,
-        method: Any,
-        *,
-        policy: dict[str, Any],
-        limits: dict[str, Any],
-    ) -> dict[str, Any]:
-        if adapter_name == "topology_calc":
-            return self._run_topology_calc(method, policy=policy, limits=limits)
-        if adapter_name == "request_entry":
-            return self._run_request_entry(method, policy=policy, limits=limits)
-        if adapter_name == "remote_entry":
-            return self._run_remote_entry(method, policy=policy, limits=limits)
-        return {"state": "skipped", "reason": "unknown_adapter"}
-
-    @staticmethod
-    def _extract_task(policy: dict[str, Any], limits: dict[str, Any]) -> str:
-        value = str(
-            policy.get("task_type")
-            or limits.get("task_type")
-            or "ask"
-        ).strip().lower()
-        return value or "ask"
-
-    @staticmethod
-    def _extract_branch_and_profile(
-        policy: dict[str, Any],
-        limits: dict[str, Any],
-    ) -> tuple[str, str]:
-        branch = "unknown"
-        profile = "default"
-        github_context = policy.get("github_context", {})
-        if isinstance(github_context, dict):
-            branch = str(
-                github_context.get("base_ref")
-                or github_context.get("target_branch")
-                or github_context.get("branch")
-                or branch
-            ).strip() or "unknown"
-        if "branch_name" in limits:
-            branch = str(limits.get("branch_name") or branch).strip() or branch
-
-        branch_protection = policy.get("branch_protection", {})
-        if isinstance(branch_protection, dict):
-            profile = str(branch_protection.get("name", profile) or profile).strip() or profile
-        if "verification_profile" in limits:
-            profile = str(limits.get("verification_profile") or profile).strip() or profile
-        return branch, profile
-
-    @staticmethod
-    def _match_pattern(pattern: str, value: str) -> bool:
-        if not pattern:
-            return False
-        if not value:
-            return False
-        return fnmatch.fnmatch(value, pattern)
-
-    def _resolve_adapter_policy(
-        self,
-        *,
-        policy: dict[str, Any],
-        limits: dict[str, Any],
-    ) -> dict[str, Any]:
-        raw = policy.get("v2_shim_policy", {})
-        if not isinstance(raw, dict):
-            raw = {}
-        task = self._extract_task(policy, limits)
-        branch, profile = self._extract_branch_and_profile(policy, limits)
-
-        allowed = set(self._adapters)
-        mode = str(raw.get("mode", "allowlist") or "allowlist").strip().lower()
-        if mode == "denylist":
-            allowed = set(self._adapters)
-
-        allow_global = raw.get("allow_adapters", None)
-        if isinstance(allow_global, list) and mode == "allowlist":
-            allowed = {name for name in self._adapters if name in {str(item).strip() for item in allow_global}}
-
-        deny_global = raw.get("deny_adapters", None)
-        if isinstance(deny_global, list):
-            deny_set = {str(item).strip() for item in deny_global if str(item).strip()}
-            allowed -= deny_set
-
-        by_task = raw.get("by_task", {})
-        if isinstance(by_task, dict):
-            task_rules = by_task.get(task, {})
-            if isinstance(task_rules, list):
-                parsed = {str(item).strip() for item in task_rules if str(item).strip()}
-                if parsed:
-                    allowed &= parsed
-            elif isinstance(task_rules, dict):
-                allow_task = task_rules.get("allow", [])
-                deny_task = task_rules.get("deny", [])
-                if isinstance(allow_task, list):
-                    parsed_allow = {str(item).strip() for item in allow_task if str(item).strip()}
-                    if parsed_allow:
-                        allowed &= parsed_allow
-                if isinstance(deny_task, list):
-                    allowed -= {str(item).strip() for item in deny_task if str(item).strip()}
-
-        by_branch = raw.get("by_branch", {})
-        if isinstance(by_branch, dict):
-            for pattern, branch_rules in by_branch.items():
-                if not self._match_pattern(str(pattern).strip(), branch):
-                    continue
-                if isinstance(branch_rules, list):
-                    parsed = {str(item).strip() for item in branch_rules if str(item).strip()}
-                    if parsed:
-                        allowed &= parsed
-                elif isinstance(branch_rules, dict):
-                    allow_branch = branch_rules.get("allow", [])
-                    deny_branch = branch_rules.get("deny", [])
-                    if isinstance(allow_branch, list):
-                        parsed_allow = {str(item).strip() for item in allow_branch if str(item).strip()}
-                        if parsed_allow:
-                            allowed &= parsed_allow
-                    if isinstance(deny_branch, list):
-                        allowed -= {str(item).strip() for item in deny_branch if str(item).strip()}
-
-        by_profile = raw.get("by_profile", {})
-        if isinstance(by_profile, dict):
-            profile_rules = by_profile.get(profile, {})
-            if isinstance(profile_rules, list):
-                parsed = {str(item).strip() for item in profile_rules if str(item).strip()}
-                if parsed:
-                    allowed &= parsed
-            elif isinstance(profile_rules, dict):
-                allow_profile = profile_rules.get("allow", [])
-                deny_profile = profile_rules.get("deny", [])
-                if isinstance(allow_profile, list):
-                    parsed_allow = {str(item).strip() for item in allow_profile if str(item).strip()}
-                    if parsed_allow:
-                        allowed &= parsed_allow
-                if isinstance(deny_profile, list):
-                    allowed -= {str(item).strip() for item in deny_profile if str(item).strip()}
-
-        allowed &= set(self._adapters)
-        return {
-            "task": task,
-            "branch": branch,
-            "profile": profile,
-            "allowed_adapters": sorted(allowed),
-            "mode": mode,
-        }
-
-    def enrich(self, *, policy: dict[str, Any], limits: dict[str, Any]) -> dict[str, Any]:
-        if not self.enabled:
-            return {
-                "used": False,
-                "reason": "disabled",
-                "caps": [],
-                "adapters": [],
-                "adapter_results": {},
-            }
-        if self._core is None:
-            return {
-                "used": False,
-                "reason": self._state_reason,
-                "caps": [],
-                "adapters": [],
-                "adapter_results": {},
-            }
-
-        result: dict[str, Any] = {
-            "used": True,
-            "reason": self._state_reason,
-            "caps": list(self._caps),
-            "adapters": list(self._adapters),
-            "path_hash": _h(str(self.path), size=12),
-            "adapter_results": {},
-        }
-        policy_ctx = self._resolve_adapter_policy(policy=policy, limits=limits)
-        allowed_adapters = set(policy_ctx["allowed_adapters"])
-        result["policy"] = {
-            "task": policy_ctx["task"],
-            "branch": policy_ctx["branch"],
-            "profile": policy_ctx["profile"],
-            "mode": policy_ctx["mode"],
-            "allowed_adapters": list(policy_ctx["allowed_adapters"]),
-        }
-        adapter_results: dict[str, dict[str, Any]] = {}
-        for adapter_name in self._adapters:
-            if adapter_name not in allowed_adapters:
-                adapter_results[adapter_name] = {"state": "skipped", "reason": "policy_blocked"}
-                continue
-            method = self._adapter_methods.get(adapter_name)
-            if not callable(method):
-                adapter_results[adapter_name] = {"state": "error", "reason": "missing_method"}
-                continue
-            adapter_results[adapter_name] = self._run_adapter(
-                adapter_name,
-                method,
-                policy=policy,
-                limits=limits,
-            )
-        result["adapter_results"] = adapter_results
-        result["adapter_results_hash"] = _h(
-            "|".join(
-                f"{name}:{adapter_results.get(name, {}).get('state', 'unknown')}:"
-                f"{adapter_results.get(name, {}).get('result_hash', '')}"
-                for name in sorted(adapter_results)
-            ),
-            size=12,
-        )
-        policy_data = result.get("policy", {})
-        result["policy_hash"] = _h(
-            "|".join(
-                [
-                    str(policy_data.get("task", "ask")),
-                    str(policy_data.get("branch", "unknown")),
-                    str(policy_data.get("profile", "default")),
-                    ",".join(sorted(map(str, policy_data.get("allowed_adapters", [])))),
-                ]
-            ),
-            size=12,
-        )
-
-        topology_result = adapter_results.get("topology_calc", {})
-        result["topology_call"] = str(topology_result.get("state", "n/a"))
-        result["topology_hash"] = topology_result.get("result_hash")
-        result["topology_keys_count"] = int(topology_result.get("result_keys_count", 0) or 0)
-        return result
-
-
-@dataclass
+@dataclass(frozen=True)
 class Codebook:
     id: str
     bins_per_axis: int = 12
@@ -602,7 +234,6 @@ class Codebook:
 
     def quantize(self, value: float) -> int:
         return int(_clip(value) * (max(2, self.bins_per_axis) - 1))
-
 
 class CodebookRegistry:
     def __init__(self) -> None:
@@ -613,7 +244,6 @@ class CodebookRegistry:
 
     def get(self, book_id: str) -> Codebook:
         return self._books.get(book_id) or Codebook(id=book_id)
-
 
 class Symbolizer:
     def __init__(self, registry: CodebookRegistry) -> None:
@@ -636,7 +266,6 @@ class Symbolizer:
                 if self._hamming(out[i], out[j]) < book.hamming_gap and out[i]:
                     out[i][-1] = (out[i][-1] + book.hamming_gap) % max(2, book.bins_per_axis)
         return out
-
 
 class HUKCore:
     def __init__(self, symbolizer: Symbolizer) -> None:
@@ -662,13 +291,11 @@ class HUKCore:
         score = _clip(0.55 * entropy + 0.30 * density + 0.15 * smooth)
         return {"score": score, "bars": bars, "codes": codes, "bars_hash": _h(",".join(f"{x:.3f}" for x in bars))}
 
-
 class Action(enum.Enum):
     NARROW_RETRIEVAL = "NARROW_RETRIEVAL"
     VERIFY = "VERIFY"
     REDUCE_BRANCHING = "REDUCE_BRANCHING"
     EXPAND = "EXPAND"
-
 
 class TopoRoute:
     def decide(self, *, score: float, risk_high: bool, task_type: str) -> dict[str, Any]:
@@ -681,7 +308,6 @@ class TopoRoute:
         if score >= 0.42:
             return {"action": Action.REDUCE_BRANCHING.value, "params": {"branch_limit": 2}}
         return {"action": Action.EXPAND.value, "params": {"branch_limit": 4}}
-
 
 class DataScienceTopologyKernel:
     @staticmethod
@@ -945,7 +571,6 @@ class DataScienceTopologyKernel:
             },
         }
 
-
 class ZigZagAnalyzer:
     """Signal-shape analyzer used to tune route confidence without randomness."""
 
@@ -980,7 +605,6 @@ class ZigZagAnalyzer:
             "volatility": round(float(volatility), 6),
             "trend": trend,
         }
-
 
 class MorseFlowGate:
     """Diff-signal gate used to enforce safe verification routing in PR contexts."""
@@ -1070,7 +694,6 @@ class MorseFlowGate:
             "test_disable_signal": test_disable_signal,
             "todo_count": int(todo_count),
         }
-
 
 class VerificationPlanner:
     """Planner that marks what checks were truly observed vs NOT_RUN."""
@@ -1321,7 +944,6 @@ class VerificationPlanner:
             "gate_reason": gate_reason,
         }
 
-
 class TopoCoreTCXv5AdvanceCASGit:
     def __init__(self) -> None:
         self.book_id = "v5-default"
@@ -1334,7 +956,6 @@ class TopoCoreTCXv5AdvanceCASGit:
         self.zigzag = ZigZagAnalyzer()
         self.morse = MorseFlowGate()
         self.verifier = VerificationPlanner()
-        self.v2_compat = V2CompatibilityShim()
         self._rd_chain = InMemoryChainAdapter("topocore-v5-rd") if InMemoryChainAdapter else None
 
     @staticmethod
@@ -1768,7 +1389,6 @@ class TopoCoreTCXv5AdvanceCASGit:
             }
         )
         verification = self.verifier.plan(task=task, policy=policy, morse=morse)
-        compat = self.v2_compat.enrich(policy=policy, limits=limits)
         trace = self._build_hash_only_trace(
             question=question,
             selected_ids=selected_ids,
@@ -1863,18 +1483,6 @@ class TopoCoreTCXv5AdvanceCASGit:
                 "verification_required_checks": list(verification.get("required_checks", [])),
                 "verification_gate_decision": str(verification.get("gate_decision", "N/A")),
                 "verification_gate_reason": str(verification.get("gate_reason", "n/a")),
-                "v2_compat_used": bool(compat.get("used", False)),
-                "v2_compat_reason": str(compat.get("reason", "n/a")),
-                "v2_compat_caps": list(compat.get("caps", [])),
-                "v2_compat_adapters": list(compat.get("adapters", [])),
-                "v2_compat_adapter_results": dict(compat.get("adapter_results", {})),
-                "v2_compat_adapter_results_hash": compat.get("adapter_results_hash"),
-                "v2_compat_policy": dict(compat.get("policy", {})),
-                "v2_compat_policy_hash": compat.get("policy_hash"),
-                "v2_compat_path_hash": compat.get("path_hash"),
-                "v2_compat_topology_call": str(compat.get("topology_call", "n/a")),
-                "v2_compat_topology_hash": compat.get("topology_hash"),
-                "v2_compat_topology_keys_count": int(compat.get("topology_keys_count", 0) or 0),
                 "trace_schema_version": str(trace.get("schema_version", TRACE_SCHEMA_VERSION)),
                 "trace_schema_policy": "1.x",
                 "trace_schema_compatible": str(trace.get("schema_version", "")).startswith("1."),
@@ -1941,6 +1549,4 @@ class TopoCoreTCXv5AdvanceCASGit:
             raise RuntimeError("Remote operations are disabled (RB_TKYA_ALLOW_REMOTE=0).")
         return {"status": "allowed_but_not_implemented"}
 
-
-TopoCoreTCXv2CAS = TopoCoreTCXv5AdvanceCASGit
 TopoCoreTCXv5AdvanceCAS = TopoCoreTCXv5AdvanceCASGit

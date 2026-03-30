@@ -10,7 +10,6 @@ This document captures the **actual runtime contract** between RepoBrain and the
   - `repobrain/tky_local.py` calls `get_engine()` from `repobrain/tkya/engine.py`.
   - Default backend is `v5` when vendor file exists, otherwise `lite` (`TopoCoreLite` fallback).
   - Advanced backend is `v5` (`RB_TKYA_BACKEND=v5`), loaded from vendor file.
-  - Legacy vendor backend remains available via `RB_TKYA_BACKEND=original`.
 - Engine direct usage points:
   - `repobrain/tky_local.py` -> `engine.decide(req)`.
   - `repobrain/tky_stub_server.py` -> `get_engine().decide(req)` for stub response generation.
@@ -174,15 +173,13 @@ Sprint-level quality policy is implemented around TKYA without changing TKYA ven
   - remote failure + fail-open true => fallback baseline
   - remote failure + fail-open false => exit code `2` with short message
 
-### Legacy/original backend loading (internal compatibility)
+### Backend loading
 - `repobrain/tkya/engine.py::get_engine`
   - default: `lite`
   - `RB_TKYA_BACKEND=v5` loads `TopoCore_TCX_v5-Advance_CAS+Git.py` with `importlib`
-  - `RB_TKYA_BACKEND=original` loads a legacy vendor adapter via `importlib` (internal compatibility path)
-  - missing/broken vendor file:
+  - missing/broken v5 vendor file:
     - fallback to lite by default
     - strict fail when `RB_TKYA_STRICT_V5=1` for v5
-    - strict fail when `RB_TKYA_STRICT_ORIGINAL=1` for original
 
 ## Files/Artifacts Expected by Index and Ask
 
@@ -225,18 +222,15 @@ Sprint-level quality policy is implemented around TKYA without changing TKYA ven
 - `RB_INDEX_CACHE_RESTORED`
 
 ### TKYA backend env
-- `RB_TKYA_BACKEND=lite|v5|original`
+- `RB_TKYA_BACKEND=lite|v5`
   - active documented backend is `v5` (`lite` remains safe fallback)
   - default behavior: if backend is not explicitly set and v5 vendor file exists, loader prefers `v5`; otherwise `lite`
-  - legacy alias values may still be normalized internally for backward compatibility
 - `RB_TKYA_ALLOW_REMOTE=0|1` (default guarded as disabled)
 - `RB_TKYA_STRICT=0|1` (common strict mode for vendor initialization)
 - `RB_TKYA_STRICT_V5=0|1`
 - `RB_TKYA_V5_PATH` (optional override path)
 - `RB_TKYA_V5_CANARY_PERCENT=0..100` (optional canary rollout gate for `v5`)
 - `RB_TKYA_CANARY_KEY` (optional stable canary bucket key)
-- `RB_TKYA_STRICT_ORIGINAL=0|1`
-- `RB_TKYA_ORIGINAL_PATH` (optional override path)
 
 ### Remote TKY inputs/env
 - CLI/action inputs used by `scripts/run_github.py` and `scripts/run_ask.py`:
