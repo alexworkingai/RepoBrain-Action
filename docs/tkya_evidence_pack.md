@@ -24,11 +24,17 @@ python scripts/gen_tkya_evidence_pack.py \
 
 ## Contract highlights
 - decision truth: route, execution mode, llm intent/reason, backend/engine
+- model/provider adapter truth: requested/selected/final model ids, model family, downgrade status
 - canonical TKYA signals: topology, HUK, ZigZag, MorseFlow, verification gate
 - boundedness and coverage: evidence budget and ultra-large mode summaries
 - provenance: runtime SHA vs PR head SHA state
 - trace safety: hash-only trace schema and hash references
-- repository scale snapshot: file/folder/size counters
+- repository scale snapshot: file/folder/size counters with explicit workspace-scope truth notes
 
 ## Safety
 Public-safe artifact intentionally excludes raw prompt text, raw candidate text, and raw diff internals.
+
+## Fidelity notes
+- Repository-scale values are scoped to the current runtime checkout (`workspace_checkout_snapshot`) and are not presented as full remote-repository history scans.
+- Provenance includes explicit governed-divergent explanations where runtime SHA differs from PR head SHA.
+- TKYA-derived metrics are exported only when canonically present in audit truth; missing values remain explicitly unavailable.

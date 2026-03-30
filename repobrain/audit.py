@@ -98,6 +98,28 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "runtime_provenance_sha_match": False,
         "runtime_provenance_pr_state": "unknown",
         "runtime_provenance_same_repo_pr": False,
+        "llm_adapter_contract_version": "llm_model_adapter_v1",
+        "llm_adapter_provider": "unknown",
+        "llm_adapter_provider_class": "unknown",
+        "llm_adapter_request_mode": "n/a",
+        "llm_adapter_execution_mode": "retrieval_only",
+        "llm_adapter_intent": "none",
+        "llm_adapter_llm_used": False,
+        "llm_adapter_policy_allowed": True,
+        "llm_adapter_requested_model_id": "not_used",
+        "llm_adapter_preferred_model_id": "not_used",
+        "llm_adapter_selected_model_id": "not_used",
+        "llm_adapter_final_model_id": "not_used",
+        "llm_adapter_model_family": "not_used",
+        "llm_adapter_downgrade_occurred": False,
+        "llm_adapter_downgrade_reason": "n/a",
+        "llm_adapter_provider_http_status": None,
+        "llm_adapter_provider_error_type": "n/a",
+        "llm_provider": "unknown",
+        "llm_model_family": "not_used",
+        "llm_model_requested_id": "not_used",
+        "llm_model_selected_id": "not_used",
+        "llm_model_final_id": "not_used",
         "evidence_budget_used": 0,
         "evidence_budget_limit": 0,
         "evidence_budget_mode": "not_applied",
@@ -468,6 +490,80 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
     )
     normalized["runtime_provenance_same_repo_pr"] = bool(
         normalized.get("runtime_provenance_same_repo_pr", False)
+    )
+    normalized["llm_adapter_contract_version"] = str(
+        normalized.get("llm_adapter_contract_version", "llm_model_adapter_v1")
+        or "llm_model_adapter_v1"
+    )
+    normalized["llm_adapter_provider"] = str(
+        normalized.get("llm_adapter_provider", "unknown") or "unknown"
+    )
+    normalized["llm_adapter_provider_class"] = str(
+        normalized.get("llm_adapter_provider_class", "unknown") or "unknown"
+    )
+    normalized["llm_adapter_request_mode"] = str(
+        normalized.get("llm_adapter_request_mode", "n/a") or "n/a"
+    )
+    normalized["llm_adapter_execution_mode"] = str(
+        normalized.get("llm_adapter_execution_mode", "retrieval_only") or "retrieval_only"
+    )
+    normalized["llm_adapter_intent"] = str(
+        normalized.get("llm_adapter_intent", "none") or "none"
+    )
+    normalized["llm_adapter_llm_used"] = bool(
+        normalized.get("llm_adapter_llm_used", False)
+    )
+    normalized["llm_adapter_policy_allowed"] = bool(
+        normalized.get("llm_adapter_policy_allowed", True)
+    )
+    normalized["llm_adapter_requested_model_id"] = str(
+        normalized.get("llm_adapter_requested_model_id", "not_used") or "not_used"
+    )
+    normalized["llm_adapter_preferred_model_id"] = str(
+        normalized.get("llm_adapter_preferred_model_id", "not_used") or "not_used"
+    )
+    normalized["llm_adapter_selected_model_id"] = str(
+        normalized.get("llm_adapter_selected_model_id", "not_used") or "not_used"
+    )
+    normalized["llm_adapter_final_model_id"] = str(
+        normalized.get("llm_adapter_final_model_id", "not_used") or "not_used"
+    )
+    normalized["llm_adapter_model_family"] = str(
+        normalized.get("llm_adapter_model_family", "not_used") or "not_used"
+    )
+    normalized["llm_adapter_downgrade_occurred"] = bool(
+        normalized.get("llm_adapter_downgrade_occurred", False)
+    )
+    normalized["llm_adapter_downgrade_reason"] = str(
+        normalized.get("llm_adapter_downgrade_reason", "n/a") or "n/a"
+    )
+    provider_http_status = normalized.get("llm_adapter_provider_http_status", None)
+    if provider_http_status in {"", "n/a"}:
+        normalized["llm_adapter_provider_http_status"] = None
+    elif provider_http_status is None:
+        normalized["llm_adapter_provider_http_status"] = None
+    else:
+        try:
+            normalized["llm_adapter_provider_http_status"] = int(provider_http_status)
+        except (TypeError, ValueError):
+            normalized["llm_adapter_provider_http_status"] = None
+    normalized["llm_adapter_provider_error_type"] = str(
+        normalized.get("llm_adapter_provider_error_type", "n/a") or "n/a"
+    )
+    normalized["llm_provider"] = str(
+        normalized.get("llm_provider", "unknown") or "unknown"
+    )
+    normalized["llm_model_family"] = str(
+        normalized.get("llm_model_family", "not_used") or "not_used"
+    )
+    normalized["llm_model_requested_id"] = str(
+        normalized.get("llm_model_requested_id", "not_used") or "not_used"
+    )
+    normalized["llm_model_selected_id"] = str(
+        normalized.get("llm_model_selected_id", "not_used") or "not_used"
+    )
+    normalized["llm_model_final_id"] = str(
+        normalized.get("llm_model_final_id", "not_used") or "not_used"
     )
 
     rd_raw = normalized.get("rd", {})

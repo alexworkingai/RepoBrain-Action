@@ -37,6 +37,11 @@ def _sample_audit() -> dict[str, object]:
         "morse_risk": "medium",
         "morse_verify_required": True,
         "morse_confidence": 0.82,
+        "morse_todo_count": 2,
+        "morse_conflict_markers": True,
+        "morse_secret_signal": False,
+        "morse_workflow_risky": True,
+        "morse_test_disable_signal": False,
         "morse_signals": ["workflow_risky_pattern", "conflict_markers"],
         "verification_overall": "WARN",
         "verification_pass_count": 2,
@@ -48,6 +53,7 @@ def _sample_audit() -> dict[str, object]:
         "verification_completeness": 0.5,
         "verification_gate_decision": "WARN",
         "verification_gate_reason": "required_checks_not_run",
+        "verification_required_checks": ["security scan", "integration-tests"],
         "trace_schema_version": "1.1",
         "trace_schema_policy": "1.x",
         "trace_schema_compatible": True,
@@ -70,17 +76,30 @@ def _sample_audit() -> dict[str, object]:
         "review_delta_prior_state_available": True,
         "runtime_provenance_status": "aligned",
         "runtime_provenance_reason_code": "runtime_sha_matches_pr_head",
+        "runtime_provenance_explanation": "Runtime SHA matches PR head SHA for this PR command run.",
+        "runtime_provenance_event_name": "issue_comment",
         "runtime_provenance_runtime_sha": "abc123",
         "runtime_provenance_pr_head_sha": "abc123",
         "runtime_provenance_sha_match": True,
+        "runtime_provenance_pr_state": "open",
+        "runtime_provenance_same_repo_pr": True,
         "security_scope": "repo_analysis",
         "security_outcome": "allow",
         "security_reason_code": "allow_repo_analysis",
         "security_reason_short": "Repository analysis allowed.",
         "llm_used": True,
         "llm_provider": "github_models",
+        "llm_policy_allowed": True,
+        "llm_request_mode": "normal",
+        "llm_primary_model_id": "openai/gpt-4.1",
+        "llm_preferred_model_id": "openai/gpt-4.1",
+        "llm_effective_model_id": "openai/gpt-4.1-mini",
         "llm_model_used": "openai/gpt-4.1",
         "llm_final_synthesis_model_id": "openai/gpt-4.1",
+        "llm_intermediate_downgrade_occurred": True,
+        "llm_intermediate_downgrade_reason": "quota_pressure",
+        "llm_provider_http_status": 200,
+        "llm_provider_error_type": "n/a",
         "llm_tokens_total": 1400,
     }
 
@@ -115,17 +134,33 @@ def test_write_tkya_evidence_pack_artifacts_internal_and_public_contract(tmp_pat
     assert internal["execution_summary"]["route_final"] == "REVIEW"
     assert internal["tkya_signals"]["topology_mode"] == "analytics_graph"
     assert internal["tkya_signals"]["morse_signals"] == ["workflow_risky_pattern", "conflict_markers"]
+    assert internal["tkya_signals"]["morse_todo_count"] == 2
+    assert internal["tkya_signals"]["verification_required_checks"] == [
+        "security scan",
+        "integration-tests",
+    ]
 
     assert public["tkya_signals"]["morse_signal_count"] == 2
     assert "morse_signals" not in public["tkya_signals"]
+    assert public["tkya_signals"]["verification_required_checks_count"] == 2
 
     assert public["trace_summary"]["trace_schema_version"] == "1.1"
     assert public["trace_summary"]["trace_hash_ref_count"] >= 1
     assert public["trace_summary"]["hash_only_policy"]["raw_prompt_exposed"] is False
+    assert public["model_summary"]["adapter_contract_version"] == "llm_model_adapter_v1"
+    assert public["model_summary"]["llm_provider"] == "github_models"
+    assert public["model_summary"]["llm_model_requested_id"] == "openai/gpt-4.1"
+    assert public["model_summary"]["llm_model_selected_id"] == "openai/gpt-4.1-mini"
+    assert public["model_summary"]["llm_model_final_id"] == "openai/gpt-4.1"
+    assert public["model_summary"]["llm_model_family"] == "gpt-4.1"
+    assert public["model_summary"]["llm_model_downgrade_occurred"] is True
+    assert public["provenance_summary"]["runtime_provenance_confidence"] == "high"
+    assert public["repository_scale"]["scale_truth_scope"] == "workspace_checkout_snapshot"
 
     assert "RepoBrain TKYA Evidence Pack v1" in summary
     assert "Route: `REVIEW`" in summary
     assert "Runtime provenance status: `aligned`" in summary
+    assert "Scope: `workspace_checkout_snapshot`" in summary
 
 
 def test_public_safe_payload_does_not_emit_raw_content_fields(tmp_path: Path) -> None:

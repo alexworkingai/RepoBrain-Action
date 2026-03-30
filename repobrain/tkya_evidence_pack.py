@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import subprocess
 import time
 from typing import Any
 
 import orjson
+
+from repobrain.llm.model_adapter_contract import (
+    MODEL_ADAPTER_CONTRACT_VERSION,
+    build_model_adapter_metadata,
+)
 
 _SKIP_DIRS = {
     ".git",
@@ -58,19 +64,21 @@ def _as_bool(value: Any) -> bool:
     return False
 
 
-def _repo_scale(repo_root: Path) -> dict[str, Any]:
+def _repo_scale(repo_root: Path, audit: dict[str, Any]) -> dict[str, Any]:
     file_count = 0
     folder_count = 0
     total_size_bytes = 0
     skipped_dir_count = 0
+    hidden_dirs_included_count = 0
+    scan_error_count = 0
 
     for root, dirs, files in os.walk(repo_root):
-        dirs[:] = [
-            d
-            for d in dirs
-            if not (d in _SKIP_DIRS or d.startswith("."))
-        ]
-        skipped_dir_count += sum(1 for d in dirs if d in _SKIP_DIRS)
+        original_dirs = list(dirs)
+        skipped_dir_count += sum(1 for d in original_dirs if d in _SKIP_DIRS)
+        hidden_dirs_included_count += sum(
+            1 for d in original_dirs if d.startswith(".") and d not in _SKIP_DIRS
+        )
+        dirs[:] = [d for d in original_dirs if d not in _SKIP_DIRS]
         folder_count += len(dirs)
         for name in files:
             path = Path(root) / name
@@ -80,7 +88,32 @@ def _repo_scale(repo_root: Path) -> dict[str, Any]:
             try:
                 total_size_bytes += int(path.stat().st_size)
             except OSError:
+                scan_error_count += 1
                 continue
+
+    git_tracked_files_total = 0
+    git_tracked_files_available = False
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=False,
+            check=False,
+        )
+        if int(proc.returncode) == 0:
+            blob = bytes(proc.stdout or b"")
+            git_tracked_files_total = int(len([p for p in blob.split(b"\x00") if p]))
+            git_tracked_files_available = True
+    except Exception:
+        git_tracked_files_total = 0
+        git_tracked_files_available = False
+
+    source_scope = "workspace_checkout_snapshot"
+    source_explanation = (
+        "Counts reflect files available in the current runtime workspace checkout, "
+        "not an out-of-band full repository history scan."
+    )
 
     return {
         "files_total": int(file_count),
@@ -88,6 +121,14 @@ def _repo_scale(repo_root: Path) -> dict[str, Any]:
         "size_bytes_total": int(total_size_bytes),
         "skipped_dirs": sorted(_SKIP_DIRS),
         "skipped_dir_count": int(skipped_dir_count),
+        "hidden_dirs_included_count": int(hidden_dirs_included_count),
+        "scan_error_count": int(scan_error_count),
+        "git_tracked_files_available": bool(git_tracked_files_available),
+        "git_tracked_files_total": int(git_tracked_files_total),
+        "scale_truth_scope": source_scope,
+        "scale_truth_explanation": source_explanation,
+        "workspace_path": repo_root.as_posix(),
+        "event_name": _as_str(audit.get("runtime_provenance_event_name", "unknown")),
     }
 
 
@@ -143,6 +184,11 @@ def _tkya_signals(audit: dict[str, Any], *, public_safe: bool) -> dict[str, Any]
         "morse_risk": _as_str(audit.get("morse_risk", "not_available")),
         "morse_verify_required": _as_bool(audit.get("morse_verify_required", False)),
         "morse_confidence": _as_float(audit.get("morse_confidence", 0.0)),
+        "morse_todo_count": _as_int(audit.get("morse_todo_count", 0)),
+        "morse_conflict_markers": _as_bool(audit.get("morse_conflict_markers", False)),
+        "morse_secret_signal": _as_bool(audit.get("morse_secret_signal", False)),
+        "morse_workflow_risky": _as_bool(audit.get("morse_workflow_risky", False)),
+        "morse_test_disable_signal": _as_bool(audit.get("morse_test_disable_signal", False)),
         "verification_completeness": _as_float(audit.get("verification_completeness", 0.0)),
         "verification_gate_decision": _as_str(audit.get("verification_gate_decision", "n/a")),
         "verification_gate_reason": _as_str(audit.get("verification_gate_reason", "n/a")),
@@ -156,8 +202,19 @@ def _tkya_signals(audit: dict[str, Any], *, public_safe: bool) -> dict[str, Any]
     )
     if public_safe:
         signals["morse_signal_count"] = len(morse_signals)
+        signals["verification_required_checks_count"] = _as_int(
+            len(audit.get("verification_required_checks", []))
+            if isinstance(audit.get("verification_required_checks", []), list)
+            else 0
+        )
     else:
         signals["morse_signals"] = morse_signals
+        required_checks = audit.get("verification_required_checks", [])
+        signals["verification_required_checks"] = (
+            [str(item).strip() for item in required_checks if str(item).strip()]
+            if isinstance(required_checks, list)
+            else []
+        )
 
     return signals
 
@@ -196,26 +253,58 @@ def _boundedness_summary(audit: dict[str, Any]) -> dict[str, Any]:
 
 
 def _provenance_summary(audit: dict[str, Any]) -> dict[str, Any]:
+    status = _as_str(audit.get("runtime_provenance_status", "not_applicable"))
+    if status == "aligned":
+        confidence = "high"
+    elif status == "governed_divergent":
+        confidence = "bounded"
+    else:
+        confidence = "not_applicable"
     return {
-        "runtime_provenance_status": _as_str(audit.get("runtime_provenance_status", "not_applicable")),
+        "runtime_provenance_status": status,
         "runtime_provenance_reason_code": _as_str(
             audit.get("runtime_provenance_reason_code", "not_applicable")
+        ),
+        "runtime_provenance_explanation": _as_str(
+            audit.get("runtime_provenance_explanation", "not_applicable")
+        ),
+        "runtime_provenance_event_name": _as_str(
+            audit.get("runtime_provenance_event_name", "unknown")
         ),
         "runtime_provenance_runtime_sha": _as_str(
             audit.get("runtime_provenance_runtime_sha", audit.get("sha", "n/a"))
         ),
         "runtime_provenance_pr_head_sha": _as_str(audit.get("runtime_provenance_pr_head_sha", "n/a")),
         "runtime_provenance_sha_match": _as_bool(audit.get("runtime_provenance_sha_match", False)),
+        "runtime_provenance_pr_state": _as_str(audit.get("runtime_provenance_pr_state", "unknown")),
+        "runtime_provenance_same_repo_pr": _as_bool(audit.get("runtime_provenance_same_repo_pr", False)),
+        "runtime_provenance_confidence": confidence,
     }
 
 
 def _model_summary(audit: dict[str, Any]) -> dict[str, Any]:
-    provider = _as_str(audit.get("llm_provider", ""), default="")
-    if not provider:
-        provider = _as_str(os.getenv("RB_LLM_PROVIDER", ""), default="unknown")
+    adapter = build_model_adapter_metadata(
+        audit,
+        provider_hint=_as_str(audit.get("llm_provider", ""), default=""),
+    )
     return {
-        "llm_used": _as_bool(audit.get("llm_used", False)),
-        "llm_provider": provider,
+        "adapter_contract_version": MODEL_ADAPTER_CONTRACT_VERSION,
+        "llm_used": bool(adapter.llm_used),
+        "llm_provider": adapter.provider,
+        "llm_provider_class": adapter.provider_class,
+        "llm_request_mode": adapter.request_mode,
+        "llm_execution_mode": adapter.execution_mode,
+        "llm_intent": adapter.llm_intent,
+        "llm_policy_allowed": bool(adapter.policy_allowed),
+        "llm_model_requested_id": adapter.requested_model_id,
+        "llm_model_preferred_id": adapter.preferred_model_id,
+        "llm_model_selected_id": adapter.selected_model_id,
+        "llm_model_final_id": adapter.final_model_id,
+        "llm_model_family": adapter.model_family,
+        "llm_model_downgrade_occurred": bool(adapter.downgrade_occurred),
+        "llm_model_downgrade_reason": adapter.downgrade_reason,
+        "llm_provider_http_status": adapter.provider_http_status,
+        "llm_provider_error_type": adapter.provider_error_type,
         "llm_model_used": _as_str(audit.get("llm_model_used", "not_used")),
         "llm_final_synthesis_model_id": _as_str(
             audit.get("llm_final_synthesis_model_id", "not_used")
@@ -235,7 +324,7 @@ def _base_payload(audit: dict[str, Any], repo_root: Path) -> dict[str, Any]:
             "pr_number": _as_int(audit.get("pr_number", 0)),
             "sha": _as_str(audit.get("sha", "n/a")),
         },
-        "repository_scale": _repo_scale(repo_root),
+        "repository_scale": _repo_scale(repo_root, audit),
         "execution_summary": _execution_summary(audit),
         "verification_summary": _verification_summary(audit),
         "boundedness_summary": _boundedness_summary(audit),
@@ -304,14 +393,19 @@ def _render_markdown_summary(public_payload: dict[str, Any]) -> str:
         "",
         "## Provenance",
         f"- Runtime provenance status: `{_as_str(provenance.get('runtime_provenance_status', 'not_applicable'))}`",
+        f"- Runtime provenance confidence: `{_as_str(provenance.get('runtime_provenance_confidence', 'not_applicable'))}`",
         f"- SHA match: `{str(_as_bool(provenance.get('runtime_provenance_sha_match', False))).lower()}`",
         f"- Runtime SHA: `{_as_str(provenance.get('runtime_provenance_runtime_sha', 'n/a'))}`",
         f"- PR head SHA: `{_as_str(provenance.get('runtime_provenance_pr_head_sha', 'n/a'))}`",
+        f"- Provenance reason: `{_as_str(provenance.get('runtime_provenance_reason_code', 'not_applicable'))}`",
         "",
         "## Repository Scale",
         f"- Files scanned: `{_as_int(scale.get('files_total', 0))}`",
         f"- Folders scanned: `{_as_int(scale.get('folders_total', 0))}`",
         f"- Approx size bytes: `{_as_int(scale.get('size_bytes_total', 0))}`",
+        f"- Scope: `{_as_str(scale.get('scale_truth_scope', 'workspace_checkout_snapshot'))}`",
+        f"- Git tracked files available: `{str(_as_bool(scale.get('git_tracked_files_available', False))).lower()}`",
+        f"- Git tracked files total: `{_as_int(scale.get('git_tracked_files_total', 0))}`",
         "",
         "This summary is public-safe and derived from canonical audit truth.",
     ]
