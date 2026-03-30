@@ -30,6 +30,20 @@ def test_workflow_generates_and_uploads_stability_benchmark_artifact() -> None:
     assert "artifacts/benchmarks/repobrain_stability_benchmark.md" in workflow
 
 
+def test_workflow_generates_and_uploads_tkya_evidence_pack_artifact() -> None:
+    workflow = Path(".github/workflows/repobrain.yml").read_text(encoding="utf-8")
+
+    assert "Generate RepoBrain TKYA evidence pack" in workflow
+    assert "python scripts/gen_tkya_evidence_pack.py \\" in workflow
+    assert "--audit-dir artifacts/audit \\" in workflow
+    assert "--output-dir artifacts/evidence_pack" in workflow
+    assert "Upload RepoBrain TKYA evidence pack artifact" in workflow
+    assert "name: repobrain-tkya-evidence-pack" in workflow
+    assert "artifacts/evidence_pack/repobrain_tkya_evidence_pack_internal.json" in workflow
+    assert "artifacts/evidence_pack/repobrain_tkya_evidence_pack_public_safe.json" in workflow
+    assert "artifacts/evidence_pack/repobrain_tkya_evidence_pack.md" in workflow
+
+
 def test_workflow_generates_and_uploads_install_readiness_artifact() -> None:
     workflow = Path(".github/workflows/repobrain.yml").read_text(encoding="utf-8")
 
