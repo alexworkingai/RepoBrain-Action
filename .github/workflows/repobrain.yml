@@ -276,7 +276,14 @@ jobs:
           name: repobrain-diagnostic-summary
           path: artifacts/diagnostic_summary.md
           if-no-files-found: ignore
-      - name: Upload RepoBrain TKYA evidence pack artifacts
+      - name: Generate RepoBrain TKYA evidence pack
+        if: always()
+        shell: bash
+        run: |
+          python scripts/gen_tkya_evidence_pack.py \
+            --audit-dir artifacts/audit \
+            --output-dir artifacts/evidence_pack
+      - name: Upload RepoBrain TKYA evidence pack artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -285,7 +292,7 @@ jobs:
             artifacts/evidence_pack/repobrain_tkya_evidence_pack_internal.json
             artifacts/evidence_pack/repobrain_tkya_evidence_pack_public_safe.json
             artifacts/evidence_pack/repobrain_tkya_evidence_pack.md
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Generate RepoBrain stability benchmark artifacts
         if: always()
         shell: bash
