@@ -333,143 +333,14 @@ def test_v5_verification_profile_includes_branch_required_checks() -> None:
     assert any("integration-tests:NOT_RUN" == item for item in not_run)
 
 
-def test_v5_v2_compat_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("RB_TKYA_ENABLE_V2_SHIM", raising=False)
+def test_v5_compression_stats_do_not_expose_legacy_compat_fields() -> None:
     module = _load_v5_module()
     core = module.TopoCoreTCXv5AdvanceCASGit()
     decision = core.decide(_sample_request("ask"))
-    assert decision.compression_stats.get("v2_compat_used") is False
-    assert decision.compression_stats.get("v2_compat_reason") == "disabled"
-
-
-def test_v5_v2_compat_loads_stub_when_enabled(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    v2_path = tmp_path / "TopoCore_TCX_v2-CAS.py"
-    v2_path.write_text(
-        "\n".join(
-            [
-                "class TopoCoreTCXv2CAS:",
-                "    def run_topological_calculation(self, payload):",
-                "        return {'alpha': 1, 'beta': 2}",
-                "",
-                "    def handle_request(self, user_text, **kwargs):",
-                "        class Resp:",
-                "            summary = 'ok'",
-                "            answer = 'ok'",
-                "        return Resp()",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("RB_TKYA_ENABLE_V2_SHIM", "1")
-    monkeypatch.setenv("RB_TKYA_V2_SHIM_PATH", str(v2_path))
-    monkeypatch.setenv("RB_TKYA_V2_SHIM_STRICT", "1")
-
-    module = _load_v5_module()
-    core = module.TopoCoreTCXv5AdvanceCASGit()
-    decision = core.decide(_sample_request("ask"))
-    stats = decision.compression_stats
-    assert stats.get("v2_compat_used") is True
-    assert stats.get("v2_compat_reason") == "loaded"
-    assert "run_topological_calculation" in (stats.get("v2_compat_caps") or [])
-    adapters = stats.get("v2_compat_adapters", [])
-    assert isinstance(adapters, list)
-    assert "topology_calc" in adapters
-    assert "request_entry" in adapters
-    adapter_results = stats.get("v2_compat_adapter_results", {})
-    assert isinstance(adapter_results, dict)
-    assert adapter_results.get("topology_calc", {}).get("state") == "ok"
-    assert adapter_results.get("request_entry", {}).get("state") == "ok"
-    assert stats.get("v2_compat_topology_call") == "ok"
-    assert stats.get("v2_compat_adapter_results_hash")
-    assert stats.get("v2_compat_topology_hash")
-
-
-def test_v5_v2_compat_remote_adapter_stays_blocked_without_remote_env(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    v2_path = tmp_path / "TopoCore_TCX_v2-CAS.py"
-    v2_path.write_text(
-        "\n".join(
-            [
-                "class TopoCoreTCXv2CAS:",
-                "    def run_topological_calculation(self, payload):",
-                "        return {'alpha': 1}",
-                "",
-                "    def remote_call(self, payload=None):",
-                "        return {'status': 'remote-ok'}",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("RB_TKYA_ENABLE_V2_SHIM", "1")
-    monkeypatch.setenv("RB_TKYA_V2_SHIM_PATH", str(v2_path))
-    monkeypatch.setenv("RB_TKYA_V2_SHIM_STRICT", "1")
-    monkeypatch.delenv("RB_TKYA_ALLOW_REMOTE", raising=False)
-
-    module = _load_v5_module()
-    core = module.TopoCoreTCXv5AdvanceCASGit()
-    decision = core.decide(_sample_request("ask"))
-    adapter_results = decision.compression_stats.get("v2_compat_adapter_results", {})
-    assert isinstance(adapter_results, dict)
-    remote_state = adapter_results.get("remote_entry", {})
-    assert remote_state.get("state") == "blocked"
-    assert remote_state.get("reason") == "remote_disabled"
-
-
-def test_v5_v2_compat_policy_blocks_adapter_by_task(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    v2_path = tmp_path / "TopoCore_TCX_v2-CAS.py"
-    v2_path.write_text(
-        "\n".join(
-            [
-                "class TopoCoreTCXv2CAS:",
-                "    def run_topological_calculation(self, payload):",
-                "        return {'alpha': 1}",
-                "",
-                "    def handle_request(self, user_text, **kwargs):",
-                "        class Resp:",
-                "            summary = 'ok'",
-                "            answer = 'ok'",
-                "        return Resp()",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("RB_TKYA_ENABLE_V2_SHIM", "1")
-    monkeypatch.setenv("RB_TKYA_V2_SHIM_PATH", str(v2_path))
-    monkeypatch.setenv("RB_TKYA_V2_SHIM_STRICT", "1")
-
-    module = _load_v5_module()
-    core = module.TopoCoreTCXv5AdvanceCASGit()
-    req = _sample_request("ask")
-    req = EngineRequest(
-        task_type=req.task_type,
-        query=req.query,
-        candidates=req.candidates,
-        limits=req.limits,
-        policy={
-            **req.policy,
-            "task_type": "ask",
-            "v2_shim_policy": {
-                "by_task": {
-                    "ask": {"allow": ["topology_calc"]},
-                }
-            },
-        },
-    )
-    decision = core.decide(req)
-    stats = decision.compression_stats
-    adapter_results = stats.get("v2_compat_adapter_results", {})
-    assert isinstance(adapter_results, dict)
-    assert adapter_results.get("topology_calc", {}).get("state") == "ok"
-    assert adapter_results.get("request_entry", {}).get("state") == "skipped"
-    assert adapter_results.get("request_entry", {}).get("reason") == "policy_blocked"
+    lowered = " ".join(str(key).lower() for key in decision.compression_stats.keys())
+    assert "compat_adapter_results" not in lowered
+    assert "compat_policy_hash" not in lowered
+    assert "compat_topology_hash" not in lowered
 
 
 def test_v5_verification_gate_blocks_on_strict_branch_missing_required_checks() -> None:

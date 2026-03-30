@@ -8,6 +8,7 @@ import time
 from repobrain.audit import write_audit
 from repobrain.github_flow import get_last_audit, parse_issue_number, run_github_flow
 from repobrain.stability_benchmark import write_stability_benchmark_artifacts
+from repobrain.tkya_evidence_pack import write_tkya_evidence_pack_artifacts
 
 
 def _parse_bool(value: str) -> bool:
@@ -51,6 +52,13 @@ def main() -> int:
     audit_path = Path("artifacts") / "audit" / f"audit_{run_id}_{issue_tag}.json"
     write_audit(audit or {}, audit_path)
     print(f"AUDIT_PATH={audit_path.as_posix()}")
+    try:
+        evidence = write_tkya_evidence_pack_artifacts(repo_root=Path.cwd(), audit=audit or {})
+        print(f"EVIDENCE_PACK_INTERNAL_PATH={str(evidence.get('internal_path', 'n/a'))}")
+        print(f"EVIDENCE_PACK_PUBLIC_SAFE_PATH={str(evidence.get('public_safe_path', 'n/a'))}")
+        print(f"EVIDENCE_PACK_SUMMARY_PATH={str(evidence.get('summary_path', 'n/a'))}")
+    except Exception as exc:  # pragma: no cover - evidence pack must not block main workflow
+        print(f"EVIDENCE_PACK_GENERATION_FAILED={exc}")
     try:
         benchmark_json = Path("artifacts") / "benchmarks" / "repobrain_stability_benchmark.json"
         benchmark_md = Path("artifacts") / "benchmarks" / "repobrain_stability_benchmark.md"

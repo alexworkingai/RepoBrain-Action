@@ -740,6 +740,84 @@ def _extract_verification_audit_fields(compression_stats: dict[str, Any]) -> dic
     return fields
 
 
+_TKYA_CANONICAL_SCALAR_KEYS: tuple[str, ...] = (
+    "topology_mode",
+    "topology_complexity",
+    "topology_metric_count",
+    "huk_score",
+    "huk_bars_hash",
+    "zigzag_turning_points",
+    "zigzag_volatility",
+    "zigzag_trend",
+    "morse_risk",
+    "morse_verify_required",
+    "morse_confidence",
+    "morse_todo_count",
+    "morse_conflict_markers",
+    "morse_secret_signal",
+    "morse_workflow_risky",
+    "morse_test_disable_signal",
+    "verification_completeness",
+    "verification_gate_decision",
+    "verification_gate_reason",
+    "verification_profile",
+    "verification_branch",
+    "trace_schema_version",
+    "trace_schema_policy",
+    "trace_schema_compatible",
+)
+_TKYA_CANONICAL_LIST_KEYS: tuple[str, ...] = (
+    "morse_signals",
+    "verification_required_checks",
+)
+_TKYA_TRACE_HASH_KEYS: tuple[str, ...] = (
+    "query_hash",
+    "selected_hash",
+    "ranking_hash",
+    "github_scope_hash",
+    "zigzag_hash",
+    "morse_hash",
+    "trace_inputs_hash",
+)
+_TKYA_AUDIT_EXPORT_KEYS: tuple[str, ...] = (
+    *_TKYA_CANONICAL_SCALAR_KEYS,
+    *_TKYA_CANONICAL_LIST_KEYS,
+    "trace_query_hash",
+    "trace_selected_hash",
+    "trace_ranking_hash",
+    "trace_github_scope_hash",
+    "trace_zigzag_hash",
+    "trace_morse_hash",
+    "trace_inputs_hash",
+    "tky_selected_chunk_ids_count",
+)
+
+
+def _extract_tkya_canonical_audit_fields(compression_stats: dict[str, Any]) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    for key in _TKYA_CANONICAL_SCALAR_KEYS:
+        if key in compression_stats:
+            fields[key] = compression_stats[key]
+    for key in _TKYA_CANONICAL_LIST_KEYS:
+        raw = compression_stats.get(key, [])
+        if isinstance(raw, list):
+            fields[key] = [str(item) for item in raw if str(item).strip()]
+
+    trace_raw = compression_stats.get("trace", {})
+    trace = dict(trace_raw) if isinstance(trace_raw, dict) else {}
+    for key in _TKYA_TRACE_HASH_KEYS:
+        value = str(trace.get(key, "") or "").strip()
+        if value:
+            fields[f"trace_{key}"] = value
+    return fields
+
+
+def _copy_tkya_canonical_fields_to_audit(*, audit: dict[str, Any], audit_summary: dict[str, Any]) -> None:
+    for key in _TKYA_AUDIT_EXPORT_KEYS:
+        if key in audit_summary:
+            audit[key] = audit_summary[key]
+
+
 def _write_ask_result_markdown(repo_root: Path, markdown: str) -> Path:
     path = repo_root / "artifacts" / "ask_result.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -5394,6 +5472,10 @@ def _build_qa_markdown(
     )
     compression_stats = result.tky.compression_stats if isinstance(result.tky.compression_stats, dict) else {}
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
+    audit_summary.update(_extract_tkya_canonical_audit_fields(compression_stats))
+    audit_summary["tky_selected_chunk_ids_count"] = int(
+        len(getattr(result.tky, "selected_chunk_ids", []) or [])
+    )
     if isinstance(audit, dict):
         audit_summary["security_scope"] = str(audit.get("security_scope", "n/a") or "n/a")
         audit_summary["security_outcome"] = str(audit.get("security_outcome", "n/a") or "n/a")
@@ -5710,6 +5792,7 @@ def _build_qa_markdown(
         audit["tky_remote_status"] = audit_summary.get("tky_remote_status", None)
         audit["tky_fallback_reason"] = str(audit_summary.get("tky_fallback_reason", "n/a") or "n/a")
         audit["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
+        _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
         audit["comment_truncated"] = False
         audit["ask_result_artifact"] = "n/a"
         audit["check_intent"] = "analysis"
@@ -6410,6 +6493,10 @@ def _build_review_markdown(
     audit_summary.update(runtime_provenance)
     audit_summary.update(_execution_from_tky_result(tky_result.tky))
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
+    audit_summary.update(_extract_tkya_canonical_audit_fields(compression_stats))
+    audit_summary["tky_selected_chunk_ids_count"] = int(
+        len(getattr(tky_result.tky, "selected_chunk_ids", []) or [])
+    )
     validation_raw = review.get("validation", {})
     validation = dict(validation_raw) if isinstance(validation_raw, dict) else {}
     signal_calibration_used = bool(
@@ -7328,6 +7415,7 @@ def _build_review_markdown(
                 audit_summary.get("review_delta_uncertainty_level", "not_applicable")
                 or "not_applicable"
             )
+            _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
             _merge_llm_meta(audit, llm_meta)
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
         return body
@@ -7855,6 +7943,7 @@ def _build_review_markdown(
         audit["patch_guard_triggered"] = bool(audit_summary.get("patch_guard_triggered", False))
         audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
         audit["patch_validation_artifact"] = patch_validation_path.as_posix()
+        _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
         if patch_debug_payload is not None:
             audit["patch_generation_debug"] = dict(patch_debug_payload)
             audit["patch_generation_debug_artifact"] = "artifacts/patch_generation_debug.json"

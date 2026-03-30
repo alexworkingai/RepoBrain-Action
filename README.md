@@ -149,12 +149,10 @@ Local TKYA backend options:
 * Safe default remains `RB_TKYA_BACKEND=lite`.
 * Advanced local core: set `RB_TKYA_BACKEND=v5` and use `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`.
 * Active documented backend path is v5; `lite` stays as safe fallback.
-* `RB_TKYA_BACKEND=original` is retained for internal legacy-compatibility only and is not part of the recommended production setup.
 * Remote/network path is disabled by default for local vendor backends: `RB_TKYA_ALLOW_REMOTE=0`.
 * Strict startup flags:
   * `RB_TKYA_STRICT_V5=1` for v5
-  * `RB_TKYA_STRICT_ORIGINAL=1` for legacy original
-* `RB_TKYA_V5_PATH` and `RB_TKYA_ORIGINAL_PATH` can override vendor file paths when needed.
+* `RB_TKYA_V5_PATH` can override the vendor file path when needed.
 * Optional canary rollout for v5 backend:
   * `RB_TKYA_V5_CANARY_PERCENT=0..100`
   * `RB_TKYA_CANARY_KEY=<stable-bucket-key>`
