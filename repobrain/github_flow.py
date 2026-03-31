@@ -89,6 +89,9 @@ from repobrain.llm.github_models_embeddings import (
     GitHubModelsEmbeddingsError,
 )
 from repobrain.llm.batch_planner import Batch, plan_batches
+from repobrain.llm.model_adapter_contract import (
+    build_model_adapter_metadata,
+)
 from repobrain.llm.model_selector import (
     choose_model,
     complexity_explanation,
@@ -791,6 +794,30 @@ _TKYA_AUDIT_EXPORT_KEYS: tuple[str, ...] = (
     "trace_inputs_hash",
     "tky_selected_chunk_ids_count",
 )
+_MODEL_ADAPTER_AUDIT_EXPORT_KEYS: tuple[str, ...] = (
+    "llm_adapter_contract_version",
+    "llm_adapter_provider",
+    "llm_adapter_provider_class",
+    "llm_adapter_request_mode",
+    "llm_adapter_execution_mode",
+    "llm_adapter_intent",
+    "llm_adapter_llm_used",
+    "llm_adapter_policy_allowed",
+    "llm_adapter_requested_model_id",
+    "llm_adapter_preferred_model_id",
+    "llm_adapter_selected_model_id",
+    "llm_adapter_final_model_id",
+    "llm_adapter_model_family",
+    "llm_adapter_downgrade_occurred",
+    "llm_adapter_downgrade_reason",
+    "llm_adapter_provider_http_status",
+    "llm_adapter_provider_error_type",
+    "llm_provider",
+    "llm_model_family",
+    "llm_model_requested_id",
+    "llm_model_selected_id",
+    "llm_model_final_id",
+)
 
 
 def _extract_tkya_canonical_audit_fields(compression_stats: dict[str, Any]) -> dict[str, Any]:
@@ -814,6 +841,22 @@ def _extract_tkya_canonical_audit_fields(compression_stats: dict[str, Any]) -> d
 
 def _copy_tkya_canonical_fields_to_audit(*, audit: dict[str, Any], audit_summary: dict[str, Any]) -> None:
     for key in _TKYA_AUDIT_EXPORT_KEYS:
+        if key in audit_summary:
+            audit[key] = audit_summary[key]
+
+
+def _apply_model_adapter_contract_fields(
+    *,
+    audit_summary: dict[str, Any],
+    llm_meta: dict[str, Any],
+    provider_hint: str | None,
+) -> None:
+    adapter = build_model_adapter_metadata(llm_meta, provider_hint=provider_hint)
+    audit_summary.update(adapter.as_audit_fields())
+
+
+def _copy_model_adapter_fields_to_audit(*, audit: dict[str, Any], audit_summary: dict[str, Any]) -> None:
+    for key in _MODEL_ADAPTER_AUDIT_EXPORT_KEYS:
         if key in audit_summary:
             audit[key] = audit_summary[key]
 
@@ -5637,6 +5680,11 @@ def _build_qa_markdown(
         audit_summary.get("answer_grounding_mode", "retrieval") or "retrieval"
     )
     _merge_llm_meta(audit_summary, llm_meta)
+    _apply_model_adapter_contract_fields(
+        audit_summary=audit_summary,
+        llm_meta=llm_meta,
+        provider_hint=cfg.llm.provider,
+    )
     audit_summary["command"] = cmd
     desired_llm = str(audit_summary.get("execution_mode", "retrieval_only")) == "retrieval_plus_llm"
     if desired_llm and not bool(llm_meta.get("llm_used", False)):
@@ -5793,6 +5841,7 @@ def _build_qa_markdown(
         audit["tky_fallback_reason"] = str(audit_summary.get("tky_fallback_reason", "n/a") or "n/a")
         audit["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
         _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        _copy_model_adapter_fields_to_audit(audit=audit, audit_summary=audit_summary)
         audit["comment_truncated"] = False
         audit["ask_result_artifact"] = "n/a"
         audit["check_intent"] = "analysis"
@@ -7150,6 +7199,12 @@ def _build_review_markdown(
         review_debug_path = _write_review_generation_debug(repo_root, review_debug_payload)
         audit_summary["review_generation_debug_artifact"] = review_debug_path.as_posix()
 
+    _apply_model_adapter_contract_fields(
+        audit_summary=audit_summary,
+        llm_meta=llm_meta,
+        provider_hint=cfg.llm.provider,
+    )
+
     diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
     diagnostic_path = _write_diagnostic_summary_markdown(repo_root, diagnostic_markdown)
     audit_summary["diagnostic_summary_artifact"] = "artifacts/diagnostic_summary.md"
@@ -7944,6 +7999,7 @@ def _build_review_markdown(
         audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
         audit["patch_validation_artifact"] = patch_validation_path.as_posix()
         _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        _copy_model_adapter_fields_to_audit(audit=audit, audit_summary=audit_summary)
         if patch_debug_payload is not None:
             audit["patch_generation_debug"] = dict(patch_debug_payload)
             audit["patch_generation_debug_artifact"] = "artifacts/patch_generation_debug.json"
