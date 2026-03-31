@@ -7472,6 +7472,7 @@ def _build_review_markdown(
             )
             _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
             _merge_llm_meta(audit, llm_meta)
+            _copy_model_adapter_fields_to_audit(audit=audit, audit_summary=audit_summary)
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
         return body
 

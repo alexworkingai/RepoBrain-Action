@@ -5,7 +5,12 @@ from pathlib import Path
 import orjson
 
 from repobrain.audit import build_audit_base, finalize_audit, write_audit
-from repobrain.github_flow import _build_review_markdown, get_last_audit, run_github_flow
+from repobrain.github_flow import (
+    _build_review_markdown,
+    _set_runtime_env_cfg,
+    get_last_audit,
+    run_github_flow,
+)
 
 
 class _SnapshotTestClient:
@@ -453,7 +458,9 @@ def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
         assert "runtime_provenance_sha_match" in audit
 
 
-def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path) -> None:
+def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("RB_LLM_PROVIDER", "github_models")
+    _set_runtime_env_cfg(None)  # noqa: SLF001
     first_audit: dict[str, object] = {}
     second_audit: dict[str, object] = {}
     client = _SnapshotTestClient()
@@ -501,8 +508,15 @@ def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path) -> Non
     assert second_audit["review_delta_memory_active"] is True
     assert second_audit["review_delta_prior_state_available"] is True
     assert second_audit["review_delta_status"] == "prior_state_present"
+    assert first_audit["llm_adapter_provider"] == "github_models"
+    assert first_audit["llm_adapter_provider_class"] == "github_models_chat_completions"
+    assert first_audit["llm_provider"] == "github_models"
+    assert second_audit["llm_adapter_provider"] == "github_models"
+    assert second_audit["llm_adapter_provider_class"] == "github_models_chat_completions"
+    assert second_audit["llm_provider"] == "github_models"
     assert second_audit["runtime_provenance_status"] in {"aligned", "governed_divergent"}
     assert "runtime_provenance_reason_code" in second_audit
+    _set_runtime_env_cfg(None)  # noqa: SLF001
     assert "Retrieval snapshot cache" in first_markdown
     assert "- Status: `miss`" in first_markdown
     assert "Retrieval snapshot cache" in second_markdown
