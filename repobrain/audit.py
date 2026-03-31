@@ -115,11 +115,29 @@ def build_audit_base(env_ctx: dict[str, Any]) -> dict[str, Any]:
         "llm_adapter_downgrade_reason": "n/a",
         "llm_adapter_provider_http_status": None,
         "llm_adapter_provider_error_type": "n/a",
+        "llm_adapter_execution_profile_requested": "balanced",
+        "llm_adapter_execution_profile_used": "balanced",
+        "llm_adapter_execution_profile_reason_code": "profile_default_balanced",
+        "llm_adapter_execution_profile_reason_short": "Execution profile defaulted to balanced.",
+        "llm_adapter_budget_sensitivity": "not_available",
+        "llm_adapter_latency_sensitivity": "not_available",
+        "llm_adapter_profile_policy_outcome": "profile_default_applied",
+        "llm_adapter_profile_override_applied": False,
+        "llm_adapter_profile_model_alignment": "not_applicable",
         "llm_provider": "unknown",
         "llm_model_family": "not_used",
         "llm_model_requested_id": "not_used",
         "llm_model_selected_id": "not_used",
         "llm_model_final_id": "not_used",
+        "llm_execution_profile_requested": "balanced",
+        "llm_execution_profile_used": "balanced",
+        "llm_execution_profile_reason_code": "profile_default_balanced",
+        "llm_execution_profile_reason_short": "Execution profile defaulted to balanced.",
+        "llm_budget_sensitivity": "not_available",
+        "llm_latency_sensitivity": "not_available",
+        "llm_profile_policy_outcome": "profile_default_applied",
+        "llm_profile_override_applied": False,
+        "llm_profile_model_alignment": "not_applicable",
         "evidence_budget_used": 0,
         "evidence_budget_limit": 0,
         "evidence_budget_mode": "not_applied",
@@ -550,6 +568,40 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
     normalized["llm_adapter_provider_error_type"] = str(
         normalized.get("llm_adapter_provider_error_type", "n/a") or "n/a"
     )
+    normalized["llm_adapter_execution_profile_requested"] = str(
+        normalized.get("llm_adapter_execution_profile_requested", "balanced") or "balanced"
+    )
+    normalized["llm_adapter_execution_profile_used"] = str(
+        normalized.get("llm_adapter_execution_profile_used", "balanced") or "balanced"
+    )
+    normalized["llm_adapter_execution_profile_reason_code"] = str(
+        normalized.get("llm_adapter_execution_profile_reason_code", "profile_default_balanced")
+        or "profile_default_balanced"
+    )
+    normalized["llm_adapter_execution_profile_reason_short"] = str(
+        normalized.get(
+            "llm_adapter_execution_profile_reason_short",
+            "Execution profile defaulted to balanced.",
+        )
+        or "Execution profile defaulted to balanced."
+    )
+    normalized["llm_adapter_budget_sensitivity"] = str(
+        normalized.get("llm_adapter_budget_sensitivity", "not_available") or "not_available"
+    )
+    normalized["llm_adapter_latency_sensitivity"] = str(
+        normalized.get("llm_adapter_latency_sensitivity", "not_available") or "not_available"
+    )
+    normalized["llm_adapter_profile_policy_outcome"] = str(
+        normalized.get("llm_adapter_profile_policy_outcome", "profile_default_applied")
+        or "profile_default_applied"
+    )
+    normalized["llm_adapter_profile_override_applied"] = bool(
+        normalized.get("llm_adapter_profile_override_applied", False)
+    )
+    normalized["llm_adapter_profile_model_alignment"] = str(
+        normalized.get("llm_adapter_profile_model_alignment", "not_applicable")
+        or "not_applicable"
+    )
     normalized["llm_provider"] = str(
         normalized.get("llm_provider", "unknown") or "unknown"
     )
@@ -564,6 +616,39 @@ def finalize_audit(audit: dict[str, Any]) -> dict[str, Any]:
     )
     normalized["llm_model_final_id"] = str(
         normalized.get("llm_model_final_id", "not_used") or "not_used"
+    )
+    normalized["llm_execution_profile_requested"] = str(
+        normalized.get("llm_execution_profile_requested", "balanced") or "balanced"
+    )
+    normalized["llm_execution_profile_used"] = str(
+        normalized.get("llm_execution_profile_used", "balanced") or "balanced"
+    )
+    normalized["llm_execution_profile_reason_code"] = str(
+        normalized.get("llm_execution_profile_reason_code", "profile_default_balanced")
+        or "profile_default_balanced"
+    )
+    normalized["llm_execution_profile_reason_short"] = str(
+        normalized.get(
+            "llm_execution_profile_reason_short",
+            "Execution profile defaulted to balanced.",
+        )
+        or "Execution profile defaulted to balanced."
+    )
+    normalized["llm_budget_sensitivity"] = str(
+        normalized.get("llm_budget_sensitivity", "not_available") or "not_available"
+    )
+    normalized["llm_latency_sensitivity"] = str(
+        normalized.get("llm_latency_sensitivity", "not_available") or "not_available"
+    )
+    normalized["llm_profile_policy_outcome"] = str(
+        normalized.get("llm_profile_policy_outcome", "profile_default_applied")
+        or "profile_default_applied"
+    )
+    normalized["llm_profile_override_applied"] = bool(
+        normalized.get("llm_profile_override_applied", False)
+    )
+    normalized["llm_profile_model_alignment"] = str(
+        normalized.get("llm_profile_model_alignment", "not_applicable") or "not_applicable"
     )
 
     rd_raw = normalized.get("rd", {})

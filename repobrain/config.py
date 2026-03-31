@@ -216,6 +216,9 @@ class LLMConfig:
     downgrade_min_remaining_requests_review: int = 4
     downgrade_min_remaining_requests_fix: int = 5
     force_strong_model_for_complex_ask: bool = True
+    execution_profile: str = "balanced"
+    budget_sensitivity: str = "not_available"
+    latency_sensitivity: str = "not_available"
 
 
 @dataclass(frozen=True)
@@ -487,6 +490,27 @@ class RepoBrainConfig:
             force_strong_model_for_complex_ask=env_bool(
                 "RB_LLM_FORCE_STRONG_MODEL_FOR_COMPLEX_ASK",
                 True,
+                source=env_source,
+                warnings=warnings,
+            ),
+            execution_profile=env_enum(
+                "RB_LLM_EXECUTION_PROFILE",
+                "balanced",
+                ("cheap", "balanced", "premium"),
+                source=env_source,
+                warnings=warnings,
+            ),
+            budget_sensitivity=env_enum(
+                "RB_LLM_BUDGET_SENSITIVITY",
+                "not_available",
+                ("low", "normal", "high", "not_available"),
+                source=env_source,
+                warnings=warnings,
+            ),
+            latency_sensitivity=env_enum(
+                "RB_LLM_LATENCY_SENSITIVITY",
+                "not_available",
+                ("low", "normal", "high", "not_available"),
                 source=env_source,
                 warnings=warnings,
             ),
@@ -903,6 +927,27 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec("RB_LLM_PROVIDER", "str", "", "LLM provider name (github_models)."),
     EnvVarSpec("RB_LLM_MODEL_HIGH", "str", "openai/gpt-4.1", "High-tier model id."),
     EnvVarSpec("RB_LLM_MODEL_LOW", "str", "openai/gpt-4.1-mini", "Low-tier model id."),
+    EnvVarSpec(
+        "RB_LLM_EXECUTION_PROFILE",
+        "enum",
+        "balanced",
+        "Execution profile control-plane mode (`cheap`, `balanced`, `premium`).",
+        ("cheap", "balanced", "premium"),
+    ),
+    EnvVarSpec(
+        "RB_LLM_BUDGET_SENSITIVITY",
+        "enum",
+        "not_available",
+        "Optional budget sensitivity hint for control-plane audit truth.",
+        ("low", "normal", "high", "not_available"),
+    ),
+    EnvVarSpec(
+        "RB_LLM_LATENCY_SENSITIVITY",
+        "enum",
+        "not_available",
+        "Optional latency sensitivity hint for control-plane audit truth.",
+        ("low", "normal", "high", "not_available"),
+    ),
     EnvVarSpec("RB_LLM_MAX_INPUT_TOKENS", "int", "7600", "Prompt input token budget.", min_value=256, max_value=64000),
     EnvVarSpec(
         "RB_LLM_MAX_INPUT_TOKENS_REVIEW_FINAL",

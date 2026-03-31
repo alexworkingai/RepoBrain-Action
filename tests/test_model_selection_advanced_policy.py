@@ -62,6 +62,38 @@ def test_simple_ask_can_use_mini() -> None:
     assert tier == "low"
 
 
+def test_cheap_profile_prefers_low_tier_for_simple_ask() -> None:
+    model_id, tier = choose_model(
+        30,
+        task_type="ask",
+        intent="analysis",
+        route="FAST",
+        execution_mode="retrieval_plus_llm",
+        llm_intent="summarize",
+        synthesis_required=False,
+        execution_profile="cheap",
+    )
+
+    assert model_id == "openai/gpt-4.1-mini"
+    assert tier == "low"
+
+
+def test_premium_profile_prefers_high_tier_for_ask() -> None:
+    model_id, tier = choose_model(
+        10,
+        task_type="ask",
+        intent="analysis",
+        route="FAST",
+        execution_mode="retrieval_plus_llm",
+        llm_intent="summarize",
+        synthesis_required=False,
+        execution_profile="premium",
+    )
+
+    assert model_id == "openai/gpt-4.1"
+    assert tier == "high"
+
+
 def test_governor_still_supports_downgrade_to_mini() -> None:
     governor = AIBudgetGovernor(
         BudgetPolicy(
@@ -86,4 +118,3 @@ def test_governor_still_supports_downgrade_to_mini() -> None:
     decision = governor.can_call_llm(next_call_cost_est=200, tier="high", intent="review")
     assert decision.allow is True
     assert decision.switch_to_mini is True
-

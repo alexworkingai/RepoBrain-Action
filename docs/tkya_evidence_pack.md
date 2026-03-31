@@ -25,6 +25,7 @@ python scripts/gen_tkya_evidence_pack.py \
 ## Contract highlights
 - decision truth: route, execution mode, llm intent/reason, backend/engine
 - model/provider adapter truth: requested/selected/final model ids, model family, downgrade status
+- control-plane truth: execution profile (requested/used), policy reason/outcome, budget/latency sensitivity hints
 - canonical TKYA signals: topology, HUK, ZigZag, MorseFlow, verification gate
 - boundedness and coverage: evidence budget and ultra-large mode summaries
 - provenance: runtime SHA vs PR head SHA state

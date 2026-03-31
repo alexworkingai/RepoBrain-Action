@@ -812,11 +812,29 @@ _MODEL_ADAPTER_AUDIT_EXPORT_KEYS: tuple[str, ...] = (
     "llm_adapter_downgrade_reason",
     "llm_adapter_provider_http_status",
     "llm_adapter_provider_error_type",
+    "llm_adapter_execution_profile_requested",
+    "llm_adapter_execution_profile_used",
+    "llm_adapter_execution_profile_reason_code",
+    "llm_adapter_execution_profile_reason_short",
+    "llm_adapter_budget_sensitivity",
+    "llm_adapter_latency_sensitivity",
+    "llm_adapter_profile_policy_outcome",
+    "llm_adapter_profile_override_applied",
+    "llm_adapter_profile_model_alignment",
     "llm_provider",
     "llm_model_family",
     "llm_model_requested_id",
     "llm_model_selected_id",
     "llm_model_final_id",
+    "llm_execution_profile_requested",
+    "llm_execution_profile_used",
+    "llm_execution_profile_reason_code",
+    "llm_execution_profile_reason_short",
+    "llm_budget_sensitivity",
+    "llm_latency_sensitivity",
+    "llm_profile_policy_outcome",
+    "llm_profile_override_applied",
+    "llm_profile_model_alignment",
 )
 
 
@@ -1024,6 +1042,15 @@ def _llm_default_meta(
         "llm_decision_reason_short": llm_decision_reason_short,
         "llm_decision_reason_code": llm_decision_reason_code,
         "llm_runtime_override_reason": "n/a",
+        "llm_execution_profile_requested": "balanced",
+        "llm_execution_profile_used": "balanced",
+        "llm_execution_profile_reason_code": "profile_default_balanced",
+        "llm_execution_profile_reason_short": "Execution profile defaulted to balanced.",
+        "llm_budget_sensitivity": "not_available",
+        "llm_latency_sensitivity": "not_available",
+        "llm_profile_policy_outcome": "profile_default_applied",
+        "llm_profile_override_applied": False,
+        "llm_profile_model_alignment": "not_applicable",
         "llm_model_used": "not used",
         "llm_final_synthesis_model_id": "not used",
         "llm_preferred_model_id": "n/a",
@@ -1230,6 +1257,74 @@ def _normalize_fix_semantics(
     return intent, mapped_code, mapped_short
 
 
+def _normalize_execution_profile(value: Any, *, default: str = "balanced") -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"cheap", "balanced", "premium"}:
+        return normalized
+    return default
+
+
+def _normalize_sensitivity(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"low", "normal", "high"}:
+        return normalized
+    return "not_available"
+
+
+def _resolve_execution_profile_policy(
+    *,
+    cfg: RepoBrainConfig,
+    cmd: str,
+    llm_intent: str,
+    execution_mode: str,
+) -> dict[str, Any]:
+    requested = _normalize_execution_profile(getattr(cfg.llm, "execution_profile", "balanced"))
+    used = requested
+    reason_code = "profile_applied"
+    reason_short = "Execution profile applied from configured request."
+    outcome = "profile_applied"
+    override_applied = False
+
+    cmd_norm = str(cmd or "").strip().lower()
+    intent_norm = str(llm_intent or "").strip().lower()
+    mode_norm = str(execution_mode or "").strip().lower()
+    if mode_norm != "retrieval_plus_llm":
+        reason_code = "profile_passthrough_llm_not_used"
+        reason_short = "Execution profile recorded; LLM execution mode is not retrieval_plus_llm."
+        outcome = "passthrough_no_llm"
+    elif requested == "cheap" and (cmd_norm in {"review", "fix"} or intent_norm in {"review", "patch"}):
+        used = "balanced"
+        reason_code = "cheap_guardrail_review_fix"
+        reason_short = "Cheap profile requested; review/fix synthesis kept balanced profile for governed safety."
+        outcome = "guardrail_override_to_balanced"
+        override_applied = True
+
+    return {
+        "llm_execution_profile_requested": requested,
+        "llm_execution_profile_used": used,
+        "llm_execution_profile_reason_code": reason_code,
+        "llm_execution_profile_reason_short": reason_short,
+        "llm_budget_sensitivity": _normalize_sensitivity(getattr(cfg.llm, "budget_sensitivity", "not_available")),
+        "llm_latency_sensitivity": _normalize_sensitivity(getattr(cfg.llm, "latency_sensitivity", "not_available")),
+        "llm_profile_policy_outcome": outcome,
+        "llm_profile_override_applied": override_applied,
+        "llm_profile_model_alignment": "not_evaluated",
+    }
+
+
+def _profile_model_alignment(*, profile_used: str, model_id: str, llm_used: bool) -> str:
+    if not llm_used:
+        return "not_applicable"
+    profile = _normalize_execution_profile(profile_used, default="balanced")
+    model = str(model_id or "").strip().lower()
+    is_low_tier = "mini" in model
+    if profile == "cheap":
+        return "aligned_cost_preference" if is_low_tier else "bounded_high_tier_for_safety"
+    if profile == "premium":
+        return "aligned_quality_preference" if not is_low_tier else "downgraded_under_constraints"
+    return "balanced_low_tier_selected" if is_low_tier else "balanced_high_tier_selected"
+
+
 def _alternate_model_id(primary_model: str, *, model_high: str, model_low: str) -> str:
     primary = str(primary_model or "").strip()
     if primary.lower() == model_high.lower():
@@ -1369,6 +1464,23 @@ def _build_llm_usage_payload(llm_meta: dict[str, Any]) -> dict[str, Any]:
         "date_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "llm_used": bool(llm_meta.get("llm_used", False)),
         "execution_mode": str(llm_meta.get("execution_mode", "retrieval_only") or "retrieval_only"),
+        "execution_profile_requested": str(
+            llm_meta.get("llm_execution_profile_requested", "balanced") or "balanced"
+        ),
+        "execution_profile_used": str(
+            llm_meta.get("llm_execution_profile_used", "balanced") or "balanced"
+        ),
+        "execution_profile_reason_code": str(
+            llm_meta.get("llm_execution_profile_reason_code", "n/a") or "n/a"
+        ),
+        "execution_profile_reason_short": str(
+            llm_meta.get("llm_execution_profile_reason_short", "n/a") or "n/a"
+        ),
+        "budget_sensitivity": str(llm_meta.get("llm_budget_sensitivity", "not_available") or "not_available"),
+        "latency_sensitivity": str(llm_meta.get("llm_latency_sensitivity", "not_available") or "not_available"),
+        "profile_policy_outcome": str(llm_meta.get("llm_profile_policy_outcome", "n/a") or "n/a"),
+        "profile_override_applied": bool(llm_meta.get("llm_profile_override_applied", False)),
+        "profile_model_alignment": str(llm_meta.get("llm_profile_model_alignment", "not_evaluated") or "not_evaluated"),
         "answer_grounding_mode": str(
             llm_meta.get("answer_grounding_mode", "n/a") or "n/a"
         ),
@@ -1921,7 +2033,8 @@ def _maybe_embed_query(
         meta = _default_embeddings_meta("disabled")
         meta["embed_chunks_embedded"] = chunks_embedded_count
         return None, meta
-    token = str(_runtime_env_cfg().workflow.github_token or "").strip()
+    cfg = _runtime_env_cfg()
+    token = str(cfg.workflow.github_token or "").strip()
     if not token:
         token = os.getenv("GITHUB_TOKEN", "").strip()
     if not token:
@@ -2190,6 +2303,13 @@ def _maybe_generate_llm_text(
     normalized_llm_intent = semantic.llm_intent
     decision_reason_short = semantic.reason_short
     decision_reason_code = semantic.reason_code
+    cfg = _runtime_env_cfg()
+    profile_fields = _resolve_execution_profile_policy(
+        cfg=cfg,
+        cmd=cmd,
+        llm_intent=normalized_llm_intent,
+        execution_mode=normalized_execution_mode,
+    )
 
     if normalized_execution_mode != "retrieval_plus_llm":
         skip_reason = f"execution_mode={normalized_execution_mode}"
@@ -2203,6 +2323,8 @@ def _maybe_generate_llm_text(
             llm_decision_reason_code=decision_reason_code,
         )
         llm_meta["llm_decision_route"] = normalized_route
+        llm_meta.update(profile_fields)
+        llm_meta["llm_profile_model_alignment"] = "not_applicable"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, _attach_llm_policy_fields(
@@ -2220,6 +2342,8 @@ def _maybe_generate_llm_text(
             llm_decision_reason_code=decision_reason_code,
         )
         llm_meta["llm_decision_route"] = normalized_route or "n/a"
+        llm_meta.update(profile_fields)
+        llm_meta["llm_profile_model_alignment"] = "not_applicable"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, _attach_llm_policy_fields(
@@ -2238,6 +2362,8 @@ def _maybe_generate_llm_text(
     llm_meta["llm_decision_route"] = normalized_route or "n/a"
     llm_allowed_by_policy, llm_policy_reason = _llm_runtime_policy(github_context)
     if not llm_allowed_by_policy:
+        llm_meta.update(profile_fields)
+        llm_meta["llm_profile_model_alignment"] = "not_applicable"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         llm_meta["llm_skip_reason"] = str(llm_policy_reason or "disabled")
@@ -2260,6 +2386,8 @@ def _maybe_generate_llm_text(
             llm_decision_reason_code=decision_reason_code,
         )
         llm_meta["llm_decision_route"] = normalized_route or "n/a"
+        llm_meta.update(profile_fields)
+        llm_meta["llm_profile_model_alignment"] = "not_applicable"
         _apply_remaining_fallback(llm_meta)
         llm_meta["llm_remaining_is_estimate"] = True
         return None, _attach_llm_policy_fields(
@@ -2268,7 +2396,6 @@ def _maybe_generate_llm_text(
             allowed=False,
         )
 
-    cfg = _runtime_env_cfg()
     effective_intent = normalized_llm_intent if normalized_llm_intent != "none" else intent
     is_patch_request = _is_fix_intent(cmd, effective_intent)
     if is_patch_request:
@@ -2309,6 +2436,7 @@ def _maybe_generate_llm_text(
         execution_mode=normalized_execution_mode,
         llm_intent=normalized_llm_intent,
         synthesis_required=synthesis_required,
+        execution_profile=str(profile_fields.get("llm_execution_profile_used", "balanced")),
     )
     selection_reason = model_selection_reason(
         score=complexity_score,
@@ -2318,6 +2446,7 @@ def _maybe_generate_llm_text(
         execution_mode=normalized_execution_mode,
         llm_intent=normalized_llm_intent,
         synthesis_required=synthesis_required,
+        execution_profile=str(profile_fields.get("llm_execution_profile_used", "balanced")),
     )
     if preferred_model_id:
         model_id = preferred_model_id.strip() or model_id
@@ -2459,6 +2588,8 @@ def _maybe_generate_llm_text(
                 )
             ]
             llm_meta["llm_model_counts"] = _build_model_counts(llm_meta["llm_calls"])
+            llm_meta.update(profile_fields)
+            llm_meta["llm_profile_model_alignment"] = "not_applicable"
             return None, _attach_llm_policy_fields(
                 llm_meta,
                 github_context=github_context,
@@ -2658,6 +2789,8 @@ def _maybe_generate_llm_text(
             )
         ]
         llm_meta["llm_model_counts"] = _build_model_counts(llm_meta["llm_calls"])
+        llm_meta.update(profile_fields)
+        llm_meta["llm_profile_model_alignment"] = "not_applicable"
         return None, _attach_llm_policy_fields(
             llm_meta,
             github_context=github_context,
@@ -2728,6 +2861,12 @@ def _maybe_generate_llm_text(
         "llm_fallback_status": fallback_status,
         "llm_error_types": list(dict.fromkeys(error_types)),
     }
+    llm_meta.update(profile_fields)
+    llm_meta["llm_profile_model_alignment"] = _profile_model_alignment(
+        profile_used=str(llm_meta.get("llm_execution_profile_used", "balanced")),
+        model_id=str(response.model_id),
+        llm_used=True,
+    )
     if governor is not None:
         governor.observe_llm_signal(
             QuotaSignal(
@@ -3130,6 +3269,13 @@ def _run_batch_llm_review_fix(
     llm_intent_norm = semantic.llm_intent
     llm_reason_short = semantic.reason_short
     llm_reason_code = semantic.reason_code
+    profile_cfg = _runtime_env_cfg()
+    profile_fields = _resolve_execution_profile_policy(
+        cfg=profile_cfg,
+        cmd=cmd,
+        llm_intent=llm_intent_norm,
+        execution_mode=execution_mode_norm,
+    )
     if execution_mode_norm != "retrieval_plus_llm":
         skip_reason = f"execution_mode={execution_mode_norm}"
         if legacy_route_block_reason:
@@ -3143,6 +3289,8 @@ def _run_batch_llm_review_fix(
         )
         llm_meta["llm_decision_route"] = route_norm or "n/a"
         llm_meta["llm_request_mode"] = "patch" if _is_fix_intent(cmd, intent) else "normal"
+        llm_meta.update(profile_fields)
+        llm_meta["llm_profile_model_alignment"] = "not_applicable"
         return {
             **planner_defaults,
             **async_defaults,
@@ -3174,6 +3322,8 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_compacted"] = bool(is_patch_mode)
         llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
         llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
+        llm_meta.update(profile_fields)
+        llm_meta["llm_profile_model_alignment"] = "not_applicable"
         return {
             **planner_defaults,
             **async_defaults,
@@ -3255,6 +3405,7 @@ def _run_batch_llm_review_fix(
         execution_mode=execution_mode_norm,
         llm_intent=llm_intent_norm,
         synthesis_required=overall_synthesis_required,
+        execution_profile=str(profile_fields.get("llm_execution_profile_used", "balanced")),
     )
     overall_selection_reason = model_selection_reason(
         score=overall_score,
@@ -3264,6 +3415,7 @@ def _run_batch_llm_review_fix(
         execution_mode=execution_mode_norm,
         llm_intent=llm_intent_norm,
         synthesis_required=overall_synthesis_required,
+        execution_profile=str(profile_fields.get("llm_execution_profile_used", "balanced")),
     )
     overall_preferred_model = overall_model
     overall_downgrade_reason = "n/a"
@@ -3312,6 +3464,8 @@ def _run_batch_llm_review_fix(
             llm_meta["llm_compacted"] = bool(is_patch_mode)
             llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
             llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
+            llm_meta.update(profile_fields)
+            llm_meta["llm_profile_model_alignment"] = "not_applicable"
             return {
                 **planner_fields,
                 **async_defaults,
@@ -3395,6 +3549,8 @@ def _run_batch_llm_review_fix(
         llm_meta["llm_compacted"] = bool(is_patch_mode)
         llm_meta["llm_attempted_compaction"] = bool(is_patch_mode)
         llm_meta["llm_attempted_patch_batch"] = bool(is_patch_mode)
+        llm_meta.update(profile_fields)
+        llm_meta["llm_profile_model_alignment"] = "not_applicable"
         return {
             **planner_fields,
             **async_defaults,
@@ -3456,6 +3612,7 @@ def _run_batch_llm_review_fix(
             execution_mode=execution_mode_norm,
             llm_intent=llm_intent_norm,
             synthesis_required=(len(batch.paths) >= 2 or len(batch.diff_hunks) >= 2),
+            execution_profile=str(profile_fields.get("llm_execution_profile_used", "balanced")),
         )
         if batch.estimated_input_tokens < 900 and score_batch < 35:
             batch_model = model_low
@@ -3773,6 +3930,12 @@ def _run_batch_llm_review_fix(
         "llm_calls": calls,
         "llm_model_counts": model_counts,
     }
+    llm_meta.update(profile_fields)
+    llm_meta["llm_profile_model_alignment"] = _profile_model_alignment(
+        profile_used=str(llm_meta.get("llm_execution_profile_used", "balanced")),
+        model_id=str(final_synthesis_model if any_used else "not used"),
+        llm_used=bool(any_used),
+    )
     if llm_meta["llm_remaining_requests"] in {None, "", "n/a"}:
         _apply_remaining_fallback(llm_meta)
     return {

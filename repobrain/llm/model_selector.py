@@ -63,6 +63,7 @@ def choose_model(
     execution_mode: str = "",
     llm_intent: str = "",
     synthesis_required: bool = False,
+    execution_profile: str = "balanced",
 ) -> tuple[str, str]:
     """Choose model id and tier from complexity score."""
     task_norm = str(task_type or "").strip().lower()
@@ -70,15 +71,24 @@ def choose_model(
     route_norm = str(route or "").strip().upper()
     mode_norm = str(execution_mode or "").strip().lower()
     llm_intent_norm = str(llm_intent or "").strip().lower()
+    profile_norm = str(execution_profile or "balanced").strip().lower()
+    if profile_norm not in {"cheap", "balanced", "premium"}:
+        profile_norm = "balanced"
 
     if intent_norm == "patch" or llm_intent_norm == "patch":
         return model_high, "high"
     if task_norm in {"review", "fix"} or llm_intent_norm == "review":
         return model_high, "high"
+    if profile_norm == "premium" and mode_norm == "retrieval_plus_llm":
+        return model_high, "high"
+    bounded = max(0, min(100, int(score)))
+    if profile_norm == "cheap":
+        if mode_norm == "retrieval_plus_llm" and route_norm == "DEEP" and synthesis_required and bounded >= 70:
+            return model_high, "high"
+        return model_low, "low"
     if mode_norm == "retrieval_plus_llm" and route_norm == "DEEP" and synthesis_required:
         return model_high, "high"
 
-    bounded = max(0, min(100, int(score)))
     if bounded >= 35:
         return model_high, "high"
     return model_low, "low"
@@ -93,18 +103,28 @@ def model_selection_reason(
     execution_mode: str,
     llm_intent: str,
     synthesis_required: bool,
+    execution_profile: str = "balanced",
 ) -> str:
     task_norm = str(task_type or "").strip().lower()
     intent_norm = str(intent or "").strip().lower()
     route_norm = str(route or "").strip().upper()
     mode_norm = str(execution_mode or "").strip().lower()
     llm_intent_norm = str(llm_intent or "").strip().lower()
+    profile_norm = str(execution_profile or "balanced").strip().lower()
+    if profile_norm not in {"cheap", "balanced", "premium"}:
+        profile_norm = "balanced"
     bounded = max(0, min(100, int(score)))
 
     if intent_norm == "patch" or llm_intent_norm == "patch":
         return "complexity_policy: patch intent prefers openai/gpt-4.1"
     if task_norm in {"review", "fix"} or llm_intent_norm == "review":
         return "complexity_policy: review/fix path prefers openai/gpt-4.1"
+    if profile_norm == "premium" and mode_norm == "retrieval_plus_llm":
+        return "execution_profile_policy: premium profile prefers high-tier model"
+    if profile_norm == "cheap":
+        if mode_norm == "retrieval_plus_llm" and route_norm == "DEEP" and synthesis_required and bounded >= 70:
+            return "execution_profile_policy: cheap profile kept high-tier for deep synthesis safety"
+        return "execution_profile_policy: cheap profile prefers low-tier model"
     if mode_norm == "retrieval_plus_llm" and route_norm == "DEEP" and synthesis_required:
         return "complexity_policy: DEEP multi-source synthesis prefers openai/gpt-4.1"
     if bounded >= 35:
