@@ -49,10 +49,15 @@ def test_workflow_generates_and_uploads_install_readiness_artifact() -> None:
 
     assert "Generate RepoBrain install readiness artifacts" in workflow
     assert "RB_GH_APP_ID: ${{ secrets.RB_GH_APP_ID || vars.RB_GH_APP_ID }}" in workflow
+    assert "RB_GH_APP_ID_SOURCE:" in workflow
     assert (
         "RB_GH_APP_INSTALLATION_ID: ${{ secrets.RB_GH_APP_INSTALLATION_ID || vars.RB_GH_APP_INSTALLATION_ID }}"
         in workflow
     )
+    assert "RB_GH_APP_INSTALLATION_ID_SOURCE:" in workflow
+    assert "RB_READINESS_GENERATION_EVENT_NAME: ${{ github.event_name }}" in workflow
+    assert "RB_READINESS_GENERATION_WORKFLOW_REF: ${{ github.workflow_ref }}" in workflow
+    assert "RB_READINESS_GENERATION_WORKFLOW_SHA: ${{ github.workflow_sha }}" in workflow
     assert "python scripts/check_install_readiness.py \\" in workflow
     assert "--workflow .github/workflows/repobrain.yml \\" in workflow
     assert "--output-json artifacts/onboarding/repobrain_install_readiness.json \\" in workflow

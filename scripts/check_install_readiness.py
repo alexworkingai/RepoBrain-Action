@@ -40,6 +40,15 @@ _FAIL_CATEGORY_PRIORITY = (
     "missing_config",
 )
 
+_KNOWN_INPUT_SOURCES = {
+    "secret",
+    "vars",
+    "env",
+    "secret_or_vars",
+    "missing",
+    "unknown",
+}
+
 
 def _norm_text(value: Any) -> str:
     return str(value or "").strip()
@@ -89,6 +98,33 @@ def _make_check(
         "message": message,
         "next_step": next_step,
     }
+
+
+def _resolve_input_source(*, value: str, source_hint: str) -> str:
+    hint = _norm_text(source_hint).lower()
+    if hint in _KNOWN_INPUT_SOURCES:
+        if hint == "missing" and value:
+            return "env"
+        return hint
+    if value:
+        return "env"
+    return "missing"
+
+
+def _derive_ref_kind(*, ref: str, workflow_ref: str) -> str:
+    ref_norm = _norm_text(ref)
+    workflow_ref_norm = _norm_text(workflow_ref)
+    if ref_norm.startswith("refs/heads/"):
+        return "branch_ref"
+    if ref_norm.startswith("refs/pull/"):
+        return "pull_ref"
+    if workflow_ref_norm and "@refs/heads/" in workflow_ref_norm:
+        return "workflow_branch_ref"
+    if workflow_ref_norm and "@refs/tags/" in workflow_ref_norm:
+        return "workflow_tag_ref"
+    if workflow_ref_norm:
+        return "workflow_other_ref"
+    return "unknown"
 
 
 def _reason_for_status(
@@ -164,6 +200,14 @@ def evaluate_install_readiness(
 
     app_id = _norm_text(source_env.get("RB_GH_APP_ID", ""))
     installation_id = _norm_text(source_env.get("RB_GH_APP_INSTALLATION_ID", ""))
+    app_id_source = _resolve_input_source(
+        value=app_id,
+        source_hint=_norm_text(source_env.get("RB_GH_APP_ID_SOURCE", "")),
+    )
+    installation_id_source = _resolve_input_source(
+        value=installation_id,
+        source_hint=_norm_text(source_env.get("RB_GH_APP_INSTALLATION_ID_SOURCE", "")),
+    )
     private_key_inline = _norm_text(source_env.get("RB_GH_APP_PRIVATE_KEY", ""))
     private_key_path = _norm_text(source_env.get("RB_GH_APP_PRIVATE_KEY_PATH", ""))
     webhook_secret = _norm_text(source_env.get("RB_GH_APP_WEBHOOK_SECRET", ""))
@@ -537,6 +581,36 @@ def evaluate_install_readiness(
         "fail": sum(1 for check in checks if check["status"] == "FAIL"),
         "warn": sum(1 for check in checks if check["status"] == "WARN"),
     }
+    generation_event = _norm_text(
+        source_env.get(
+            "RB_READINESS_GENERATION_EVENT_NAME",
+            source_env.get("GITHUB_EVENT_NAME", "local/manual"),
+        )
+    ) or "local/manual"
+    generation_workflow_path = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_WORKFLOW_PATH", workflow_path.as_posix())
+    ) or workflow_path.as_posix()
+    generation_ref = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_REF", source_env.get("GITHUB_REF", "n/a"))
+    ) or "n/a"
+    generation_sha = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_SHA", source_env.get("GITHUB_SHA", "n/a"))
+    ) or "n/a"
+    generation_workflow_ref = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_WORKFLOW_REF", source_env.get("GITHUB_WORKFLOW_REF", "n/a"))
+    ) or "n/a"
+    generation_workflow_sha = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_WORKFLOW_SHA", source_env.get("GITHUB_WORKFLOW_SHA", "n/a"))
+    ) or "n/a"
+    generation_run_id = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_RUN_ID", source_env.get("GITHUB_RUN_ID", "n/a"))
+    ) or "n/a"
+    generation_run_attempt = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_RUN_ATTEMPT", source_env.get("GITHUB_RUN_ATTEMPT", "n/a"))
+    ) or "n/a"
+    generation_job_name = _norm_text(source_env.get("RB_READINESS_GENERATION_JOB_NAME", "n/a")) or "n/a"
+    generation_ref_kind = _derive_ref_kind(ref=generation_ref, workflow_ref=generation_workflow_ref)
+
     payload: dict[str, Any] = {
         "readiness_contract_version": _INSTALL_READINESS_CONTRACT_VERSION,
         "generated_at_utc": _utc_now_iso(),
@@ -563,11 +637,25 @@ def evaluate_install_readiness(
             "detected_permissions": workflow_permissions,
             "missing_permissions": sorted(missing_permissions),
         },
+        "readiness_provenance": {
+            "generation_event_name": generation_event,
+            "generation_workflow_path": generation_workflow_path,
+            "generation_ref": generation_ref,
+            "generation_sha": generation_sha,
+            "generation_ref_kind": generation_ref_kind,
+            "generation_workflow_ref": generation_workflow_ref,
+            "generation_workflow_sha": generation_workflow_sha,
+            "generation_run_id": generation_run_id,
+            "generation_run_attempt": generation_run_attempt,
+            "generation_job_name": generation_job_name,
+        },
         "inputs_seen": {
-            "event_name": event_name or "local/manual",
+            "event_name": generation_event,
             "current_repository": current_repo or "n/a",
             "app_id_present": bool(app_id),
+            "app_id_source": app_id_source,
             "installation_id_present": bool(installation_id),
+            "installation_id_source": installation_id_source,
             "private_key_source": private_key_source,
             "private_key_path_present": bool(private_key_path),
             "private_key_path_exists": private_key_path_exists,
@@ -600,6 +688,9 @@ def render_install_readiness_markdown(payload: dict[str, Any]) -> str:
         f"- Status summary: {payload.get('status_reason_short', 'n/a')}",
         f"- Ready for Ask/Review/Fix: `{'yes' if bool(payload.get('ready_for_ask_review_fix', False)) else 'no'}`",
         f"- Repository selection mode: `{payload.get('repository_selection_mode', 'selected')}`",
+        f"- Generation event: `{payload.get('readiness_provenance', {}).get('generation_event_name', 'local/manual')}`",
+        f"- Generation ref: `{payload.get('readiness_provenance', {}).get('generation_ref', 'n/a')}`",
+        f"- App ID source: `{payload.get('inputs_seen', {}).get('app_id_source', 'unknown')}`",
         "",
         "## Check Summary",
         f"- PASS: `{int(summary.get('pass', 0) or 0)}`",

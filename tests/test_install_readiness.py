@@ -60,6 +60,15 @@ def test_install_readiness_reports_ready_for_app_first_selected_rollout(tmp_path
     assert payload["ready_for_ask_review_fix"] is True
     assert payload["repository_selection_mode"] == "selected"
     assert payload["inputs_seen"]["selected_repositories_count"] == 2
+    assert payload["inputs_seen"]["app_id_source"] == "env"
+    assert payload["inputs_seen"]["installation_id_source"] == "env"
+    assert payload["readiness_provenance"]["generation_ref_kind"] in {
+        "unknown",
+        "branch_ref",
+        "pull_ref",
+        "workflow_branch_ref",
+        "workflow_other_ref",
+    }
 
 
 def test_install_readiness_reports_missing_config_when_app_inputs_absent(tmp_path: Path) -> None:
@@ -89,6 +98,8 @@ def test_install_readiness_reports_missing_config_when_app_inputs_absent(tmp_pat
     assert "selected_repositories_missing" in check_codes
     assert payload["inputs_seen"]["app_id_present"] is False
     assert payload["inputs_seen"]["installation_id_present"] is False
+    assert payload["inputs_seen"]["app_id_source"] == "missing"
+    assert payload["inputs_seen"]["installation_id_source"] == "missing"
 
 
 def test_install_readiness_reports_missing_permission_when_workflow_permissions_are_weak(
@@ -200,6 +211,44 @@ def test_install_readiness_reports_invalid_app_and_installation_ids(tmp_path: Pa
     assert payload["overall_status"] == "MISSING_CONFIG"
     assert payload["inputs_seen"]["app_id_present"] is True
     assert payload["inputs_seen"]["installation_id_present"] is True
+    assert payload["inputs_seen"]["app_id_source"] == "env"
+    assert payload["inputs_seen"]["installation_id_source"] == "env"
+
+
+def test_install_readiness_tracks_source_hints_and_generation_provenance(tmp_path: Path) -> None:
+    module = _load_module()
+    workflow = tmp_path / "repobrain.yml"
+    _write_workflow(workflow)
+    payload = module.evaluate_install_readiness(
+        workflow_path=workflow,
+        env={
+            "GITHUB_EVENT_NAME": "issue_comment",
+            "GITHUB_REF": "refs/heads/main",
+            "GITHUB_SHA": "abc123",
+            "RB_GH_APP_ID": "abc",
+            "RB_GH_APP_ID_SOURCE": "vars",
+            "RB_GH_APP_INSTALLATION_ID": "789",
+            "RB_GH_APP_INSTALLATION_ID_SOURCE": "secret",
+            "RB_GH_APP_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----...",
+            "RB_GH_APP_REPOSITORY_SELECTION": "all",
+            "RB_READINESS_GENERATION_WORKFLOW_REF": "owner/repo/.github/workflows/repobrain.yml@refs/heads/main",
+            "RB_READINESS_GENERATION_WORKFLOW_SHA": "def456",
+            "RB_READINESS_GENERATION_RUN_ID": "1001",
+            "RB_READINESS_GENERATION_RUN_ATTEMPT": "3",
+            "RB_READINESS_GENERATION_JOB_NAME": "repobrain",
+        },
+    )
+
+    assert payload["status_reason_code"] == "github_app_id_invalid"
+    assert payload["inputs_seen"]["app_id_present"] is True
+    assert payload["inputs_seen"]["app_id_source"] == "vars"
+    assert payload["inputs_seen"]["installation_id_source"] == "secret"
+    assert payload["readiness_provenance"]["generation_event_name"] == "issue_comment"
+    assert payload["readiness_provenance"]["generation_ref"] == "refs/heads/main"
+    assert payload["readiness_provenance"]["generation_sha"] == "abc123"
+    assert payload["readiness_provenance"]["generation_workflow_sha"] == "def456"
+    assert payload["readiness_provenance"]["generation_run_id"] == "1001"
+    assert payload["readiness_provenance"]["generation_run_attempt"] == "3"
 
 
 def test_install_readiness_main_writes_json_and_markdown(tmp_path: Path, monkeypatch) -> None:
