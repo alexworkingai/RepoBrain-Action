@@ -62,6 +62,15 @@ class ModelAdapterMetadata:
     downgrade_reason: str
     provider_http_status: int | None
     provider_error_type: str
+    execution_profile_requested: str
+    execution_profile_used: str
+    execution_profile_reason_code: str
+    execution_profile_reason_short: str
+    budget_sensitivity: str
+    latency_sensitivity: str
+    profile_policy_outcome: str
+    profile_override_applied: bool
+    profile_model_alignment: str
 
     def as_audit_fields(self) -> dict[str, Any]:
         return {
@@ -82,12 +91,30 @@ class ModelAdapterMetadata:
             "llm_adapter_downgrade_reason": self.downgrade_reason,
             "llm_adapter_provider_http_status": self.provider_http_status,
             "llm_adapter_provider_error_type": self.provider_error_type,
+            "llm_adapter_execution_profile_requested": self.execution_profile_requested,
+            "llm_adapter_execution_profile_used": self.execution_profile_used,
+            "llm_adapter_execution_profile_reason_code": self.execution_profile_reason_code,
+            "llm_adapter_execution_profile_reason_short": self.execution_profile_reason_short,
+            "llm_adapter_budget_sensitivity": self.budget_sensitivity,
+            "llm_adapter_latency_sensitivity": self.latency_sensitivity,
+            "llm_adapter_profile_policy_outcome": self.profile_policy_outcome,
+            "llm_adapter_profile_override_applied": self.profile_override_applied,
+            "llm_adapter_profile_model_alignment": self.profile_model_alignment,
             # Canonical aliases for non-adapter consumers.
             "llm_provider": self.provider,
             "llm_model_family": self.model_family,
             "llm_model_requested_id": self.requested_model_id,
             "llm_model_selected_id": self.selected_model_id,
             "llm_model_final_id": self.final_model_id,
+            "llm_execution_profile_requested": self.execution_profile_requested,
+            "llm_execution_profile_used": self.execution_profile_used,
+            "llm_execution_profile_reason_code": self.execution_profile_reason_code,
+            "llm_execution_profile_reason_short": self.execution_profile_reason_short,
+            "llm_budget_sensitivity": self.budget_sensitivity,
+            "llm_latency_sensitivity": self.latency_sensitivity,
+            "llm_profile_policy_outcome": self.profile_policy_outcome,
+            "llm_profile_override_applied": self.profile_override_applied,
+            "llm_profile_model_alignment": self.profile_model_alignment,
         }
 
 
@@ -98,6 +125,20 @@ def _provider_class(provider: str) -> str:
     if lowered in {"openai", "azure_openai"}:
         return "openai_compatible"
     return "unknown"
+
+
+def _execution_profile(value: Any, *, default: str = "balanced") -> str:
+    normalized = _as_str(value, default).lower()
+    if normalized in {"cheap", "balanced", "premium"}:
+        return normalized
+    return default
+
+
+def _sensitivity(value: Any) -> str:
+    normalized = _as_str(value, "not_available").lower()
+    if normalized in {"low", "normal", "high", "not_available"}:
+        return normalized
+    return "not_available"
 
 
 def build_model_adapter_metadata(
@@ -111,6 +152,50 @@ def build_model_adapter_metadata(
         provider = _as_str(provider_hint or "", default="")
     if not provider:
         provider = _as_str(os.getenv("RB_LLM_PROVIDER", ""), default="unknown")
+    profile_requested = _execution_profile(
+        meta.get("llm_execution_profile_requested", os.getenv("RB_LLM_EXECUTION_PROFILE", "balanced")),
+        default="balanced",
+    )
+    profile_used = _execution_profile(
+        meta.get("llm_execution_profile_used", profile_requested),
+        default=profile_requested,
+    )
+    profile_reason_code = _as_str(
+        meta.get(
+            "llm_execution_profile_reason_code",
+            "profile_applied" if profile_requested == profile_used else "profile_overridden",
+        ),
+        "n/a",
+    )
+    profile_reason_short = _as_str(
+        meta.get(
+            "llm_execution_profile_reason_short",
+            "Execution profile applied from configured request."
+            if profile_requested == profile_used
+            else "Execution profile adjusted by runtime guardrail.",
+        ),
+        "n/a",
+    )
+    budget_sensitivity = _sensitivity(
+        meta.get("llm_budget_sensitivity", os.getenv("RB_LLM_BUDGET_SENSITIVITY", "not_available"))
+    )
+    latency_sensitivity = _sensitivity(
+        meta.get("llm_latency_sensitivity", os.getenv("RB_LLM_LATENCY_SENSITIVITY", "not_available"))
+    )
+    profile_policy_outcome = _as_str(
+        meta.get(
+            "llm_profile_policy_outcome",
+            "profile_applied" if profile_requested == profile_used else "guardrail_override",
+        ),
+        "n/a",
+    )
+    profile_override_applied = _as_bool(
+        meta.get("llm_profile_override_applied", profile_requested != profile_used)
+    )
+    profile_model_alignment = _as_str(
+        meta.get("llm_profile_model_alignment", "not_evaluated"),
+        "not_evaluated",
+    )
 
     requested_model_id = _as_str(
         meta.get("llm_primary_model_id", meta.get("llm_preferred_model_id", "not used")),
@@ -172,4 +257,13 @@ def build_model_adapter_metadata(
         downgrade_reason=downgrade_reason,
         provider_http_status=_as_int_or_none(meta.get("llm_provider_http_status")),
         provider_error_type=_as_str(meta.get("llm_provider_error_type", "n/a")),
+        execution_profile_requested=profile_requested,
+        execution_profile_used=profile_used,
+        execution_profile_reason_code=profile_reason_code,
+        execution_profile_reason_short=profile_reason_short,
+        budget_sensitivity=budget_sensitivity,
+        latency_sensitivity=latency_sensitivity,
+        profile_policy_outcome=profile_policy_outcome,
+        profile_override_applied=profile_override_applied,
+        profile_model_alignment=profile_model_alignment,
     )

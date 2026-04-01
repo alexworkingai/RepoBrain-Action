@@ -21,6 +21,15 @@ def _sample_audit() -> dict[str, object]:
         "llm_intent": "review",
         "llm_decision_reason_code": "REVIEW_SYNTHESIS_REQUIRED",
         "llm_decision_reason_short": "LLM used: review synthesis required.",
+        "llm_execution_profile_requested": "balanced",
+        "llm_execution_profile_used": "balanced",
+        "llm_execution_profile_reason_code": "profile_applied",
+        "llm_execution_profile_reason_short": "Execution profile applied from configured request.",
+        "llm_budget_sensitivity": "normal",
+        "llm_latency_sensitivity": "low",
+        "llm_profile_policy_outcome": "profile_applied",
+        "llm_profile_override_applied": False,
+        "llm_profile_model_alignment": "balanced_high_tier_selected",
         "tkya_backend": "v5",
         "tky_engine": "topocore_v5",
         "selected": 5,
@@ -132,6 +141,8 @@ def test_write_tkya_evidence_pack_artifacts_internal_and_public_contract(tmp_pat
     assert internal["artifact_kind"] == "internal"
     assert public["artifact_kind"] == "public_safe"
     assert internal["execution_summary"]["route_final"] == "REVIEW"
+    assert internal["execution_summary"]["execution_profile_used"] == "balanced"
+    assert internal["execution_summary"]["execution_profile_reason_code"] == "profile_applied"
     assert internal["tkya_signals"]["topology_mode"] == "analytics_graph"
     assert internal["tkya_signals"]["morse_signals"] == ["workflow_risky_pattern", "conflict_markers"]
     assert internal["tkya_signals"]["morse_todo_count"] == 2
@@ -154,6 +165,9 @@ def test_write_tkya_evidence_pack_artifacts_internal_and_public_contract(tmp_pat
     assert public["model_summary"]["llm_model_final_id"] == "openai/gpt-4.1"
     assert public["model_summary"]["llm_model_family"] == "gpt-4.1"
     assert public["model_summary"]["llm_model_downgrade_occurred"] is True
+    assert public["model_summary"]["llm_execution_profile_used"] == "balanced"
+    assert public["model_summary"]["llm_profile_policy_outcome"] == "profile_applied"
+    assert public["model_summary"]["llm_profile_override_applied"] is False
     assert public["provenance_summary"]["runtime_provenance_confidence"] == "high"
     assert public["repository_scale"]["scale_truth_scope"] == "workspace_checkout_snapshot"
 

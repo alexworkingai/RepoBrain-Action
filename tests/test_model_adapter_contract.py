@@ -36,6 +36,10 @@ def test_model_adapter_metadata_tracks_requested_selected_final_and_family() -> 
     assert fields["llm_adapter_model_family"] == "gpt-4.1"
     assert fields["llm_adapter_downgrade_occurred"] is True
     assert fields["llm_adapter_downgrade_reason"] == "quota_pressure"
+    assert fields["llm_adapter_execution_profile_requested"] == "balanced"
+    assert fields["llm_adapter_execution_profile_used"] == "balanced"
+    assert fields["llm_adapter_execution_profile_reason_code"] == "profile_applied"
+    assert fields["llm_adapter_profile_override_applied"] is False
 
 
 def test_model_adapter_metadata_marks_not_used_path() -> None:
@@ -70,3 +74,34 @@ def test_model_adapter_metadata_uses_provider_hint_when_meta_provider_missing() 
     fields = meta.as_audit_fields()
     assert fields["llm_adapter_provider"] == "github_models"
     assert fields["llm_provider"] == "github_models"
+
+
+def test_model_adapter_metadata_tracks_execution_profile_contract_fields() -> None:
+    meta = build_model_adapter_metadata(
+        {
+            "llm_used": True,
+            "llm_provider": "github_models",
+            "llm_execution_profile_requested": "cheap",
+            "llm_execution_profile_used": "balanced",
+            "llm_execution_profile_reason_code": "cheap_guardrail_review_fix",
+            "llm_execution_profile_reason_short": "Cheap profile requested; review/fix synthesis kept balanced profile for governed safety.",
+            "llm_budget_sensitivity": "high",
+            "llm_latency_sensitivity": "low",
+            "llm_profile_policy_outcome": "guardrail_override_to_balanced",
+            "llm_profile_override_applied": True,
+            "llm_profile_model_alignment": "balanced_high_tier_selected",
+            "llm_primary_model_id": "openai/gpt-4.1",
+            "llm_effective_model_id": "openai/gpt-4.1",
+            "llm_final_synthesis_model_id": "openai/gpt-4.1",
+        }
+    )
+    fields = meta.as_audit_fields()
+    assert fields["llm_adapter_execution_profile_requested"] == "cheap"
+    assert fields["llm_adapter_execution_profile_used"] == "balanced"
+    assert fields["llm_adapter_execution_profile_reason_code"] == "cheap_guardrail_review_fix"
+    assert fields["llm_adapter_budget_sensitivity"] == "high"
+    assert fields["llm_adapter_latency_sensitivity"] == "low"
+    assert fields["llm_adapter_profile_policy_outcome"] == "guardrail_override_to_balanced"
+    assert fields["llm_adapter_profile_override_applied"] is True
+    assert fields["llm_adapter_profile_model_alignment"] == "balanced_high_tier_selected"
+    assert fields["llm_execution_profile_used"] == "balanced"

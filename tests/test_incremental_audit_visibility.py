@@ -115,6 +115,15 @@ def test_audit_base_contains_incremental_observability_fields() -> None:
     assert "runtime_provenance_sha_match" in audit
     assert "runtime_provenance_pr_state" in audit
     assert "runtime_provenance_same_repo_pr" in audit
+    assert "llm_execution_profile_requested" in audit
+    assert "llm_execution_profile_used" in audit
+    assert "llm_execution_profile_reason_code" in audit
+    assert "llm_execution_profile_reason_short" in audit
+    assert "llm_budget_sensitivity" in audit
+    assert "llm_latency_sensitivity" in audit
+    assert "llm_profile_policy_outcome" in audit
+    assert "llm_profile_override_applied" in audit
+    assert "llm_profile_model_alignment" in audit
 
 
 def test_finalize_audit_preserves_incremental_observability_values() -> None:
@@ -456,6 +465,10 @@ def test_review_and_fix_runtime_audit_include_budget_fields() -> None:
         assert "runtime_provenance_runtime_sha" in audit
         assert "runtime_provenance_pr_head_sha" in audit
         assert "runtime_provenance_sha_match" in audit
+        assert "llm_execution_profile_requested" in audit
+        assert "llm_execution_profile_used" in audit
+        assert "llm_execution_profile_reason_code" in audit
+        assert "llm_profile_policy_outcome" in audit
 
 
 def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path, monkeypatch) -> None:
@@ -514,6 +527,8 @@ def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path, monkey
     assert second_audit["llm_adapter_provider"] == "github_models"
     assert second_audit["llm_adapter_provider_class"] == "github_models_chat_completions"
     assert second_audit["llm_provider"] == "github_models"
+    assert second_audit["llm_execution_profile_requested"] in {"cheap", "balanced", "premium"}
+    assert second_audit["llm_execution_profile_used"] in {"cheap", "balanced", "premium"}
     assert second_audit["runtime_provenance_status"] in {"aligned", "governed_divergent"}
     assert "runtime_provenance_reason_code" in second_audit
     _set_runtime_env_cfg(None)  # noqa: SLF001

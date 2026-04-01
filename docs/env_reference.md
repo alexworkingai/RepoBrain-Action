@@ -37,6 +37,7 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_LLM_BATCH_MAX_CALLS_PER_RUN` | int | `6` | 1..100 | Batch LLM call cap per run. |
 | `RB_LLM_BATCH_REDUCE_ENABLE` | bool | `1` | - | Enable reduce step in batch mode. |
 | `RB_LLM_BATCH_REDUCE_MODEL` | str | `` | - | Optional override model for reduce step. |
+| `RB_LLM_BUDGET_SENSITIVITY` | enum | `not_available` | low, normal, high, not_available | Optional budget sensitivity hint for control-plane audit truth. |
 | `RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_ASK` | int | `8` | 0..1000 | Minimum remaining requests before allowing ask downgrade from preferred model. |
 | `RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_FIX` | int | `5` | 0..1000 | Minimum remaining requests before allowing fix downgrade from preferred model. |
 | `RB_LLM_DOWNGRADE_MIN_REMAINING_REQUESTS_REVIEW` | int | `4` | 0..1000 | Minimum remaining requests before allowing review downgrade from preferred model. |
@@ -44,7 +45,9 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_LLM_ENABLE_ISSUE_COMMENT` | bool | `1` | - | Allow LLM for issue_comment event path. |
 | `RB_LLM_ENABLE_ISSUE_ONLY` | bool | `0` | - | Allow LLM for issue_comment on non-PR issues. |
 | `RB_LLM_ENABLE_PR_COMMENTS` | bool | `1` | - | Allow LLM for issue_comment on PR discussions. |
+| `RB_LLM_EXECUTION_PROFILE` | enum | `balanced` | cheap, balanced, premium | Execution profile control-plane mode (`cheap`, `balanced`, `premium`). |
 | `RB_LLM_FORCE_STRONG_MODEL_FOR_COMPLEX_ASK` | bool | `1` | - | Retain preferred strong model for complex ask/explain when quota remains comfortable. |
+| `RB_LLM_LATENCY_SENSITIVITY` | enum | `not_available` | low, normal, high, not_available | Optional latency sensitivity hint for control-plane audit truth. |
 | `RB_LLM_MAX_FILES_REVIEW_CONTEXT` | int | `40` | 1..500 | Maximum changed files included in final review synthesis context. |
 | `RB_LLM_MAX_FINDINGS_CONTEXT` | int | `24` | 1..200 | Maximum condensed findings/notes included in final review synthesis context. |
 | `RB_LLM_MAX_HUNKS_REVIEW_CONTEXT` | int | `24` | 1..500 | Maximum diff hunks included in final review synthesis context. |

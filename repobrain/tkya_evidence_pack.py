@@ -158,6 +158,20 @@ def _execution_summary(audit: dict[str, Any]) -> dict[str, Any]:
         "task_type": _as_str(audit.get("task_type", "n/a")),
         "route_final": _as_str(audit.get("route_final", "n/a")),
         "execution_mode": _as_str(audit.get("execution_mode", "n/a")),
+        "execution_profile_requested": _as_str(
+            audit.get("llm_execution_profile_requested", "balanced")
+        ),
+        "execution_profile_used": _as_str(
+            audit.get("llm_execution_profile_used", "balanced")
+        ),
+        "execution_profile_reason_code": _as_str(
+            audit.get("llm_execution_profile_reason_code", "n/a")
+        ),
+        "execution_profile_reason_short": _as_str(
+            audit.get("llm_execution_profile_reason_short", "n/a")
+        ),
+        "budget_sensitivity": _as_str(audit.get("llm_budget_sensitivity", "not_available")),
+        "latency_sensitivity": _as_str(audit.get("llm_latency_sensitivity", "not_available")),
         "llm_intent": _as_str(audit.get("llm_intent", "n/a")),
         "llm_decision_reason_code": _as_str(audit.get("llm_decision_reason_code", "n/a")),
         "llm_decision_reason_short": _as_str(audit.get("llm_decision_reason_short", "n/a")),
@@ -285,7 +299,10 @@ def _provenance_summary(audit: dict[str, Any]) -> dict[str, Any]:
 def _model_summary(audit: dict[str, Any]) -> dict[str, Any]:
     adapter = build_model_adapter_metadata(
         audit,
-        provider_hint=_as_str(audit.get("llm_provider", ""), default=""),
+        provider_hint=_as_str(
+            audit.get("llm_adapter_provider", audit.get("llm_provider", "")),
+            default="",
+        ),
     )
     return {
         "adapter_contract_version": MODEL_ADAPTER_CONTRACT_VERSION,
@@ -303,6 +320,15 @@ def _model_summary(audit: dict[str, Any]) -> dict[str, Any]:
         "llm_model_family": adapter.model_family,
         "llm_model_downgrade_occurred": bool(adapter.downgrade_occurred),
         "llm_model_downgrade_reason": adapter.downgrade_reason,
+        "llm_execution_profile_requested": adapter.execution_profile_requested,
+        "llm_execution_profile_used": adapter.execution_profile_used,
+        "llm_execution_profile_reason_code": adapter.execution_profile_reason_code,
+        "llm_execution_profile_reason_short": adapter.execution_profile_reason_short,
+        "llm_budget_sensitivity": adapter.budget_sensitivity,
+        "llm_latency_sensitivity": adapter.latency_sensitivity,
+        "llm_profile_policy_outcome": adapter.profile_policy_outcome,
+        "llm_profile_override_applied": bool(adapter.profile_override_applied),
+        "llm_profile_model_alignment": adapter.profile_model_alignment,
         "llm_provider_http_status": adapter.provider_http_status,
         "llm_provider_error_type": adapter.provider_error_type,
         "llm_model_used": _as_str(audit.get("llm_model_used", "not_used")),
@@ -379,6 +405,8 @@ def _render_markdown_summary(public_payload: dict[str, Any]) -> str:
         "## Decision",
         f"- Route: `{_as_str(execution.get('route_final', 'n/a'))}`",
         f"- Execution mode: `{_as_str(execution.get('execution_mode', 'n/a'))}`",
+        f"- Execution profile: `{_as_str(execution.get('execution_profile_used', 'balanced'))}` (requested: `{_as_str(execution.get('execution_profile_requested', 'balanced'))}`)",
+        f"- Profile policy: `{_as_str(execution.get('execution_profile_reason_code', 'n/a'))}`",
         f"- LLM intent: `{_as_str(execution.get('llm_intent', 'n/a'))}`",
         f"- Topology mode: `{_as_str(tkya.get('topology_mode', 'not_available'))}`",
         f"- Topology complexity: `{_as_str(tkya.get('topology_complexity', 'not_available'))}`",
