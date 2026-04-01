@@ -102,6 +102,8 @@ jobs:
       RB_LLM_BATCH_ENABLE: "0"
       RB_EMBED_ENABLED: "0"
       RB_CHECK_RUN_PUBLISH_MODE: "deferred"
+      RB_GH_APP_ID: ${{ vars.RB_GH_APP_ID }}
+      RB_GH_APP_REPOSITORY_SELECTION: ${{ vars.RB_GH_APP_REPOSITORY_SELECTION }}
     steps:
       - uses: actions/github-script@v7
         id: ack
