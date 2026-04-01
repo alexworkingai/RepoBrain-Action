@@ -17,6 +17,9 @@ def test_github_app_setup_doc_covers_selected_repo_and_readiness_statuses() -> N
     assert "MISSING_PERMISSION" in text
     assert "MISSING_CONFIG" in text
     assert "UNSUPPORTED_SETUP" in text
+    assert "status_reason_code" in text
+    assert "status_reason_short" in text
+    assert "selected_repo_binding_mismatch" in text
 
 
 def test_permissions_doc_covers_required_workflow_permissions() -> None:

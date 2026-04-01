@@ -32,6 +32,23 @@ _PERMISSION_LEVEL_ORDER = {
     "write-all": 3,
 }
 
+_INSTALL_READINESS_CONTRACT_VERSION = "install_readiness_v2"
+
+_FAIL_CATEGORY_PRIORITY = (
+    "unsupported_setup",
+    "missing_permission",
+    "missing_config",
+)
+
+_KNOWN_INPUT_SOURCES = {
+    "secret",
+    "vars",
+    "env",
+    "secret_or_vars",
+    "missing",
+    "unknown",
+}
+
 
 def _norm_text(value: Any) -> str:
     return str(value or "").strip()
@@ -83,6 +100,95 @@ def _make_check(
     }
 
 
+def _resolve_input_source(*, value: str, source_hint: str) -> str:
+    hint = _norm_text(source_hint).lower()
+    if hint in _KNOWN_INPUT_SOURCES:
+        if hint == "missing" and value:
+            return "env"
+        return hint
+    if value:
+        return "env"
+    return "missing"
+
+
+def _derive_ref_kind(*, ref: str, workflow_ref: str) -> str:
+    ref_norm = _norm_text(ref)
+    workflow_ref_norm = _norm_text(workflow_ref)
+    if ref_norm.startswith("refs/heads/"):
+        return "branch_ref"
+    if ref_norm.startswith("refs/pull/"):
+        return "pull_ref"
+    if workflow_ref_norm and "@refs/heads/" in workflow_ref_norm:
+        return "workflow_branch_ref"
+    if workflow_ref_norm and "@refs/tags/" in workflow_ref_norm:
+        return "workflow_tag_ref"
+    if workflow_ref_norm:
+        return "workflow_other_ref"
+    return "unknown"
+
+
+def _reason_for_status(
+    *,
+    overall_status: str,
+    fail_codes: list[str],
+) -> tuple[str, str]:
+    fail_set = {code.strip() for code in fail_codes if code.strip()}
+    if overall_status == "READY":
+        return (
+            "ready_all_prereqs_satisfied",
+            "All required GitHub App onboarding prerequisites are satisfied.",
+        )
+    if overall_status == "UNSUPPORTED_SETUP":
+        if "runtime_event_unsupported" in fail_set:
+            return (
+                "unsupported_runtime_event",
+                "Runtime event is unsupported for onboarding validation.",
+            )
+        if "repository_selection_mode_invalid" in fail_set:
+            return (
+                "unsupported_repository_selection_mode",
+                "Repository selection mode is invalid.",
+            )
+        if "selected_repositories_repo_not_allowed" in fail_set:
+            return (
+                "selected_repo_binding_mismatch",
+                "Current repository is not included in selected-repository rollout allowlist.",
+            )
+        if "workflow_issue_comment_missing" in fail_set:
+            return (
+                "issue_comment_trigger_missing",
+                "Workflow does not expose issue_comment trigger required for command flow.",
+            )
+        if "workflow_file_missing" in fail_set:
+            return (
+                "workflow_file_missing",
+                "RepoBrain workflow file is missing or unresolved.",
+            )
+        return ("unsupported_setup_detected", "Unsupported setup topology detected.")
+    if overall_status == "MISSING_PERMISSION":
+        if "workflow_permissions_missing" in fail_set:
+            return (
+                "workflow_permissions_missing",
+                "Workflow permissions are missing or weaker than required.",
+            )
+        return ("missing_permission_detected", "Required permission prerequisites are missing.")
+    if overall_status == "MISSING_CONFIG":
+        if "github_app_id_missing" in fail_set:
+            return ("github_app_id_missing", "GitHub App ID is missing.")
+        if "github_app_id_invalid" in fail_set:
+            return ("github_app_id_invalid", "GitHub App ID format is invalid.")
+        if "github_app_installation_id_missing" in fail_set:
+            return ("github_app_installation_id_missing", "GitHub App installation ID is missing.")
+        if "github_app_installation_id_invalid" in fail_set:
+            return ("github_app_installation_id_invalid", "GitHub App installation ID format is invalid.")
+        if "github_app_private_key_missing" in fail_set:
+            return ("github_app_private_key_missing", "GitHub App private key is missing.")
+        if "selected_repositories_missing" in fail_set:
+            return ("selected_repositories_missing", "Selected repositories allowlist is missing.")
+        return ("missing_config_detected", "Configuration prerequisites are missing.")
+    return ("unknown_status", "Readiness status could not be classified.")
+
+
 def evaluate_install_readiness(
     *,
     workflow_path: Path,
@@ -94,16 +200,37 @@ def evaluate_install_readiness(
 
     app_id = _norm_text(source_env.get("RB_GH_APP_ID", ""))
     installation_id = _norm_text(source_env.get("RB_GH_APP_INSTALLATION_ID", ""))
+    app_id_source = _resolve_input_source(
+        value=app_id,
+        source_hint=_norm_text(source_env.get("RB_GH_APP_ID_SOURCE", "")),
+    )
+    installation_id_source = _resolve_input_source(
+        value=installation_id,
+        source_hint=_norm_text(source_env.get("RB_GH_APP_INSTALLATION_ID_SOURCE", "")),
+    )
     private_key_inline = _norm_text(source_env.get("RB_GH_APP_PRIVATE_KEY", ""))
     private_key_path = _norm_text(source_env.get("RB_GH_APP_PRIVATE_KEY_PATH", ""))
     webhook_secret = _norm_text(source_env.get("RB_GH_APP_WEBHOOK_SECRET", ""))
     repo_selection_mode = _norm_text(source_env.get("RB_GH_APP_REPOSITORY_SELECTION", "selected")).lower()
     selected_repositories = _split_csv(source_env.get("RB_GH_APP_SELECTED_REPOS", ""))
+    selected_repositories_norm = {item.lower() for item in selected_repositories}
+    current_repo = _norm_text(source_env.get("GITHUB_REPOSITORY", "")).lower()
     event_name = _norm_text(source_env.get("GITHUB_EVENT_NAME", "")).lower()
 
     private_key_path_exists = bool(private_key_path and Path(private_key_path).exists())
-    private_key_present = bool(private_key_inline or private_key_path_exists)
-    private_key_source = "env_inline" if private_key_inline else ("path" if private_key_path_exists else "missing")
+    private_key_path_readable = False
+    if private_key_path_exists:
+        try:
+            _ = Path(private_key_path).read_text(encoding="utf-8")
+            private_key_path_readable = True
+        except OSError:
+            private_key_path_readable = False
+    private_key_present = bool(private_key_inline or private_key_path_readable)
+    private_key_source = (
+        "env_inline"
+        if private_key_inline
+        else ("path" if private_key_path_readable else "missing")
+    )
 
     if event_name in _SUPPORTED_RUNTIME_EVENTS:
         checks.append(
@@ -169,17 +296,55 @@ def evaluate_install_readiness(
                     next_step="Verify installed repositories match this allowlist.",
                 )
             )
+            if current_repo and current_repo not in selected_repositories_norm:
+                checks.append(
+                    _make_check(
+                        code="selected_repositories_repo_not_allowed",
+                        status="FAIL",
+                        category="unsupported_setup",
+                        message=(
+                            f"Current repository `{current_repo}` is not included in "
+                            "`RB_GH_APP_SELECTED_REPOS` allowlist."
+                        ),
+                        next_step="Add current repository to allowlist or install App on this repository.",
+                    )
+                )
+                next_steps.append(
+                    "Add current repository to `RB_GH_APP_SELECTED_REPOS` or update GitHub App selected-repository installation."
+                )
+        elif repo_selection_mode == "all" and selected_repositories:
+            checks.append(
+                _make_check(
+                    code="selected_repositories_ignored_in_all_mode",
+                    status="WARN",
+                    category="config",
+                    message="`RB_GH_APP_SELECTED_REPOS` is set but rollout mode is `all`; allowlist is ignored.",
+                    next_step="Clear selected allowlist or switch rollout mode back to `selected`.",
+                )
+            )
 
     if app_id:
-        checks.append(
-            _make_check(
-                code="github_app_id_present",
-                status="PASS",
-                category="config",
-                message="`RB_GH_APP_ID` is configured.",
-                next_step="Keep App ID stable across environments.",
+        if app_id.isdigit():
+            checks.append(
+                _make_check(
+                    code="github_app_id_present",
+                    status="PASS",
+                    category="config",
+                    message="`RB_GH_APP_ID` is configured.",
+                    next_step="Keep App ID stable across environments.",
+                )
             )
-        )
+        else:
+            checks.append(
+                _make_check(
+                    code="github_app_id_invalid",
+                    status="FAIL",
+                    category="missing_config",
+                    message="`RB_GH_APP_ID` is set but format is invalid (expected numeric App ID).",
+                    next_step="Set numeric App ID from GitHub App settings.",
+                )
+            )
+            next_steps.append("Set `RB_GH_APP_ID` to numeric GitHub App id.")
     else:
         checks.append(
             _make_check(
@@ -193,15 +358,30 @@ def evaluate_install_readiness(
         next_steps.append("Set `RB_GH_APP_ID` for GitHub App-first mode.")
 
     if installation_id:
-        checks.append(
-            _make_check(
-                code="github_app_installation_id_present",
-                status="PASS",
-                category="config",
-                message="`RB_GH_APP_INSTALLATION_ID` is configured.",
-                next_step="Ensure installation id matches selected repository install.",
+        if installation_id.isdigit():
+            checks.append(
+                _make_check(
+                    code="github_app_installation_id_present",
+                    status="PASS",
+                    category="config",
+                    message="`RB_GH_APP_INSTALLATION_ID` is configured.",
+                    next_step="Ensure installation id matches selected repository install.",
+                )
             )
-        )
+        else:
+            checks.append(
+                _make_check(
+                    code="github_app_installation_id_invalid",
+                    status="FAIL",
+                    category="missing_config",
+                    message=(
+                        "`RB_GH_APP_INSTALLATION_ID` is set but format is invalid "
+                        "(expected numeric installation ID)."
+                    ),
+                    next_step="Set numeric installation id from GitHub App installation page.",
+                )
+            )
+            next_steps.append("Set `RB_GH_APP_INSTALLATION_ID` to numeric installation id.")
     else:
         checks.append(
             _make_check(
@@ -214,7 +394,39 @@ def evaluate_install_readiness(
         )
         next_steps.append("Set `RB_GH_APP_INSTALLATION_ID` for the target installation.")
 
-    if private_key_present:
+    if private_key_inline:
+        checks.append(
+            _make_check(
+                code="github_app_private_key_present",
+                status="PASS",
+                category="config",
+                message="GitHub App private key is available (`env_inline`).",
+                next_step="Rotate key regularly and keep key material secret-scoped.",
+            )
+        )
+    elif private_key_path and not private_key_path_exists:
+        checks.append(
+            _make_check(
+                code="github_app_private_key_path_missing",
+                status="FAIL",
+                category="missing_config",
+                message=f"`RB_GH_APP_PRIVATE_KEY_PATH` is set but file is missing (`{private_key_path}`).",
+                next_step="Fix key path or provide `RB_GH_APP_PRIVATE_KEY` secret.",
+            )
+        )
+        next_steps.append("Fix `RB_GH_APP_PRIVATE_KEY_PATH` or set `RB_GH_APP_PRIVATE_KEY` secret.")
+    elif private_key_path_exists and not private_key_path_readable:
+        checks.append(
+            _make_check(
+                code="github_app_private_key_path_unreadable",
+                status="FAIL",
+                category="missing_config",
+                message=f"`RB_GH_APP_PRIVATE_KEY_PATH` exists but is not readable (`{private_key_path}`).",
+                next_step="Grant read access to key file or use inline secret key.",
+            )
+        )
+        next_steps.append("Grant read access to key file or set `RB_GH_APP_PRIVATE_KEY` secret.")
+    elif private_key_present:
         checks.append(
             _make_check(
                 code="github_app_private_key_present",
@@ -332,6 +544,25 @@ def evaluate_install_readiness(
         for check in checks
         if check["status"] == "FAIL"
     }
+    fail_codes = [
+        str(check.get("code", "")).strip()
+        for check in checks
+        if str(check.get("status", "")).upper() == "FAIL"
+    ]
+    fail_codes_by_category = {
+        category: sorted(
+            str(check.get("code", "")).strip()
+            for check in checks
+            if str(check.get("status", "")).upper() == "FAIL"
+            and str(check.get("category", "")).strip() == category
+            and str(check.get("code", "")).strip()
+        )
+        for category in _FAIL_CATEGORY_PRIORITY
+    }
+    fail_counts_by_category = {
+        category: len(fail_codes_by_category[category])
+        for category in _FAIL_CATEGORY_PRIORITY
+    }
     if "unsupported_setup" in fail_categories:
         overall_status = "UNSUPPORTED_SETUP"
     elif "missing_permission" in fail_categories:
@@ -340,21 +571,63 @@ def evaluate_install_readiness(
         overall_status = "MISSING_CONFIG"
     else:
         overall_status = "READY"
+    status_reason_code, status_reason_short = _reason_for_status(
+        overall_status=overall_status,
+        fail_codes=fail_codes,
+    )
 
     summary = {
         "pass": sum(1 for check in checks if check["status"] == "PASS"),
         "fail": sum(1 for check in checks if check["status"] == "FAIL"),
         "warn": sum(1 for check in checks if check["status"] == "WARN"),
     }
+    generation_event = _norm_text(
+        source_env.get(
+            "RB_READINESS_GENERATION_EVENT_NAME",
+            source_env.get("GITHUB_EVENT_NAME", "local/manual"),
+        )
+    ) or "local/manual"
+    generation_workflow_path = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_WORKFLOW_PATH", workflow_path.as_posix())
+    ) or workflow_path.as_posix()
+    generation_ref = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_REF", source_env.get("GITHUB_REF", "n/a"))
+    ) or "n/a"
+    generation_sha = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_SHA", source_env.get("GITHUB_SHA", "n/a"))
+    ) or "n/a"
+    generation_workflow_ref = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_WORKFLOW_REF", source_env.get("GITHUB_WORKFLOW_REF", "n/a"))
+    ) or "n/a"
+    generation_workflow_sha = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_WORKFLOW_SHA", source_env.get("GITHUB_WORKFLOW_SHA", "n/a"))
+    ) or "n/a"
+    generation_run_id = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_RUN_ID", source_env.get("GITHUB_RUN_ID", "n/a"))
+    ) or "n/a"
+    generation_run_attempt = _norm_text(
+        source_env.get("RB_READINESS_GENERATION_RUN_ATTEMPT", source_env.get("GITHUB_RUN_ATTEMPT", "n/a"))
+    ) or "n/a"
+    generation_job_name = _norm_text(source_env.get("RB_READINESS_GENERATION_JOB_NAME", "n/a")) or "n/a"
+    generation_ref_kind = _derive_ref_kind(ref=generation_ref, workflow_ref=generation_workflow_ref)
+
     payload: dict[str, Any] = {
+        "readiness_contract_version": _INSTALL_READINESS_CONTRACT_VERSION,
         "generated_at_utc": _utc_now_iso(),
         "installation_model": "github_app_first",
         "overall_status": overall_status,
+        "status_reason_code": status_reason_code,
+        "status_reason_short": status_reason_short,
         "ready_for_ask_review_fix": overall_status == "READY",
         "repository_selection_mode": repo_selection_mode,
         "selected_repositories": selected_repositories,
         "checks": checks,
         "summary": summary,
+        "blocking_summary": {
+            "fail_codes": sorted(fail_codes),
+            "fail_codes_by_category": fail_codes_by_category,
+            "fail_counts_by_category": fail_counts_by_category,
+        },
         "next_steps": list(dict.fromkeys(next_steps)),
         "workflow_probe": {
             "workflow_path": workflow_path.as_posix(),
@@ -364,13 +637,29 @@ def evaluate_install_readiness(
             "detected_permissions": workflow_permissions,
             "missing_permissions": sorted(missing_permissions),
         },
+        "readiness_provenance": {
+            "generation_event_name": generation_event,
+            "generation_workflow_path": generation_workflow_path,
+            "generation_ref": generation_ref,
+            "generation_sha": generation_sha,
+            "generation_ref_kind": generation_ref_kind,
+            "generation_workflow_ref": generation_workflow_ref,
+            "generation_workflow_sha": generation_workflow_sha,
+            "generation_run_id": generation_run_id,
+            "generation_run_attempt": generation_run_attempt,
+            "generation_job_name": generation_job_name,
+        },
         "inputs_seen": {
-            "event_name": event_name or "local/manual",
+            "event_name": generation_event,
+            "current_repository": current_repo or "n/a",
             "app_id_present": bool(app_id),
+            "app_id_source": app_id_source,
             "installation_id_present": bool(installation_id),
+            "installation_id_source": installation_id_source,
             "private_key_source": private_key_source,
             "private_key_path_present": bool(private_key_path),
             "private_key_path_exists": private_key_path_exists,
+            "private_key_path_readable": private_key_path_readable,
             "webhook_secret_present": bool(webhook_secret),
             "selected_repositories_count": len(selected_repositories),
         },
@@ -392,10 +681,16 @@ def render_install_readiness_markdown(payload: dict[str, Any]) -> str:
     lines: list[str] = [
         "# RepoBrain GitHub App Install Readiness",
         "",
+        f"- Contract version: `{payload.get('readiness_contract_version', 'install_readiness_v1')}`",
         f"- Installation model: `{payload.get('installation_model', 'github_app_first')}`",
         f"- Overall status: `{payload.get('overall_status', 'UNSUPPORTED_SETUP')}`",
+        f"- Status reason: `{payload.get('status_reason_code', 'unknown')}`",
+        f"- Status summary: {payload.get('status_reason_short', 'n/a')}",
         f"- Ready for Ask/Review/Fix: `{'yes' if bool(payload.get('ready_for_ask_review_fix', False)) else 'no'}`",
         f"- Repository selection mode: `{payload.get('repository_selection_mode', 'selected')}`",
+        f"- Generation event: `{payload.get('readiness_provenance', {}).get('generation_event_name', 'local/manual')}`",
+        f"- Generation ref: `{payload.get('readiness_provenance', {}).get('generation_ref', 'n/a')}`",
+        f"- App ID source: `{payload.get('inputs_seen', {}).get('app_id_source', 'unknown')}`",
         "",
         "## Check Summary",
         f"- PASS: `{int(summary.get('pass', 0) or 0)}`",

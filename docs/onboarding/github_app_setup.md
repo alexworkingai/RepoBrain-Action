@@ -64,6 +64,17 @@ Possible overall statuses:
 
 The checker includes explicit next steps for each failing condition.
 
+Readiness JSON also includes deterministic operator verdict fields:
+
+- `readiness_contract_version`
+- `status_reason_code`
+- `status_reason_short`
+- `blocking_summary.fail_codes_by_category`
+
+For selected-repository rollout, readiness now explicitly fails with
+`selected_repo_binding_mismatch` when the current repository is not in
+`RB_GH_APP_SELECTED_REPOS`.
+
 ## Workflow Artifact
 
 The `RepoBrain` workflow now uploads onboarding readiness artifacts:

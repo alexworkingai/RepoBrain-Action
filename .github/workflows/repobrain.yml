@@ -314,13 +314,24 @@ jobs:
         if: always()
         shell: bash
         env:
-          RB_GH_APP_ID: ${{ secrets.RB_GH_APP_ID }}
-          RB_GH_APP_INSTALLATION_ID: ${{ secrets.RB_GH_APP_INSTALLATION_ID }}
+          RB_GH_APP_ID: ${{ secrets.RB_GH_APP_ID || vars.RB_GH_APP_ID }}
+          RB_GH_APP_ID_SOURCE: ${{ secrets.RB_GH_APP_ID != '' && 'secret' || (vars.RB_GH_APP_ID != '' && 'vars' || 'missing') }}
+          RB_GH_APP_INSTALLATION_ID: ${{ secrets.RB_GH_APP_INSTALLATION_ID || vars.RB_GH_APP_INSTALLATION_ID }}
+          RB_GH_APP_INSTALLATION_ID_SOURCE: ${{ secrets.RB_GH_APP_INSTALLATION_ID != '' && 'secret' || (vars.RB_GH_APP_INSTALLATION_ID != '' && 'vars' || 'missing') }}
           RB_GH_APP_PRIVATE_KEY: ${{ secrets.RB_GH_APP_PRIVATE_KEY }}
           RB_GH_APP_PRIVATE_KEY_PATH: ${{ vars.RB_GH_APP_PRIVATE_KEY_PATH }}
           RB_GH_APP_WEBHOOK_SECRET: ${{ secrets.RB_GH_APP_WEBHOOK_SECRET }}
           RB_GH_APP_REPOSITORY_SELECTION: ${{ vars.RB_GH_APP_REPOSITORY_SELECTION }}
           RB_GH_APP_SELECTED_REPOS: ${{ vars.RB_GH_APP_SELECTED_REPOS }}
+          RB_READINESS_GENERATION_EVENT_NAME: ${{ github.event_name }}
+          RB_READINESS_GENERATION_WORKFLOW_PATH: .github/workflows/repobrain.yml
+          RB_READINESS_GENERATION_REF: ${{ github.ref }}
+          RB_READINESS_GENERATION_SHA: ${{ github.sha }}
+          RB_READINESS_GENERATION_WORKFLOW_REF: ${{ github.workflow_ref }}
+          RB_READINESS_GENERATION_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RB_READINESS_GENERATION_RUN_ID: ${{ github.run_id }}
+          RB_READINESS_GENERATION_RUN_ATTEMPT: ${{ github.run_attempt }}
+          RB_READINESS_GENERATION_JOB_NAME: repobrain
         run: |
           python scripts/check_install_readiness.py \
             --workflow .github/workflows/repobrain.yml \
