@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import os
@@ -114,12 +114,17 @@ from repobrain.verify import build_verify_report
 
 HELP_TEXT = """RepoBrain command examples:
 - /repobrain help
-- /repobrain ask How does provider selection work?
+- /repobrain ask --profile balanced How does provider selection work?
 - /repobrain locate TKYProvider
 - /repobrain explain retrieve_topk
-- /repobrain review
-- /repobrain fix Improve guard conditions in github_flow
+- /repobrain review --profile balanced
+- /repobrain fix --profile premium Improve guard conditions in github_flow
 - /repobrain verify (PR checks-based verification ladder v0)
+
+Execution profile:
+- Use `--profile cheap|balanced|premium` with ask/review/fix.
+- Default is `balanced` when `--profile` is omitted.
+- For review/fix safety, requested `cheap` may be normalized to `balanced`.
 """
 
 BOT_MARKER = "[bot]"
@@ -8470,7 +8475,6 @@ def run_github_flow(
         event_ctx=event_ctx,
         resolved_issue_number=resolved_issue_number,
     )
-    verification_context_seed = _build_verification_context_seed(time_budget_s=30, env_cfg=env_cfg)
     mode_label = "DRY_RUN" if dry_run else "POST_MODE"
     audit = build_audit_base(
         {
@@ -8533,10 +8537,54 @@ def run_github_flow(
     t0 = time.perf_counter()
     parsed = parse_command(source_text)
     add_timing(audit, "parse", (time.perf_counter() - t0) * 1000.0)
-    cmd = parsed["cmd"]
-    query = parsed["query"]
+    cmd = str(parsed.get("cmd", "help") or "help")
+    query = str(parsed.get("query", "") or "")
+    profile_override = str(parsed.get("profile", "") or "").strip().lower()
+    parse_error_code = str(parsed.get("error_code", "") or "").strip().lower()
+    parse_error_message = str(parsed.get("error_message", "") or "").strip()
+
+    if profile_override and cmd in {"ask", "review", "fix"}:
+        env_cfg = replace(env_cfg, llm=replace(env_cfg.llm, execution_profile=profile_override))
+        _set_runtime_env_cfg(env_cfg)
+        audit["llm_execution_profile_command_override"] = profile_override
+    else:
+        audit["llm_execution_profile_command_override"] = "none"
+
+    verification_context_seed = _build_verification_context_seed(time_budget_s=30, env_cfg=env_cfg)
+
     audit["command"] = cmd
     audit["task_type"] = cmd
+    if parse_error_code:
+        audit["command_parse_error_code"] = parse_error_code
+        audit["command_parse_error_message"] = parse_error_message or "Invalid command syntax."
+        body_markdown = (
+            f"{audit['command_parse_error_message']}\n\n"
+            "Use `/repobrain help` for command examples."
+        )
+        audit["route_final"] = "HELP"
+        audit["pass_count"] = 1
+        audit["index_source"] = "n/a"
+        print(f"Mode={mode_label}")
+        print(f"Cmd={cmd}")
+        print(f"Query={query}")
+        if dry_run:
+            print(body_markdown)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "DRY_RUN_OK"
+        if resolved_issue_number is None:
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            raise ValueError("issue_number is required when dry_run=False")
+        client = _build_post_client()
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+            client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        t0 = time.perf_counter()
+        client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+        add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+        audit["posted"] = True
+        print(f"Posted comment to issue #{resolved_issue_number}")
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+        return "POSTED_OK"
+
     print(f"Mode={mode_label}")
     print(f"Cmd={cmd}")
     print(f"Query={query}")

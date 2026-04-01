@@ -41,6 +41,22 @@ Compatibility aliases:
 - `RB_LLM_BUDGET_SENSITIVITY` = `low|normal|high|not_available` (default: `not_available`)
 - `RB_LLM_LATENCY_SENSITIVITY` = `low|normal|high|not_available` (default: `not_available`)
 
+## Command surface
+
+Execution profile is user-facing via command flags on ask/review/fix:
+
+- `/repobrain ask --profile cheap ...`
+- `/repobrain review --profile balanced`
+- `/repobrain fix --profile premium ...`
+
+Precedence order:
+
+1. Explicit command `--profile`
+2. Repo/operator env/config defaults
+3. Built-in default `balanced`
+
+Environment controls remain a technical fallback/default mechanism.
+
 ## Semantics
 
 - `balanced` is the default profile and preserves existing behavior.
