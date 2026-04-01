@@ -314,8 +314,8 @@ jobs:
         if: always()
         shell: bash
         env:
-          RB_GH_APP_ID: ${{ secrets.RB_GH_APP_ID }}
-          RB_GH_APP_INSTALLATION_ID: ${{ secrets.RB_GH_APP_INSTALLATION_ID }}
+          RB_GH_APP_ID: ${{ secrets.RB_GH_APP_ID || vars.RB_GH_APP_ID }}
+          RB_GH_APP_INSTALLATION_ID: ${{ secrets.RB_GH_APP_INSTALLATION_ID || vars.RB_GH_APP_INSTALLATION_ID }}
           RB_GH_APP_PRIVATE_KEY: ${{ secrets.RB_GH_APP_PRIVATE_KEY }}
           RB_GH_APP_PRIVATE_KEY_PATH: ${{ vars.RB_GH_APP_PRIVATE_KEY_PATH }}
           RB_GH_APP_WEBHOOK_SECRET: ${{ secrets.RB_GH_APP_WEBHOOK_SECRET }}

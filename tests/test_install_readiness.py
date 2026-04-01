@@ -87,6 +87,8 @@ def test_install_readiness_reports_missing_config_when_app_inputs_absent(tmp_pat
     assert "github_app_installation_id_missing" in check_codes
     assert "github_app_private_key_missing" in check_codes
     assert "selected_repositories_missing" in check_codes
+    assert payload["inputs_seen"]["app_id_present"] is False
+    assert payload["inputs_seen"]["installation_id_present"] is False
 
 
 def test_install_readiness_reports_missing_permission_when_workflow_permissions_are_weak(
@@ -196,6 +198,8 @@ def test_install_readiness_reports_invalid_app_and_installation_ids(tmp_path: Pa
     assert "github_app_id_invalid" in check_codes
     assert "github_app_installation_id_invalid" in check_codes
     assert payload["overall_status"] == "MISSING_CONFIG"
+    assert payload["inputs_seen"]["app_id_present"] is True
+    assert payload["inputs_seen"]["installation_id_present"] is True
 
 
 def test_install_readiness_main_writes_json_and_markdown(tmp_path: Path, monkeypatch) -> None:
