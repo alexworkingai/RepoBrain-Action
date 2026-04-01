@@ -6901,6 +6901,12 @@ def _build_review_markdown(
         audit_summary["llm_intent"] = llm_decision_intent
         audit_summary["llm_decision_reason_code"] = llm_decision_reason_code
         audit_summary["llm_decision_reason_short"] = llm_decision_reason_short
+    profile_fields = _resolve_execution_profile_policy(
+        cfg=_runtime_env_cfg(),
+        cmd=cmd,
+        llm_intent=llm_decision_intent,
+        execution_mode=execution_mode,
+    )
     llm_context = dict(github_context_seed or {})
     if changed_files:
         llm_context["changed_files"] = list(changed_files)
@@ -7015,6 +7021,8 @@ def _build_review_markdown(
         llm_meta["llm_downgrade_threshold_used"] = str(
             _llm_downgrade_threshold_for_command(cfg, cmd, llm_intent)
         )
+        llm_meta.update(profile_fields)
+        llm_meta["llm_profile_model_alignment"] = "not_applicable"
     elif use_batch_mode:
         review_batching_attempted = cmd == "review"
         if cmd == "review":
