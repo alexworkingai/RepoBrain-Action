@@ -88,6 +88,7 @@ Common artifacts include:
 - Environment reference: `docs/env_reference.md`
 - Team governance layer: `docs/governance/TEAM_GOVERNANCE.md`
 - Packaging overview: `docs/packaging/PACKAGING_OVERVIEW.md`
+- Startup readiness: `docs/startup/STARTUP_READINESS.md`
 
 ## Scope Boundaries
 

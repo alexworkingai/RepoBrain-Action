@@ -41,3 +41,4 @@ This packaging layer does not include:
 - Preflight checklist: `docs/packaging/PREFLIGHT_CHECKLIST.md`
 - Validation checklist: `docs/packaging/VALIDATION_CHECKLIST.md`
 - Distribution boundaries: `docs/packaging/DISTRIBUTION_BOUNDARIES.md`
+- Startup-readiness layer: `docs/startup/STARTUP_READINESS.md`
