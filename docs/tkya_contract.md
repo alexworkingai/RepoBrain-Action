@@ -1,47 +1,76 @@
-﻿# Protected Kernel Contract (Public-Safe)
+﻿# Protected Kernel Decision Contract (Public-Safe)
 
 ## Scope
 
-This document defines the outward-facing contract between RepoBrain orchestration and the protected internal kernel.
+This document describes the public-safe decision boundary between RepoBrain and its protected internal kernel.
 
-It is intentionally product-safe and does not disclose internal kernel structure, module layout, or implementation paths.
+It is intentionally limited to operator-safe and public-safe behavior.
+It does not disclose internal kernel structure, internal schema design, module layout, implementation paths, or reconstructable execution wiring.
 
-## Core Decision Object
+## Public-Safe Decision Boundary
 
-RepoBrain consumes a canonical decision object named `EngineDecision`.
+RepoBrain receives a protected decision outcome from its internal kernel and uses that outcome to drive:
 
-Public-safe required fields:
+- bounded command behavior,
+- governance-aware execution,
+- compact user-facing responses,
+- public-safe and operator-safe artifacts.
 
-- `route`
-- `selected_chunk_ids`
-- `compression_stats` (safe structured diagnostics only)
-- `execution_mode`
-- `llm_intent`
-- `llm_decision_reason_short`
-- `llm_decision_reason_code`
+Public documentation describes only externally relevant behavior and supported output categories.
 
-## Route Contract
+## What Public-Safe Surfaces May Expose
 
-The route vocabulary remains:
+Outward-facing surfaces may expose only high-level, product-safe decision truth such as:
 
-- `FAST`
-- `DEEP`
-- `WAIT`
-- `REFUSE`
-- `BLOCK`
-- `REVIEW`
+- decision category,
+- execution/governance outcome,
+- boundedness and safety markers,
+- public-safe diagnostics,
+- explicit supported/unsupported capability results.
 
-These route labels are stable orchestration categories, not disclosures of kernel internals.
+These are operational outcomes for safe usage, not disclosures of internal kernel design.
 
 ## Behavioral Guarantees
 
-1. Safety routes (`WAIT/REFUSE/BLOCK`) are respected as hard orchestration outcomes.
-2. Non-safety routes (`FAST/DEEP/REVIEW`) remain bounded by runtime governance.
-3. LLM execution is policy-governed and can be runtime-overridden safely.
-4. Public outputs remain usersafe and avoid internal kernel disclosure.
+RepoBrain preserves the following public-safe guarantees:
 
-## Audit/Evidence Guarantees
+1. Safety and governance outcomes are respected as hard runtime boundaries.
+2. Bounded execution remains explicit rather than implied.
+3. Public outputs stay usersafe and avoid protected kernel disclosure.
+4. Audit/evidence artifacts preserve decision truth at a public-safe or operator-safe level without exposing protected internal implementation.
 
-RepoBrain exports canonical decision truth through audit/evidence artifacts with public-safe and operator-safe boundaries.
+## Audit and Evidence Boundary
 
-The contract exposes decision categories and governance outcomes, not internal kernel implementation details.
+RepoBrain exports decision and governance truth through artifacts designed for safe interpretation.
+
+These artifacts are intended to help operators understand:
+
+- what outcome occurred,
+- whether execution was allowed, bounded, or blocked,
+- what capability surface is supported,
+- how to interpret the current result safely.
+
+They do not disclose internal kernel layout, internal contracts, or reconstructable implementation details.
+
+## What This Document Intentionally Does Not Disclose
+
+This document does not define or expose:
+
+- internal kernel object names,
+- internal field schemas,
+- internal route/control enumerations,
+- internal module/file organization,
+- implementation-level decision wiring,
+- reverse-engineering-oriented details.
+
+## Operator Guidance
+
+For practical usage, rely on:
+
+- supported command/capability documentation,
+- explicit blocked/unsupported behavior,
+- readiness outputs,
+- public-safe and operator-safe artifacts,
+- user/operator runbooks.
+
+These are sufficient for safe operation without exposing protected kernel internals.
