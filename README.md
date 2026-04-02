@@ -27,6 +27,14 @@ Environment reference:
 * Migration guide: `MIGRATION.md`
 * Post-merge validation: `docs/post_merge_validation.md`
 
+Current product docs:
+
+* User guide: `docs/USER_GUIDE.md`
+* Operator quickstart: `docs/OPERATOR_QUICKSTART.md`
+* External mode: `docs/EXTERNAL_MODE.md`
+* External trials: `docs/trials/external_repo_trial_template.md`
+* Capabilities matrix: `docs/benchmarks/current_capabilities_matrix.md`
+
 GitHub Actions note:
 
 * `issue_number`: use digits only; `#` prefix is also accepted (for example `1` or `#1`).
