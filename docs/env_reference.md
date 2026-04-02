@@ -76,7 +76,7 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_TKYA_ALLOW_REMOTE` | bool | `0` | - | Allow remote/network operations in TKYA. |
 | `RB_TKYA_BACKEND` | enum | `lite` | lite, v5 | TKYA backend selection (active backends: lite or v5). |
 | `RB_TKYA_STRICT` | bool | `0` | - | Strict TKYA load mode. |
-| `RB_TKYA_STRICT_V5` | bool | `0` | - | Strict v5 vendor load mode. |
-| `RB_TKYA_V5_PATH` | str | `` | - | Optional override path for v5 vendor file. |
+| `RB_TKYA_STRICT_V5` | bool | `0` | - | Strict protected-kernel v5 load mode. |
+| `RB_TKYA_V5_PATH` | str | `` | - | Optional override path for protected-kernel v5 runtime file. |
 | `RB_TRUSTED_CONTEXT` | bool | `0` | - | Trusted execution context. |
 | `RB_VERIFY_TIME_BUDGET_S` | int | `120` | 1..7200 | Verification time budget. |

@@ -1,4 +1,4 @@
-# TKYA-Aware Evidence Pack v1
+﻿# Evidence Pack v1 (Public-Safe Contract)
 
 RepoBrain writes three Evidence Pack artifacts per run:
 
@@ -7,14 +7,14 @@ RepoBrain writes three Evidence Pack artifacts per run:
 - `artifacts/evidence_pack/repobrain_tkya_evidence_pack.md`
 
 ## Purpose
-- `internal.json`: richer operator-facing canonical TKYA truth.
-- `public_safe.json`: sanitized comparison-friendly subset.
-- `.md`: compact human-readable summary generated from public-safe truth.
+
+- `internal.json`: richer operator-facing decision truth under existing safety constraints.
+- `public_safe.json`: sanitized benchmark/comparison-friendly truth.
+- `.md`: compact human-readable summary derived from public-safe truth.
 
 ## Generation
-Issue-comment and workflow runs generate the pack automatically through `scripts/run_github.py`.
 
-Manual regeneration from latest audit artifact:
+Generated automatically in run flow, or manually:
 
 ```bash
 python scripts/gen_tkya_evidence_pack.py \
@@ -22,20 +22,18 @@ python scripts/gen_tkya_evidence_pack.py \
   --output-dir artifacts/evidence_pack
 ```
 
-## Contract highlights
-- decision truth: route, execution mode, llm intent/reason, backend/engine
-- model/provider adapter truth: requested/selected/final model ids, model family, downgrade status
-- control-plane truth: execution profile (requested/used), policy reason/outcome, budget/latency sensitivity hints
-- canonical TKYA signals: topology, HUK, ZigZag, MorseFlow, verification gate
-- boundedness and coverage: evidence budget and ultra-large mode summaries
-- provenance: runtime SHA vs PR head SHA state
-- trace safety: hash-only trace schema and hash references
-- repository scale snapshot: file/folder/size counters with explicit workspace-scope truth notes
+## Public-Safe Contract Highlights
+
+- decision category truth (route/execution/governance)
+- model/provider summary truth (requested/used/final)
+- control-plane profile truth (requested/used/reason/outcome)
+- boundedness and coverage honesty signals
+- provenance summary
+- trace safety markers (hash-only policy)
+- repository-scale snapshot with explicit scope limits
 
 ## Safety
-Public-safe artifact intentionally excludes raw prompt text, raw candidate text, and raw diff internals.
 
-## Fidelity notes
-- Repository-scale values are scoped to the current runtime checkout (`workspace_checkout_snapshot`) and are not presented as full remote-repository history scans.
-- Provenance includes explicit governed-divergent explanations where runtime SHA differs from PR head SHA.
-- TKYA-derived metrics are exported only when canonically present in audit truth; missing values remain explicitly unavailable.
+Public-safe artifact excludes raw prompt text, raw candidate text, and raw diff internals.
+
+If canonical values are unavailable, artifacts keep explicit bounded placeholders instead of synthetic values.

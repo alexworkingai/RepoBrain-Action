@@ -1,266 +1,76 @@
-# TKYA Contract Baseline (RepoBrain-Action)
+﻿# Protected Kernel Decision Contract (Public-Safe)
 
 ## Scope
-This document captures the **actual runtime contract** between RepoBrain and the TKYA engine/providers as implemented in the current codebase.
 
-## Where TKYLite/TopoCoreLite Is Used
-- Provider factory:
-  - `repobrain/ask.py` (`make_provider`) returns `LocalTKYProvider` for `mode=local`.
-- Local provider execution:
-  - `repobrain/tky_local.py` calls `get_engine()` from `repobrain/tkya/engine.py`.
-  - Default backend is `v5` when vendor file exists, otherwise `lite` (`TopoCoreLite` fallback).
-  - Advanced backend is `v5` (`RB_TKYA_BACKEND=v5`), loaded from vendor file.
-- Engine direct usage points:
-  - `repobrain/tky_local.py` -> `engine.decide(req)`.
-  - `repobrain/tky_stub_server.py` -> `get_engine().decide(req)` for stub response generation.
-- Legacy/direct `TopoCoreLite` usage remains in tests and engine fallback internals:
-  - `repobrain/topocore_lite.py`
-  - `repobrain/tkya/engine.py`
-  - `tests/test_topocore_lite_*.py`, `tests/test_tkya_engine.py`
+This document describes the public-safe decision boundary between RepoBrain and its protected internal kernel.
 
-## Index / Ask / issue_comment Flow Locations
+It is intentionally limited to operator-safe and public-safe behavior.
+It does not disclose internal kernel structure, internal schema design, module layout, implementation paths, or reconstructable execution wiring.
 
-### Index mode
-- CLI entrypoint: `scripts/run_index.py`
-- Index builder: `repobrain/index_store.py::build_index`
-- Output file (current implementation):
-  - `artifacts/index-package.zip`
-- Build/load in GitHub flow:
-  - `repobrain/github_flow.py::load_or_build_chunks_with_meta`
+## Public-Safe Decision Boundary
 
-### Ask mode
-- Local CLI entrypoint: `scripts/run_ask.py`
-- GitHub flow orchestration:
-  - `repobrain/github_flow.py::run_github_flow`
-  - Ask/locate/explain path: `_build_qa_markdown` -> `run_qa_two_pass`
-  - TKY decision call path: `_answer_with_remote_fallback` -> `answer_question` -> `provider.compress_context`
+RepoBrain receives a protected decision outcome from its internal kernel and uses that outcome to drive:
 
-### issue_comment handling (`/repobrain ask`)
-- Workflow trigger:
-  - `.github/workflows/repobrain.yml` (`on.issue_comment.types: [created]`)
-- Command parsing:
-  - `repobrain/commands.py::parse_command`
-- Runtime command handling:
-  - `repobrain/github_flow.py::run_github_flow`
-  - Ignores non-`/repobrain` and bot comments
-  - Handles `help|ask|locate|explain|review|verify`
+- bounded command behavior,
+- governance-aware execution,
+- compact user-facing responses,
+- public-safe and operator-safe artifacts.
 
-## Index Artifact vs Expected Names
-- **Found in code:** `artifacts/index-package.zip`
-  - created by `scripts/run_index.py`
-  - loaded/reused in `scripts/run_ask.py` and `repobrain/github_flow.py`
-- **Found in code:** `artifacts/repobrain-index-<commit>.zip` (commit-tagged copy)
-- **Found in code:** zip entries `manifest.json` + `topo_map.json` + `index/chunks.jsonl`
-- Artifact contract reference: `docs/artifacts.md`
+Public documentation describes only externally relevant behavior and supported output categories.
 
-## TKYA Engine Contract (Expected by RepoBrain)
+## What Public-Safe Surfaces May Expose
 
-### Provider-level contract
-Defined in `repobrain/tky_provider.py`:
-- Protocol method:
-  - `compress_context(*, question: str, candidates: list[CandidateChunk], limits: dict[str, Any]) -> TKYResult`
+Outward-facing surfaces may expose only high-level, product-safe decision truth such as:
 
-#### Input model: `CandidateChunk`
-- `chunk_id: str`
-- `file_path: str`
-- `line_start: int`
-- `line_end: int`
-- `score: float`
-- `text: str | None = None`
-- `signature: list[int] | None = None`
+- decision category,
+- execution/governance outcome,
+- boundedness and safety markers,
+- public-safe diagnostics,
+- explicit supported/unsupported capability results.
 
-#### Output model: `TKYResult`
-- `selected_chunk_ids: list[str]`
-- `route: str` (supported set: `FAST`, `DEEP`, `WAIT`, `REFUSE`, `BLOCK`, `REVIEW`)
-- `compression_stats: dict[str, Any]`
-- `rationale: str`
-- `execution_mode: str` (`retrieval_only|retrieval_plus_llm|verification_first|refuse`)
-- `llm_intent: str` (`none|explain|summarize|review|patch`)
-- `llm_decision_reason_short: str` (short usersafe reason for LLM use/skip)
-- `llm_decision_reason_code: str` (machine-readable reason code)
+These are operational outcomes for safe usage, not disclosures of internal kernel design.
 
-### Engine-level contract (local TKYA engine)
-Defined in `repobrain/tky_engine.py` and used by `repobrain/tky_local.py`:
-- Engine method:
-  - `decide(req: EngineRequest) -> EngineDecision`
+## Behavioral Guarantees
 
-#### Engine input model: `EngineRequest`
-- `task_type: Literal["ask","locate","explain","review"]`
-- `query: EngineQuery` (`text`, `signature`)
-- `candidates: list[EngineCandidate]` (`chunk_id`, `score_local`, optional signature/path/lines)
-- `limits: dict[str, Any]`
-- `policy: dict[str, Any]`
+RepoBrain preserves the following public-safe guarantees:
 
-Policy keys used by TopoCore v5 wiring:
-- `corelocked: bool`
-- `github_context: dict` (event/repo/sha/ref/issue/pr/base/head/changed_files/diff_hunks when available)
-- `verification_context: dict` (capability summary: pytest/ruff/time budget/mode/patch/network)
-- `runtime: dict` (safe runtime metadata, no secrets)
+1. Safety and governance outcomes are respected as hard runtime boundaries.
+2. Bounded execution remains explicit rather than implied.
+3. Public outputs stay usersafe and avoid protected kernel disclosure.
+4. Audit/evidence artifacts preserve decision truth at a public-safe or operator-safe level without exposing protected internal implementation.
 
-#### Engine output model: `EngineDecision`
-- `route: str`
-- `selected_chunk_ids: list[str]`
-- `compression_stats: dict[str, Any]`
-- `security: EngineSecurity`
-- `rationale: str`
-- `stable_tokens: list[str]`
-- `execution_mode: str` (`retrieval_only|retrieval_plus_llm|verification_first|refuse`)
-- `llm_intent: str` (`none|explain|summarize|review|patch`)
-- `llm_decision_reason_short: str` (short usersafe reason)
-- `llm_decision_reason_code: str` (machine-readable reason code)
+## Audit and Evidence Boundary
 
-Route compatibility contract:
+RepoBrain exports decision and governance truth through artifacts designed for safe interpretation.
 
-- `FAST` -> single-pass retrieval is sufficient
-- `DEEP` -> caller should run second-pass retrieval with larger candidate budget
-- `WAIT` -> caller should return pending/verification-needed response
-- `REFUSE` -> caller should safely refuse request
-- `BLOCK` -> caller should block request by policy
-- `REVIEW` -> caller should use review-style rendering and checks summary
+These artifacts are intended to help operators understand:
 
-Execution mode compatibility contract:
+- what outcome occurred,
+- whether execution was allowed, bounded, or blocked,
+- what capability surface is supported,
+- how to interpret the current result safely.
 
-- `execution_mode=retrieval_only` -> caller should not invoke LLM.
-- `execution_mode=retrieval_plus_llm` -> caller should attempt LLM synthesis unless blocked by runtime policy/budget.
-- `execution_mode=verification_first` -> caller should not invoke LLM before verification state is resolved.
-- `execution_mode=refuse` -> caller should short-circuit to refusal/blocked response.
+They do not disclose internal kernel layout, internal contracts, or reconstructable implementation details.
 
-Precedence rules:
+## What This Document Intentionally Does Not Disclose
 
-- Safety and route hard-stops always win: `WAIT/REFUSE/BLOCK` imply non-LLM execution.
-- Runtime constraints can override semantic LLM intent:
-  - disabled config, missing token, governor budget, provider outage.
-- When runtime overrides semantic LLM intent, caller must keep:
-  - `llm_decision_reason_short` (semantic reason from TKYA)
-  - `llm_runtime_override_reason` (separate runtime reason in audit/report).
+This document does not define or expose:
 
-## Orchestration Layer (Outside TKYA v5)
+- internal kernel object names,
+- internal field schemas,
+- internal route/control enumerations,
+- internal module/file organization,
+- implementation-level decision wiring,
+- reverse-engineering-oriented details.
 
-Sprint-level quality policy is implemented around TKYA without changing TKYA vendor internals:
+## Operator Guidance
 
-- Security calibration:
-  - `protected_zone` -> hard block/refuse (TKYA internals, hidden prompts, protected files/secrets).
-  - `repo_analysis` -> allow normal repository/PR analysis unless exfiltration intent is explicit.
-- PR grounding:
-  - PR changed-files metadata is treated as authoritative context for ask/review/fix in PR flows.
-  - `answer_grounding_mode` tracks `pr_metadata|retrieval|hybrid`.
-- Review validation:
-  - severe findings are kept as confirmed only when evidence-backed.
-  - weak unsupported signals are downgraded to possible signals.
-- Patch validation:
-  - patch output is validated before publish (`valid_patch|no_patch|patch_validation_failed|provider_failed`).
-  - placeholder/unrelated patches are suppressed.
-- Model policy:
-  - review/fix/patch and complex DEEP synthesis prefer `openai/gpt-4.1`;
-  - lighter calls may use `openai/gpt-4.1-mini`;
-  - budget governor may downgrade with explicit reason.
+For practical usage, rely on:
 
-## Expected Exceptions / Error Handling
+- supported command/capability documentation,
+- explicit blocked/unsupported behavior,
+- readiness outputs,
+- public-safe and operator-safe artifacts,
+- user/operator runbooks.
 
-### Remote TKY
-- `repobrain/tky_remote.py` raises `RemoteTKYError` with:
-  - `status_code`
-  - `error_class`
-  - `fallback_reason_code`
-  - `diagnostics` (`latency_ms`, `retry_count`, etc.)
-
-### Fallback behavior
-- In GitHub flow (`repobrain/github_flow.py::_answer_with_remote_fallback`):
-  - If `tky_mode_requested == "remote"` and remote fails:
-    - fail-open (`tky_remote_fail_open=True`) => fallback to baseline provider
-    - fail-open disabled => returns REFUSE-style response
-- In local CLI (`scripts/run_ask.py`):
-  - remote failure + fail-open true => fallback baseline
-  - remote failure + fail-open false => exit code `2` with short message
-
-### Backend loading
-- `repobrain/tkya/engine.py::get_engine`
-  - default: `lite`
-  - `RB_TKYA_BACKEND=v5` loads `TopoCore_TCX_v5-Advance_CAS+Git.py` with `importlib`
-  - missing/broken v5 vendor file:
-    - fallback to lite by default
-    - strict fail when `RB_TKYA_STRICT_V5=1` for v5
-
-## Files/Artifacts Expected by Index and Ask
-
-### Index step
-- Input: repository root files scanned/chunked
-- Output:
-  - `artifacts/index-package.zip`
-  - `artifacts/repobrain-index-<commit>.zip`
-  - contains:
-    - `manifest.json`
-    - `topo_map.json`
-    - `index/chunks.jsonl`
-    - `chunks.jsonl` (legacy compatibility)
-
-### Ask step
-- Requires:
-  - existing `artifacts/index-package.zip`, or
-  - auto-build through `load_or_build_chunks_with_meta`
-- Ask reads chunks, retrieves top-k, calls TKY provider, emits usersafe markdown:
-  - route-aware headers (`Answer/Needs verification/Refused/Blocked`)
-  - file locators only (no raw code snippets)
-  - grouped diagnostics table (compact, usersafe)
-  - TKYA backend/mode rendered consistently:
-    - `TKYA backend` (e.g. `v5`)
-    - `TKYA mode` (e.g. `topocore_lite`, `baseline-policy`, `remote`)
-  - verification summary (`PASS/WARN/NOT_RUN`)
-  - deep-pass marker for 2-pass retrieval
-  - PR-aware grounding diagnostics when PR metadata is available:
-    - `pr_changed_files_count`
-    - `pr_metadata_used`
-    - `answer_grounding_mode` (`pr_metadata|retrieval|hybrid`)
-- If rendered markdown is oversized, output is truncated for comment safety and full body is written to `artifacts/ask_result.md`.
-
-## Existing Env/Config Knobs
-
-### Core runtime env
-- `GITHUB_REPOSITORY`, `GITHUB_SHA`, `GITHUB_REF_NAME`, `GITHUB_REF`, `GITHUB_EVENT_PATH`
-- `GITHUB_TOKEN` (post mode only)
-- `RB_DISABLE_INTERNAL_REACTIONS`
-- `RB_INDEX_CACHE_RESTORED`
-
-### TKYA backend env
-- `RB_TKYA_BACKEND=lite|v5`
-  - active documented backend is `v5` (`lite` remains safe fallback)
-  - default behavior: if backend is not explicitly set and v5 vendor file exists, loader prefers `v5`; otherwise `lite`
-- `RB_TKYA_ALLOW_REMOTE=0|1` (default guarded as disabled)
-- `RB_TKYA_STRICT=0|1` (common strict mode for vendor initialization)
-- `RB_TKYA_STRICT_V5=0|1`
-- `RB_TKYA_V5_PATH` (optional override path)
-- `RB_TKYA_V5_CANARY_PERCENT=0..100` (optional canary rollout gate for `v5`)
-- `RB_TKYA_CANARY_KEY` (optional stable canary bucket key)
-
-### Remote TKY inputs/env
-- CLI/action inputs used by `scripts/run_github.py` and `scripts/run_ask.py`:
-  - `--tky-mode auto|baseline|remote|local`
-  - `--remote-url`
-  - `--api-key`
-  - `--hmac-secret`
-  - `--enable-hmac`
-- `.repobrain.yml` parsed by `repobrain/config.py`:
-  - `tky.remote_enabled`
-  - `tky.remote_url`
-  - `tky.remote_allow_commands`
-  - `tky.remote_allow_branches`
-  - `tky.remote_allow_repos`
-  - `tky.remote_fail_open`
-
-## Dependencies and Quality Configuration
-- Build/deps/lint/test config is in `pyproject.toml`:
-  - Runtime deps: `PyYAML`, `requests`, `orjson`
-  - Dev deps: `pytest`, `ruff`
-  - Ruff config: `[tool.ruff]`
-  - Pytest config: `[tool.pytest.ini_options]`
-- `requirements*.txt` not used in current repo root.
-
-## Local Dev Commands
-From current `pyproject.toml` (pip editable install):
-
-```powershell
-python -m pip install -U pip
-pip install -e ".[dev]"
-ruff check .
-pytest -q
-```
+These are sufficient for safe operation without exposing protected kernel internals.

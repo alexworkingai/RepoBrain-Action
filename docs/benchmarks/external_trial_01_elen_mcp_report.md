@@ -13,6 +13,7 @@
 2. External `ask` path works and returns governed answer output.
 3. External `review` path is blocked explicitly as unsupported (honest failure mode).
 4. This is an external execution path, not yet full GitHub-native PR runtime in target repository.
+5. The same ask-first boundary can be exposed through the thin MCP surface with identical honest unsupported behavior.
 
 ## Benchmark Narrative (Concise)
 

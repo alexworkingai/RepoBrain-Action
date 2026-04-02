@@ -308,5 +308,5 @@ Workflow: `.github/workflows/canary_v5.yml`
   - `RB_TKYA_STRICT=0`
 - behavior:
   - runs lint/tests for wiring safety
-  - if v5 vendor file is present, executes full test suite
-  - if v5 vendor file is absent, executes a fallback test subset and does not fail purely because vendor is missing
+  - executes full coverage when protected kernel runtime is available
+  - executes bounded fallback coverage when protected kernel runtime is unavailable
