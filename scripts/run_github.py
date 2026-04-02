@@ -17,6 +17,7 @@ def _parse_bool(value: str) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", default="github", choices=["github", "external"])
     parser.add_argument("--dry-run", default="true")
     parser.add_argument("--comment-text", default="")
     parser.add_argument("--issue-number", default="")
@@ -25,7 +26,28 @@ def main() -> int:
     parser.add_argument("--api-key", default="")
     parser.add_argument("--hmac-secret", default="")
     parser.add_argument("--enable-hmac", default="false")
+    parser.add_argument("--query", default="")
+    parser.add_argument("--command", default="ask")
+    parser.add_argument("--repo-root", default=".")
+
     args = parser.parse_args()
+
+    if args.mode == "external":
+        from repobrain.external_flow import ExternalFlowInput, run_external_flow
+
+        result = run_external_flow(
+            ExternalFlowInput(
+                repo_root=Path(args.repo_root).resolve(),
+                query=args.query,
+                command=args.command,
+                dry_run=_parse_bool(args.dry_run),
+                tky_mode=args.tky_mode,
+            )
+        )
+        print(f"STATUS={result.status}")
+        print(f"DECISION={result.decision}")
+        print(result.content)
+        return 0 if result.status == "success" else 1
 
     try:
         issue_number = parse_issue_number(args.issue_number)
