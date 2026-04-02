@@ -87,6 +87,7 @@ Depending on command and mode:
 - Operator install/readiness: `docs/OPERATOR_QUICKSTART.md`
 - External mode details: `docs/EXTERNAL_MODE.md`
 - MCP surface details: `docs/MCP_SURFACE.md`
+- Packaging overview: `docs/packaging/PACKAGING_OVERVIEW.md`
 - Trial protocol/templates: `docs/trials/external_repo_trial_template.md`
 - Trial #1 runbook: `docs/trials/external_repo_trial_01_elen_mcp.md`
 - Trial #1 benchmark narrative: `docs/benchmarks/external_trial_01_elen_mcp_report.md`

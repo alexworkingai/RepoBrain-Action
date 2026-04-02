@@ -87,6 +87,7 @@ Common artifacts include:
 - Capabilities matrix: `docs/benchmarks/current_capabilities_matrix.md`
 - Environment reference: `docs/env_reference.md`
 - Team governance layer: `docs/governance/TEAM_GOVERNANCE.md`
+- Packaging overview: `docs/packaging/PACKAGING_OVERVIEW.md`
 
 ## Scope Boundaries
 
