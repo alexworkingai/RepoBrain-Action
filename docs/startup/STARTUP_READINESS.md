@@ -37,3 +37,4 @@ RepoBrain has repeatable packaging, governance, and bounded external evaluation,
 - Readiness matrix: `docs/startup/READINESS_MATRIX.md`
 - Product boundaries: `docs/startup/PRODUCT_BOUNDARIES.md`
 - Design partner overview: `docs/startup/DESIGN_PARTNER_OVERVIEW.md`
+- Strategic package index: `docs/strategy/ATTENTION_PACK_INDEX.md`

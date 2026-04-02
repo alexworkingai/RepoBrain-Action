@@ -89,6 +89,7 @@ Common artifacts include:
 - Team governance layer: `docs/governance/TEAM_GOVERNANCE.md`
 - Packaging overview: `docs/packaging/PACKAGING_OVERVIEW.md`
 - Startup readiness: `docs/startup/STARTUP_READINESS.md`
+- Strategic attention pack: `docs/strategy/ATTENTION_PACK_INDEX.md`
 
 ## Scope Boundaries
 
