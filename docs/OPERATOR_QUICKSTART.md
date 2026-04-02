@@ -74,7 +74,33 @@ Expected:
 - blocked status
 - decision `UNSUPPORTED_COMMAND`
 
-## 4) Trial Evidence Capture
+## 4) MCP Surface Validation (Ask-Only)
+
+```bash
+python scripts/run_mcp_surface.py \
+  --capability ask \
+  --repo-root /absolute/path/to/repo \
+  --query "What changed around module X?"
+```
+
+Expected:
+
+- JSON response
+- `status=success`
+- `decision=ANSWER`
+
+Unsupported capability probe:
+
+```bash
+python scripts/run_mcp_surface.py --capability review --repo-root /path --query "..."
+```
+
+Expected:
+
+- `status=blocked`
+- `decision=UNSUPPORTED_CAPABILITY`
+
+## 5) Trial Evidence Capture
 
 Use:
 
@@ -88,7 +114,7 @@ Capture for each executed step:
 - operator blockers
 - final verdict (`TRIAL_PASS|TRIAL_PARTIAL|TRIAL_BLOCKED`)
 
-## 5) Stop Conditions
+## 6) Stop Conditions
 
 Stop and file product issue if:
 

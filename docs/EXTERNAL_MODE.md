@@ -65,3 +65,4 @@ For review/fix in PR context, use GitHub mode in the target repository.
 - Reusable template: `docs/trials/external_repo_trial_template.md`
 - Evidence template: `docs/trials/external_repo_trial_evidence_template.md`
 - Trial #1 report: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
+- MCP-facing adapter: `docs/MCP_SURFACE.md`

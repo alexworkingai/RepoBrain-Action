@@ -43,6 +43,19 @@ python scripts/run_github.py \
   --query "What does module X do?"
 ```
 
+### MCP-Facing Surface (`scripts/run_mcp_surface.py`)
+
+Thin ask-first structured surface for integration workflows:
+
+```bash
+python scripts/run_mcp_surface.py \
+  --capability ask \
+  --repo-root /path/to/repo \
+  --query "What changed around module X?"
+```
+
+Supported now: `ask` only.
+
 ## What Works vs Not Yet
 
 ### Works Today
@@ -55,6 +68,7 @@ python scripts/run_github.py \
 ### Not Yet (Explicitly)
 
 - External mode review/fix execution.
+- MCP surface review/fix capabilities.
 - Full GitHub-native PR runtime inside arbitrary third-party repositories from external mode alone.
 - Marketplace-style product packaging/admin portal.
 
@@ -72,6 +86,7 @@ Depending on command and mode:
 
 - Operator install/readiness: `docs/OPERATOR_QUICKSTART.md`
 - External mode details: `docs/EXTERNAL_MODE.md`
+- MCP surface details: `docs/MCP_SURFACE.md`
 - Trial protocol/templates: `docs/trials/external_repo_trial_template.md`
 - Trial #1 runbook: `docs/trials/external_repo_trial_01_elen_mcp.md`
 - Trial #1 benchmark narrative: `docs/benchmarks/external_trial_01_elen_mcp_report.md`

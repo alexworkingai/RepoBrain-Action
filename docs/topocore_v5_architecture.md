@@ -1,54 +1,37 @@
-# TopoCore TCX v5 Architecture (RepoBrain)
+﻿# Protected Kernel Architecture (Public-Safe)
 
 ## Scope
-This document describes the active TKYA architecture in RepoBrain.
 
-- Active local TKYA engines: `v5` and safe fallback `lite`
-- Active vendor file: `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
-- Security posture: hash-only traces, no raw prompt/code persistence in engine diagnostics
+RepoBrain is powered by a protected internal kernel.
 
-## Runtime entrypoints
-- Engine selector: `repobrain/tkya/engine.py`
-- Local provider integration: `repobrain/tky_local.py`
-- Engine contract: `repobrain/tky_engine.py`
+This document intentionally uses high-level product-safe abstractions only:
 
-## Decision contract
-`TKYEngine.decide(req: EngineRequest) -> EngineDecision`
+- governed repository cognition
+- bounded decision runtime
+- evidence-aware orchestration
+- model-agnostic orchestration layer
 
-Key output fields used by RepoBrain:
-- `route`
-- `selected_chunk_ids`
-- `compression_stats`
-- `execution_mode`
-- `llm_intent`
-- `llm_decision_reason_short`
-- `llm_decision_reason_code`
+## Public-Safe Architecture View
 
-## Canonical v5 diagnostics in `compression_stats`
-- Route context: `phase1_action`, `top_score`
-- Topology: `topology_mode`, `topology_complexity`, `topology_metric_count`
-- HUK: `huk_score`, `huk_bars_hash`
-- ZigZag: `zigzag_turning_points`, `zigzag_volatility`, `zigzag_trend`
-- MorseFlow: `morse_risk`, `morse_verify_required`, `morse_confidence`, `morse_signals`
-- Verification ladder: `verification_*`, `verification_gate_decision`, `verification_gate_reason`
-- Trace schema: `trace_schema_version`, `trace_schema_policy`, `trace_schema_compatible`
-- Hash-only trace payload: `trace`
+1. Input normalization and policy context preparation.
+2. Evidence selection and bounded decision generation.
+3. Governance-aware execution outcome (`route`, `execution_mode`, policy reasons).
+4. Structured artifact export with public-safe/operator-safe separation.
 
-## Safety and boundedness
-- Deterministic routing with explicit thresholds and policy gates
-- Hash-only telemetry and diagnostics
-- Verification gate summary exported to audit
-- Ultra-large PR boundedness handled by orchestration layer, not by hidden engine behavior
+## What Is Intentionally Not Disclosed
 
-## Environment controls
-- `RB_TKYA_BACKEND=lite|v5`
-- `RB_TKYA_STRICT=0|1`
-- `RB_TKYA_STRICT_V5=0|1`
-- `RB_TKYA_V5_PATH=<optional override path>`
-- `RB_TKYA_V5_CANARY_PERCENT=0..100`
-- `RB_TKYA_CANARY_KEY=<stable bucket key>`
-- `RB_TKYA_ALLOW_REMOTE=0|1` (guarded, fail-closed when disabled)
+- internal module composition
+- internal file paths
+- kernel schema internals
+- implementation wiring details
 
-## Notes
-- RepoBrain keeps `v5` as the sole active vendor generation for TKYA.
-- Legacy vendor generations are not part of active runtime wiring.
+## Operator Relevance
+
+Operators should rely on:
+
+- readiness status,
+- command outcomes,
+- audit/evidence artifacts,
+- explicit supported/unsupported capability contracts.
+
+This is sufficient for safe operation without exposing protected internals.
