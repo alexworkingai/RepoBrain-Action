@@ -86,6 +86,7 @@ Common artifacts include:
 - Trial #1 narrative: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
 - Capabilities matrix: `docs/benchmarks/current_capabilities_matrix.md`
 - Environment reference: `docs/env_reference.md`
+- Team governance layer: `docs/governance/TEAM_GOVERNANCE.md`
 
 ## Scope Boundaries
 
