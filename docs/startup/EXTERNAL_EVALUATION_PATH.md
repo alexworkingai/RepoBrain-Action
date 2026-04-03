@@ -25,6 +25,24 @@ What it does not prove:
 
 ## Path B: External CLI Mode (Bounded Proof)
 
+What to run (GitHub-native foundation in third-party repo):
+
+- install caller workflow from `docs/packaging/repobrain_external_github_foundation_template.yml`
+- `/repobrain help`
+- `/repobrain ask ...`
+- optional negative check: `/repobrain review`
+
+What it proves:
+
+- real third-party GitHub-native bounded foundation,
+- explicit unsupported behavior for out-of-scope commands.
+
+What it does not prove:
+
+- full external ask/review/fix parity.
+
+## Path C: External CLI Mode (Bounded Proof)
+
 What to run:
 
 ```bash
@@ -45,7 +63,7 @@ What it does not prove:
 
 - external review/fix support.
 
-## Path C: MCP Surface (Bounded Integration Proof)
+## Path D: MCP Surface (Bounded Integration Proof)
 
 What to run:
 

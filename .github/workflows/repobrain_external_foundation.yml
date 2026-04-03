@@ -1,0 +1,239 @@
+name: RepoBrain External GitHub Foundation
+
+on:
+  workflow_call:
+    inputs:
+      dry_run:
+        description: "true = print only, false = post comment"
+        required: false
+        default: "false"
+        type: string
+      comment_text:
+        description: "RepoBrain command text"
+        required: false
+        default: ""
+        type: string
+      issue_number:
+        description: "Issue/PR number (digits or #N)"
+        required: false
+        default: ""
+        type: string
+      workflow_path:
+        description: "Caller workflow path used for readiness checks"
+        required: false
+        default: ".github/workflows/repobrain_external.yml"
+        type: string
+      caller_event_name:
+        description: "Caller event name (issue_comment/workflow_dispatch)"
+        required: false
+        default: "workflow_dispatch"
+        type: string
+    secrets:
+      RB_GH_APP_ID:
+        required: false
+      RB_GH_APP_INSTALLATION_ID:
+        required: false
+      RB_GH_APP_PRIVATE_KEY:
+        required: false
+      RB_GH_APP_WEBHOOK_SECRET:
+        required: false
+
+permissions:
+  contents: read
+  models: read
+  checks: write
+  statuses: read
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  repobrain_external_foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve external GitHub foundation command boundary
+        id: cmd_gate
+        shell: bash
+        run: |
+          comment="${{ inputs.comment_text }}"
+          cmd=""
+          if [[ "$comment" =~ ^/repobrain[[:space:]]+([a-zA-Z_-]+) ]]; then
+            cmd="${BASH_REMATCH[1]}"
+          else
+            cmd="help"
+          fi
+          cmd="$(echo "$cmd" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$cmd" == "help" || "$cmd" == "ask" ]]; then
+            supported="1"
+          else
+            supported="0"
+          fi
+          echo "cmd=$cmd" >> "$GITHUB_OUTPUT"
+          echo "supported=$supported" >> "$GITHUB_OUTPUT"
+
+      - name: Post unsupported command boundary comment
+        if: steps.cmd_gate.outputs.supported == '0' && inputs.dry_run != 'true' && inputs.issue_number != ''
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          COMMAND: ${{ steps.cmd_gate.outputs.cmd }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = Number(process.env.ISSUE_NUMBER);
+            if (!issue_number) {
+              core.info("Issue number is empty; skip unsupported boundary comment.");
+              return;
+            }
+            const command = String(process.env.COMMAND || "unknown");
+            const body = [
+              "RepoBrain external GitHub mode foundation currently supports only `/repobrain help` and `/repobrain ask`.",
+              `Received: \`/repobrain ${command}\`.`,
+              "This bounded behavior is intentional for the current external GitHub foundation stage.",
+            ].join("\n");
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+
+      - uses: actions/github-script@v7
+        id: checkout_ref
+        if: steps.cmd_gate.outputs.supported == '1'
+        with:
+          script: |
+            let ref = context.sha;
+            let reason = "default_workflow_sha";
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueRaw = `${{ inputs.issue_number }}`.trim();
+            const issueNumber = Number(String(issueRaw).replace(/^#/, ""));
+            if (issueNumber) {
+              try {
+                const { data: pull } = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: issueNumber,
+                });
+                const baseRepo = `${owner}/${repo}`.toLowerCase();
+                const headRepo = String(pull.head?.repo?.full_name || "").toLowerCase();
+                const headSha = String(pull.head?.sha || "").trim();
+                if (headRepo === baseRepo && headSha && String(pull.state || "").toLowerCase() === "open") {
+                  ref = headSha;
+                  reason = "same_repo_pr_head_sha";
+                } else if (headRepo !== baseRepo) {
+                  reason = "fork_pr_uses_default_branch_runtime";
+                } else if (String(pull.state || "").toLowerCase() !== "open") {
+                  reason = "closed_pr_uses_default_branch_runtime";
+                } else {
+                  reason = "missing_pr_head_sha";
+                }
+              } catch (error) {
+                core.info(`PR head resolution skipped: ${error}`);
+                reason = "pull_lookup_failed";
+              }
+            } else {
+              reason = "issue_number_not_provided";
+            }
+            core.info(`RepoBrain external checkout ref resolution: ${reason} -> ${ref}`);
+            core.setOutput("ref", ref);
+            core.setOutput("reason", reason);
+
+      - name: Checkout caller repository
+        if: steps.cmd_gate.outputs.supported == '1'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.checkout_ref.outputs.ref }}
+
+      - name: Run RepoBrain Action (external GitHub foundation)
+        if: steps.cmd_gate.outputs.supported == '1'
+        uses: alexworkingai/RepoBrain-Action@main
+        with:
+          tky_mode: "auto"
+          dry_run: ${{ inputs.dry_run }}
+          comment_text: ${{ inputs.comment_text }}
+          issue_number: ${{ inputs.issue_number }}
+
+      - name: Checkout RepoBrain tooling for readiness artifacts
+        if: always()
+        uses: actions/checkout@v4
+        with:
+          repository: alexworkingai/RepoBrain-Action
+          ref: main
+          path: .repobrain_action
+
+      - name: Setup Python for readiness tooling
+        if: always()
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install readiness tooling dependencies
+        if: always()
+        shell: bash
+        run: |
+          python -m pip install -U pip
+          pip install orjson
+
+      - name: Generate external install readiness artifacts
+        if: always()
+        shell: bash
+        env:
+          GITHUB_EVENT_NAME: ${{ inputs.caller_event_name }}
+          RB_GH_APP_ID: ${{ secrets.RB_GH_APP_ID || vars.RB_GH_APP_ID }}
+          RB_GH_APP_ID_SOURCE: ${{ secrets.RB_GH_APP_ID != '' && 'secret' || (vars.RB_GH_APP_ID != '' && 'vars' || 'missing') }}
+          RB_GH_APP_INSTALLATION_ID: ${{ secrets.RB_GH_APP_INSTALLATION_ID || vars.RB_GH_APP_INSTALLATION_ID }}
+          RB_GH_APP_INSTALLATION_ID_SOURCE: ${{ secrets.RB_GH_APP_INSTALLATION_ID != '' && 'secret' || (vars.RB_GH_APP_INSTALLATION_ID != '' && 'vars' || 'missing') }}
+          RB_GH_APP_PRIVATE_KEY: ${{ secrets.RB_GH_APP_PRIVATE_KEY }}
+          RB_GH_APP_PRIVATE_KEY_PATH: ${{ vars.RB_GH_APP_PRIVATE_KEY_PATH }}
+          RB_GH_APP_WEBHOOK_SECRET: ${{ secrets.RB_GH_APP_WEBHOOK_SECRET }}
+          RB_GH_APP_REPOSITORY_SELECTION: ${{ vars.RB_GH_APP_REPOSITORY_SELECTION }}
+          RB_GH_APP_SELECTED_REPOS: ${{ vars.RB_GH_APP_SELECTED_REPOS }}
+          RB_READINESS_GENERATION_EVENT_NAME: ${{ inputs.caller_event_name }}
+          RB_READINESS_GENERATION_WORKFLOW_PATH: ${{ inputs.workflow_path }}
+          RB_READINESS_GENERATION_REF: ${{ github.ref }}
+          RB_READINESS_GENERATION_SHA: ${{ github.sha }}
+          RB_READINESS_GENERATION_WORKFLOW_REF: ${{ github.workflow_ref }}
+          RB_READINESS_GENERATION_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RB_READINESS_GENERATION_RUN_ID: ${{ github.run_id }}
+          RB_READINESS_GENERATION_RUN_ATTEMPT: ${{ github.run_attempt }}
+          RB_READINESS_GENERATION_JOB_NAME: repobrain_external_foundation
+        run: |
+          python .repobrain_action/scripts/check_install_readiness.py \
+            --workflow "${{ inputs.workflow_path }}" \
+            --output-json artifacts/onboarding/repobrain_install_readiness.json \
+            --output-md artifacts/onboarding/repobrain_install_readiness.md
+
+      - name: Upload RepoBrain audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-audit
+          path: artifacts/audit/*.json
+          if-no-files-found: ignore
+
+      - name: Upload RepoBrain diagnostic summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-diagnostic-summary
+          path: artifacts/diagnostic_summary.md
+          if-no-files-found: ignore
+
+      - name: Upload RepoBrain TKYA evidence pack artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-tkya-evidence-pack
+          path: |
+            artifacts/evidence_pack/repobrain_tkya_evidence_pack_internal.json
+            artifacts/evidence_pack/repobrain_tkya_evidence_pack_public_safe.json
+            artifacts/evidence_pack/repobrain_tkya_evidence_pack.md
+          if-no-files-found: ignore
+
+      - name: Upload RepoBrain install readiness artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-install-readiness
+          path: |
+            artifacts/onboarding/repobrain_install_readiness.json
+            artifacts/onboarding/repobrain_install_readiness.md
+          if-no-files-found: ignore

@@ -17,8 +17,9 @@ Not a fit yet:
 
 1. Confirm setup/readiness path is explicit and actionable.
 2. Validate GitHub mode on an open PR (`help`, `ask`, `review`, `fix` with safe expectations).
-3. Validate external ask path on local third-party checkout.
-4. Validate MCP ask path and unsupported block behavior for non-ask capability.
+3. Validate external GitHub mode foundation on a third-party repo (`help`, `ask`, and explicit unsupported `review` block).
+4. Validate external ask path on local third-party checkout.
+5. Validate MCP ask path and unsupported block behavior for non-ask capability.
 
 ## Success Criteria
 

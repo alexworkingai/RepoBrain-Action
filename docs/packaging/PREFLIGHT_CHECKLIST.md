@@ -22,7 +22,13 @@ Use this checklist before handing RepoBrain to an operator/deployer.
 2. Expected artifacts are accessible.
 3. Operator can trigger `/repobrain help`.
 
-### External mode
+### External GitHub mode foundation
+
+1. Caller workflow is installed from reusable foundation template.
+2. Operator understands help/ask-only boundary.
+3. Readiness artifacts are expected on each run.
+
+### External mode (CLI)
 
 1. `scripts/run_github.py --mode external` is callable.
 2. Local path for target repository is known.

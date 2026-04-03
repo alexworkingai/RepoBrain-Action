@@ -5,6 +5,7 @@
 This quickstart is for operators validating RepoBrain in:
 
 - GitHub App mode (primary runtime),
+- external GitHub mode foundation (third-party GitHub-native bounded path),
 - external CLI mode (ask-only trial path).
 
 It describes what to verify first, what to run, and how to classify outcomes.
@@ -45,7 +46,34 @@ What to verify:
 - profile truth is coherent in audit/evidence,
 - review/fix `cheap` normalization guardrail remains explicit when applicable.
 
-## 3) External Mode Validation (Ask-Only)
+## 3) External GitHub Mode Foundation Validation (Third-Party)
+
+Install caller workflow in target repository:
+
+- `docs/packaging/repobrain_external_github_foundation_template.yml`
+- `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+
+Run:
+
+1. `/repobrain help`
+2. `/repobrain ask ...`
+
+Expected:
+
+- workflow executes via reusable external foundation path,
+- readiness artifact is uploaded,
+- ask/help boundary is clear and compact.
+
+Negative check:
+
+1. `/repobrain review`
+
+Expected:
+
+- explicit unsupported boundary comment,
+- no false review/fix support claim.
+
+## 4) External CLI Mode Validation (Ask-Only)
 
 Run against a local checkout of target repository:
 
@@ -74,7 +102,7 @@ Expected:
 - blocked status
 - decision `UNSUPPORTED_COMMAND`
 
-## 4) MCP Surface Validation (Ask-Only)
+## 5) MCP Surface Validation (Ask-Only)
 
 ```bash
 python scripts/run_mcp_surface.py \
@@ -100,7 +128,7 @@ Expected:
 - `status=blocked`
 - `decision=UNSUPPORTED_CAPABILITY`
 
-## 5) Trial Evidence Capture
+## 6) Trial Evidence Capture
 
 Use:
 
@@ -114,7 +142,7 @@ Capture for each executed step:
 - operator blockers
 - final verdict (`TRIAL_PASS|TRIAL_PARTIAL|TRIAL_BLOCKED`)
 
-## 6) Stop Conditions
+## 7) Stop Conditions
 
 Stop and file product issue if:
 

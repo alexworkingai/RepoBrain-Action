@@ -21,7 +21,26 @@ References:
 - `docs/onboarding/permissions.md`
 - `docs/OPERATOR_QUICKSTART.md`
 
-## Surface 2: External CLI Mode (Bounded)
+## Surface 2: External GitHub Mode Foundation (Bounded)
+
+Use when you need a third-party GitHub-native entry path without claiming full parity.
+
+Current supported commands:
+
+- `/repobrain help`
+- `/repobrain ask ...`
+
+Current unsupported commands:
+
+- `/repobrain review`
+- `/repobrain fix`
+
+Template and runbook:
+
+- `docs/packaging/repobrain_external_github_foundation_template.yml`
+- `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+
+## Surface 3: External CLI Mode (Bounded)
 
 Use when you need bounded external execution on repository checkout.
 
@@ -40,7 +59,7 @@ Entrypoint:
 python scripts/run_github.py --mode external --repo-root /path/to/repo --command ask --query "..."
 ```
 
-## Surface 3: MCP-Facing Surface (Bounded)
+## Surface 4: MCP-Facing Surface (Bounded)
 
 Use for structured ask-first integration.
 

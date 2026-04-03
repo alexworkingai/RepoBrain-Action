@@ -14,7 +14,12 @@ Accepted and evidenced capabilities only.
 
 ## Proven Bounded Capabilities
 
-### External mode
+### External GitHub mode foundation
+
+- third-party GitHub-native `/repobrain help` and `/repobrain ask` are supported.
+- `/repobrain review` and `/repobrain fix` are explicitly unsupported and block honestly.
+
+### External mode (CLI)
 
 - `ask` is supported.
 - `review` and `fix` are explicitly unsupported and block honestly.

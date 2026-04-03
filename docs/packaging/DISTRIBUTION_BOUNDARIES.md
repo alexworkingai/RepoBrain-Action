@@ -9,8 +9,9 @@ The current packaging layer supports repeatable handoff and operator onboarding 
 ## Explicitly Supported Today
 
 1. GitHub mode: ask/review/fix within accepted governance and readiness boundaries.
-2. External mode: ask-only.
-3. MCP surface: ask-only.
+2. External GitHub mode foundation: help/ask only.
+3. External mode (CLI): ask-only.
+4. MCP surface: ask-only.
 
 ## Explicitly Not Supported Today
 

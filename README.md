@@ -24,6 +24,12 @@ Execution profile controls:
 
 ### External mode (bounded surface)
 
+Third-party GitHub-native foundation (bounded):
+
+- template: `docs/packaging/repobrain_external_github_foundation_template.yml`
+- supported: `/repobrain help`, `/repobrain ask ...`
+- unsupported (explicit block): `/repobrain review`, `/repobrain fix`
+
 CLI entrypoint:
 
 ```bash
@@ -80,6 +86,7 @@ Common artifacts include:
 - User guide: `docs/USER_GUIDE.md`
 - Operator quickstart: `docs/OPERATOR_QUICKSTART.md`
 - External mode: `docs/EXTERNAL_MODE.md`
+- External GitHub foundation: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - MCP surface contract: `docs/MCP_SURFACE.md`
 - Trial template: `docs/trials/external_repo_trial_template.md`
 - Trial #1 runbook: `docs/trials/external_repo_trial_01_elen_mcp.md`

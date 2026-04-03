@@ -1,0 +1,43 @@
+name: RepoBrain External GitHub Mode
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = print only, false = post comment"
+        required: false
+        default: "false"
+        type: string
+      comment_text:
+        description: "RepoBrain command text (manual testing)"
+        required: false
+        default: "/repobrain help"
+        type: string
+      issue_number:
+        description: "Issue/PR number for workflow_dispatch (digits or #N)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  models: read
+  checks: write
+  statuses: read
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  repobrain_external:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/repobrain')
+    uses: alexworkingai/RepoBrain-Action/.github/workflows/repobrain_external_foundation.yml@main
+    with:
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      comment_text: ${{ github.event_name == 'workflow_dispatch' && inputs.comment_text || github.event.comment.body }}
+      issue_number: ${{ github.event_name == 'workflow_dispatch' && inputs.issue_number || github.event.issue.number }}
+      workflow_path: .github/workflows/repobrain_external.yml
+      caller_event_name: ${{ github.event_name }}
+    secrets: inherit

@@ -9,6 +9,7 @@ This document explains RepoBrain readiness at startup stage: externally evaluabl
 RepoBrain is a governed repository cognition runtime with:
 
 - GitHub-native ask/review/fix as primary surface,
+- external GitHub mode foundation (third-party help/ask),
 - external ask-only CLI surface,
 - MCP ask-only surface,
 - explicit safety/governance and auditable artifacts.
@@ -16,9 +17,10 @@ RepoBrain is a governed repository cognition runtime with:
 ## What Is Ready to Evaluate
 
 1. GitHub mode behavior and artifacts.
-2. External ask path on third-party repository checkout.
-3. MCP ask contract and honest unsupported blocking.
-4. Operator readiness flow for GitHub App setup.
+2. External GitHub mode foundation path on third-party repository.
+3. External CLI ask path on third-party repository checkout.
+4. MCP ask contract and honest unsupported blocking.
+5. Operator readiness flow for GitHub App setup.
 
 ## What Is Intentionally Bounded
 
