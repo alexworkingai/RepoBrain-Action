@@ -24,6 +24,7 @@ Explicitly unsupported (blocked with clear boundary message):
 1. Install the RepoBrain GitHub App to the target repository (selected-repo rollout recommended).
 2. Add `.github/workflows/repobrain_external.yml` using:
    - `docs/packaging/repobrain_external_github_foundation_template.yml`
+   - reusable host: `alexworkingai/repobrain-community/.github/workflows/repobrain_external_foundation.yml@main`
 3. Configure required secrets/variables:
    - `RB_GH_APP_ID`
    - `RB_GH_APP_INSTALLATION_ID`

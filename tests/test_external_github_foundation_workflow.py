@@ -28,7 +28,7 @@ def test_external_github_foundation_template_uses_reusable_workflow_call() -> No
     assert "name: RepoBrain External GitHub Mode" in template
     assert "issue_comment:" in template
     assert "workflow_dispatch:" in template
-    assert "uses: alexworkingai/RepoBrain-Action/.github/workflows/repobrain_external_foundation.yml@main" in template
+    assert "uses: alexworkingai/repobrain-community/.github/workflows/repobrain_external_foundation.yml@main" in template
     assert "comment_text: ${{ github.event_name == 'workflow_dispatch' && inputs.comment_text || github.event.comment.body }}" in template
     assert "issue_number: ${{ github.event_name == 'workflow_dispatch' && inputs.issue_number || github.event.issue.number }}" in template
     assert "workflow_path: .github/workflows/repobrain_external.yml" in template

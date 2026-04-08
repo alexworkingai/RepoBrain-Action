@@ -33,7 +33,7 @@ permissions:
 jobs:
   repobrain_external:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/repobrain')
-    uses: alexworkingai/RepoBrain-Action/.github/workflows/repobrain_external_foundation.yml@main
+    uses: alexworkingai/repobrain-community/.github/workflows/repobrain_external_foundation.yml@main
     with:
       dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
       comment_text: ${{ github.event_name == 'workflow_dispatch' && inputs.comment_text || github.event.comment.body }}
