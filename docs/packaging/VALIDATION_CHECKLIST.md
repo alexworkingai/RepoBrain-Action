@@ -27,7 +27,16 @@ Verify on real PR/issue path:
 2. Artifacts are present and coherent.
 3. Unsupported/blocked behavior remains explicit where applicable.
 
-### External mode
+### External GitHub mode foundation
+
+Verify on a real third-party GitHub repository:
+
+1. `/repobrain help` succeeds with compact output.
+2. `/repobrain ask ...` succeeds with artifacts present.
+3. `/repobrain review` and `/repobrain fix` are blocked explicitly.
+4. Readiness artifact remains operator-readable.
+
+### External mode (CLI)
 
 Verify on real target checkout:
 

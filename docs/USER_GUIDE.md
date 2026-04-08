@@ -26,6 +26,21 @@ Execution profile flags are user-facing:
 - default remains `balanced`
 - safety guardrail: review/fix normalize `cheap -> balanced` with explicit audit truth
 
+### External GitHub Mode Foundation (Third-Party)
+
+GitHub-native bounded entry path for external repositories:
+
+- supported: `/repobrain help`, `/repobrain ask ...`
+- unsupported (explicit block): `/repobrain review`, `/repobrain fix`
+
+Setup template:
+
+- `docs/packaging/repobrain_external_github_foundation_template.yml`
+
+Runbook:
+
+- `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+
 ### External CLI Mode (`scripts/run_github.py --mode external`)
 
 Current support is intentionally narrow:
@@ -61,6 +76,7 @@ Supported now: `ask` only.
 ### Works Today
 
 - GitHub mode ask/review/fix on configured repositories.
+- External GitHub mode foundation on third-party repos for help/ask with explicit unsupported blocks for review/fix.
 - External mode ask execution on third-party repository checkouts.
 - Operator readiness contract for GitHub App onboarding.
 - Evidence/audit artifact generation, including TKYA evidence pack.
@@ -69,7 +85,7 @@ Supported now: `ask` only.
 
 - External mode review/fix execution.
 - MCP surface review/fix capabilities.
-- Full GitHub-native PR runtime inside arbitrary third-party repositories from external mode alone.
+- Full ask/review/fix parity in third-party GitHub-native mode.
 - Marketplace-style product packaging/admin portal.
 
 ## Artifacts You Should Expect
@@ -86,6 +102,7 @@ Depending on command and mode:
 
 - Operator install/readiness: `docs/OPERATOR_QUICKSTART.md`
 - External mode details: `docs/EXTERNAL_MODE.md`
+- External GitHub foundation runbook: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - MCP surface details: `docs/MCP_SURFACE.md`
 - Packaging overview: `docs/packaging/PACKAGING_OVERVIEW.md`
 - Startup readiness: `docs/startup/STARTUP_READINESS.md`

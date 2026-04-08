@@ -7,6 +7,7 @@ This matrix reflects accepted product behavior after Sprint 59.
 | Surface | Ask | Review | Fix | Help | Notes |
 |---|---|---|---|---|---|
 | GitHub mode (`issue_comment` PR flow) | Supported | Supported | Supported | Supported | Primary runtime surface with readiness/audit/evidence artifacts. |
+| External GitHub mode foundation (`workflow_call` reusable path) | Supported | Unsupported (explicit block) | Unsupported (explicit block) | Supported | Third-party GitHub-native bounded foundation using reusable workflow and explicit command boundary. |
 | External CLI mode (`scripts/run_github.py --mode external`) | Supported | Unsupported (explicit block) | Unsupported (explicit block) | N/A (use CLI docs) | Ask-first trial path for third-party repo execution without full PR-native runtime. |
 | MCP surface (`scripts/run_mcp_surface.py`) | Supported | Unsupported (explicit block) | Unsupported (explicit block) | N/A (request/response contract) | Thin ask-first structured adapter over accepted external ask runtime. |
 

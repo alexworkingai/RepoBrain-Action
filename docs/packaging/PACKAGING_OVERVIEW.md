@@ -8,11 +8,12 @@ It is a pre-distribution hardening layer, not a feature-expansion sprint.
 
 ## Current Product Shape
 
-RepoBrain currently exposes three bounded surfaces:
+RepoBrain currently exposes four bounded surfaces:
 
 1. GitHub mode (primary): ask/review/fix in comment-driven workflow.
-2. External CLI mode (bounded): ask only.
-3. MCP-facing surface (bounded): ask only.
+2. External GitHub mode foundation (bounded): help/ask only.
+3. External CLI mode (bounded): ask only.
+4. MCP-facing surface (bounded): ask only.
 
 ## Packaging Objectives
 
@@ -38,6 +39,7 @@ This packaging layer does not include:
 
 - Installation shape: `docs/packaging/INSTALLATION_SHAPE.md`
 - Capability surfaces: `docs/packaging/CAPABILITY_SURFACES.md`
+- External GitHub foundation runbook: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - Preflight checklist: `docs/packaging/PREFLIGHT_CHECKLIST.md`
 - Validation checklist: `docs/packaging/VALIDATION_CHECKLIST.md`
 - Distribution boundaries: `docs/packaging/DISTRIBUTION_BOUNDARIES.md`

@@ -3,6 +3,7 @@
 | Surface | Readiness Level | What Is Stable | What Is Bounded | Evaluator Expectation |
 |---|---|---|---|---|
 | GitHub mode | Startup-evaluable (primary) | ask/review/fix flow, readiness contract, artifact truth | depends on setup quality and scope discipline | evaluate as primary product surface |
+| External GitHub mode foundation | Startup-evaluable (bounded) | third-party GitHub-native help/ask path | review/fix unsupported | evaluate as first installable third-party GitHub foundation |
 | External CLI mode | Startup-evaluable (bounded) | ask path on third-party checkout | review/fix unsupported | use for bounded external ask validation |
 | MCP surface | Startup-evaluable (bounded) | ask request/response contract | non-ask capabilities unsupported | use for integration-style ask evaluation only |
 | Marketplace-style distribution | Not ready | none | launch/admin/billing not provided | do not evaluate as launched distribution |

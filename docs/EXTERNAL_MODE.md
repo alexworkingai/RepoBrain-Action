@@ -2,11 +2,34 @@
 
 ## Purpose
 
-External mode provides a controlled CLI execution path for third-party repository trials without requiring GitHub issue-comment runtime wiring.
+RepoBrain currently exposes two bounded external paths:
 
-Current status: **ask-first / ask-only**.
+1. External GitHub mode foundation (third-party GitHub-native ask/help path).
+2. External CLI mode (ask-only on local checkout).
 
-## Entrypoint
+Both paths are intentionally bounded and must block unsupported capabilities honestly.
+
+## External GitHub Mode Foundation (Third-Party)
+
+Use this when a third-party repository needs GitHub-native command entry via workflow.
+
+Foundation template:
+
+- `docs/packaging/repobrain_external_github_foundation_template.yml`
+
+Contract in this foundation stage:
+
+- supported: `/repobrain help`, `/repobrain ask ...`
+- unsupported (explicit block): `/repobrain review`, `/repobrain fix`
+
+Runbook and install details:
+
+- `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+- `docs/onboarding/github_app_setup.md`
+
+## External CLI Mode (Ask-Only)
+
+Entrypoint:
 
 ```bash
 python scripts/run_github.py \
@@ -18,14 +41,14 @@ python scripts/run_github.py \
 
 Arguments:
 
-- `--mode external` enables external path
-- `--repo-root` points to repository checkout
-- `--command` currently supports only `ask`
-- `--query` is required for ask
-- `--dry-run` defaults to true and is accepted for parity
-- `--tky-mode` defaults to `auto`
+- `--mode external` enables external path.
+- `--repo-root` points to repository checkout.
+- `--command` currently supports only `ask`.
+- `--query` is required for ask.
+- `--dry-run` defaults to true and is accepted for parity.
+- `--tky-mode` defaults to `auto`.
 
-## Support Matrix (External Mode)
+Support in CLI external mode:
 
 - `ask`: supported
 - `review`: unsupported (blocked)
@@ -38,31 +61,29 @@ Block behavior is explicit:
 - `decision=UNSUPPORTED_COMMAND`
 - message includes requested unsupported command
 
-## Runtime Behavior
+## Runtime Behavior (CLI External Ask)
 
-For supported ask path, external mode:
+For supported ask path, external CLI mode:
 
 1. loads config from target repo root,
 2. builds external index package,
 3. runs retrieval over indexed chunks,
 4. synthesizes ask answer via local provider path.
 
-No `GITHUB_TOKEN` is required for this external ask flow.
+No `GITHUB_TOKEN` is required for this external CLI ask flow.
 
 ## What External Mode Is Not (Yet)
 
 External mode is not currently:
 
-- full PR-native GitHub review/fix runtime,
-- replacement for GitHub App installation/readiness flow,
+- full ask/review/fix parity on third-party GitHub repositories,
+- replacement for primary GitHub-mode review/fix runtime,
 - complete third-party repo automation surface.
-
-For review/fix in PR context, use GitHub mode in the target repository.
 
 ## Trial Usage Reference
 
 - Trial runbook: `docs/trials/external_repo_trial_01_elen_mcp.md`
-- Reusable template: `docs/trials/external_repo_trial_template.md`
+- Reusable trial template: `docs/trials/external_repo_trial_template.md`
 - Evidence template: `docs/trials/external_repo_trial_evidence_template.md`
 - Trial #1 report: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
 - MCP-facing adapter: `docs/MCP_SURFACE.md`
