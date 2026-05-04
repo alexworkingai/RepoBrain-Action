@@ -19,8 +19,8 @@ Foundation template:
 
 Contract in this foundation stage:
 
-- supported: `/repobrain help`, `/repobrain ask ...`
-- unsupported (explicit block): `/repobrain review`, `/repobrain fix`
+- supported: `/repobrain help`, `/repobrain ask ...`, `/repobrain review` (bounded Review-Lite PR triage)
+- unsupported (explicit block): `/repobrain fix`
 
 Runbook and install details:
 
