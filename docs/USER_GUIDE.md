@@ -30,8 +30,8 @@ Execution profile flags are user-facing:
 
 GitHub-native bounded entry path for external repositories:
 
-- supported: `/repobrain help`, `/repobrain ask ...`
-- unsupported (explicit block): `/repobrain review`, `/repobrain fix`
+- supported: `/repobrain help`, `/repobrain ask ...`, `/repobrain review` (bounded Review-Lite PR triage)
+- unsupported (explicit block): `/repobrain fix`
 
 Setup template:
 
@@ -76,14 +76,14 @@ Supported now: `ask` only.
 ### Works Today
 
 - GitHub mode ask/review/fix on configured repositories.
-- External GitHub mode foundation on third-party repos for help/ask with explicit unsupported blocks for review/fix.
+- External GitHub mode foundation on third-party repos for help/ask plus bounded Review-Lite, with explicit unsupported block for fix.
 - External mode ask execution on third-party repository checkouts.
 - Operator readiness contract for GitHub App onboarding.
 - Evidence/audit artifact generation, including TKYA evidence pack.
 
 ### Not Yet (Explicitly)
 
-- External mode review/fix execution.
+- External mode fix execution.
 - MCP surface review/fix capabilities.
 - Full ask/review/fix parity in third-party GitHub-native mode.
 - Marketplace-style product packaging/admin portal.
