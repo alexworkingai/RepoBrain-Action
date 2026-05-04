@@ -11,11 +11,12 @@ It provides a bounded, product-shaped install path for external repositories wit
 Supported in external GitHub mode foundation:
 
 - `/repobrain help`
+- `/repobrain doctor`
 - `/repobrain ask ...`
+- `/repobrain review` (bounded Review-Lite PR triage)
 
 Explicitly unsupported (blocked with clear boundary message):
 
-- `/repobrain review`
 - `/repobrain fix`
 - non-RepoBrain or out-of-contract commands
 
@@ -31,7 +32,7 @@ Explicitly unsupported (blocked with clear boundary message):
    - `RB_GH_APP_PRIVATE_KEY` (recommended) or `RB_GH_APP_PRIVATE_KEY_PATH`
    - `RB_GH_APP_REPOSITORY_SELECTION`
    - `RB_GH_APP_SELECTED_REPOS` (when selection mode is `selected`)
-4. Trigger `/repobrain help` on an open PR first, then `/repobrain ask ...`.
+4. Trigger `/repobrain doctor` on an open PR first, then `/repobrain help`, `/repobrain ask ...`, and `/repobrain review`.
 
 ## Expected Artifacts
 
@@ -47,17 +48,23 @@ If command is out of boundary, readiness still publishes while unsupported comma
 ## Third-Party Trial Runbook (Minimal)
 
 1. Open PR in target external repository.
-2. Post `/repobrain help`.
+2. Post `/repobrain doctor`.
 3. Verify:
    - workflow executed,
    - readiness artifact exists,
-   - boundary/output is compact and readable.
-4. Post `/repobrain ask <question>`.
+   - setup card/output is compact and readable.
+4. Post `/repobrain help`.
 5. Verify:
+   - supported commands are listed clearly,
+   - doctor/help messaging remains bounded and public-safe.
+6. Post `/repobrain ask <question>`.
+7. Verify:
    - ask response published,
    - audit/diagnostic/evidence artifacts uploaded.
-6. Optional negative check: `/repobrain review`.
-7. Verify unsupported behavior is explicit and does not pretend support.
+8. Post `/repobrain review`.
+9. Verify Review-Lite remains compact, read-only, and does not claim full review parity.
+10. Optional negative check: `/repobrain fix`.
+11. Verify unsupported behavior is explicit and does not pretend support.
 
 ## Stop Conditions
 

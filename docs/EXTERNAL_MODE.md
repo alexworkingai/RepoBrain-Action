@@ -19,13 +19,15 @@ Foundation template:
 
 Contract in this foundation stage:
 
-- supported: `/repobrain help`, `/repobrain ask ...`, `/repobrain review` (bounded Review-Lite PR triage)
+- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded Review-Lite PR triage)
 - unsupported (explicit block): `/repobrain fix`
 
 Runbook and install details:
 
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - `docs/onboarding/github_app_setup.md`
+
+Use `/repobrain doctor` to verify the external setup surface before first ask/review commands.
 
 ## External CLI Mode (Ask-Only)
 
