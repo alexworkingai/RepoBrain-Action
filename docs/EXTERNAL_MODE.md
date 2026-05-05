@@ -19,7 +19,7 @@ Foundation template:
 
 Contract in this foundation stage:
 
-- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite suggestion-only)
+- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual patch suggestion)
 - unsupported (explicit block): out-of-contract commands
 
 Runbook and install details:
