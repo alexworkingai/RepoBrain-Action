@@ -13,7 +13,7 @@ Supported in external GitHub mode foundation:
 - `/repobrain help`
 - `/repobrain doctor`
 - `/repobrain ask ...`
-- `/repobrain review` (bounded read-only Review v1)
+- `/repobrain review` (bounded read-only Review Candidate)
 - `/repobrain fix` (bounded Fix-Lite suggestion-only)
 
 Explicitly unsupported (blocked with clear boundary message):
@@ -62,7 +62,7 @@ If command is out of boundary, readiness still publishes while unsupported comma
    - ask response published,
    - audit/diagnostic/evidence artifacts uploaded.
 8. Post `/repobrain review`.
-9. Verify Review v1 remains compact, read-only, and does not claim full review parity.
+9. Verify Review Candidate remains compact, read-only, and does not claim full review parity.
 10. Post `/repobrain fix`.
 11. Verify Fix-Lite remains suggestion-only, does not apply patches, and does not pretend support beyond bounded manual direction.
 
