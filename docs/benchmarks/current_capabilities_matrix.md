@@ -7,7 +7,7 @@ This matrix reflects accepted product behavior after Sprint 59.
 | Surface | Ask | Review | Fix | Help | Notes |
 |---|---|---|---|---|---|
 | GitHub mode (`issue_comment` PR flow) | Supported | Supported | Supported | Supported | Primary runtime surface with readiness/audit/evidence artifacts. |
-| External GitHub mode foundation (`workflow_call` reusable path) | Supported | Supported (bounded read-only Review v1) | Unsupported (explicit block) | Supported | Third-party GitHub-native bounded foundation using reusable workflow and explicit command boundary. |
+| External GitHub mode foundation (`workflow_call` reusable path) | Supported | Supported (bounded read-only Review v1) | Supported (bounded Fix-Lite suggestion-only) | Supported | Third-party GitHub-native bounded foundation using reusable workflow and explicit command boundary. |
 | External CLI mode (`scripts/run_github.py --mode external`) | Supported | Unsupported (explicit block) | Unsupported (explicit block) | N/A (use CLI docs) | Ask-first trial path for third-party repo execution without full PR-native runtime. |
 | MCP surface (`scripts/run_mcp_surface.py`) | Supported | Unsupported (explicit block) | Unsupported (explicit block) | N/A (request/response contract) | Thin ask-first structured adapter over accepted external ask runtime. |
 
@@ -31,4 +31,4 @@ This matrix reflects accepted product behavior after Sprint 59.
 
 | Trial | Repository | Outcome | Interpretation |
 |---|---|---|---|
-| Trial #01 | `alexworkingai/Elen-MCP-v.2.2.0` | External ask success; external review now bounded to read-only Review v1 | External execution path validated; full external command parity and external fix are still not delivered. |
+| Trial #01 | `alexworkingai/Elen-MCP-v.2.2.0` | External ask success; external review now bounded to read-only Review v1; external fix now bounded to Fix-Lite suggestion-only | External execution path validated; full external command parity and autofix are still not delivered. |

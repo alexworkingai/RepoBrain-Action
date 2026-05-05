@@ -14,10 +14,10 @@ Supported in external GitHub mode foundation:
 - `/repobrain doctor`
 - `/repobrain ask ...`
 - `/repobrain review` (bounded read-only Review v1)
+- `/repobrain fix` (bounded Fix-Lite suggestion-only)
 
 Explicitly unsupported (blocked with clear boundary message):
 
-- `/repobrain fix`
 - non-RepoBrain or out-of-contract commands
 
 ## Installation Shape (Third-Party Repo)
@@ -32,7 +32,7 @@ Explicitly unsupported (blocked with clear boundary message):
    - `RB_GH_APP_PRIVATE_KEY` (recommended) or `RB_GH_APP_PRIVATE_KEY_PATH`
    - `RB_GH_APP_REPOSITORY_SELECTION`
    - `RB_GH_APP_SELECTED_REPOS` (when selection mode is `selected`)
-4. Trigger `/repobrain doctor` on an open PR first, then `/repobrain help`, `/repobrain ask ...`, and `/repobrain review`.
+4. Trigger `/repobrain doctor` on an open PR first, then `/repobrain help`, `/repobrain ask ...`, `/repobrain review`, and `/repobrain fix`.
 
 ## Expected Artifacts
 
@@ -63,8 +63,8 @@ If command is out of boundary, readiness still publishes while unsupported comma
    - audit/diagnostic/evidence artifacts uploaded.
 8. Post `/repobrain review`.
 9. Verify Review v1 remains compact, read-only, and does not claim full review parity.
-10. Optional negative check: `/repobrain fix`.
-11. Verify unsupported behavior is explicit and does not pretend support.
+10. Post `/repobrain fix`.
+11. Verify Fix-Lite remains suggestion-only, does not apply patches, and does not pretend support beyond bounded manual direction.
 
 ## Stop Conditions
 
