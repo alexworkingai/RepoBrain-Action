@@ -40,6 +40,6 @@ def test_external_mode_doc_describes_github_foundation_boundary() -> None:
     text = Path("docs/EXTERNAL_MODE.md").read_text(encoding="utf-8")
 
     assert "External GitHub Mode Foundation (Third-Party)" in text
-    assert "supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded Review-Lite PR triage)" in text
+    assert "supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review v1)" in text
     assert "unsupported (explicit block): `/repobrain fix`" in text
     assert "docs/packaging/repobrain_external_github_foundation_template.yml" in text

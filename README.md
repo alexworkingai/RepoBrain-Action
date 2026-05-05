@@ -27,7 +27,7 @@ Execution profile controls:
 Third-party GitHub-native foundation (bounded):
 
 - template: `docs/packaging/repobrain_external_github_foundation_template.yml`
-- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (Review-Lite PR triage)
+- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review v1)
 - unsupported (explicit block): `/repobrain fix`
 
 CLI entrypoint:
