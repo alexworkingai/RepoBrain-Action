@@ -1,4 +1,4 @@
-﻿# RepoBrain External Mode
+# RepoBrain External Mode
 
 ## Purpose
 
@@ -101,8 +101,8 @@ External mode is not currently:
 
 ## Trial Usage Reference
 
-- Trial runbook: `docs/trials/external_repo_trial_01_elen_mcp.md`
+- Historical Sprint 59 trial runbook artifact: `docs/trials/external_repo_trial_01_elen_mcp.md`
 - Reusable trial template: `docs/trials/external_repo_trial_template.md`
 - Evidence template: `docs/trials/external_repo_trial_evidence_template.md`
-- Trial #1 report: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
+- Historical benchmark narrative artifact: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
 - MCP-facing adapter: `docs/MCP_SURFACE.md`

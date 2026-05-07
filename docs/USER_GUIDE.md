@@ -1,4 +1,4 @@
-﻿# RepoBrain User Guide (Current Reality)
+# RepoBrain User Guide (Current Reality)
 
 ## What RepoBrain Is
 
@@ -107,5 +107,5 @@ Depending on command and mode:
 - Packaging overview: `docs/packaging/PACKAGING_OVERVIEW.md`
 - Startup readiness: `docs/startup/STARTUP_READINESS.md`
 - Trial protocol/templates: `docs/trials/external_repo_trial_template.md`
-- Trial #1 runbook: `docs/trials/external_repo_trial_01_elen_mcp.md`
-- Trial #1 benchmark narrative: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
+- Historical Sprint 59 trial runbook artifact: `docs/trials/external_repo_trial_01_elen_mcp.md`
+- Historical benchmark narrative artifact: `docs/benchmarks/external_trial_01_elen_mcp_report.md`

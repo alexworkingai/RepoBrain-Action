@@ -1,4 +1,24 @@
-﻿# External Trial #01 Report вЂ” alexworkingai/Elen-MCP-v.2.2.0
+# External Trial #01 Report - alexworkingai/Elen-MCP-v.2.2.0
+
+> Historical artifact notice
+>
+> This document is a historical benchmark/trial artifact. It reflects the RepoBrain surface and trial interpretation at the time of the original Elen-MCP validation and is not the current command-surface truth.
+>
+> Current public external GitHub foundation truth after Sprint 78:
+> - `/repobrain doctor`
+> - `/repobrain help`
+> - `/repobrain ask <question>`
+> - `/repobrain review` as bounded read-only Review Candidate
+> - `/repobrain fix` as bounded Fix-Lite Candidate manual-only patch suggestion
+>
+> Mandatory Fix-Lite boundary:
+> - `No patch was applied. No files were modified.`
+>
+> For current operator guidance, use:
+> - `docs/EXTERNAL_MODE.md`
+> - `docs/USER_GUIDE.md`
+> - `docs/OPERATOR_QUICKSTART.md`
+> - `docs/benchmarks/current_capabilities_matrix.md`
 
 ## Trial Identity
 
@@ -52,4 +72,3 @@ This report does **not** claim:
 ## Next Validation Step
 
 Run a repeated external ask on the same repository with different scoped queries and confirm artifact/log consistency, then prioritize external review/fix enablement only when explicit product scope allows it.
-

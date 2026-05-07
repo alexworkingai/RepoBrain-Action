@@ -1,4 +1,4 @@
-﻿# RepoBrain Action
+# RepoBrain Action
 
 Current release candidate: `0.5.0-rc.1`
 
@@ -89,8 +89,8 @@ Common artifacts include:
 - External GitHub foundation: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - MCP surface contract: `docs/MCP_SURFACE.md`
 - Trial template: `docs/trials/external_repo_trial_template.md`
-- Trial #1 runbook: `docs/trials/external_repo_trial_01_elen_mcp.md`
-- Trial #1 narrative: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
+- Historical Sprint 59 trial runbook artifact: `docs/trials/external_repo_trial_01_elen_mcp.md`
+- Historical benchmark narrative artifact: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
 - Capabilities matrix: `docs/benchmarks/current_capabilities_matrix.md`
 - Environment reference: `docs/env_reference.md`
 - Team governance layer: `docs/governance/TEAM_GOVERNANCE.md`
