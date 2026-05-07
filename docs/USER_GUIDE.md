@@ -1,4 +1,4 @@
-# RepoBrain User Guide (Current Reality)
+﻿# RepoBrain User Guide (Current Reality)
 
 ## What RepoBrain Is
 
@@ -83,7 +83,7 @@ Supported now: `ask` only.
 
 ### Not Yet (Explicitly)
 
-- External mode autofix execution.
+- Autofix execution in any external surface.
 - MCP surface review/fix capabilities.
 - Full ask/review/fix parity in third-party GitHub-native mode.
 - Marketplace-style product packaging/admin portal.

@@ -1,11 +1,11 @@
-# RepoBrain Operator Quickstart
+﻿# RepoBrain Operator Quickstart
 
 ## Scope
 
 This quickstart is for operators validating RepoBrain in:
 
 - GitHub App mode (primary runtime),
-- external GitHub mode foundation (third-party GitHub-native bounded path),
+- external GitHub mode foundation (third-party GitHub-native bounded public path hosted publicly through `repobrain-community`),
 - external CLI mode (ask-only trial path).
 
 It describes what to verify first, what to run, and how to classify outcomes.
@@ -48,30 +48,37 @@ What to verify:
 
 ## 3) External GitHub Mode Foundation Validation (Third-Party)
 
-Install caller workflow in target repository:
+Public runtime host and install kit:
+
+- `repobrain-community`
+
+Legacy reference copies in this repository:
 
 - `docs/packaging/repobrain_external_github_foundation_template.yml`
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 
-Run:
+Run on a third-party PR:
 
-1. `/repobrain help`
-2. `/repobrain ask ...`
+1. `/repobrain doctor`
+2. `/repobrain help`
+3. `/repobrain ask ...`
+4. `/repobrain review`
+5. `/repobrain fix`
 
 Expected:
 
-- workflow executes via reusable external foundation path,
+- workflow executes via the reusable external foundation path,
 - readiness artifact is uploaded,
-- ask/help boundary is clear and compact.
+- doctor/help truth is current and compact,
+- review is a bounded read-only Review Candidate,
+- fix is a bounded Fix-Lite Candidate manual-only patch suggestion,
+- Fix-Lite may return `suggestion available`, `blocked`, or `not applicable`,
+- no duplicate comments appear,
+- no patch-applied, file-modified, commit-created, branch-pushed, PR-created, security-verdict, safe-to-merge, approval/rejection, or autofix claims appear.
 
-Negative check:
+Mandatory Fix-Lite boundary:
 
-1. `/repobrain review`
-
-Expected:
-
-- explicit unsupported boundary comment,
-- no false review/fix support claim.
+- `No patch was applied. No files were modified.`
 
 ## 4) External CLI Mode Validation (Ask-Only)
 

@@ -1,4 +1,4 @@
-# Evaluator Guide
+﻿# Evaluator Guide
 
 ## Who Should Evaluate Now
 
@@ -10,14 +10,14 @@ Good fit now:
 
 Not a fit yet:
 
-- users expecting full external review/fix support,
+- users expecting full external review/fix parity,
 - users expecting marketplace-style turnkey onboarding at scale.
 
 ## Minimal Evaluation Sequence
 
 1. Confirm setup/readiness path is explicit and actionable.
 2. Validate GitHub mode on an open PR (`help`, `ask`, `review`, `fix` with safe expectations).
-3. Validate external GitHub mode foundation on a third-party repo (`help`, `ask`, and explicit unsupported `review` block).
+3. Validate external GitHub mode foundation on a third-party repo (`doctor`, `help`, `ask`, `review`, `fix`).
 4. Validate external ask path on local third-party checkout.
 5. Validate MCP ask path and unsupported block behavior for non-ask capability.
 

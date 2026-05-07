@@ -1,4 +1,4 @@
-# Validation Checklist
+﻿# Validation Checklist
 
 This checklist separates local validation from live validation and defines minimum reality checks for each supported surface.
 
@@ -31,10 +31,18 @@ Verify on real PR/issue path:
 
 Verify on a real third-party GitHub repository:
 
-1. `/repobrain help` succeeds with compact output.
-2. `/repobrain ask ...` succeeds with artifacts present.
-3. `/repobrain review` and `/repobrain fix` are blocked explicitly.
-4. Readiness artifact remains operator-readable.
+1. `/repobrain doctor` succeeds with compact setup output.
+2. `/repobrain help` succeeds with current command truth.
+3. `/repobrain ask ...` succeeds with compact bounded output and artifacts present.
+4. `/repobrain review` succeeds with bounded read-only Review Candidate behavior.
+5. `/repobrain fix` succeeds with bounded Fix-Lite Candidate manual-only patch suggestion behavior.
+6. Readiness artifact remains operator-readable.
+7. No duplicate comments appear.
+8. No patch-applied, file-modified, commit-created, branch-pushed, PR-created, security-verdict, safe-to-merge, approval/rejection, or autofix claims appear.
+
+Historical note:
+
+- earlier external-foundation validation phases used explicit blocked review/fix checks before those commands were accepted; current public truth after Sprint 78 is bounded review/fix support, not ask-only behavior.
 
 ### External mode (CLI)
 

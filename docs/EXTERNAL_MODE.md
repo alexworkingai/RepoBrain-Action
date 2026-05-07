@@ -1,10 +1,10 @@
-# RepoBrain External Mode
+﻿# RepoBrain External Mode
 
 ## Purpose
 
 RepoBrain currently exposes two bounded external paths:
 
-1. External GitHub mode foundation (third-party GitHub-native ask/help path).
+1. External GitHub mode foundation (third-party GitHub-native doctor/help/ask plus bounded Review Candidate and Fix-Lite Candidate through the public `repobrain-community` host).
 2. External CLI mode (ask-only on local checkout).
 
 Both paths are intentionally bounded and must block unsupported capabilities honestly.
@@ -13,14 +13,31 @@ Both paths are intentionally bounded and must block unsupported capabilities hon
 
 Use this when a third-party repository needs GitHub-native command entry via workflow.
 
-Foundation template:
+Foundation template reference in this repository:
 
 - `docs/packaging/repobrain_external_github_foundation_template.yml`
+
+Canonical public host and install kit:
+
+- `repobrain-community`
 
 Contract in this foundation stage:
 
 - supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual patch suggestion)
 - unsupported (explicit block): out-of-contract commands
+
+Bounded non-claims in this public surface:
+
+- no patch application
+- no file modification
+- no commit creation
+- no branch pushing
+- no PR creation
+- no security verdicts
+- no safe-to-merge claims
+- no approval/rejection verdicts
+- no autofix
+- no full review parity
 
 Runbook and install details:
 

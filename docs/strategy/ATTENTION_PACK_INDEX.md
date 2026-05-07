@@ -1,4 +1,4 @@
-# RepoBrain Strategic Attention Pack
+﻿# RepoBrain Strategic Attention Pack
 
 ## Purpose
 
@@ -28,6 +28,6 @@ It is aligned to accepted product reality and explicitly bounded.
 This package does not claim:
 
 - Marketplace launch,
-- full external review/fix support,
+- full external GitHub-native review/fix parity,
 - MCP breadth beyond ask,
 - protected-kernel implementation disclosure.

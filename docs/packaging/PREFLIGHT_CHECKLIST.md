@@ -1,4 +1,4 @@
-# Preflight Checklist
+﻿# Preflight Checklist
 
 Use this checklist before handing RepoBrain to an operator/deployer.
 
@@ -24,9 +24,16 @@ Use this checklist before handing RepoBrain to an operator/deployer.
 
 ### External GitHub mode foundation
 
-1. Caller workflow is installed from reusable foundation template.
-2. Operator understands help/ask-only boundary.
+1. Caller workflow is installed from the reusable external foundation template.
+2. Operator understands the current bounded public command surface:
+   - `/repobrain doctor`
+   - `/repobrain help`
+   - `/repobrain ask ...`
+   - `/repobrain review` as bounded read-only Review Candidate
+   - `/repobrain fix` as bounded Fix-Lite Candidate manual-only patch suggestion
 3. Readiness artifacts are expected on each run.
+4. Operator understands the mandatory Fix-Lite no-action guarantee:
+   - `No patch was applied. No files were modified.`
 
 ### External mode (CLI)
 
