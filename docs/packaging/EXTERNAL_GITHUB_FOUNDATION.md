@@ -1,76 +1,70 @@
-# External GitHub Mode Foundation (Third-Party Repositories)
+# External GitHub Foundation Boundary
 
 ## Purpose
 
-This document defines the Sprint 66 foundation for third-party GitHub-native RepoBrain usage.
+This document is a RepoBrain-Action boundary reference for the public external
+GitHub foundation surface.
 
-It provides a bounded, product-shaped install path for external repositories without claiming full command parity.
+RepoBrain-Action is not the public runtime or install-template host for this
+surface. The canonical public host and install kit live in
+`repobrain-community`.
 
-## Current Capability Boundary
+## Canonical Public Host
 
-Supported in external GitHub mode foundation:
+Use these community-owned public artifacts for third-party GitHub-native setup:
 
-- `/repobrain help`
+- install template: `repobrain-community/templates/repobrain.yml`
+- reusable workflow host:
+  `alexworkingai/repobrain-community/.github/workflows/repobrain_external_foundation.yml@main`
+
+For current public install steps and examples, use the `repobrain-community`
+README and template files rather than local copies in RepoBrain-Action.
+
+## Current Public Command Truth
+
+Supported in the external GitHub foundation:
+
 - `/repobrain doctor`
+- `/repobrain help`
 - `/repobrain ask ...`
 - `/repobrain review` (bounded read-only Review Candidate)
-- `/repobrain fix` (bounded Fix-Lite Candidate manual patch suggestion)
+- `/repobrain fix` (bounded Fix-Lite Candidate manual-only patch suggestion)
 
-Explicitly unsupported (blocked with clear boundary message):
+Unsupported:
 
-- non-RepoBrain or out-of-contract commands
+- out-of-contract commands
 
-## Installation Shape (Third-Party Repo)
+## Bounded Non-Claims
 
-1. Install the RepoBrain GitHub App to the target repository (selected-repo rollout recommended).
-2. Add `.github/workflows/repobrain_external.yml` using:
-   - `docs/packaging/repobrain_external_github_foundation_template.yml`
-   - reusable host: `alexworkingai/repobrain-community/.github/workflows/repobrain_external_foundation.yml@main`
-3. Configure required secrets/variables:
-   - `RB_GH_APP_ID`
-   - `RB_GH_APP_INSTALLATION_ID`
-   - `RB_GH_APP_PRIVATE_KEY` (recommended) or `RB_GH_APP_PRIVATE_KEY_PATH`
-   - `RB_GH_APP_REPOSITORY_SELECTION`
-   - `RB_GH_APP_SELECTED_REPOS` (when selection mode is `selected`)
-4. Trigger `/repobrain doctor` on an open PR first, then `/repobrain help`, `/repobrain ask ...`, `/repobrain review`, and `/repobrain fix`.
+The public external GitHub foundation does not claim:
 
-## Expected Artifacts
+- autofix
+- patch application
+- file modification
+- commit creation
+- branch pushing
+- PR creation
+- full review parity
+- security verdicts
+- safe-to-merge claims
+- approval/rejection verdicts
+- autonomous repair behavior
 
-The foundation workflow uploads operator-readable artifacts:
+Mandatory Fix-Lite boundary:
 
-- `repobrain-install-readiness`
-- `repobrain-audit`
-- `repobrain-diagnostic-summary`
-- `repobrain-tkya-evidence-pack`
+- `No patch was applied. No files were modified.`
 
-If command is out of boundary, readiness still publishes while unsupported command behavior remains explicit.
+## What Stays In RepoBrain-Action
 
-## Third-Party Trial Runbook (Minimal)
+RepoBrain-Action remains the source of:
 
-1. Open PR in target external repository.
-2. Post `/repobrain doctor`.
-3. Verify:
-   - workflow executed,
-   - readiness artifact exists,
-   - setup card/output is compact and readable.
-4. Post `/repobrain help`.
-5. Verify:
-   - supported commands are listed clearly,
-   - doctor/help messaging remains bounded and public-safe.
-6. Post `/repobrain ask <question>`.
-7. Verify:
-   - ask response published,
-   - audit/diagnostic/evidence artifacts uploaded.
-8. Post `/repobrain review`.
-9. Verify Review Candidate remains compact, read-only, and does not claim full review parity.
-10. Post `/repobrain fix`.
-11. Verify Fix-Lite Candidate remains manual-only, does not apply patches, and does not pretend support beyond bounded manual direction.
+- current-truth docs and capability alignment,
+- governance and regression tests,
+- bounded external CLI ask-only and MCP ask-only secondary surfaces.
 
-## Stop Conditions
+Use these local docs for current operator/context references:
 
-Stop and file a product issue instead of improvising if:
-
-1. readiness artifact is missing or contradictory,
-2. supported/unsupported behavior does not match this contract,
-3. setup requires copying internal monolithic workflows,
-4. outward docs or workflow text would expose protected kernel internals.
+- `docs/EXTERNAL_MODE.md`
+- `docs/USER_GUIDE.md`
+- `docs/OPERATOR_QUICKSTART.md`
+- `docs/benchmarks/current_capabilities_matrix.md`

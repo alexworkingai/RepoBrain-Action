@@ -52,9 +52,8 @@ Public runtime host and install kit:
 
 - `repobrain-community`
 
-Legacy reference copies in this repository:
+RepoBrain-Action boundary/reference doc:
 
-- `docs/packaging/repobrain_external_github_foundation_template.yml`
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 
 Run on a third-party PR:

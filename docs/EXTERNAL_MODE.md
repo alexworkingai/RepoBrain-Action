@@ -13,17 +13,16 @@ Both paths are intentionally bounded and must block unsupported capabilities hon
 
 Use this when a third-party repository needs GitHub-native command entry via workflow.
 
-Foundation template reference in this repository:
-
-- `docs/packaging/repobrain_external_github_foundation_template.yml`
-
 Canonical public host and install kit:
 
 - `repobrain-community`
+- install template: `repobrain-community/templates/repobrain.yml`
+- reusable workflow host:
+  `alexworkingai/repobrain-community/.github/workflows/repobrain_external_foundation.yml@main`
 
 Contract in this foundation stage:
 
-- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual patch suggestion)
+- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual-only patch suggestion)
 - unsupported (explicit block): out-of-contract commands
 
 Bounded non-claims in this public surface:
@@ -39,7 +38,7 @@ Bounded non-claims in this public surface:
 - no autofix
 - no full review parity
 
-Runbook and install details:
+Boundary/reference and onboarding details:
 
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - `docs/onboarding/github_app_setup.md`

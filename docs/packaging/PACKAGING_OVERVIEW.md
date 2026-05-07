@@ -39,7 +39,7 @@ This packaging layer does not include:
 
 - Installation shape: `docs/packaging/INSTALLATION_SHAPE.md`
 - Capability surfaces: `docs/packaging/CAPABILITY_SURFACES.md`
-- External GitHub foundation runbook: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+- External GitHub foundation boundary reference: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - Preflight checklist: `docs/packaging/PREFLIGHT_CHECKLIST.md`
 - Validation checklist: `docs/packaging/VALIDATION_CHECKLIST.md`
 - Distribution boundaries: `docs/packaging/DISTRIBUTION_BOUNDARIES.md`

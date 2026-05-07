@@ -53,9 +53,12 @@ Bounded non-claims that remain true:
 
 Canonical public host and install kit live in `repobrain-community`.
 
-Template and runbook references kept here:
+Canonical public install template:
 
-- `docs/packaging/repobrain_external_github_foundation_template.yml`
+- `repobrain-community/templates/repobrain.yml`
+
+RepoBrain-Action boundary/reference doc:
+
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 
 ## Surface 3: External CLI Mode (Bounded)
