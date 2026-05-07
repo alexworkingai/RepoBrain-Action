@@ -5,7 +5,7 @@
 | Surface | Entry Point | Supported | Unsupported | Notes |
 |---|---|---|---|---|
 | GitHub mode | `/repobrain` commands in GitHub comments | `help`, `ask`, `review`, `fix` | out-of-contract commands | Primary runtime path. |
-| External GitHub mode foundation | third-party caller workflow -> `repobrain_external_foundation.yml` | `help`, `doctor`, `ask`, `review`, `fix` | out-of-contract commands | Product-shaped third-party GitHub-native foundation path with bounded read-only Review Candidate and Fix-Lite Candidate manual patch suggestion mode. |
+| External GitHub mode foundation | third-party caller workflow -> `repobrain_external_foundation.yml` | `help`, `doctor`, `ask`, `review`, `fix` | out-of-contract commands | Product-shaped third-party GitHub-native foundation path with bounded read-only Review Candidate and Fix-Lite Candidate manual-only patch suggestion mode. |
 | External mode | `scripts/run_github.py --mode external` | `ask` | `review`, `fix`, non-ask commands | Explicit unsupported block expected. |
 | MCP surface | `scripts/run_mcp_surface.py` | `ask` capability | non-ask capabilities | Structured public-safe response contract. |
 
