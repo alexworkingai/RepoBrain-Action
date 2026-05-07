@@ -54,6 +54,7 @@ Public runtime host and install kit:
 
 RepoBrain-Action boundary/reference doc:
 
+- `docs/REPO_BOUNDARY_CONTRACT.md`
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 
 Run on a third-party PR:

@@ -64,6 +64,7 @@ RepoBrain-Action remains the source of:
 
 Use these local docs for current operator/context references:
 
+- `docs/REPO_BOUNDARY_CONTRACT.md`
 - `docs/EXTERNAL_MODE.md`
 - `docs/USER_GUIDE.md`
 - `docs/OPERATOR_QUICKSTART.md`

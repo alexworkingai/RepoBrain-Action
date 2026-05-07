@@ -40,6 +40,7 @@ Bounded non-claims in this public surface:
 
 Boundary/reference and onboarding details:
 
+- `docs/REPO_BOUNDARY_CONTRACT.md`
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - `docs/onboarding/github_app_setup.md`
 
