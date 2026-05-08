@@ -3,10 +3,22 @@ from __future__ import annotations
 from repobrain.fix.patch_guard import evaluate_patch_payload
 
 
+def test_patch_guard_allows_empty_payload_without_triggering() -> None:
+    decision = evaluate_patch_payload("")
+    assert decision.triggered is False
+    assert decision.reason_code == "EMPTY_OUTPUT"
+
+
 def test_patch_guard_detects_placeholder_payload() -> None:
     decision = evaluate_patch_payload("Here is patch: update path/to/file and apply placeholder changes")
     assert decision.triggered is True
     assert decision.reason_code == "PATCH_PLACEHOLDER_DETECTED"
+
+
+def test_patch_guard_detects_generic_patch_prose_without_diff() -> None:
+    decision = evaluate_patch_payload("Here is the patch. You can fix by renaming the function.")
+    assert decision.triggered is True
+    assert decision.reason_code == "PATCH_GENERIC_TEXT"
 
 
 def test_patch_guard_allows_real_diff_payload() -> None:
