@@ -42,6 +42,13 @@ class PatchTarget:
     hunk_count: int
 
 
+@dataclass(frozen=True)
+class _PatchTargetAssessment:
+    target: PatchTarget
+    has_localized_evidence: bool
+    has_query_match: bool
+
+
 def _extension(path: str) -> str:
     base = os.path.basename(path)
     if "." not in base:
@@ -125,6 +132,71 @@ def _query_matches_file(query: str, path: str) -> bool:
     return full in query_norm or base in query_norm or (stem and stem in query_norm)
 
 
+def _assess_patch_target(
+    *,
+    path: str,
+    status: str,
+    changes: int,
+    hunks: list[str],
+    evidence_paths: set[str],
+    query: str,
+    max_hunks: int,
+) -> _PatchTargetAssessment:
+    if not _is_likely_fixable_path(path):
+        return _PatchTargetAssessment(
+            target=PatchTarget(
+                path=path,
+                score=-100,
+                reason="non_patchable_or_too_broad",
+                category="non_patchable_or_too_broad",
+                hunk_count=len(hunks),
+            ),
+            has_localized_evidence=False,
+            has_query_match=False,
+        )
+
+    score = 0
+    reasons: list[str] = []
+    has_localized_evidence = path in evidence_paths
+    has_query_match = _query_matches_file(query, path)
+
+    if has_localized_evidence:
+        score += 120
+        reasons.append("evidence_path")
+    if has_query_match:
+        score += 90
+        reasons.append("query_matched_path")
+    if hunks:
+        score += 24
+        reasons.append("has_diff_hunks")
+    if status in {"modified", "renamed"}:
+        score += 10
+    elif status == "added":
+        score += 4
+    if changes <= 250:
+        score += 12
+    elif changes > 900:
+        score -= 18
+    if len(hunks) > max_hunks:
+        score -= 5
+    if path.lower().startswith(".github/workflows/") and not has_localized_evidence:
+        score -= 10
+    if _extension(path) in _DOC_EXTENSIONS:
+        score -= 30
+
+    return _PatchTargetAssessment(
+        target=PatchTarget(
+            path=path,
+            score=score,
+            reason=",".join(reasons) if reasons else "low_localization",
+            category="likely_fixable" if score >= 30 else "context_only",
+            hunk_count=len(hunks),
+        ),
+        has_localized_evidence=has_localized_evidence,
+        has_query_match=has_query_match,
+    )
+
+
 def select_patch_targets(
     *,
     files: list[dict[str, Any]],
@@ -154,57 +226,22 @@ def select_patch_targets(
         hunks_by_path[path] = list(hunks)
         changes = int(file_item.get("changes", 0) or 0)
         status = str(file_item.get("status", "modified") or "modified").lower()
-        score = 0
-        reasons: list[str] = []
-
-        if not _is_likely_fixable_path(path):
-            non_patchable_count += 1
-            ranked.append(
-                PatchTarget(
-                    path=path,
-                    score=-100,
-                    reason="non_patchable_or_too_broad",
-                    category="non_patchable_or_too_broad",
-                    hunk_count=len(hunks),
-                )
-            )
-            continue
-
-        if path in evidence_paths:
-            score += 120
-            localized_evidence_count += 1
-            reasons.append("evidence_path")
-        if _query_matches_file(query, path):
-            score += 90
-            query_matched_count += 1
-            reasons.append("query_matched_path")
-        if hunks:
-            score += 24
-            reasons.append("has_diff_hunks")
-        if status in {"modified", "renamed"}:
-            score += 10
-        elif status == "added":
-            score += 4
-        if changes <= 250:
-            score += 12
-        elif changes > 900:
-            score -= 18
-        if len(hunks) > max_hunks:
-            score -= 5
-        if path.lower().startswith(".github/workflows/") and path not in evidence_paths:
-            score -= 10
-        if _extension(path) in _DOC_EXTENSIONS:
-            score -= 30
-        category = "likely_fixable" if score >= 30 else "context_only"
-        ranked.append(
-            PatchTarget(
-                path=path,
-                score=score,
-                reason=",".join(reasons) if reasons else "low_localization",
-                category=category,
-                hunk_count=len(hunks),
-            )
+        assessment = _assess_patch_target(
+            path=path,
+            status=status,
+            changes=changes,
+            hunks=hunks,
+            evidence_paths=evidence_paths,
+            query=query,
+            max_hunks=max_hunks,
         )
+        if assessment.target.category == "non_patchable_or_too_broad":
+            non_patchable_count += 1
+        if assessment.has_localized_evidence:
+            localized_evidence_count += 1
+        if assessment.has_query_match:
+            query_matched_count += 1
+        ranked.append(assessment.target)
 
     ranked_sorted = sorted(ranked, key=lambda item: (-item.score, item.path))
     likely = [item for item in ranked_sorted if item.category == "likely_fixable"]
