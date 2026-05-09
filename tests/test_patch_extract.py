@@ -26,6 +26,15 @@ def test_extract_patch_handles_no_patch_token() -> None:
     assert result.reason_code == "NO_PATCH"
 
 
+def test_extract_patch_handles_json_no_patch_envelope() -> None:
+    result = extract_patch_candidate('{"result":"no_patch"}')
+    assert result.patch_text == ""
+    assert result.has_json_envelope is True
+    assert result.has_no_patch is True
+    assert result.extraction_path == "no_patch"
+    assert result.reason_code == "NO_PATCH"
+
+
 def test_extract_patch_marks_missing_when_no_diff_present() -> None:
     result = extract_patch_candidate("I suggest improving this function with better naming.")
     assert result.patch_text == ""

@@ -4,7 +4,7 @@
 
 RepoBrain currently exposes two bounded external paths:
 
-1. External GitHub mode foundation (third-party GitHub-native ask/help path).
+1. External GitHub mode foundation (third-party GitHub-native doctor/help/ask plus bounded Review Candidate and Fix-Lite Candidate through the public `repobrain-community` host).
 2. External CLI mode (ask-only on local checkout).
 
 Both paths are intentionally bounded and must block unsupported capabilities honestly.
@@ -13,17 +13,34 @@ Both paths are intentionally bounded and must block unsupported capabilities hon
 
 Use this when a third-party repository needs GitHub-native command entry via workflow.
 
-Foundation template:
+Canonical public host and install kit:
 
-- `docs/packaging/repobrain_external_github_foundation_template.yml`
+- `repobrain-community`
+- install template: `repobrain-community/templates/repobrain.yml`
+- reusable workflow host:
+  `alexworkingai/repobrain-community/.github/workflows/repobrain_external_foundation.yml@main`
 
 Contract in this foundation stage:
 
-- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual patch suggestion)
+- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual-only patch suggestion)
 - unsupported (explicit block): out-of-contract commands
 
-Runbook and install details:
+Bounded non-claims in this public surface:
 
+- no patch application
+- no file modification
+- no commit creation
+- no branch pushing
+- no PR creation
+- no security verdicts
+- no safe-to-merge claims
+- no approval/rejection verdicts
+- no autofix
+- no full review parity
+
+Boundary/reference and onboarding details:
+
+- `docs/REPO_BOUNDARY_CONTRACT.md`
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - `docs/onboarding/github_app_setup.md`
 
@@ -84,8 +101,8 @@ External mode is not currently:
 
 ## Trial Usage Reference
 
-- Trial runbook: `docs/trials/external_repo_trial_01_elen_mcp.md`
+- Historical Sprint 59 trial runbook artifact: `docs/trials/external_repo_trial_01_elen_mcp.md`
 - Reusable trial template: `docs/trials/external_repo_trial_template.md`
 - Evidence template: `docs/trials/external_repo_trial_evidence_template.md`
-- Trial #1 report: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
+- Historical benchmark narrative artifact: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
 - MCP-facing adapter: `docs/MCP_SURFACE.md`

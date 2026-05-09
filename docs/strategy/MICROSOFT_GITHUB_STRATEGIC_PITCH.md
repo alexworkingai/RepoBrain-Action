@@ -1,8 +1,8 @@
-# Microsoft / GitHub Strategic Pitch
+﻿# Microsoft / GitHub Strategic Pitch
 
 ## Thesis
 
-RepoBrain is not another broad AI reviewer claim.  
+RepoBrain is not another broad AI reviewer claim.
 RepoBrain is a governed, bounded, evidence-aware orchestration layer for GitHub-centric AI workflows, with explicit capability boundaries and protected-kernel discipline.
 
 ## Why This Matters Now
@@ -27,7 +27,8 @@ RepoBrain aligns with platform priorities where trust and operational clarity ma
 ## Current Product Shape (Evidence-Backed)
 
 - Primary surface: GitHub mode (`ask/review/fix`).
-- Bounded external surface: external CLI `ask` (review/fix explicitly unsupported).
+- Bounded public external surface: external GitHub mode foundation (`doctor/help/ask/review/fix`) with bounded Review Candidate and Fix-Lite Candidate behavior.
+- Bounded external CLI surface: `ask` only.
 - Bounded integration surface: MCP `ask` (non-ask explicitly unsupported).
 - Governance, packaging, and startup-readiness layers are documented and aligned to accepted behavior.
 
@@ -40,6 +41,6 @@ RepoBrain is best positioned as a control and trust layer complementing platform
 This pitch does not claim:
 
 - broad autonomous coding parity,
-- external review/fix availability,
+- patch application, file modification, commit creation, branch pushing, or PR creation in the external public surface,
 - Marketplace or GA distribution maturity,
 - internal kernel disclosure.

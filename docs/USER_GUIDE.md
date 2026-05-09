@@ -30,14 +30,14 @@ Execution profile flags are user-facing:
 
 GitHub-native bounded entry path for external repositories:
 
-- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual patch suggestion)
+- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual-only patch suggestion)
 - unsupported (explicit block): out-of-contract commands
 
-Setup template:
+Canonical public install template:
 
-- `docs/packaging/repobrain_external_github_foundation_template.yml`
+- `repobrain-community/templates/repobrain.yml`
 
-Runbook:
+Boundary/reference doc:
 
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 
@@ -76,14 +76,14 @@ Supported now: `ask` only.
 ### Works Today
 
 - GitHub mode ask/review/fix on configured repositories.
-- External GitHub mode foundation on third-party repos for help/doctor/ask plus bounded read-only Review Candidate and bounded Fix-Lite Candidate manual patch suggestion mode.
+- External GitHub mode foundation on third-party repos for help/doctor/ask plus bounded read-only Review Candidate and bounded Fix-Lite Candidate manual-only patch suggestion mode.
 - External mode ask execution on third-party repository checkouts.
 - Operator readiness contract for GitHub App onboarding.
 - Evidence/audit artifact generation, including TKYA evidence pack.
 
 ### Not Yet (Explicitly)
 
-- External mode autofix execution.
+- Autofix execution in any external surface.
 - MCP surface review/fix capabilities.
 - Full ask/review/fix parity in third-party GitHub-native mode.
 - Marketplace-style product packaging/admin portal.
@@ -102,10 +102,10 @@ Depending on command and mode:
 
 - Operator install/readiness: `docs/OPERATOR_QUICKSTART.md`
 - External mode details: `docs/EXTERNAL_MODE.md`
-- External GitHub foundation runbook: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+- External GitHub foundation boundary reference: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - MCP surface details: `docs/MCP_SURFACE.md`
 - Packaging overview: `docs/packaging/PACKAGING_OVERVIEW.md`
 - Startup readiness: `docs/startup/STARTUP_READINESS.md`
 - Trial protocol/templates: `docs/trials/external_repo_trial_template.md`
-- Trial #1 runbook: `docs/trials/external_repo_trial_01_elen_mcp.md`
-- Trial #1 benchmark narrative: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
+- Historical Sprint 59 trial runbook artifact: `docs/trials/external_repo_trial_01_elen_mcp.md`
+- Historical benchmark narrative artifact: `docs/benchmarks/external_trial_01_elen_mcp_report.md`

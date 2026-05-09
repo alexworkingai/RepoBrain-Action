@@ -1,4 +1,4 @@
-# Installation Shape
+﻿# Installation Shape
 
 ## Scope
 
@@ -21,23 +21,44 @@ References:
 - `docs/onboarding/permissions.md`
 - `docs/OPERATOR_QUICKSTART.md`
 
-## Surface 2: External GitHub Mode Foundation (Bounded)
+## Surface 2: External GitHub Mode Foundation (Bounded Public Surface)
 
-Use when you need a third-party GitHub-native entry path without claiming full parity.
+Use when you need a third-party GitHub-native entry path with bounded public behavior.
 
 Current supported commands:
 
+- `/repobrain doctor`
 - `/repobrain help`
 - `/repobrain ask ...`
+- `/repobrain review` as bounded read-only Review Candidate
+- `/repobrain fix` as bounded Fix-Lite Candidate manual-only patch suggestion
 
 Current unsupported commands:
 
-- `/repobrain review`
-- `/repobrain fix`
+- out-of-contract commands
 
-Template and runbook:
+Bounded non-claims that remain true:
 
-- `docs/packaging/repobrain_external_github_foundation_template.yml`
+- no patch application
+- no file modification
+- no commit creation
+- no branch pushing
+- no PR creation
+- no autofix claim
+- no full review parity claim
+- no security verdicts
+- no safe-to-merge claim
+- no approval/rejection verdicts
+- no autonomous repair behavior
+
+Canonical public host and install kit live in `repobrain-community`.
+
+Canonical public install template:
+
+- `repobrain-community/templates/repobrain.yml`
+
+RepoBrain-Action boundary/reference doc:
+
 - `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 
 ## Surface 3: External CLI Mode (Bounded)

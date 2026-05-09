@@ -1,4 +1,4 @@
-# Packaging Overview (Pre-Marketplace)
+﻿# Packaging Overview (Pre-Marketplace)
 
 ## Purpose
 
@@ -11,7 +11,7 @@ It is a pre-distribution hardening layer, not a feature-expansion sprint.
 RepoBrain currently exposes four bounded surfaces:
 
 1. GitHub mode (primary): ask/review/fix in comment-driven workflow.
-2. External GitHub mode foundation (bounded): help/ask only.
+2. External GitHub mode foundation (bounded): doctor/help/ask plus bounded read-only Review Candidate and bounded Fix-Lite Candidate manual-only patch suggestion.
 3. External CLI mode (bounded): ask only.
 4. MCP-facing surface (bounded): ask only.
 
@@ -31,7 +31,7 @@ This packaging layer does not include:
 
 - Marketplace launch,
 - admin/billing portal,
-- external review/fix support,
+- patch application, file modification, commit creation, branch pushing, or PR creation in the external public surface,
 - MCP capability expansion beyond ask,
 - runtime architecture redesign.
 
@@ -39,7 +39,7 @@ This packaging layer does not include:
 
 - Installation shape: `docs/packaging/INSTALLATION_SHAPE.md`
 - Capability surfaces: `docs/packaging/CAPABILITY_SURFACES.md`
-- External GitHub foundation runbook: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+- External GitHub foundation boundary reference: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - Preflight checklist: `docs/packaging/PREFLIGHT_CHECKLIST.md`
 - Validation checklist: `docs/packaging/VALIDATION_CHECKLIST.md`
 - Distribution boundaries: `docs/packaging/DISTRIBUTION_BOUNDARIES.md`

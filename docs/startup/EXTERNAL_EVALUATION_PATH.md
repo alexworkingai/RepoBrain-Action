@@ -1,4 +1,4 @@
-# External Evaluation Path
+﻿# External Evaluation Path
 
 ## Scope
 
@@ -23,23 +23,34 @@ What it does not prove:
 
 - external CLI parity for review/fix.
 
-## Path B: External CLI Mode (Bounded Proof)
+## Path B: External GitHub Mode Foundation (Bounded Public Proof)
 
-What to run (GitHub-native foundation in third-party repo):
+Public runtime host:
 
-- install caller workflow from `docs/packaging/repobrain_external_github_foundation_template.yml`
+- `repobrain-community`
+
+What to run in a third-party repository:
+
+- install the caller workflow from the public community template
+- `/repobrain doctor`
 - `/repobrain help`
 - `/repobrain ask ...`
-- optional negative check: `/repobrain review`
+- `/repobrain review`
+- `/repobrain fix`
 
 What it proves:
 
-- real third-party GitHub-native bounded foundation,
-- explicit unsupported behavior for out-of-scope commands.
+- real third-party GitHub-native bounded public runtime,
+- doctor/help truth is externally visible,
+- review is available as bounded read-only Review Candidate,
+- fix is available as bounded Fix-Lite Candidate manual-only patch suggestion,
+- duplicate-response regressions remain absent.
 
 What it does not prove:
 
-- full external ask/review/fix parity.
+- full external ask/review/fix parity,
+- patch application, file modification, commit creation, branch pushing, or PR creation,
+- security verdicts, safe-to-merge claims, or approval/rejection decisions.
 
 ## Path C: External CLI Mode (Bounded Proof)
 
@@ -61,7 +72,7 @@ What it proves:
 
 What it does not prove:
 
-- external review/fix support.
+- external CLI review/fix support.
 
 ## Path D: MCP Surface (Bounded Integration Proof)
 

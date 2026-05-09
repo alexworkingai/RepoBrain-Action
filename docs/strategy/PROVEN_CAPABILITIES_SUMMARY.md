@@ -1,4 +1,4 @@
-# Proven Capabilities Summary
+﻿# Proven Capabilities Summary
 
 ## Scope
 
@@ -16,8 +16,10 @@ Accepted and evidenced capabilities only.
 
 ### External GitHub mode foundation
 
-- third-party GitHub-native `/repobrain help` and `/repobrain ask` are supported.
-- `/repobrain review` and `/repobrain fix` are explicitly unsupported and block honestly.
+- third-party GitHub-native `/repobrain doctor`, `/repobrain help`, and `/repobrain ask` are supported.
+- `/repobrain review` is supported as bounded read-only Review Candidate.
+- `/repobrain fix` is supported as bounded Fix-Lite Candidate manual-only patch suggestion.
+- bounded non-claims remain explicit: no patch application, file modification, commit creation, branch pushing, PR creation, security verdicts, safe-to-merge claims, approval/rejection, or autofix.
 
 ### External mode (CLI)
 
@@ -42,7 +44,8 @@ Accepted and evidenced capabilities only.
 
 ## Explicitly Bounded / Unsupported
 
-1. External review/fix support.
+1. External CLI review/fix support.
 2. MCP expansion beyond ask.
 3. Marketplace/admin/billing distribution claims.
 4. Protected-kernel implementation disclosure.
+5. Full external review parity or autonomous repair behavior.

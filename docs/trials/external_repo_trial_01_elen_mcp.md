@@ -1,4 +1,24 @@
-﻿# External Repo Trial #01 Runbook - alexworkingai/Elen-MCP-v.2.2.0
+# External Repo Trial #01 Runbook - alexworkingai/Elen-MCP-v.2.2.0
+
+> Historical artifact notice
+>
+> This document is a historical external trial artifact. It reflects the RepoBrain surface and validation posture at the time of the original Elen-MCP trial and is not the current command-surface truth.
+>
+> Current public external GitHub foundation truth after Sprint 78:
+> - `/repobrain doctor`
+> - `/repobrain help`
+> - `/repobrain ask <question>`
+> - `/repobrain review` as bounded read-only Review Candidate
+> - `/repobrain fix` as bounded Fix-Lite Candidate manual-only patch suggestion
+>
+> Mandatory Fix-Lite boundary:
+> - `No patch was applied. No files were modified.`
+>
+> For current operator guidance, use:
+> - `docs/EXTERNAL_MODE.md`
+> - `docs/USER_GUIDE.md`
+> - `docs/OPERATOR_QUICKSTART.md`
+> - `docs/benchmarks/current_capabilities_matrix.md`
 
 ## Scope
 
@@ -96,4 +116,3 @@ After Trial #1 (or on blocked setup):
 2. Remove temporary trial-only variables/secrets not needed for continued beta.
 3. If trial is paused, disable temporary trial workflow wiring in target repository.
 4. Record blocker codes and next actions in trial summary.
-
