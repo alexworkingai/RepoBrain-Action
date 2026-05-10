@@ -87,6 +87,7 @@ Common artifacts include:
 - Operator quickstart: `docs/OPERATOR_QUICKSTART.md`
 - External mode: `docs/EXTERNAL_MODE.md`
 - Repository boundary contract: `docs/REPO_BOUNDARY_CONTRACT.md`
+- Refactor phase closeout: `docs/refactor/REFACTOR_PHASE_CLOSEOUT.md`
 - External GitHub foundation boundary reference: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - MCP surface contract: `docs/MCP_SURFACE.md`
 - Trial template: `docs/trials/external_repo_trial_template.md`

@@ -12,6 +12,10 @@ Use it as the default contract for future refactoring so we preserve:
 - bounded external surfaces,
 - regression and governance guarantees.
 
+Refactor phase closeout reference:
+
+- `docs/refactor/REFACTOR_PHASE_CLOSEOUT.md`
+
 ## 2. Current Command Truth
 
 Current public external GitHub foundation commands:
