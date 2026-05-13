@@ -19,6 +19,10 @@ It is intentionally evidence-based and reflects the code paths that are active t
 
 This is a current-state document, not an integration plan. TopoCore v6 is a future integration target and is not described here as active runtime wiring unless RepoBrain-Action code proves it.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V5_TO_V6_CONTROLLED_MIGRATION_BLUEPRINT.md`
+
 ## 2. Repository Roles
 
 ### RepoBrain-Action
