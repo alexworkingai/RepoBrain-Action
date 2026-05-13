@@ -29,6 +29,10 @@ Relationship:
 - Sprint 20 planned the harness
 - Sprint 21 implements the disabled and manual version only
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_DECISION_DIFF_STRATEGY.md`
+
 ## 3. How to Run Manually
 
 PowerShell:

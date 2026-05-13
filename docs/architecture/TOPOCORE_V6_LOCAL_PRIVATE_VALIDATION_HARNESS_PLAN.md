@@ -17,6 +17,7 @@ This sprint is planning only. It exists to define how RepoBrain-Action can later
 See also:
 
 - `docs/architecture/TOPOCORE_V6_MANUAL_LOCAL_VALIDATION_HARNESS.md`
+- `docs/architecture/TOPOCORE_V6_DECISION_DIFF_STRATEGY.md`
 
 ## 2. Current Baseline
 

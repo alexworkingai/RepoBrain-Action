@@ -19,6 +19,7 @@ See also:
 - `docs/architecture/TOPOCORE_V6_ADAPTER_SKELETON.md`
 - `docs/architecture/TOPOCORE_V6_STUB_COMPATIBILITY_TESTS.md`
 - `docs/architecture/TOPOCORE_V6_LOCAL_PRIVATE_VALIDATION_HARNESS_PLAN.md`
+- `docs/architecture/TOPOCORE_V6_DECISION_DIFF_STRATEGY.md`
 
 ## 2. Current Runtime Baseline
 
