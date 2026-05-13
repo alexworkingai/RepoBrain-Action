@@ -14,6 +14,10 @@ Current truth:
 
 This sprint is planning only. It exists to define how RepoBrain-Action can later validate the existing adapter skeleton against a real local or private TopoCore v6 installation without introducing runtime risk.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_MANUAL_LOCAL_VALIDATION_HARNESS.md`
+
 ## 2. Current Baseline
 
 Current baseline summary:

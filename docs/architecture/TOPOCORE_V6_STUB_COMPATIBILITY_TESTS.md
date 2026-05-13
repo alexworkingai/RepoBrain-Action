@@ -30,6 +30,7 @@ Relationship:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_LOCAL_PRIVATE_VALIDATION_HARNESS_PLAN.md`
+- `docs/architecture/TOPOCORE_V6_MANUAL_LOCAL_VALIDATION_HARNESS.md`
 
 ## 3. What Is Being Tested
 

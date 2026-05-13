@@ -30,6 +30,7 @@ See also:
 
 - `docs/architecture/TOPOCORE_V6_STUB_COMPATIBILITY_TESTS.md`
 - `docs/architecture/TOPOCORE_V6_LOCAL_PRIVATE_VALIDATION_HARNESS_PLAN.md`
+- `docs/architecture/TOPOCORE_V6_MANUAL_LOCAL_VALIDATION_HARNESS.md`
 
 Sprint 18 still does not wire TopoCore v6 into live RepoBrain runtime.
 
