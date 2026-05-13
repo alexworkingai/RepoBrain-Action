@@ -13,6 +13,10 @@ Current truth:
 
 This blueprint exists so later implementation work can move deliberately without breaking the active RepoBrain runtime, the accepted fix-path safety baseline, or the current repository-boundary split.
 
+See also:
+
+- `docs/architecture/GITHUB_MODELS_LLM_SUMMARY_CONTRACT_TOPOCORE_V6.md`
+
 ## 2. Current Runtime Baseline
 
 Detailed current-state evidence is documented in:
