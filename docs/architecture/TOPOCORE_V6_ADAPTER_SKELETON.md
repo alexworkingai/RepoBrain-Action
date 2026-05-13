@@ -26,6 +26,10 @@ Relationship:
 - Sprint 17 defined the GitHub Models LLM summary contract
 - Sprint 18 introduces a code-level adapter shape for future implementation work
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_STUB_COMPATIBILITY_TESTS.md`
+
 Sprint 18 still does not wire TopoCore v6 into live RepoBrain runtime.
 
 ## 3. Adapter Skeleton Scope
