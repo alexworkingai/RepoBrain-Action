@@ -34,6 +34,10 @@ Relationship:
 - Sprint 21 implemented the manual and disabled local validation harness
 - Sprint 22 defines the future comparison strategy
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_SHADOW_MODE_DESIGN_AND_GO_NOGO.md`
+
 ## 3. Why Decision Diff Is Needed
 
 - v5 remains the current primary decision layer
