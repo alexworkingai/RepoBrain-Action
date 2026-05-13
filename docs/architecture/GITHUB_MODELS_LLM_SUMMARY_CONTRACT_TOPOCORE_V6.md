@@ -14,6 +14,10 @@ Current truth:
 
 This sprint is docs-only. It does not implement adapter code, runtime routing, provider changes, or any TopoCore v6 integration.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_ADAPTER_SKELETON.md`
+
 ## 2. Current LLM Runtime Baseline
 
 The authoritative runtime linkage baseline is documented in:
