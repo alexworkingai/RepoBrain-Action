@@ -18,6 +18,7 @@ See also:
 - `docs/architecture/GITHUB_MODELS_LLM_SUMMARY_CONTRACT_TOPOCORE_V6.md`
 - `docs/architecture/TOPOCORE_V6_ADAPTER_SKELETON.md`
 - `docs/architecture/TOPOCORE_V6_STUB_COMPATIBILITY_TESTS.md`
+- `docs/architecture/TOPOCORE_V6_LOCAL_PRIVATE_VALIDATION_HARNESS_PLAN.md`
 
 ## 2. Current Runtime Baseline
 

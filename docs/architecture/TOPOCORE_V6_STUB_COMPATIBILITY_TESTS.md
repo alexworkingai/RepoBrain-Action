@@ -27,6 +27,10 @@ Relationship:
 - Sprint 18 added the inert adapter skeleton
 - Sprint 19 validates adapter shape against fake or stub v6-style fixtures and expectations
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_LOCAL_PRIVATE_VALIDATION_HARNESS_PLAN.md`
+
 ## 3. What Is Being Tested
 
 Sprint 19 tests cover:
