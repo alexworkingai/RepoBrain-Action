@@ -18,6 +18,7 @@ This sprint is a documentation and checkpoint sprint. Its job is to close the ea
 See also:
 
 - `docs/architecture/TOPOCORE_V6_SHADOW_PATH_RUNTIME_SEAM_DESIGN.md`
+- `docs/architecture/TOPOCORE_V6_DISABLED_ADVISORY_PATH_SKELETON.md`
 
 ## 2. Current Main Baseline
 

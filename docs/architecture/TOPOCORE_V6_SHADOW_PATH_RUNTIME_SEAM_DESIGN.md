@@ -33,6 +33,10 @@ Reference documents:
 - `docs/architecture/TOPOCORE_V6_MANUAL_DECISION_DIFF_ARTIFACT_HARNESS.md`
 - `docs/architecture/CURRENT_RUNTIME_LINKAGE_REPOBRAIN_TOPOCORE_V5_LLM_COMMUNITY.md`
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_DISABLED_ADVISORY_PATH_SKELETON.md`
+
 ## 3. Current Runtime Path to Protect
 
 The current protected runtime path is:
