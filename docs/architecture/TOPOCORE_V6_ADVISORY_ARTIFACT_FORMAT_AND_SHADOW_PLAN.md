@@ -32,6 +32,10 @@ Relationship summary:
 - Sprint 23 defined shadow-mode go/no-go criteria
 - Sprint 24 defines the safe advisory artifact format and the planning boundary for future implementation
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_MANUAL_DECISION_DIFF_ARTIFACT_HARNESS.md`
+
 ## 3. Advisory Artifact Definition
 
 An advisory artifact is:

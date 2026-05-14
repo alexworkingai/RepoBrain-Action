@@ -33,6 +33,7 @@ See also:
 
 - `docs/architecture/TOPOCORE_V6_DECISION_DIFF_STRATEGY.md`
 - `docs/architecture/TOPOCORE_V6_SHADOW_MODE_DESIGN_AND_GO_NOGO.md`
+- `docs/architecture/TOPOCORE_V6_MANUAL_DECISION_DIFF_ARTIFACT_HARNESS.md`
 
 ## 3. How to Run Manually
 
