@@ -19,6 +19,7 @@ This sprint exists to review the Phase 4 planning work completed so far, decide 
 See also:
 
 - `docs/architecture/TOPOCORE_V6_STILL_DISABLED_ADVISORY_BOUNDARY.md`
+- `docs/architecture/TOPOCORE_V6_PHASE_5_BOUNDARY_GUARD_CHECKPOINT.md`
 
 ## 2. Current Accepted Baseline
 

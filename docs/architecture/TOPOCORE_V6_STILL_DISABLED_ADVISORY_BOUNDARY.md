@@ -15,6 +15,10 @@ Current truth:
 
 This sprint exists to add a narrow boundary around the existing shadow-path skeleton so future work can target a concrete integration seam without changing current RepoBrain behavior.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_PHASE_5_BOUNDARY_GUARD_CHECKPOINT.md`
+
 ## 2. Relationship to Sprint 33
 
 See:
