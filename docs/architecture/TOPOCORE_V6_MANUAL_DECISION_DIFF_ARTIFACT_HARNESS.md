@@ -35,6 +35,10 @@ Relationship summary:
 - Sprint 24 created the advisory artifact helper
 - Sprint 25 connects both to the manual/local harness only
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_PHASE_1_2_CLOSEOUT_AND_PHASE_3_SCOPE.md`
+
 ## 3. Manual Harness Flow
 
 Current manual flow:

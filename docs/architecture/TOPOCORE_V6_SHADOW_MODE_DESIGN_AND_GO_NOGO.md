@@ -15,6 +15,7 @@ Current truth:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_ADVISORY_ARTIFACT_FORMAT_AND_SHADOW_PLAN.md`
+- `docs/architecture/TOPOCORE_V6_PHASE_1_2_CLOSEOUT_AND_PHASE_3_SCOPE.md`
 
 This sprint is documentation only. It exists to define when a future shadow-mode experiment may be considered and what evidence must exist before that happens.
 

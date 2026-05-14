@@ -35,6 +35,7 @@ Relationship summary:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_MANUAL_DECISION_DIFF_ARTIFACT_HARNESS.md`
+- `docs/architecture/TOPOCORE_V6_PHASE_1_2_CLOSEOUT_AND_PHASE_3_SCOPE.md`
 
 ## 3. Advisory Artifact Definition
 
