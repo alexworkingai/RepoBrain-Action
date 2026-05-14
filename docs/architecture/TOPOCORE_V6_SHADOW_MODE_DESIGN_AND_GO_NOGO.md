@@ -12,6 +12,10 @@ Current truth:
 - it does not change command behavior
 - it prepares the decision framework for a later advisory-only experiment
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_ADVISORY_ARTIFACT_FORMAT_AND_SHADOW_PLAN.md`
+
 This sprint is documentation only. It exists to define when a future shadow-mode experiment may be considered and what evidence must exist before that happens.
 
 ## 2. Current Baseline

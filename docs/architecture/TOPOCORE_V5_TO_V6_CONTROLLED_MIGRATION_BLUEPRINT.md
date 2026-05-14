@@ -21,6 +21,7 @@ See also:
 - `docs/architecture/TOPOCORE_V6_LOCAL_PRIVATE_VALIDATION_HARNESS_PLAN.md`
 - `docs/architecture/TOPOCORE_V6_DECISION_DIFF_STRATEGY.md`
 - `docs/architecture/TOPOCORE_V6_SHADOW_MODE_DESIGN_AND_GO_NOGO.md`
+- `docs/architecture/TOPOCORE_V6_ADVISORY_ARTIFACT_FORMAT_AND_SHADOW_PLAN.md`
 
 ## 2. Current Runtime Baseline
 
