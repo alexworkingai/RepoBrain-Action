@@ -85,3 +85,7 @@ Output boundary:
 
 - Sprint 29 should add internal artifact guard tests and failure-isolation tests around this skeleton
 - Sprint 30 should review Phase 3 and decide go/no-go for any future runtime-adjacent experiment
+
+See also:
+
+- `docs/architecture/TOPOCORE_V6_ADVISORY_PATH_GUARD_TESTS.md`

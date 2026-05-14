@@ -36,6 +36,7 @@ Reference documents:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_DISABLED_ADVISORY_PATH_SKELETON.md`
+- `docs/architecture/TOPOCORE_V6_ADVISORY_PATH_GUARD_TESTS.md`
 
 ## 3. Current Runtime Path to Protect
 

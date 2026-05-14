@@ -38,6 +38,17 @@ _FORBIDDEN_FIELDS = frozenset(
     }
 )
 
+_ALLOWED_FAILURE_CATEGORIES = frozenset(
+    {
+        "disabled",
+        "enabled_not_implemented",
+        "invalid_input",
+        "forbidden_output_issue",
+        "artifact_unavailable",
+        "configuration_error",
+    }
+)
+
 
 class TopoCoreV6ShadowError(ValueError):
     """Raised when shadow-path input is unsafe or invalid."""
@@ -98,6 +109,20 @@ class TopoCoreV6ShadowResult:
         }
 
 
+def _contains_forbidden_keys(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            normalized_key = _normalize_text(key).lower()
+            if normalized_key in _FORBIDDEN_FIELDS:
+                return True
+            if _contains_forbidden_keys(item):
+                return True
+        return False
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return any(_contains_forbidden_keys(item) for item in value)
+    return False
+
+
 def _normalize_text(value: Any, default: str = "") -> str:
     text = str(value if value is not None else default).strip()
     return text or default
@@ -114,6 +139,13 @@ def load_shadow_config_from_env(env: Mapping[str, str] | None = None) -> TopoCor
         artifacts_enabled=_env_flag("RB_TOPOCORE_V6_SHADOW_ARTIFACTS", env=env) == "1",
         fail_closed=_env_flag("RB_TOPOCORE_V6_SHADOW_FAIL_CLOSED", env=env) == "1",
     )
+
+
+def normalize_shadow_failure_category(value: Any) -> str:
+    normalized = _normalize_text(value).lower()
+    if normalized in _ALLOWED_FAILURE_CATEGORIES:
+        return normalized
+    return "configuration_error"
 
 
 def _sanitize_value(value: Any) -> Any:
@@ -189,6 +221,7 @@ def _result(
     artifact_generated: bool = False,
 ) -> TopoCoreV6ShadowResult:
     shadow_input = input_value or TopoCoreV6ShadowInput()
+    normalized_category = normalize_shadow_failure_category(failure_category or status.value)
     return TopoCoreV6ShadowResult(
         enabled=config.enabled,
         status=status,
@@ -197,10 +230,28 @@ def _result(
         task_type=shadow_input.task_type,
         artifacts_enabled=config.artifacts_enabled,
         fail_closed=config.fail_closed,
-        failure_category=failure_category,
+        failure_category=normalized_category,
         artifact_generated=artifact_generated,
         safety_flags=_base_safety_flags(),
     )
+
+
+def assert_shadow_result_safe(result: TopoCoreV6ShadowResult | Mapping[str, Any]) -> dict[str, Any]:
+    """Validate that a shadow-path result is safe and JSON-serializable."""
+
+    payload = result.to_dict() if isinstance(result, TopoCoreV6ShadowResult) else dict(result)
+    if _contains_forbidden_keys(payload):
+        raise TopoCoreV6ShadowError("Forbidden output field detected in shadow-path result.")
+
+    safety_flags = payload.get("safety_flags")
+    if not isinstance(safety_flags, Mapping):
+        raise TopoCoreV6ShadowError("Shadow-path result requires safety_flags.")
+    for key in ("contains_raw_query", "contains_raw_code", "contains_decide_raw", "contains_secrets"):
+        if safety_flags.get(key) is not False:
+            raise TopoCoreV6ShadowError(f"Shadow-path safety flag must remain false: {key}")
+
+    payload["failure_category"] = normalize_shadow_failure_category(payload.get("failure_category"))
+    return payload
 
 
 def run_topocore_v6_shadow_path(
@@ -229,16 +280,18 @@ def run_topocore_v6_shadow_path(
         )
 
     if not effective_config.enabled:
-        return _result(
+        result = _result(
             config=effective_config,
             status=TopoCoreV6ShadowStatus.DISABLED,
             reason="shadow_path_disabled_noop",
             input_value=shadow_input,
             failure_category="disabled",
         )
+        assert_shadow_result_safe(result)
+        return result
 
     if effective_config.artifacts_enabled:
-        return _result(
+        result = _result(
             config=effective_config,
             status=TopoCoreV6ShadowStatus.ARTIFACT_UNAVAILABLE,
             reason="artifact_generation_unavailable_in_sprint_28",
@@ -246,8 +299,10 @@ def run_topocore_v6_shadow_path(
             failure_category="artifact_unavailable",
             artifact_generated=False,
         )
+        assert_shadow_result_safe(result)
+        return result
 
-    return _result(
+    result = _result(
         config=effective_config,
         status=TopoCoreV6ShadowStatus.ENABLED_NOT_IMPLEMENTED,
         reason="advisory_shadow_path_enabled_but_not_implemented",
@@ -255,6 +310,8 @@ def run_topocore_v6_shadow_path(
         failure_category="enabled_not_implemented",
         artifact_generated=False,
     )
+    assert_shadow_result_safe(result)
+    return result
 
 
 __all__ = [
@@ -263,6 +320,8 @@ __all__ = [
     "TopoCoreV6ShadowInput",
     "TopoCoreV6ShadowResult",
     "TopoCoreV6ShadowStatus",
+    "assert_shadow_result_safe",
     "load_shadow_config_from_env",
+    "normalize_shadow_failure_category",
     "run_topocore_v6_shadow_path",
 ]

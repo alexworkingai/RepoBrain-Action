@@ -19,6 +19,7 @@ See also:
 
 - `docs/architecture/TOPOCORE_V6_SHADOW_PATH_RUNTIME_SEAM_DESIGN.md`
 - `docs/architecture/TOPOCORE_V6_DISABLED_ADVISORY_PATH_SKELETON.md`
+- `docs/architecture/TOPOCORE_V6_ADVISORY_PATH_GUARD_TESTS.md`
 
 ## 2. Current Main Baseline
 
