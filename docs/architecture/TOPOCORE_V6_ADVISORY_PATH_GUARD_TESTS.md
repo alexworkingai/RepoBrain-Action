@@ -71,3 +71,7 @@ Sprint 29 does not prove:
 - Sprint 30 should be Phase 3 Review / Go-No-Go
 - Sprint 30 should decide whether the project is ready to propose a future controlled advisory shadow experiment
 - Sprint 30 must not itself become canary or route migration unless separately approved
+
+See also:
+
+- `docs/architecture/TOPOCORE_V6_PHASE_3_REVIEW_GO_NOGO.md`

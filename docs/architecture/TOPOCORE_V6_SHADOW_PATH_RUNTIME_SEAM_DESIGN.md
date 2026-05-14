@@ -37,6 +37,7 @@ See also:
 
 - `docs/architecture/TOPOCORE_V6_DISABLED_ADVISORY_PATH_SKELETON.md`
 - `docs/architecture/TOPOCORE_V6_ADVISORY_PATH_GUARD_TESTS.md`
+- `docs/architecture/TOPOCORE_V6_PHASE_3_REVIEW_GO_NOGO.md`
 
 ## 3. Current Runtime Path to Protect
 
