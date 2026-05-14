@@ -16,6 +16,10 @@ Current truth:
 
 This sprint exists to review the Phase 4 planning work completed so far, decide whether a narrowly bounded still-disabled implementation step may be proposed next, and keep all activation-risk boundaries explicit.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_STILL_DISABLED_ADVISORY_BOUNDARY.md`
+
 ## 2. Current Accepted Baseline
 
 Current accepted baseline:
