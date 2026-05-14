@@ -90,3 +90,4 @@ See also:
 
 - `docs/architecture/TOPOCORE_V6_ADVISORY_PATH_GUARD_TESTS.md`
 - `docs/architecture/TOPOCORE_V6_PHASE_3_REVIEW_GO_NOGO.md`
+- `docs/architecture/TOPOCORE_V6_PHASE_4_SCOPE_AND_CONTROLLED_ADVISORY_SHADOW_PLAN.md`

@@ -15,6 +15,10 @@ Current truth:
 
 This sprint is a documentation and checkpoint sprint. Its job is to close Phase 3 cleanly, record the evidence gathered so far, and prevent accidental escalation into runtime-affecting work without a fresh explicit approval.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_PHASE_4_SCOPE_AND_CONTROLLED_ADVISORY_SHADOW_PLAN.md`
+
 ## 2. Current Accepted Baseline
 
 Current accepted baseline:
