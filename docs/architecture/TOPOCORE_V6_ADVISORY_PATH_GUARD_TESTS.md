@@ -75,3 +75,4 @@ Sprint 29 does not prove:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_3_REVIEW_GO_NOGO.md`
+- `docs/architecture/TOPOCORE_V6_CONTROLLED_ADVISORY_EXPERIMENT_RUNBOOK.md`

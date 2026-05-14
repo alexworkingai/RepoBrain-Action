@@ -18,6 +18,7 @@ This sprint is a documentation and checkpoint sprint. Its job is to close Phase 
 See also:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_4_SCOPE_AND_CONTROLLED_ADVISORY_SHADOW_PLAN.md`
+- `docs/architecture/TOPOCORE_V6_CONTROLLED_ADVISORY_EXPERIMENT_RUNBOOK.md`
 
 ## 2. Current Accepted Baseline
 

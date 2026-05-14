@@ -16,6 +16,10 @@ Current truth:
 
 This sprint is a documentation and checkpoint sprint. Its job is to start Phase 4 without crossing into runtime work, preserve the Sprint 30 go/no-go decision, and keep the future advisory experiment tightly bounded.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_CONTROLLED_ADVISORY_EXPERIMENT_RUNBOOK.md`
+
 ## 2. Current Accepted Baseline
 
 Current accepted baseline:
