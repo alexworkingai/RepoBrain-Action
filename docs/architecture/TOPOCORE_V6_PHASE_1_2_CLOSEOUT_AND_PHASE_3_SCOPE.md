@@ -15,6 +15,10 @@ Current truth:
 
 This sprint is a documentation and checkpoint sprint. Its job is to close the early migration-preparation phases cleanly and prevent uncontrolled expansion into runtime-adjacent work without explicit approval.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_SHADOW_PATH_RUNTIME_SEAM_DESIGN.md`
+
 ## 2. Current Main Baseline
 
 Current accepted baseline:
