@@ -15,6 +15,10 @@ Current truth:
 
 This sprint exists to operationalize the Phase 4 planning into a future runbook and evidence checklist without crossing into live runtime behavior.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_PHASE_4_CHECKPOINT_RUNTIME_ADJACENT_APPROVAL.md`
+
 ## 2. Current Accepted Baseline
 
 Current accepted baseline:

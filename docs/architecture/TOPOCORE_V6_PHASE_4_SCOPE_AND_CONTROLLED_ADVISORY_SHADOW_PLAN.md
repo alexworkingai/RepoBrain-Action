@@ -19,6 +19,7 @@ This sprint is a documentation and checkpoint sprint. Its job is to start Phase 
 See also:
 
 - `docs/architecture/TOPOCORE_V6_CONTROLLED_ADVISORY_EXPERIMENT_RUNBOOK.md`
+- `docs/architecture/TOPOCORE_V6_PHASE_4_CHECKPOINT_RUNTIME_ADJACENT_APPROVAL.md`
 
 ## 2. Current Accepted Baseline
 
