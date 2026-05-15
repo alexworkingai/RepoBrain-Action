@@ -17,6 +17,10 @@ Current truth:
 
 This sprint exists to define the exact manual evidence bundle expected from local or private TopoCore v6 validation and to close Phase 7 as a stabilization baseline.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_REAL_INTEGRATION_CONTRACT_LOCK.md`
+
 ## 2. Current Accepted Baseline
 
 Current accepted baseline:

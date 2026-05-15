@@ -39,6 +39,7 @@ See:
 - `docs/architecture/TOPOCORE_V6_TEST_COVERAGE_INDEX.md`
 - `docs/architecture/TOPOCORE_V6_PHASE_6_NO_GO_CHECKPOINT.md`
 - `docs/architecture/TOPOCORE_V6_MANUAL_EVIDENCE_COLLECTION_AND_PHASE_7_CHECKPOINT.md`
+- `docs/architecture/TOPOCORE_V6_REAL_INTEGRATION_CONTRACT_LOCK.md`
 
 ## 3. Problem Statement
 
