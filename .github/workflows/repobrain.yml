@@ -20,6 +20,15 @@ on:
         required: false
         default: ""
         type: string
+      topocore_backend:
+        description: "TopoCore backend for manual lab runtime selection"
+        required: false
+        default: "v5"
+        type: choice
+        options:
+          - v5
+          - v6
+          - auto
       enable_llm:
         description: "Enable LLM path for workflow_dispatch run"
         required: false
@@ -219,6 +228,7 @@ jobs:
           dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
           comment_text: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.comment_text || '' }}
           issue_number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.issue_number || '' }}
+          topocore_backend: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.topocore_backend || 'v5' }}
       - name: Save RepoBrain retrieval snapshot cache
         if: always() && hashFiles('artifacts/.repobrain_cache/*') != ''
         uses: actions/cache/save@v4

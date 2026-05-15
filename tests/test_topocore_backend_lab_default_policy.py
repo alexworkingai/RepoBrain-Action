@@ -391,8 +391,11 @@ def test_github_default_files_unchanged() -> None:
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
     assert "RB_TKYA_BACKEND" in action_text
+    assert "RB_TOPOCORE_BACKEND" in action_text
     assert "v5" in action_text
-    assert "RB_TOPOCORE_BACKEND" not in workflow_text
+    assert "issue_comment:" in workflow_text
+    assert "workflow_dispatch:" in workflow_text
+    assert "topocore_backend:" in workflow_text
 
     for relative_path in (
         "repobrain/github_flow.py",
