@@ -85,3 +85,7 @@ Current non-goals:
 - no patch behavior change
 - no PR, check, or comment behavior change
 - no `repobrain-community` change
+
+See also:
+
+- `docs/architecture/TOPOCORE_V6_REVIEW_VERIFY_BACKEND_EXPANSION.md`

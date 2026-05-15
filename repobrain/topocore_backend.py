@@ -15,6 +15,8 @@ from repobrain.tky_provider import CandidateChunk, TKYResult
 TopoCoreBackendName = Literal["v5", "v6"]
 BACKEND_V5: TopoCoreBackendName = "v5"
 BACKEND_V6: TopoCoreBackendName = "v6"
+_V5_ENGINE_TASK_TYPES = frozenset({"ask", "locate", "explain", "review"})
+_V6_REQUEST_TASK_TYPES = frozenset({"ask", "locate", "explain", "review", "verify"})
 
 
 class TopoCoreBackendError(ValueError):
@@ -100,6 +102,190 @@ def _sanitize_mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _normalize_requested_task_type(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in _V6_REQUEST_TASK_TYPES:
+        return normalized
+    return "ask"
+
+
+def _normalize_v5_engine_task_type(requested_task_type: str) -> str:
+    normalized = _normalize_requested_task_type(requested_task_type)
+    if normalized == "verify":
+        return "review"
+    if normalized in _V5_ENGINE_TASK_TYPES:
+        return normalized
+    return "ask"
+
+
+def _safe_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _build_evidence_summary(
+    *,
+    requested_task_type: str,
+    candidates: list[CandidateChunk],
+    github_context: dict[str, Any],
+    verification_context: dict[str, Any],
+) -> dict[str, Any]:
+    file_paths = sorted(
+        {
+            str(item.file_path).strip()
+            for item in candidates
+            if str(item.file_path or "").strip()
+        }
+    )
+    return {
+        "command_family": requested_task_type,
+        "candidate_count": len(candidates),
+        "candidate_ids": [item.chunk_id for item in candidates[:8]],
+        "candidate_file_count": len(file_paths),
+        "pr_context_available": bool(github_context.get("is_pr", False)),
+        "verification_context_available": bool(verification_context),
+    }
+
+
+def _build_project_audit_summary(
+    *,
+    requested_task_type: str,
+    github_context: dict[str, Any],
+    runtime_context: dict[str, Any],
+) -> tuple[dict[str, Any], tuple[dict[str, Any], ...]]:
+    changed_files = _safe_string_list(github_context.get("changed_files", []))
+    diff_hunks = _safe_string_list(github_context.get("diff_hunks", []))
+    pr_context = {
+        "command_family": requested_task_type,
+        "is_pr": bool(github_context.get("is_pr", False)),
+        "pr_number": github_context.get("pr_number"),
+        "issue_number": github_context.get("issue_number"),
+        "changed_files_count": len(changed_files),
+        "diff_hunk_count": len(diff_hunks),
+        "base_ref": str(github_context.get("base_ref", "") or ""),
+    }
+    findings: tuple[dict[str, Any], ...]
+    if pr_context["is_pr"]:
+        findings = (
+            {
+                "finding": "pr_context_detected",
+                "changed_files_count": len(changed_files),
+                "diff_hunk_count": len(diff_hunks),
+            },
+        )
+    else:
+        findings = (
+            {
+                "finding": "review_verify_context_without_pr",
+                "mode": str(runtime_context.get("github_actions", False)).lower(),
+            },
+        )
+    return pr_context, findings
+
+
+def _build_verification_summary(
+    *,
+    requested_task_type: str,
+    verification_context: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "command_family": requested_task_type,
+        "mode": str(verification_context.get("mode", "") or ""),
+        "can_run_pytest": bool(verification_context.get("can_run_pytest", False)),
+        "can_run_ruff": bool(verification_context.get("can_run_ruff", False)),
+        "time_budget_s": int(verification_context.get("time_budget_s", 0) or 0),
+        "network_allowed": bool(verification_context.get("network_allowed", False)),
+        "verification_pending": bool(verification_context.get("verification_pending", False)),
+        "verification_failed": bool(verification_context.get("verification_failed", False)),
+    }
+
+
+def _build_risk_items(
+    *,
+    requested_task_type: str,
+    verification_context: dict[str, Any],
+    github_context: dict[str, Any],
+) -> tuple[dict[str, Any], ...]:
+    risk_items: list[dict[str, Any]] = []
+    if requested_task_type == "verify":
+        risk_items.append(
+            {
+                "risk_area": "verification",
+                "severity_hint": "low",
+                "reason_code": "verify_path_selected",
+            }
+        )
+    if requested_task_type == "review":
+        risk_items.append(
+            {
+                "risk_area": "review",
+                "severity_hint": "low",
+                "reason_code": "review_path_selected",
+            }
+        )
+    if bool(verification_context.get("verification_pending", False)):
+        risk_items.append(
+            {
+                "risk_area": "verification",
+                "severity_hint": "medium",
+                "reason_code": "verification_pending",
+            }
+        )
+    if bool(verification_context.get("verification_failed", False)):
+        risk_items.append(
+            {
+                "risk_area": "verification",
+                "severity_hint": "high",
+                "reason_code": "verification_failed",
+            }
+        )
+    if not bool(github_context.get("is_pr", False)) and requested_task_type in {"review", "verify"}:
+        risk_items.append(
+            {
+                "risk_area": "context",
+                "severity_hint": "low",
+                "reason_code": "pr_context_missing",
+            }
+        )
+    return tuple(risk_items)
+
+
+def _build_unknowns_summary(
+    *,
+    requested_task_type: str,
+    candidates: list[CandidateChunk],
+    github_context: dict[str, Any],
+    verification_context: dict[str, Any],
+) -> dict[str, Any]:
+    unknowns: list[str] = []
+    if requested_task_type in {"review", "verify"} and not bool(github_context.get("is_pr", False)):
+        unknowns.append("pr_context_missing")
+    if requested_task_type == "verify" and not bool(verification_context.get("can_run_pytest", False)):
+        unknowns.append("pytest_unavailable")
+    if not candidates:
+        unknowns.append("candidate_evidence_missing")
+    return {
+        "command_family": requested_task_type,
+        "unknowns": unknowns,
+    }
+
+
+def _build_scenario_branches(
+    *,
+    requested_task_type: str,
+    engine_task_type: str,
+    verification_context: dict[str, Any],
+) -> tuple[dict[str, Any], ...]:
+    return (
+        {
+            "command_family": requested_task_type,
+            "engine_task_type": engine_task_type,
+            "strict_local_v6": bool(verification_context.get("strict_local_v6", False)),
+        },
+    )
+
+
 def build_v6_summary_bundle(
     *,
     question: str,
@@ -107,19 +293,53 @@ def build_v6_summary_bundle(
     limits: dict[str, Any],
     policy: dict[str, Any],
 ) -> RepoBrainV6SummaryBundle:
-    task_type = str(limits.get("task_type", "ask") or "ask").strip().lower()
-    if task_type not in {"ask", "locate", "explain", "review"}:
-        task_type = "ask"
+    requested_task_type = _normalize_requested_task_type(
+        limits.get("requested_task_type", limits.get("task_type", "ask"))
+    )
+    engine_task_type = _normalize_v5_engine_task_type(requested_task_type)
 
     github_context = _sanitize_mapping(policy.get("github_context", {}))
     verification_context = _sanitize_mapping(policy.get("verification_context", {}))
     runtime_context = _sanitize_mapping(policy.get("runtime", {}))
+    verification_context.setdefault("strict_local_v6", bool(limits.get("strict_local_v6", False)))
+
+    pr_context_summary, project_findings = _build_project_audit_summary(
+        requested_task_type=requested_task_type,
+        github_context=github_context,
+        runtime_context=runtime_context,
+    )
+    evidence_summary = _build_evidence_summary(
+        requested_task_type=requested_task_type,
+        candidates=candidates,
+        github_context=github_context,
+        verification_context=verification_context,
+    )
+    verification_summary = _build_verification_summary(
+        requested_task_type=requested_task_type,
+        verification_context=verification_context,
+    )
+    risk_items = _build_risk_items(
+        requested_task_type=requested_task_type,
+        verification_context=verification_context,
+        github_context=github_context,
+    )
+    unknowns_summary = _build_unknowns_summary(
+        requested_task_type=requested_task_type,
+        candidates=candidates,
+        github_context=github_context,
+        verification_context=verification_context,
+    )
+    scenario_branches = _build_scenario_branches(
+        requested_task_type=requested_task_type,
+        engine_task_type=engine_task_type,
+        verification_context=verification_context,
+    )
 
     return RepoBrainV6SummaryBundle(
         query=question,
         intent_summary={
-            "command": task_type,
-            "task_type_candidate": task_type,
+            "command": requested_task_type,
+            "task_type_candidate": engine_task_type,
             "user_goal": str(limits.get("user_goal", "") or ""),
         },
         candidates=tuple(
@@ -133,18 +353,18 @@ def build_v6_summary_bundle(
             )
             for item in candidates
         ),
-        task_type=task_type,
+        task_type=engine_task_type,
         limits=dict(limits),
-        pr_context_summary=github_context,
-        evidence_summary={"candidate_count": len(candidates)},
-        unknowns_summary={},
-        risk_items=(),
+        pr_context_summary=pr_context_summary,
+        evidence_summary=evidence_summary,
+        unknowns_summary=unknowns_summary,
+        risk_items=risk_items,
         review_draft_summary={},
         fix_draft_summary={},
-        verification_results=verification_context,
+        verification_results=verification_summary,
         project_audit_scorecard=runtime_context,
-        project_audit_findings=(),
-        scenario_branches=(),
+        project_audit_findings=project_findings,
+        scenario_branches=scenario_branches,
     )
 
 

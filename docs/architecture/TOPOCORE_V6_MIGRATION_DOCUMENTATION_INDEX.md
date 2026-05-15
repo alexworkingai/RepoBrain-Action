@@ -101,6 +101,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_REAL_INTEGRATION_CONTRACT_LOCK.md`
 - `docs/architecture/TOPOCORE_V6_REAL_ADAPTER_IMPLEMENTATION.md`
 - `docs/architecture/TOPOCORE_V6_RUNTIME_BACKEND_SELECTION.md`
+- `docs/architecture/TOPOCORE_V6_REVIEW_VERIFY_BACKEND_EXPANSION.md`
 
 ## 5. Recommended Reading Paths
 

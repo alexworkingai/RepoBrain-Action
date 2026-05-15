@@ -106,3 +106,4 @@ Current non-goals:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_RUNTIME_BACKEND_SELECTION.md`
+- `docs/architecture/TOPOCORE_V6_REVIEW_VERIFY_BACKEND_EXPANSION.md`

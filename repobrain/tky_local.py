@@ -151,6 +151,21 @@ def _build_runtime_context() -> dict[str, Any]:
     }
 
 
+def _normalize_requested_task_type(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"ask", "locate", "explain", "review", "verify"}:
+        return normalized
+    return "ask"
+
+
+def _normalize_engine_task_type(requested_task_type: str) -> str:
+    if requested_task_type == "verify":
+        return "review"
+    if requested_task_type in {"ask", "locate", "explain", "review"}:
+        return requested_task_type
+    return "ask"
+
+
 def _build_policy(limits: dict[str, Any]) -> dict[str, Any]:
     seed = limits.get("policy", {})
     policy = dict(seed) if isinstance(seed, dict) else {}
@@ -178,11 +193,12 @@ class LocalTKYProvider(TKYProvider):
         candidates: list[CandidateChunk],
         limits: dict[str, Any],
     ) -> TKYResult:
-        task_type = str(limits.get("task_type", "ask")).lower()
-        if task_type not in {"ask", "locate", "explain", "review"}:
-            task_type = "ask"
+        requested_task_type = _normalize_requested_task_type(limits.get("task_type", "ask"))
+        task_type = _normalize_engine_task_type(requested_task_type)
         limits = dict(limits)
         limits["task_type"] = task_type
+        limits["requested_task_type"] = requested_task_type
+        limits["strict_local_v6"] = _to_bool(os.getenv("RB_TOPOCORE_V6_REQUIRE_LOCAL", "0"))
         policy = _build_policy(limits)
         backend = resolve_backend()
 
