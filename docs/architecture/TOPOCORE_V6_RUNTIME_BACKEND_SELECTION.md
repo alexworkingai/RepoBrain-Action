@@ -89,3 +89,4 @@ Current non-goals:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_REVIEW_VERIFY_BACKEND_EXPANSION.md`
+- `docs/architecture/TOPOCORE_V6_FIX_LITE_DECISION_PATH.md`

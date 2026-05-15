@@ -153,7 +153,7 @@ def _build_runtime_context() -> dict[str, Any]:
 
 def _normalize_requested_task_type(value: Any) -> str:
     normalized = str(value or "").strip().lower()
-    if normalized in {"ask", "locate", "explain", "review", "verify"}:
+    if normalized in {"ask", "locate", "explain", "review", "verify", "fix"}:
         return normalized
     return "ask"
 

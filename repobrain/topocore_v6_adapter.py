@@ -47,6 +47,8 @@ _FORBIDDEN_OUTPUT_KEYS = frozenset(
         "governance_internals",
         "hidden_prompt",
         "password",
+        "patch_body",
+        "patch_text",
         "private_key",
         "prompt",
         "raw_code",

@@ -16,7 +16,7 @@ TopoCoreBackendName = Literal["v5", "v6"]
 BACKEND_V5: TopoCoreBackendName = "v5"
 BACKEND_V6: TopoCoreBackendName = "v6"
 _V5_ENGINE_TASK_TYPES = frozenset({"ask", "locate", "explain", "review"})
-_V6_REQUEST_TASK_TYPES = frozenset({"ask", "locate", "explain", "review", "verify"})
+_V6_REQUEST_TASK_TYPES = frozenset({"ask", "locate", "explain", "review", "verify", "fix"})
 
 
 class TopoCoreBackendError(ValueError):
@@ -113,6 +113,8 @@ def _normalize_v5_engine_task_type(requested_task_type: str) -> str:
     normalized = _normalize_requested_task_type(requested_task_type)
     if normalized == "verify":
         return "review"
+    if normalized == "fix":
+        return "ask"
     if normalized in _V5_ENGINE_TASK_TYPES:
         return normalized
     return "ask"
@@ -124,12 +126,33 @@ def _safe_string_list(value: Any) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def _safe_string(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _safe_string_mapping(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    safe: dict[str, str] = {}
+    for key, item in value.items():
+        normalized_key = _safe_string(key)
+        if not normalized_key:
+            continue
+        safe[normalized_key] = _safe_string(item)
+    return safe
+
+
+def _safe_summary_mapping(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
 def _build_evidence_summary(
     *,
     requested_task_type: str,
     candidates: list[CandidateChunk],
     github_context: dict[str, Any],
     verification_context: dict[str, Any],
+    fix_draft_summary: dict[str, Any],
 ) -> dict[str, Any]:
     file_paths = sorted(
         {
@@ -138,7 +161,7 @@ def _build_evidence_summary(
             if str(item.file_path or "").strip()
         }
     )
-    return {
+    evidence_summary = {
         "command_family": requested_task_type,
         "candidate_count": len(candidates),
         "candidate_ids": [item.chunk_id for item in candidates[:8]],
@@ -146,6 +169,12 @@ def _build_evidence_summary(
         "pr_context_available": bool(github_context.get("is_pr", False)),
         "verification_context_available": bool(verification_context),
     }
+    if requested_task_type == "fix":
+        evidence_summary["fix_governance_present"] = bool(fix_draft_summary)
+        evidence_summary["patch_safety_notes_count"] = len(
+            _safe_string_list(fix_draft_summary.get("patch_safety_notes", []))
+        )
+    return evidence_summary
 
 
 def _build_project_audit_summary(
@@ -206,6 +235,8 @@ def _build_risk_items(
     requested_task_type: str,
     verification_context: dict[str, Any],
     github_context: dict[str, Any],
+    fix_draft_summary: dict[str, Any],
+    patch_governance_summary: dict[str, str],
 ) -> tuple[dict[str, Any], ...]:
     risk_items: list[dict[str, Any]] = []
     if requested_task_type == "verify":
@@ -224,6 +255,41 @@ def _build_risk_items(
                 "reason_code": "review_path_selected",
             }
         )
+    if requested_task_type == "fix":
+        risk_items.append(
+            {
+                "risk_area": "patch_governance",
+                "severity_hint": "low",
+                "reason_code": "fix_lite_decision_only",
+            }
+        )
+        no_patch_reason = _safe_string(fix_draft_summary.get("no_patch_reason"))
+        if no_patch_reason:
+            risk_items.append(
+                {
+                    "risk_area": "patch_governance",
+                    "severity_hint": "medium",
+                    "reason_code": "no_patch_reason_present",
+                    "detail_code": no_patch_reason,
+                }
+            )
+        governance_reason = _safe_string(patch_governance_summary.get("governance_reason"))
+        if governance_reason:
+            risk_items.append(
+                {
+                    "risk_area": "patch_governance",
+                    "severity_hint": "medium",
+                    "reason_code": governance_reason,
+                }
+            )
+        if _safe_string_list(fix_draft_summary.get("patch_safety_notes", [])):
+            risk_items.append(
+                {
+                    "risk_area": "patch_safety",
+                    "severity_hint": "medium",
+                    "reason_code": "patch_safety_notes_present",
+                }
+            )
     if bool(verification_context.get("verification_pending", False)):
         risk_items.append(
             {
@@ -257,12 +323,15 @@ def _build_unknowns_summary(
     candidates: list[CandidateChunk],
     github_context: dict[str, Any],
     verification_context: dict[str, Any],
+    fix_draft_summary: dict[str, Any],
 ) -> dict[str, Any]:
     unknowns: list[str] = []
     if requested_task_type in {"review", "verify"} and not bool(github_context.get("is_pr", False)):
         unknowns.append("pr_context_missing")
     if requested_task_type == "verify" and not bool(verification_context.get("can_run_pytest", False)):
         unknowns.append("pytest_unavailable")
+    if requested_task_type == "fix" and not _safe_string(fix_draft_summary.get("no_patch_reason")):
+        unknowns.append("fix_governance_reason_missing")
     if not candidates:
         unknowns.append("candidate_evidence_missing")
     return {
@@ -276,14 +345,60 @@ def _build_scenario_branches(
     requested_task_type: str,
     engine_task_type: str,
     verification_context: dict[str, Any],
+    fix_draft_summary: dict[str, Any],
 ) -> tuple[dict[str, Any], ...]:
+    branch = {
+        "command_family": requested_task_type,
+        "engine_task_type": engine_task_type,
+        "strict_local_v6": bool(verification_context.get("strict_local_v6", False)),
+    }
+    if requested_task_type == "fix":
+        branch["fix_lite_decision"] = True
+        branch["no_patch_reason"] = _safe_string(
+            fix_draft_summary.get("no_patch_reason", "fix_lite_decision_only")
+        ) or "fix_lite_decision_only"
     return (
-        {
-            "command_family": requested_task_type,
-            "engine_task_type": engine_task_type,
-            "strict_local_v6": bool(verification_context.get("strict_local_v6", False)),
-        },
+        branch,
     )
+
+
+def _build_fix_draft_summary(*, policy: dict[str, Any], limits: dict[str, Any]) -> dict[str, Any]:
+    seed = _safe_summary_mapping(policy.get("fix_draft_summary", {}))
+    if not seed:
+        seed = _safe_summary_mapping(limits.get("fix_draft_summary", {}))
+    patch_governance = _safe_string_mapping(policy.get("patch_governance", {}))
+    safe_summary: dict[str, Any] = {}
+
+    localized_target_hint = _safe_string(
+        seed.get("localized_target_hint") or patch_governance.get("localized_target_hint", "")
+    )
+    if localized_target_hint:
+        safe_summary["localized_target_hint"] = localized_target_hint
+
+    no_patch_reason = _safe_string(
+        seed.get("no_patch_reason")
+        or patch_governance.get("governance_reason", "")
+        or "fix_lite_decision_only"
+    )
+    safe_summary["no_patch_reason"] = no_patch_reason
+
+    patch_safety_notes = _safe_string_list(seed.get("patch_safety_notes", []))
+    if patch_safety_notes:
+        safe_summary["patch_safety_notes"] = patch_safety_notes
+
+    governance_reason = _safe_string(patch_governance.get("governance_reason", ""))
+    if governance_reason:
+        safe_summary["governance_reason"] = governance_reason
+
+    next_safe_step = _safe_string(patch_governance.get("next_safe_step", ""))
+    if next_safe_step:
+        safe_summary["next_safe_step"] = next_safe_step
+
+    patchability_class = _safe_string(patch_governance.get("patchability_class", ""))
+    if patchability_class:
+        safe_summary["patchability_class"] = patchability_class
+
+    return safe_summary
 
 
 def build_v6_summary_bundle(
@@ -301,6 +416,8 @@ def build_v6_summary_bundle(
     github_context = _sanitize_mapping(policy.get("github_context", {}))
     verification_context = _sanitize_mapping(policy.get("verification_context", {}))
     runtime_context = _sanitize_mapping(policy.get("runtime", {}))
+    patch_governance_summary = _safe_string_mapping(policy.get("patch_governance", {}))
+    fix_draft_summary = _build_fix_draft_summary(policy=policy, limits=limits)
     verification_context.setdefault("strict_local_v6", bool(limits.get("strict_local_v6", False)))
 
     pr_context_summary, project_findings = _build_project_audit_summary(
@@ -313,6 +430,7 @@ def build_v6_summary_bundle(
         candidates=candidates,
         github_context=github_context,
         verification_context=verification_context,
+        fix_draft_summary=fix_draft_summary,
     )
     verification_summary = _build_verification_summary(
         requested_task_type=requested_task_type,
@@ -322,17 +440,21 @@ def build_v6_summary_bundle(
         requested_task_type=requested_task_type,
         verification_context=verification_context,
         github_context=github_context,
+        fix_draft_summary=fix_draft_summary,
+        patch_governance_summary=patch_governance_summary,
     )
     unknowns_summary = _build_unknowns_summary(
         requested_task_type=requested_task_type,
         candidates=candidates,
         github_context=github_context,
         verification_context=verification_context,
+        fix_draft_summary=fix_draft_summary,
     )
     scenario_branches = _build_scenario_branches(
         requested_task_type=requested_task_type,
         engine_task_type=engine_task_type,
         verification_context=verification_context,
+        fix_draft_summary=fix_draft_summary,
     )
 
     return RepoBrainV6SummaryBundle(
@@ -360,7 +482,7 @@ def build_v6_summary_bundle(
         unknowns_summary=unknowns_summary,
         risk_items=risk_items,
         review_draft_summary={},
-        fix_draft_summary={},
+        fix_draft_summary=fix_draft_summary,
         verification_results=verification_summary,
         project_audit_scorecard=runtime_context,
         project_audit_findings=project_findings,
@@ -465,6 +587,23 @@ def run_v6_backend(
             "confidence_band": decision.confidence_band,
             "message_code": decision.message_code,
             "blocked": bool(decision.blocked),
+            **(
+                {
+                    "fix_lite_decision": True,
+                    "patch_authorized": False,
+                    "patch_applied": False,
+                    "files_modified": False,
+                    "branch_created": False,
+                    "commit_created": False,
+                    "pr_created": False,
+                    "no_patch_reason": _safe_string(
+                        bundle.fix_draft_summary.get("no_patch_reason", "fix_lite_decision_only")
+                    )
+                    or "fix_lite_decision_only",
+                }
+                if str(bundle.intent_summary.get("command", "") or "").strip().lower() == "fix"
+                else {}
+            ),
         },
         rationale=(
             "TopoCore v6 external decision: "
