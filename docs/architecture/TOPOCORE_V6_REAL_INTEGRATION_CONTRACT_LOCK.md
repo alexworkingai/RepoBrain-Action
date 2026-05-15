@@ -196,6 +196,10 @@ Current assessment:
 
 - RepoBrain-Action can proceed without blocking on TopoCore team now
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_REAL_ADAPTER_IMPLEMENTATION.md`
+
 ## 10. Non-Goals for Sprint 41
 
 Current non-goals:
