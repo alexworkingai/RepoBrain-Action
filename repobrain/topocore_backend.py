@@ -13,8 +13,10 @@ from repobrain.topocore_v6_adapter import (
 from repobrain.tky_provider import CandidateChunk, TKYResult
 
 TopoCoreBackendName = Literal["v5", "v6"]
+TopoCoreBackendPolicyName = Literal["v5", "v6", "auto"]
 BACKEND_V5: TopoCoreBackendName = "v5"
 BACKEND_V6: TopoCoreBackendName = "v6"
+BACKEND_AUTO: TopoCoreBackendPolicyName = "auto"
 _V5_ENGINE_TASK_TYPES = frozenset({"ask", "locate", "explain", "review"})
 _V6_REQUEST_TASK_TYPES = frozenset({"ask", "locate", "explain", "review", "verify", "fix"})
 
@@ -25,6 +27,7 @@ class TopoCoreBackendError(ValueError):
 
 @dataclass(frozen=True)
 class TopoCoreBackendResolution:
+    requested_backend: TopoCoreBackendPolicyName
     selected_backend: TopoCoreBackendName
     source_env: str
     strict_v6: bool = False
@@ -53,23 +56,32 @@ def _env_bool(name: str, default: bool = False, env: dict[str, str] | None = Non
     return raw.lower() in {"1", "true", "yes", "y", "on"}
 
 
-def _normalize_backend(value: str) -> TopoCoreBackendName:
+def _normalize_backend_policy(value: str) -> TopoCoreBackendPolicyName:
     normalized = str(value or "").strip().lower()
     if normalized in {"v5", "lite"}:
         return BACKEND_V5
     if normalized == "v6":
         return BACKEND_V6
+    if normalized == "auto":
+        return BACKEND_AUTO
     raise TopoCoreBackendError(
         f"Invalid backend selection: {normalized or 'empty'}."
     )
 
 
+def _selected_backend_for_policy(policy_name: TopoCoreBackendPolicyName) -> TopoCoreBackendName:
+    if policy_name == BACKEND_V5:
+        return BACKEND_V5
+    return BACKEND_V6
+
+
 def resolve_backend(env: dict[str, str] | None = None) -> TopoCoreBackendResolution:
     explicit = _env_str("RB_TOPOCORE_BACKEND", "", env)
     if explicit:
-        backend = _normalize_backend(explicit)
+        requested_backend = _normalize_backend_policy(explicit)
         return TopoCoreBackendResolution(
-            selected_backend=backend,
+            requested_backend=requested_backend,
+            selected_backend=_selected_backend_for_policy(requested_backend),
             source_env="RB_TOPOCORE_BACKEND",
             strict_v6=_env_bool("RB_TOPOCORE_V6_REQUIRE_LOCAL", False, env),
             local_path=_env_str("RB_TOPOCORE_V6_LOCAL_PATH", "", env),
@@ -77,17 +89,19 @@ def resolve_backend(env: dict[str, str] | None = None) -> TopoCoreBackendResolut
 
     legacy = _env_str("RB_TKYA_BACKEND", "", env)
     if legacy:
-        backend = _normalize_backend(legacy)
+        requested_backend = _normalize_backend_policy(legacy)
         return TopoCoreBackendResolution(
-            selected_backend=backend,
+            requested_backend=requested_backend,
+            selected_backend=_selected_backend_for_policy(requested_backend),
             source_env="RB_TKYA_BACKEND",
             strict_v6=_env_bool("RB_TOPOCORE_V6_REQUIRE_LOCAL", False, env),
             local_path=_env_str("RB_TOPOCORE_V6_LOCAL_PATH", "", env),
         )
 
     return TopoCoreBackendResolution(
-        selected_backend=BACKEND_V5,
-        source_env="default",
+        requested_backend=BACKEND_AUTO,
+        selected_backend=BACKEND_V6,
+        source_env="default_auto",
         strict_v6=_env_bool("RB_TOPOCORE_V6_REQUIRE_LOCAL", False, env),
         local_path=_env_str("RB_TOPOCORE_V6_LOCAL_PATH", "", env),
     )
@@ -623,6 +637,7 @@ def run_v6_backend(
 
 
 __all__ = [
+    "BACKEND_AUTO",
     "BACKEND_V5",
     "BACKEND_V6",
     "TopoCoreBackendDecision",

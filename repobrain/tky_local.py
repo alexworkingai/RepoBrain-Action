@@ -214,6 +214,11 @@ class LocalTKYProvider(TKYProvider):
                 compression_stats = dict(result.compression_stats)
                 compression_stats.setdefault("tky_engine_local", "topocore_v6")
                 compression_stats.setdefault("topocore_backend", "v6")
+                compression_stats.setdefault("requested_backend", backend.requested_backend)
+                compression_stats.setdefault("resolved_backend", "v6")
+                compression_stats.setdefault("backend_mode", backend.requested_backend)
+                compression_stats.setdefault("fallback_used", False)
+                compression_stats.setdefault("fallback_reason", "none")
                 return TKYResult(
                     selected_chunk_ids=list(result.selected_chunk_ids),
                     route=result.route,
@@ -258,8 +263,18 @@ class LocalTKYProvider(TKYProvider):
         compression_stats = dict(decision.compression_stats)
         compression_stats.setdefault("tky_engine_local", describe_engine_instance(engine))
         compression_stats.setdefault("topocore_backend", "v5")
+        compression_stats.setdefault("requested_backend", backend.requested_backend)
+        compression_stats.setdefault("resolved_backend", "v5")
+        compression_stats.setdefault("backend_mode", backend.requested_backend)
+        compression_stats.setdefault("fallback_used", False)
+        compression_stats.setdefault("fallback_reason", "none")
         if backend.selected_backend == BACKEND_V6:
-            compression_stats.setdefault("topocore_backend_requested", "v6")
+            compression_stats["requested_backend"] = backend.requested_backend
+            compression_stats["resolved_backend"] = "v5"
+            compression_stats["backend_mode"] = backend.requested_backend
+            compression_stats["fallback_used"] = True
+            compression_stats["fallback_reason"] = "v6_unavailable"
+            compression_stats.setdefault("topocore_backend_requested", backend.requested_backend)
             compression_stats.setdefault("topocore_backend_fallback", "v5")
         return TKYResult(
             selected_chunk_ids=decision.selected_chunk_ids,

@@ -9,6 +9,7 @@ import pytest
 
 import repobrain.tky_local as tky_local
 from repobrain.topocore_backend import (
+    BACKEND_AUTO,
     BACKEND_V5,
     BACKEND_V6,
     TopoCoreBackendError,
@@ -148,20 +149,27 @@ def _clear_topocore_modules(monkeypatch: pytest.MonkeyPatch) -> None:
     sys.modules.pop("topocore_v6", None)
 
 
-def test_default_backend_is_v5() -> None:
+def test_default_backend_policy_is_auto() -> None:
     resolution = resolve_backend()
-    assert resolution.selected_backend == BACKEND_V5
+    assert resolution.requested_backend == BACKEND_AUTO
+    assert resolution.source_env == "default_auto"
+    assert resolution.selected_backend == BACKEND_V6
     assert "topocore_v6" not in sys.modules
 
 
 def test_rb_tkya_backend_v5_remains_supported(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RB_TKYA_BACKEND", "v5")
-    assert resolve_backend().selected_backend == BACKEND_V5
+    resolution = resolve_backend()
+    assert resolution.requested_backend == BACKEND_V5
+    assert resolution.selected_backend == BACKEND_V5
+    assert "topocore_v6" not in sys.modules
 
 
 def test_rb_topocore_backend_v6_selects_v6(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v6")
-    assert resolve_backend().selected_backend == BACKEND_V6
+    resolution = resolve_backend()
+    assert resolution.requested_backend == BACKEND_V6
+    assert resolution.selected_backend == BACKEND_V6
     assert "topocore_v6" not in sys.modules
 
 
