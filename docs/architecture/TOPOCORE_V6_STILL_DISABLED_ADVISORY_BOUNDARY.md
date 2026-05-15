@@ -20,6 +20,8 @@ See also:
 - `docs/architecture/TOPOCORE_V6_PHASE_5_BOUNDARY_GUARD_CHECKPOINT.md`
 - `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
 - `docs/architecture/TOPOCORE_V6_PHASE_6_NO_GO_CHECKPOINT.md`
+- `docs/architecture/TOPOCORE_V6_MIGRATION_DOCUMENTATION_INDEX.md`
+- `docs/architecture/TOPOCORE_V6_TEST_COVERAGE_INDEX.md`
 
 ## 2. Relationship to Sprint 33
 

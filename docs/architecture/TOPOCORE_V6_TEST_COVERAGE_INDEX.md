@@ -1,0 +1,94 @@
+# TopoCore v6 Test Coverage Index
+
+## 1. Purpose
+
+Sprint 38 maps TopoCore v6 migration-related tests.
+
+Current truth:
+
+- this index is documentation only
+- it does not change test behavior
+- it does not add runtime behavior
+- it helps explain what is covered and what is not covered
+
+## 2. Current Test Baseline
+
+Current test baseline:
+
+- latest accepted test result from Sprint 37:
+  - `pytest` passed with `725` tests
+- disabled/default harness check passed
+- no `topocore_v6` dependency is required in default CI
+- no runtime behavior was intentionally changed
+
+## 3. Test Index by Artifact
+
+| Test file | Covered artifact | Phase | Main coverage | Runtime behavior changed? |
+|---|---|---|---|---|
+| `tests/test_topocore_v6_adapter_skeleton.py` | `repobrain/topocore_v6_adapter.py` | Phase 1 | Adapter request preview shape, summary-to-policy mapping, safe candidate refs, unsafe metadata blocking, no runtime wiring | No |
+| `tests/test_topocore_v6_adapter_stub_compatibility.py` | Adapter plus fake or stub v6-style payloads | Phase 1 | Offline stub compatibility, fake `ExternalDecisionView`-style outputs, product-safe previews, failure taxonomy, no real dependency | No |
+| `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
+| `tests/test_topocore_v6_decision_diff.py` | `repobrain/topocore_v6_decision_diff.py` | Phase 1/2 | Sanitized v5/v6 snapshot comparison, severity and category mapping, candidate overlap, fix-governance mismatch detection, forbidden field blocking | No |
+| `tests/test_topocore_v6_advisory_artifact.py` | `repobrain/topocore_v6_advisory_artifact.py` | Phase 2 | Advisory artifact schema, go/no-go hint, fix conservatism, retention defaults, forbidden field blocking, no runtime wiring | No |
+| `tests/test_topocore_v6_shadow_path.py` | `repobrain/topocore_v6_shadow_path.py` | Phase 3 | Disabled skeleton behavior, env flags, safe result shape, no `topocore_v6` dependency, no runtime wiring | No |
+| `tests/test_topocore_v6_shadow_path_guardrails.py` | `repobrain/topocore_v6_shadow_path.py` | Phase 3 | No-op guardrails, forbidden input and output handling, artifact flag safety, fail-closed recording, fix conservatism, manual harness unchanged | No |
+| `tests/test_topocore_v6_advisory_boundary.py` | `repobrain/topocore_v6_advisory_boundary.py` | Phase 5 | Still-disabled boundary skeleton, delegation safety, forbidden input handling, failure-category normalization, no runtime wiring | No |
+| `tests/test_topocore_v6_advisory_boundary_guardrails.py` | `repobrain/topocore_v6_advisory_boundary.py` | Phase 5 | Boundary guardrails, nested forbidden fields, forbidden output checks, no dependency drift, manual harness unchanged, fix conservatism | No |
+
+## 4. Coverage by Safety Area
+
+| Safety area | Covered by | Status | Notes |
+|---|---|---|---|
+| no `topocore_v6` dependency in default CI | Adapter, decision-diff, artifact, shadow-path, and advisory-boundary tests | Covered | Multiple modules import cleanly without private dependency access. |
+| disabled/no-op behavior | Shadow-path and advisory-boundary tests | Covered | Default path stays inert. |
+| explicit disabled override | Shadow-path guardrails and advisory-boundary guardrails | Covered | Disabled mode wins over artifact and fail-closed flags. |
+| enabled-still-disabled behavior | Shadow-path and advisory-boundary tests | Covered | Enabled flags still do not activate live v6 behavior. |
+| forbidden input blocking | Adapter, decision-diff, artifact, shadow-path, and advisory-boundary tests | Covered | Flat and nested unsafe fields are blocked. |
+| nested forbidden field blocking | Shadow-path guardrails and advisory-boundary tests | Covered | Nested dictionaries and lists are scanned for unsafe keys. |
+| forbidden output prevention | Decision-diff, advisory artifact, shadow-path guardrails, and advisory-boundary guardrails | Covered | Output-like payloads are kept product-safe. |
+| `decide_raw` not called | Local validation harness, adapter, decision-diff, shadow-path, and advisory-boundary tests | Covered | `decide_raw` remains absent from current track behavior. |
+| no artifact persistence or publication | Advisory artifact, shadow-path guardrails, and advisory-boundary guardrails | Covered | Default behavior keeps artifacts sanitized and unpublished. |
+| no runtime wiring | Adapter, local validation harness, decision-diff, artifact, shadow-path, and advisory-boundary tests | Covered | Protected runtime files remain free of migration-module wiring. |
+| no user-visible output change | Shadow-path and advisory-boundary guardrails plus checkpoint docs | Covered indirectly | Tests verify non-user-visible, no-op boundaries rather than live product rendering. |
+| fix conservatism | Local validation harness, decision-diff, advisory artifact, shadow-path, and advisory-boundary tests | Covered | Fix-like cases do not authorize patching or repo actions. |
+| manual harness default skip | Local validation harness, shadow-path guardrails, and advisory-boundary guardrails | Covered | Default harness path still exits `0` with the same skip message. |
+| JSON serialization safety | Adapter stub compatibility, decision-diff, advisory artifact, shadow-path, and advisory-boundary tests | Covered | Migration artifacts remain serializable and safe to render. |
+| sanitized failure categories | Adapter stub compatibility, shadow-path guardrails, and advisory-boundary tests | Covered | Failure taxonomy stays bounded and product-safe. |
+
+## 5. What Tests Prove
+
+Current tests prove that:
+
+- adapter shapes are dependency-free
+- manual harness is disabled by default
+- shadow skeleton is no-op by default
+- advisory boundary is no-op by default
+- forbidden fields are blocked
+- no `topocore_v6` dependency is required in default CI
+- no runtime wiring has been introduced by migration artifacts
+- fix-like paths do not authorize patching
+- artifacts are sanitized and not persisted or published by default
+
+## 6. What Tests Do Not Prove
+
+Current tests do not prove:
+
+- live TopoCore v6 runtime behavior
+- GitHub workflow advisory behavior
+- real PR v5/v6 parity
+- canary readiness
+- route migration readiness
+- fix migration readiness
+- v5 replacement readiness
+- production packaging or private dependency CI strategy
+
+## 7. Recommended Future Test Maintenance
+
+Recommended maintenance:
+
+- keep guardrail tests deterministic and offline
+- keep `topocore_v6` absent from default CI requirements
+- add future tests only behind disabled or manual boundaries
+- preserve no-runtime-wiring assertions
+- preserve forbidden-output assertions
+- preserve manual harness default skip behavior

@@ -17,6 +17,11 @@ Current truth:
 
 This sprint exists to review the Sprint 36 proposal, record an explicit NO-GO decision for immediate implementation, and keep the project in the safest currently supported state.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_MIGRATION_DOCUMENTATION_INDEX.md`
+- `docs/architecture/TOPOCORE_V6_TEST_COVERAGE_INDEX.md`
+
 ## 2. Current Accepted Baseline
 
 Current accepted baseline:
