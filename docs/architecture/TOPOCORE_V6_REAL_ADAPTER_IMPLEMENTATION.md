@@ -102,3 +102,7 @@ Current non-goals:
 - no patch or fix behavior change
 - no PR, check, or comment behavior change
 - no `repobrain-community` change
+
+See also:
+
+- `docs/architecture/TOPOCORE_V6_RUNTIME_BACKEND_SELECTION.md`

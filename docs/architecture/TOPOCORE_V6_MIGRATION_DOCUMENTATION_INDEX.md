@@ -100,6 +100,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_MANUAL_EVIDENCE_COLLECTION_AND_PHASE_7_CHECKPOINT.md`
 - `docs/architecture/TOPOCORE_V6_REAL_INTEGRATION_CONTRACT_LOCK.md`
 - `docs/architecture/TOPOCORE_V6_REAL_ADAPTER_IMPLEMENTATION.md`
+- `docs/architecture/TOPOCORE_V6_RUNTIME_BACKEND_SELECTION.md`
 
 ## 5. Recommended Reading Paths
 

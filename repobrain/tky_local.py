@@ -10,6 +10,13 @@ from typing import Any
 
 from .execution_mode import coerce_execution_decision
 from .signatures import build_query_signature
+from .topocore_backend import (
+    BACKEND_V6,
+    TopoCoreBackendError,
+    resolve_backend,
+    run_v6_backend,
+    should_fallback_to_v5,
+)
 from .tkya.engine import describe_engine_instance, get_engine
 from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
 from .tky_provider import CandidateChunk, TKYProvider, TKYResult
@@ -159,8 +166,9 @@ class LocalTKYProvider(TKYProvider):
     """Local TKY provider stub.
 
     Local provider backed by selectable TKYA engines.
-    Safe default is `RB_TKYA_BACKEND=lite`. Advanced local mode can use
-    `RB_TKYA_BACKEND=v5` with vendor file `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`.
+    Safe default keeps the current v5/TKYA path. Explicit `RB_TOPOCORE_BACKEND=v6`
+    can select the real TopoCore v6 adapter in local or lab paths without
+    changing default GitHub runtime behavior.
     """
 
     def compress_context(
@@ -170,10 +178,41 @@ class LocalTKYProvider(TKYProvider):
         candidates: list[CandidateChunk],
         limits: dict[str, Any],
     ) -> TKYResult:
-        engine = get_engine()
         task_type = str(limits.get("task_type", "ask")).lower()
         if task_type not in {"ask", "locate", "explain", "review"}:
             task_type = "ask"
+        limits = dict(limits)
+        limits["task_type"] = task_type
+        policy = _build_policy(limits)
+        backend = resolve_backend()
+
+        if backend.selected_backend == BACKEND_V6:
+            try:
+                result = run_v6_backend(
+                    question=question,
+                    candidates=candidates,
+                    limits=limits,
+                    policy=policy,
+                    local_path=backend.local_path,
+                ).tky_result
+                compression_stats = dict(result.compression_stats)
+                compression_stats.setdefault("tky_engine_local", "topocore_v6")
+                compression_stats.setdefault("topocore_backend", "v6")
+                return TKYResult(
+                    selected_chunk_ids=list(result.selected_chunk_ids),
+                    route=result.route,
+                    compression_stats=compression_stats,
+                    rationale=result.rationale,
+                    execution_mode=result.execution_mode,
+                    llm_intent=result.llm_intent,
+                    llm_decision_reason_short=result.llm_decision_reason_short,
+                    llm_decision_reason_code=result.llm_decision_reason_code,
+                )
+            except TopoCoreBackendError as exc:
+                if backend.strict_v6 or not should_fallback_to_v5(exc):
+                    raise TopoCoreBackendError(str(exc)) from exc
+
+        engine = get_engine()
 
         req = EngineRequest(
             task_type=task_type,  # type: ignore[arg-type]
@@ -189,8 +228,8 @@ class LocalTKYProvider(TKYProvider):
                 )
                 for c in candidates
             ],
-            limits=dict(limits),
-            policy=_build_policy(limits),
+            limits=limits,
+            policy=policy,
         )
         decision = engine.decide(req)
         execution = coerce_execution_decision(
@@ -202,6 +241,10 @@ class LocalTKYProvider(TKYProvider):
         )
         compression_stats = dict(decision.compression_stats)
         compression_stats.setdefault("tky_engine_local", describe_engine_instance(engine))
+        compression_stats.setdefault("topocore_backend", "v5")
+        if backend.selected_backend == BACKEND_V6:
+            compression_stats.setdefault("topocore_backend_requested", "v6")
+            compression_stats.setdefault("topocore_backend_fallback", "v5")
         return TKYResult(
             selected_chunk_ids=decision.selected_chunk_ids,
             route=decision.route,
