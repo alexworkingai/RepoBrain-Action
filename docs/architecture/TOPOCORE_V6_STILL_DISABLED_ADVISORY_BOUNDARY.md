@@ -18,6 +18,7 @@ This sprint exists to add a narrow boundary around the existing shadow-path skel
 See also:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_5_BOUNDARY_GUARD_CHECKPOINT.md`
+- `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
 
 ## 2. Relationship to Sprint 33
 

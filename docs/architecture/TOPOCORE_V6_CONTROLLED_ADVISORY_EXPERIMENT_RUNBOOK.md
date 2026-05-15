@@ -18,6 +18,7 @@ This sprint exists to operationalize the Phase 4 planning into a future runbook 
 See also:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_4_CHECKPOINT_RUNTIME_ADJACENT_APPROVAL.md`
+- `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
 
 ## 2. Current Accepted Baseline
 

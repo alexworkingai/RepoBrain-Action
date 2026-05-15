@@ -14,6 +14,10 @@ Current truth:
 
 This sprint exists to verify the still-disabled advisory boundary remains safe, inert, and non-user-visible, then record a checkpoint decision before any future experiment proposal can be considered.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
+
 ## 2. Current Accepted Baseline
 
 Current accepted baseline:
