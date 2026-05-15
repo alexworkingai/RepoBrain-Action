@@ -97,6 +97,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_MIGRATION_DOCUMENTATION_INDEX.md`
 - `docs/architecture/TOPOCORE_V6_TEST_COVERAGE_INDEX.md`
 - `docs/architecture/TOPOCORE_V6_PRIVATE_DEPENDENCY_STRATEGY_PROPOSAL.md`
+- `docs/architecture/TOPOCORE_V6_MANUAL_EVIDENCE_COLLECTION_AND_PHASE_7_CHECKPOINT.md`
 
 ## 5. Recommended Reading Paths
 

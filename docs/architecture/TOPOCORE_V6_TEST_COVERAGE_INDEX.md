@@ -92,3 +92,7 @@ Recommended maintenance:
 - preserve no-runtime-wiring assertions
 - preserve forbidden-output assertions
 - preserve manual harness default skip behavior
+
+See also:
+
+- `docs/architecture/TOPOCORE_V6_MANUAL_EVIDENCE_COLLECTION_AND_PHASE_7_CHECKPOINT.md`
