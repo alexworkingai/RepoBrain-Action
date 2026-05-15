@@ -29,6 +29,24 @@ on:
           - v5
           - v6
           - auto
+      topocore_v6_dependency_mode:
+        description: "Manual lab TopoCore v6 dependency mode"
+        required: false
+        default: "none"
+        type: choice
+        options:
+          - none
+          - private_checkout
+      topocore_v6_ref:
+        description: "Manual lab TopoCore v6 ref"
+        required: false
+        default: "main"
+        type: string
+      topocore_v6_repository:
+        description: "Manual lab TopoCore v6 repository slug"
+        required: false
+        default: "alexworkingai/topocore"
+        type: string
       enable_llm:
         description: "Enable LLM path for workflow_dispatch run"
         required: false
@@ -190,11 +208,24 @@ jobs:
           echo "RB_E2E_COMMAND=${{ inputs.e2e_command }}" >> $GITHUB_ENV
           echo "RB_E2E_PR_NUMBER=${{ inputs.e2e_pr_number }}" >> $GITHUB_ENV
           echo "RB_E2E_REF=${{ inputs.e2e_ref }}" >> $GITHUB_ENV
+      - name: Checkout private TopoCore v6 for manual lab run
+        if: github.event_name == 'workflow_dispatch' && inputs.topocore_v6_dependency_mode == 'private_checkout' && (inputs.topocore_backend == 'v6' || inputs.topocore_backend == 'auto')
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.topocore_v6_repository }}
+          ref: ${{ inputs.topocore_v6_ref }}
+          token: ${{ secrets.TOPOCORE_V6_REPO_TOKEN }}
+          path: .topocore-v6
+      - name: Install private TopoCore v6 for manual lab run
+        if: github.event_name == 'workflow_dispatch' && inputs.topocore_v6_dependency_mode == 'private_checkout' && (inputs.topocore_backend == 'v6' || inputs.topocore_backend == 'auto')
+        shell: bash
+        run: python -m pip install -e ./.topocore-v6
       - uses: ./. 
         env:
           RB_INDEX_CACHE_RESTORED: ${{ steps.index_cache.outputs.cache-hit == 'true' && '1' || '' }}
           RB_REQUIRE_VERIFY_FOR_PATCH: "0"
           RB_FAIL_ON_NOT_RUN: "0"
+          RB_TOPOCORE_V6_REQUIRE_LOCAL: ${{ github.event_name == 'workflow_dispatch' && inputs.topocore_v6_dependency_mode == 'private_checkout' && (inputs.topocore_backend == 'v6' || inputs.topocore_backend == 'auto') && '1' || '0' }}
           RB_LLM_MODEL_HIGH: "openai/gpt-4.1"
           RB_LLM_MODEL_LOW: "openai/gpt-4.1-mini"
           RB_LLM_MAX_INPUT_TOKENS: "7600"

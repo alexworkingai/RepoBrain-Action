@@ -207,23 +207,28 @@ def test_issue_comment_path_remains_v5_default() -> None:
     assert "startsWith(github.event.comment.body, '/repobrain')" in workflow_text
 
 
-def test_workflows_do_not_install_private_topocore_v6() -> None:
+def test_workflow_default_path_does_not_install_private_topocore_v6() -> None:
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8").lower()
+    workflow = _load_workflow_yaml()
+    dispatch_inputs = _workflow_on_section(workflow)["workflow_dispatch"]["inputs"]
 
-    assert "topocore_v6" not in workflow_text
-    assert "pip install topocore" not in workflow_text
-    assert "actions/checkout" in workflow_text
+    assert dispatch_inputs["topocore_backend"]["default"] == "v5"
+    assert dispatch_inputs["topocore_v6_dependency_mode"]["default"] == "none"
+    assert "workflow_dispatch" in workflow_text
+    assert "issue_comment" in workflow_text
     assert "github packages" not in workflow_text
     assert "package registry" not in workflow_text
-    assert "rb_topocore" not in workflow_text
 
 
 def test_action_workflow_do_not_enable_strict_v6_by_default() -> None:
-    action_text = (_ROOT / "action.yml").read_text(encoding="utf-8")
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
+    workflow = _load_workflow_yaml()
+    dispatch_inputs = _workflow_on_section(workflow)["workflow_dispatch"]["inputs"]
 
-    assert "RB_TOPOCORE_V6_REQUIRE_LOCAL" not in action_text
-    assert "RB_TOPOCORE_V6_REQUIRE_LOCAL" not in workflow_text
+    assert dispatch_inputs["topocore_v6_dependency_mode"]["default"] == "none"
+    assert "RB_TOPOCORE_V6_REQUIRE_LOCAL" in workflow_text
+    assert "topocore_v6_dependency_mode == 'private_checkout'" in workflow_text
+    assert "|| '0'" in workflow_text
 
 
 def test_no_decide_raw_exposure() -> None:
