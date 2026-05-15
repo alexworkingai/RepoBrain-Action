@@ -38,6 +38,7 @@ Relationship summary:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_1_2_CLOSEOUT_AND_PHASE_3_SCOPE.md`
+- `docs/architecture/TOPOCORE_V6_PRIVATE_DEPENDENCY_STRATEGY_PROPOSAL.md`
 
 ## 3. Manual Harness Flow
 
