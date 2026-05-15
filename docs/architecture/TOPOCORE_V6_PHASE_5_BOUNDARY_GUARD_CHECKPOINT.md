@@ -17,6 +17,7 @@ This sprint exists to verify the still-disabled advisory boundary remains safe, 
 See also:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
+- `docs/architecture/TOPOCORE_V6_PHASE_6_NO_GO_CHECKPOINT.md`
 
 ## 2. Current Accepted Baseline
 

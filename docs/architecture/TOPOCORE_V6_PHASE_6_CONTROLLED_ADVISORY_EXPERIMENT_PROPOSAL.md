@@ -16,6 +16,10 @@ Current truth:
 
 This sprint exists to define what a future controlled advisory experiment proposal would mean while preserving every Phase 5 safety boundary and keeping the current runtime untouched.
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_PHASE_6_NO_GO_CHECKPOINT.md`
+
 ## 2. Current Accepted Baseline
 
 Current accepted baseline:
