@@ -42,6 +42,32 @@ on:
         required: false
         default: "main"
         type: string
+      repobrain_lab_command:
+        description: "Manual RepoBrain lab command"
+        required: false
+        default: "help"
+        type: choice
+        options:
+          - help
+          - ask
+          - review
+          - verify
+          - fix-lite
+      repobrain_lab_query:
+        description: "Manual RepoBrain lab query"
+        required: false
+        default: "Summarize current RepoBrain TopoCore backend status."
+        type: string
+      repobrain_lab_fixture:
+        description: "Manual RepoBrain lab fixture"
+        required: false
+        default: "minimal"
+        type: choice
+        options:
+          - minimal
+          - review
+          - verify
+          - fix_lite
       topocore_v6_repository:
         description: "Manual lab TopoCore v6 repository slug"
         required: false
@@ -253,6 +279,10 @@ jobs:
           RB_AI_MAX_TOKENS_PER_RUN_LLM: "12000"
           RB_AI_MAX_TOKENS_PER_RUN_EMBED: "200000"
           RB_AI_TIME_BUDGET_S: "240"
+          RB_REPOBRAIN_LAB_COMMAND: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.repobrain_lab_command || 'help' }}
+          RB_REPOBRAIN_LAB_QUERY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.repobrain_lab_query || 'Summarize current RepoBrain TopoCore backend status.' }}
+          RB_REPOBRAIN_LAB_FIXTURE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.repobrain_lab_fixture || 'minimal' }}
+          RB_REPOBRAIN_LAB_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         with:
           # remote_url intentionally not set here; use repobrain_remote_stub_test.yml for stub remote tests.
           tky_mode: "auto"
@@ -316,6 +346,13 @@ jobs:
         with:
           name: repobrain-diagnostic-summary
           path: artifacts/diagnostic_summary.md
+          if-no-files-found: ignore
+      - name: Upload RepoBrain lab backend evidence artifact
+        if: always() && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-lab-backend-evidence
+          path: artifacts/lab_backend_evidence/repobrain_lab_backend_evidence.json
           if-no-files-found: ignore
       - name: Generate RepoBrain TKYA evidence pack
         if: always()

@@ -32,6 +32,9 @@ Current test baseline:
 | `tests/test_topocore_backend_review_verify.py` | `repobrain/topocore_backend.py` plus `repobrain/tky_local.py` | Phase 7 | Review and verify task-family mapping, safe v6 summary-family payloads, v5 fallback, strict local failure, fix exclusion, no runtime wiring | No |
 | `tests/test_topocore_backend_fix_lite.py` | `repobrain/topocore_backend.py` plus `repobrain/tky_local.py` | Phase 7 | Fix-lite command-family preservation, conservative v6 fix decision shaping, patch-safety markers, v5 fallback, strict local failure, no runtime wiring | No |
 | `tests/test_topocore_backend_lab_default_policy.py` | `repobrain/topocore_backend.py` plus `repobrain/tky_local.py` | Phase 7 | Auto lab-default backend policy, v6-preferred runtime selection, v5 fallback markers, strict local failure, command-family coverage, GitHub pin preservation | No |
+| `tests/test_github_runtime_v6_lab_switch.py` | `action.yml` plus `.github/workflows/repobrain.yml` | Phase 7 | Manual workflow-dispatch backend selection, v5-pinned issue-comment safety, no default strict mode, no private install, selector compatibility | No |
+| `tests/test_github_runtime_v6_dependency_gate.py` | `.github/workflows/repobrain.yml` | Phase 7 | Manual-only private checkout gate, secret-only token handling, strict-mode gating, no default private dependency install | No |
+| `tests/test_github_workflow_dispatch_meaningful_v6_path.py` | `.github/workflows/repobrain.yml` plus `scripts/run_github.py` | Phase 7 | Meaningful workflow-dispatch lab command inputs, bounded v6 decision execution evidence, fallback markers, conservative fix-lite evidence, no patch or repo mutation steps | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
 | `tests/test_topocore_v6_decision_diff.py` | `repobrain/topocore_v6_decision_diff.py` | Phase 1/2 | Sanitized v5/v6 snapshot comparison, severity and category mapping, candidate overlap, fix-governance mismatch detection, forbidden field blocking | No |
 | `tests/test_topocore_v6_advisory_artifact.py` | `repobrain/topocore_v6_advisory_artifact.py` | Phase 2 | Advisory artifact schema, go/no-go hint, fix conservatism, retention defaults, forbidden field blocking, no runtime wiring | No |
@@ -107,3 +110,6 @@ See also:
 - `docs/architecture/TOPOCORE_V6_REVIEW_VERIFY_BACKEND_EXPANSION.md`
 - `docs/architecture/TOPOCORE_V6_FIX_LITE_DECISION_PATH.md`
 - `docs/architecture/TOPOCORE_V6_DEFAULT_LAB_RUNTIME_POLICY.md`
+- `docs/architecture/TOPOCORE_V6_GITHUB_RUNTIME_LAB_SWITCH.md`
+- `docs/architecture/TOPOCORE_V6_GITHUB_LAB_DEPENDENCY_GATE.md`
+- `docs/architecture/TOPOCORE_V6_WORKFLOW_DISPATCH_MEANINGFUL_DECISION_PATH.md`
