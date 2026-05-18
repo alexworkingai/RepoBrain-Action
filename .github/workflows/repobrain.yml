@@ -387,7 +387,7 @@ jobs:
             artifacts/evidence_pack/repobrain_tkya_evidence_pack_internal.json
             artifacts/evidence_pack/repobrain_tkya_evidence_pack_public_safe.json
             artifacts/evidence_pack/repobrain_tkya_evidence_pack.md
-          if-no-files-found: error
+          if-no-files-found: warn
       - name: Generate RepoBrain stability benchmark artifacts
         if: always()
         shell: bash
