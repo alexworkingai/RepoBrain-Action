@@ -169,8 +169,9 @@ def test_issue_comment_is_not_affected() -> None:
 
     assert "issue_comment:" in workflow_text
     assert "startsWith(github.event.comment.body, '/repobrain')" in workflow_text
-    assert "github.event_name == 'issue_comment' && inputs.topocore_v6_dependency_mode == 'private_checkout'" not in workflow_text
     assert "github.event_name == 'issue_comment' && github.event.inputs.repobrain_lab_command" not in workflow_text
+    assert "Checkout private TopoCore v6 for issue_comment lab run" in workflow_text
+    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in workflow_text
 
 
 def test_workflow_dispatch_default_remains_safe() -> None:

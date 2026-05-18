@@ -58,14 +58,14 @@ def test_private_checkout_is_manual_only() -> None:
     assert "inputs.topocore_backend == 'v6' || inputs.topocore_backend == 'auto'" in condition
 
 
-def test_issue_comment_does_not_private_checkout() -> None:
+def test_issue_comment_private_checkout_is_gate_controlled() -> None:
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
     assert "issue_comment:" in workflow_text
-    assert "inputs.topocore_v6_dependency_mode == 'private_checkout'" in workflow_text
-    assert "github.event_name == 'workflow_dispatch'" in workflow_text
-    assert "github.event_name == 'issue_comment' && inputs.topocore_v6_dependency_mode == 'private_checkout'" not in workflow_text
-    assert "github.event_name == 'issue_comment' && inputs.topocore_backend == 'v6'" not in workflow_text
+    assert "Checkout private TopoCore v6 for issue_comment lab run" in workflow_text
+    assert "github.event_name == 'issue_comment'" in workflow_text
+    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in workflow_text
+    assert "startsWith(github.event.comment.body, '/repobrain')" in workflow_text
 
 
 def test_private_install_is_conditional() -> None:

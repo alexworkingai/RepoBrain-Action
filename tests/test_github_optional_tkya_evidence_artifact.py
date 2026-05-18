@@ -41,7 +41,7 @@ def test_lab_backend_evidence_artifact_remains_visible() -> None:
     assert "artifacts/lab_backend_evidence/repobrain_lab_backend_evidence.json" in lab_upload["with"]["path"]
 
 
-def test_private_checkout_and_install_behavior_is_unchanged() -> None:
+def test_manual_private_checkout_and_install_behavior_is_unchanged() -> None:
     workflow = _load_workflow_yaml()
     steps = workflow["jobs"]["repobrain"]["steps"]
     checkout_step = next(step for step in steps if step.get("name") == "Checkout private TopoCore v6 for manual lab run")
@@ -56,7 +56,7 @@ def test_private_checkout_and_install_behavior_is_unchanged() -> None:
     assert install_step["if"] == expected_condition
 
 
-def test_runtime_import_diagnostic_behavior_is_unchanged() -> None:
+def test_manual_runtime_import_diagnostic_behavior_is_unchanged() -> None:
     workflow = _load_workflow_yaml()
     steps = workflow["jobs"]["repobrain"]["steps"]
     diagnostic_step = next(step for step in steps if step.get("name") == "Check TopoCore v6 runtime import for manual lab run")
@@ -69,15 +69,15 @@ def test_runtime_import_diagnostic_behavior_is_unchanged() -> None:
     assert "check_topocore_v6_runtime_import.py" in diagnostic_step["run"]
 
 
-def test_issue_comment_behavior_is_unchanged() -> None:
+def test_issue_comment_behavior_is_controlled_by_lab_gate() -> None:
     workflow = _load_workflow_yaml()
     on_section = _workflow_on_section(workflow)
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
     assert "issue_comment" in on_section
-    assert "github.event_name == 'issue_comment' && inputs.topocore_v6_dependency_mode == 'private_checkout'" not in workflow_text
-    assert "github.event_name == 'workflow_dispatch'" in workflow_text
-    assert "inputs.topocore_backend" in workflow_text
+    assert "Checkout private TopoCore v6 for issue_comment lab run" in workflow_text
+    assert "Check TopoCore v6 runtime import for issue_comment lab run" in workflow_text
+    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in workflow_text
 
 
 def test_workflow_dispatch_defaults_are_unchanged() -> None:

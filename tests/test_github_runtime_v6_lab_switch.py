@@ -197,13 +197,14 @@ def test_workflow_dispatch_exposes_lab_backend_choice() -> None:
     assert backend["options"] == ["v5", "v6", "auto"]
 
 
-def test_issue_comment_path_remains_v5_default() -> None:
+def test_issue_comment_path_has_controlled_v6_lab_gate_with_safe_default() -> None:
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
     assert "issue_comment:" in workflow_text
     assert "workflow_dispatch:" in workflow_text
     assert "topocore_backend:" in workflow_text
-    assert "github.event.inputs.topocore_backend || 'v5'" in workflow_text
+    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in workflow_text
+    assert "&& 'auto' || 'v5'" in workflow_text
     assert "startsWith(github.event.comment.body, '/repobrain')" in workflow_text
 
 

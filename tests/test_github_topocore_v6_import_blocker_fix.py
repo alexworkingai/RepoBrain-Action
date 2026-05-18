@@ -146,7 +146,7 @@ def test_runtime_import_diagnostic_script_exists() -> None:
     assert "check_topocore_v6_runtime_import.py" in workflow_text
 
 
-def test_diagnostic_script_is_disabled_from_default_issue_comment_path() -> None:
+def test_manual_diagnostic_step_remains_strict_for_workflow_dispatch() -> None:
     workflow = _load_workflow_yaml()
     steps = workflow["jobs"]["repobrain"]["steps"]
     diagnostic_step = next(step for step in steps if step.get("name") == "Check TopoCore v6 runtime import for manual lab run")
@@ -251,12 +251,13 @@ def test_evidence_failure_category_is_more_precise(monkeypatch: pytest.MonkeyPat
     assert ".topocore-v6" not in json.dumps(payload)
 
 
-def test_issue_comment_behavior_is_unchanged() -> None:
+def test_issue_comment_behavior_is_controlled_by_lab_gate() -> None:
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
     assert "issue_comment:" in workflow_text
     assert "Check TopoCore v6 runtime import for manual lab run" in workflow_text
-    assert "github.event_name == 'issue_comment' && inputs.topocore_v6_dependency_mode == 'private_checkout'" not in workflow_text
+    assert "Check TopoCore v6 runtime import for issue_comment lab run" in workflow_text
+    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in workflow_text
 
 
 def test_no_patch_or_autofix_workflow_steps_introduced() -> None:

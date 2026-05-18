@@ -242,8 +242,24 @@ jobs:
           ref: ${{ inputs.topocore_v6_ref }}
           token: ${{ secrets.TOPOCORE_V6_REPO_TOKEN }}
           path: .topocore-v6
+      - name: Checkout private TopoCore v6 for issue_comment lab run
+        id: issue_comment_topocore_checkout
+        if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.RB_ISSUE_COMMENT_TOPOCORE_V6_REPOSITORY || 'alexworkingai/topocore' }}
+          ref: ${{ vars.RB_ISSUE_COMMENT_TOPOCORE_V6_REF || 'main' }}
+          token: ${{ secrets.TOPOCORE_V6_REPO_TOKEN }}
+          path: .topocore-v6
       - name: Install private TopoCore v6 for manual lab run
         if: github.event_name == 'workflow_dispatch' && inputs.topocore_v6_dependency_mode == 'private_checkout' && (inputs.topocore_backend == 'v6' || inputs.topocore_backend == 'auto')
+        shell: bash
+        run: python -m pip install -e ./.topocore-v6
+      - name: Install private TopoCore v6 for issue_comment lab run
+        id: issue_comment_topocore_install
+        if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && steps.issue_comment_topocore_checkout.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: python -m pip install -e ./.topocore-v6
       - name: Expose private TopoCore v6 path for manual lab run
@@ -259,8 +275,26 @@ jobs:
             echo "PYTHONPATH=${GITHUB_WORKSPACE}/.topocore-v6:${PYTHONPATH}" >> "$GITHUB_ENV"
             echo "TopoCore v6 runtime path prepared: repo_root"
           fi
+      - name: Expose private TopoCore v6 path for issue_comment lab run
+        if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && steps.issue_comment_topocore_checkout.outcome == 'success'
+        shell: bash
+        run: |
+          if [ -d ".topocore-v6/src" ]; then
+            echo "RB_TOPOCORE_V6_LOCAL_PATH=${GITHUB_WORKSPACE}/.topocore-v6/src" >> "$GITHUB_ENV"
+            echo "PYTHONPATH=${GITHUB_WORKSPACE}/.topocore-v6/src:${PYTHONPATH}" >> "$GITHUB_ENV"
+            echo "TopoCore v6 runtime path prepared: src"
+          else
+            echo "RB_TOPOCORE_V6_LOCAL_PATH=${GITHUB_WORKSPACE}/.topocore-v6" >> "$GITHUB_ENV"
+            echo "PYTHONPATH=${GITHUB_WORKSPACE}/.topocore-v6:${PYTHONPATH}" >> "$GITHUB_ENV"
+            echo "TopoCore v6 runtime path prepared: repo_root"
+          fi
       - name: Check TopoCore v6 runtime import for manual lab run
         if: github.event_name == 'workflow_dispatch' && inputs.topocore_v6_dependency_mode == 'private_checkout' && (inputs.topocore_backend == 'v6' || inputs.topocore_backend == 'auto')
+        shell: bash
+        run: python scripts/check_topocore_v6_runtime_import.py
+      - name: Check TopoCore v6 runtime import for issue_comment lab run
+        if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && steps.issue_comment_topocore_checkout.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: python scripts/check_topocore_v6_runtime_import.py
       - uses: ./. 
@@ -306,7 +340,7 @@ jobs:
           dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
           comment_text: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.comment_text || '' }}
           issue_number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.issue_number || '' }}
-          topocore_backend: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.topocore_backend || 'v5' }}
+          topocore_backend: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.topocore_backend || github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && 'auto' || 'v5' }}
       - name: Save RepoBrain retrieval snapshot cache
         if: always() && hashFiles('artifacts/.repobrain_cache/*') != ''
         uses: actions/cache/save@v4
