@@ -150,6 +150,10 @@ Given the repository variable is intentionally left at `0`, the recommended next
   - `Sprint 55 - v5 Deprecation Readiness Assessment`
 - do not start v5 removal yet
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_READINESS_ASSESSMENT.md`
+
 ## 10. Non-Goals
 
 - no runtime behavior change
@@ -160,4 +164,3 @@ Given the repository variable is intentionally left at `0`, the recommended next
 - no patch application
 - no commit, branch, or PR creation
 - no `repobrain-community` change
-

@@ -84,6 +84,9 @@ Current tests prove that:
 - Sprint 53 operational checks proved:
   - gate `1` can resolve issue-comment TopoCore v6
   - gate `0` keeps the issue-comment path on the v5-side runtime
+- Sprint 55 adds no new runtime coverage:
+  - it maps existing v6 and v5 fallback evidence
+  - it identifies missing deprecation evidence rather than adding new execution coverage
 
 ## 6. What Tests Do Not Prove
 
@@ -98,6 +101,7 @@ Current tests do not prove:
 - v5 replacement readiness
 - production packaging or private dependency CI strategy
 - Sprint 54 adds no new runtime coverage because it is a docs and policy-freeze closeout sprint
+- Sprint 55 does not prove v5 deprecation readiness by itself because it is an assessment-only sprint
 
 ## 7. Recommended Future Test Maintenance
 
@@ -127,3 +131,4 @@ See also:
 - `docs/architecture/TOPOCORE_V6_ISSUE_COMMENT_LAB_RUNTIME.md`
 - `docs/architecture/TOPOCORE_V6_ISSUE_COMMENT_LAB_GATE_PROPAGATION_FIX.md`
 - `docs/architecture/TOPOCORE_V6_ISSUE_COMMENT_LAB_TRANSITION_CLOSEOUT.md`
+- `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_READINESS_ASSESSMENT.md`
