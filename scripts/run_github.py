@@ -16,6 +16,7 @@ from repobrain.github_flow import (
     run_github_flow,
 )
 from repobrain.stability_benchmark import write_stability_benchmark_artifacts
+from repobrain.topocore_v6_adapter import classify_topocore_v6_runtime_error
 from repobrain.tky_local import LocalTKYProvider
 from repobrain.tky_provider import CandidateChunk
 from repobrain.tkya_evidence_pack import write_tkya_evidence_pack_artifacts
@@ -324,6 +325,42 @@ def _print_lab_backend_evidence(evidence: dict[str, Any]) -> None:
         print(f"{key}={evidence.get(key)}")
 
 
+def _build_lab_failure_evidence(
+    *,
+    lab_command: str,
+    lab_fixture: str,
+    exc: Exception,
+) -> dict[str, Any]:
+    category, sanitized_message = classify_topocore_v6_runtime_error(
+        exc,
+        local_path=_env_str("RB_TOPOCORE_V6_LOCAL_PATH", ""),
+    )
+    requested_backend = _env_str("RB_TOPOCORE_BACKEND", _env_str("RB_TKYA_BACKEND", "auto")) or "auto"
+    evidence = {
+        "lab_command": lab_command,
+        "lab_fixture": lab_fixture,
+        "requested_backend": requested_backend,
+        "resolved_backend": "unknown",
+        "fallback_used": "unknown",
+        "failure_category": category,
+        "error_message_sanitized": sanitized_message,
+        "decide_raw_used": False,
+        "patch_application": False,
+        "commit_created": False,
+        "branch_created": False,
+        "pr_created": False,
+    }
+    if lab_command == "fix-lite":
+        evidence.update(
+            {
+                "patch_authorized": False,
+                "patch_applied": False,
+                "files_modified": False,
+            }
+        )
+    return evidence
+
+
 def run_workflow_dispatch_lab_command(*, repo_root: Path) -> dict[str, Any]:
     lab_command = _normalize_lab_command(_env_str("RB_REPOBRAIN_LAB_COMMAND", "help"))
     lab_fixture = _normalize_lab_fixture(_env_str("RB_REPOBRAIN_LAB_FIXTURE", "minimal"))
@@ -333,12 +370,30 @@ def run_workflow_dispatch_lab_command(*, repo_root: Path) -> dict[str, Any]:
     )
     runtime_command = "fix" if lab_command == "fix-lite" else lab_command
     question = question_from_command(runtime_command, lab_query)
-    result = answer_question(
-        question=question,
-        candidates=_build_lab_candidates(lab_fixture),
-        provider=LocalTKYProvider(),
-        limits=_build_lab_limits(lab_command, lab_fixture),
-    )
+    try:
+        result = answer_question(
+            question=question,
+            candidates=_build_lab_candidates(lab_fixture),
+            provider=LocalTKYProvider(),
+            limits=_build_lab_limits(lab_command, lab_fixture),
+        )
+    except Exception as exc:
+        failure_evidence = _build_lab_failure_evidence(
+            lab_command=lab_command,
+            lab_fixture=lab_fixture,
+            exc=exc,
+        )
+        evidence_path = _write_lab_backend_evidence(repo_root, failure_evidence)
+        print("RepoBrain lab backend evidence:")
+        print(f"lab_command={failure_evidence['lab_command']}")
+        print(f"lab_fixture={failure_evidence['lab_fixture']}")
+        print(f"requested_backend={failure_evidence['requested_backend']}")
+        print(f"resolved_backend={failure_evidence['resolved_backend']}")
+        print(f"fallback_used={failure_evidence['fallback_used']}")
+        print(f"failure_category={failure_evidence['failure_category']}")
+        print(f"error_message_sanitized={failure_evidence['error_message_sanitized']}")
+        print(f"LAB_BACKEND_EVIDENCE_PATH={evidence_path.as_posix()}")
+        raise ValueError(failure_evidence["error_message_sanitized"]) from exc
     compression_stats = (
         dict(result.tky.compression_stats)
         if isinstance(result.tky.compression_stats, dict)

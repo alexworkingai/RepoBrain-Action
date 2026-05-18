@@ -75,6 +75,13 @@ _REQUIRED_FACADE_METHODS = (
     "health",
 )
 
+_CATEGORY_IMPORT_FAILED = "topocore_v6_import_failed"
+_CATEGORY_MISSING_SYMBOL = "topocore_v6_missing_symbol"
+_CATEGORY_WRONG_PYTHON_CONTEXT = "topocore_v6_wrong_python_context"
+_CATEGORY_HEALTH_FAILED = "topocore_v6_health_failed"
+_CATEGORY_ADAPTER_CONTRACT_FAILED = "topocore_v6_adapter_contract_failed"
+_CATEGORY_RUNTIME_UNKNOWN = "topocore_v6_runtime_unknown"
+
 _PATH_TOKEN_RE = re.compile(
     r"([A-Za-z]:\\[^\\\s]+(?:\\[^\\\s]+)*)|(/[^/\s]+(?:/[^/\s]+)*)"
 )
@@ -86,6 +93,36 @@ class RepoBrainV6AdapterError(ValueError):
 
 class RepoBrainV6AdapterRuntimeError(RepoBrainV6AdapterError):
     """Raised when dynamic TopoCore v6 loading or invocation fails safely."""
+
+
+@dataclass(frozen=True)
+class TopoCoreV6RuntimeImportDiagnostics:
+    """Sanitized diagnostics for dynamic TopoCore v6 import/public API checks."""
+
+    ok: bool
+    python_executable: str
+    import_ok: bool
+    version: str = ""
+    public_api_ok: bool = False
+    health_ok: bool = False
+    health_release_stage: str = ""
+    health_api_stability: str = ""
+    failure_category: str = ""
+    error_message_sanitized: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ok": self.ok,
+            "python_executable": self.python_executable,
+            "import_ok": self.import_ok,
+            "version": self.version,
+            "public_api_ok": self.public_api_ok,
+            "health_ok": self.health_ok,
+            "health_release_stage": self.health_release_stage,
+            "health_api_stability": self.health_api_stability,
+            "failure_category": self.failure_category,
+            "error_message_sanitized": self.error_message_sanitized,
+        }
 
 
 @dataclass(frozen=True)
@@ -217,6 +254,46 @@ def _is_mapping(value: Any) -> bool:
 def _sanitize_error_text(text: str) -> str:
     normalized = " ".join(str(text or "").split())
     return _PATH_TOKEN_RE.sub("[redacted-path]", normalized)
+
+
+def _runtime_python_label() -> str:
+    executable = str(Path(sys.executable).name or "python").strip()
+    return executable or "python"
+
+
+def _is_existing_local_path(local_path: str | None) -> bool:
+    if not local_path:
+        return False
+    try:
+        return Path(local_path).exists()
+    except OSError:
+        return False
+
+
+def classify_topocore_v6_runtime_error(
+    exc: Exception,
+    *,
+    local_path: str | None = None,
+) -> tuple[str, str]:
+    """Return a sanitized failure category and message for v6 runtime issues."""
+
+    message = _sanitize_error_text(str(exc))
+    lowered = message.lower()
+    if "missing required symbols" in lowered:
+        return _CATEGORY_MISSING_SYMBOL, message
+    if "local path is not available" in lowered:
+        return _CATEGORY_WRONG_PYTHON_CONTEXT, message
+    if "health" in lowered and ("failed" in lowered or "missing" in lowered):
+        return _CATEGORY_HEALTH_FAILED, message
+    if "facade creation failed" in lowered or "request construction failed" in lowered:
+        return _CATEGORY_ADAPTER_CONTRACT_FAILED, message
+    if "external decision call failed" in lowered:
+        return _CATEGORY_ADAPTER_CONTRACT_FAILED, message
+    if "public api is unavailable" in lowered:
+        if local_path and _is_existing_local_path(local_path):
+            return _CATEGORY_IMPORT_FAILED, message
+        return _CATEGORY_IMPORT_FAILED, message
+    return _CATEGORY_RUNTIME_UNKNOWN, message
 
 
 def _sanitize_preview_value(value: Any) -> Any:
@@ -399,8 +476,9 @@ def load_topocore_v6_public_api(*, local_path: str | None = None) -> Any:
     except RepoBrainV6AdapterRuntimeError:
         raise
     except Exception as exc:  # pragma: no cover - exercised via tests
+        _category, sanitized = classify_topocore_v6_runtime_error(exc, local_path=local_path)
         raise RepoBrainV6AdapterRuntimeError(
-            "TopoCore v6 public API is unavailable."
+            f"TopoCore v6 public API is unavailable. [{_CATEGORY_IMPORT_FAILED}] {sanitized}"
         ) from exc
 
     missing_symbols = [
@@ -409,13 +487,115 @@ def load_topocore_v6_public_api(*, local_path: str | None = None) -> Any:
     if missing_symbols:
         joined = ",".join(sorted(missing_symbols))
         raise RepoBrainV6AdapterRuntimeError(
-            f"TopoCore v6 public API is missing required symbols: {joined}"
+            f"TopoCore v6 public API is missing required symbols: {joined} [{_CATEGORY_MISSING_SYMBOL}]"
         )
     return module
 
 
 def _extract_safe_decision_text(value: Any) -> str:
     return _sanitize_error_text(_normalize_text(value))
+
+
+def inspect_topocore_v6_runtime_import(
+    *,
+    local_path: str | None = None,
+) -> TopoCoreV6RuntimeImportDiagnostics:
+    """Inspect the public TopoCore v6 runtime import surface safely.
+
+    This check never calls ``decide_raw``, ``decide``, or ``decide_external``.
+    """
+
+    python_executable = _runtime_python_label()
+    if local_path:
+        try:
+            path_obj = Path(local_path)
+        except OSError as exc:
+            category, sanitized = classify_topocore_v6_runtime_error(exc, local_path=local_path)
+            return TopoCoreV6RuntimeImportDiagnostics(
+                ok=False,
+                python_executable=python_executable,
+                import_ok=False,
+                failure_category=category,
+                error_message_sanitized=sanitized,
+            )
+        if not path_obj.exists():
+            return TopoCoreV6RuntimeImportDiagnostics(
+                ok=False,
+                python_executable=python_executable,
+                import_ok=False,
+                failure_category=_CATEGORY_WRONG_PYTHON_CONTEXT,
+                error_message_sanitized="TopoCore v6 local path is not available.",
+            )
+
+    try:
+        public_api = load_topocore_v6_public_api(local_path=local_path)
+    except Exception as exc:  # pragma: no cover - exercised via tests
+        category, sanitized = classify_topocore_v6_runtime_error(exc, local_path=local_path)
+        return TopoCoreV6RuntimeImportDiagnostics(
+            ok=False,
+            python_executable=python_executable,
+            import_ok=False,
+            failure_category=category,
+            error_message_sanitized=sanitized,
+        )
+
+    version = _sanitize_error_text(_normalize_text(getattr(public_api, "__version__", "")))
+    try:
+        facade = public_api.create_topocore()
+    except Exception:  # pragma: no cover - exercised via tests
+        category, sanitized = classify_topocore_v6_runtime_error(
+            RepoBrainV6AdapterRuntimeError("TopoCore v6 facade creation failed."),
+            local_path=local_path,
+        )
+        return TopoCoreV6RuntimeImportDiagnostics(
+            ok=False,
+            python_executable=python_executable,
+            import_ok=True,
+            version=version,
+            public_api_ok=True,
+            failure_category=category,
+            error_message_sanitized=sanitized,
+        )
+
+    if not hasattr(facade, "health"):
+        return TopoCoreV6RuntimeImportDiagnostics(
+            ok=False,
+            python_executable=python_executable,
+            import_ok=True,
+            version=version,
+            public_api_ok=True,
+            failure_category=_CATEGORY_HEALTH_FAILED,
+            error_message_sanitized="TopoCore v6 facade health method is unavailable.",
+        )
+
+    try:
+        health_raw = facade.health()
+    except Exception:  # pragma: no cover - exercised via tests
+        category, sanitized = classify_topocore_v6_runtime_error(
+            RepoBrainV6AdapterRuntimeError("TopoCore v6 health check failed."),
+            local_path=local_path,
+        )
+        return TopoCoreV6RuntimeImportDiagnostics(
+            ok=False,
+            python_executable=python_executable,
+            import_ok=True,
+            version=version,
+            public_api_ok=True,
+            failure_category=category,
+            error_message_sanitized=sanitized,
+        )
+
+    health = dict(health_raw) if isinstance(health_raw, Mapping) else {}
+    return TopoCoreV6RuntimeImportDiagnostics(
+        ok=True,
+        python_executable=python_executable,
+        import_ok=True,
+        version=version,
+        public_api_ok=True,
+        health_ok=True,
+        health_release_stage=_sanitize_error_text(_normalize_text(health.get("release_stage", ""))),
+        health_api_stability=_sanitize_error_text(_normalize_text(health.get("api_stability", ""))),
+    )
 
 
 class RepoBrainTopoCoreV6Adapter:
@@ -646,5 +826,8 @@ __all__ = [
     "RepoBrainV6RealRequestBundle",
     "RepoBrainV6RequestPreview",
     "RepoBrainV6SummaryBundle",
+    "TopoCoreV6RuntimeImportDiagnostics",
+    "classify_topocore_v6_runtime_error",
+    "inspect_topocore_v6_runtime_import",
     "load_topocore_v6_public_api",
 ]
