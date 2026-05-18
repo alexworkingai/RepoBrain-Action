@@ -146,7 +146,19 @@ If Sprint 53 post-merge operational checks pass, Sprint 54 can either:
 
 If the checks fail, Sprint 54 should fix only the specific remaining blocker.
 
-## 10. Non-Goals
+## 10. Operational Follow-Up
+
+The Sprint 53 operational checks succeeded and are frozen in the Sprint 54 closeout note:
+
+- `docs/architecture/TOPOCORE_V6_ISSUE_COMMENT_LAB_TRANSITION_CLOSEOUT.md`
+
+Current frozen operational state after those checks:
+
+- `RB_ENABLE_ISSUE_COMMENT_V6_LAB=0`
+- issue-comment default remains the safe v5-side path
+- controlled v6 lab mode remains available without a code change when the gate is intentionally enabled
+
+## 11. Non-Goals
 
 - no v5 removal
 - no production or Marketplace switch

@@ -127,7 +127,21 @@ If the Sprint 52 `issue_comment` operational check succeeds, Sprint 53 may eithe
 
 If it fails, Sprint 53 should fix only the specific remaining blocker.
 
-## 10. Non-Goals
+## 10. Current State
+
+Sprint 53 proved the controlled `issue_comment` v6 lab path and the v5 kill-switch path.
+
+Current frozen operational state:
+
+- v6 lab mode is proven
+- the repository variable is intentionally left disabled at `RB_ENABLE_ISSUE_COMMENT_V6_LAB=0`
+- normal `issue_comment` operational behavior is therefore still the v5-side path
+
+See:
+
+- `docs/architecture/TOPOCORE_V6_ISSUE_COMMENT_LAB_TRANSITION_CLOSEOUT.md`
+
+## 11. Non-Goals
 
 - no v5 removal
 - no production or Marketplace switch
