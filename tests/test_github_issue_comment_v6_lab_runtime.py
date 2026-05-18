@@ -30,10 +30,14 @@ def test_issue_comment_v6_lab_gate_exists() -> None:
 
 
 def test_issue_comment_default_safe_behavior_is_defined() -> None:
-    workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
+    workflow = _load_workflow_yaml()
+    steps = workflow["jobs"]["repobrain"]["steps"]
+    action_step = next(step for step in steps if step.get("uses") == "./.")
 
-    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && 'auto' || 'v5'" in workflow_text
-    assert "topocore_backend: ${{ github.event_name == 'workflow_dispatch'" in workflow_text
+    assert action_step["with"]["topocore_backend"]
+    assert action_step["with"]["tky_mode"]
+    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in action_step["with"]["topocore_backend"]
+    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in action_step["with"]["tky_mode"]
 
 
 def test_issue_comment_can_run_private_checkout_when_lab_gate_enabled() -> None:
@@ -86,11 +90,15 @@ def test_issue_comment_backend_env_changes_correctly() -> None:
     steps = workflow["jobs"]["repobrain"]["steps"]
     action_step = next(step for step in steps if step.get("uses") == "./.")
     topocore_backend_expr = action_step["with"]["topocore_backend"]
+    tky_mode_expr = action_step["with"]["tky_mode"]
 
     assert "github.event_name == 'issue_comment'" in topocore_backend_expr
     assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in topocore_backend_expr
     assert "'auto'" in topocore_backend_expr
     assert "'v5'" in topocore_backend_expr
+    assert "github.event_name == 'issue_comment'" in tky_mode_expr
+    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in tky_mode_expr
+    assert "'local'" in tky_mode_expr
 
 
 def test_workflow_dispatch_behavior_is_preserved() -> None:

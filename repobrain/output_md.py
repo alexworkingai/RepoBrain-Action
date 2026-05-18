@@ -945,10 +945,27 @@ def _tkya_mode_label(audit_summary: dict[str, Any]) -> str:
     return raw
 
 
+def _bool_label(value: Any) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    raw = str(value or "").strip().lower()
+    if raw in {"true", "1", "yes"}:
+        return "yes"
+    if raw in {"false", "0", "no"}:
+        return "no"
+    if raw in {"", "n/a"}:
+        return "n/a"
+    return raw
+
+
 def _version_backend_lines(audit_summary: dict[str, Any]) -> list[str]:
     version = str(audit_summary.get("repobrain_version", "") or "").strip()
     backend = str(audit_summary.get("tkya_backend", "") or "").strip()
     mode = _tkya_mode_label(audit_summary)
+    topocore_requested = str(audit_summary.get("requested_backend", "") or "").strip()
+    topocore_resolved = str(audit_summary.get("resolved_backend", "") or "").strip()
+    topocore_fallback_used = audit_summary.get("fallback_used", "n/a")
+    topocore_fallback_reason = str(audit_summary.get("fallback_reason", "") or "").strip()
     lines: list[str] = []
     if version:
         lines.append(f"- RepoBrain version: `{version}`")
@@ -956,6 +973,15 @@ def _version_backend_lines(audit_summary: dict[str, Any]) -> list[str]:
         lines.append(f"- TKYA backend: `{backend}`")
     if mode and mode != "n/a":
         lines.append(f"- TKYA mode: `{mode}`")
+    if topocore_requested:
+        lines.append(f"- TopoCore backend requested: `{topocore_requested}`")
+    if topocore_resolved:
+        lines.append(f"- TopoCore backend resolved: `{topocore_resolved}`")
+    if topocore_fallback_used != "n/a":
+        fallback_label = _bool_label(topocore_fallback_used)
+        lines.append(f"- TopoCore fallback used: `{fallback_label}`")
+    if topocore_fallback_reason:
+        lines.append(f"- TopoCore fallback reason: `{topocore_fallback_reason}`")
     return lines
 
 
@@ -1723,6 +1749,31 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     "TKY mode used",
                     audit_summary.get("tky_mode_used", "n/a"),
                     "Effective provider mode after policy checks.",
+                ),
+                (
+                    "TopoCore backend requested",
+                    audit_summary.get("requested_backend", "n/a"),
+                    "Requested TopoCore backend policy after workflow and action inputs are applied.",
+                ),
+                (
+                    "TopoCore backend resolved",
+                    audit_summary.get("resolved_backend", "n/a"),
+                    "Effective TopoCore backend after local selector resolution or safe fallback.",
+                ),
+                (
+                    "TopoCore backend mode",
+                    audit_summary.get("backend_mode", "n/a"),
+                    "Backend policy mode recorded by the local TopoCore selector.",
+                ),
+                (
+                    "TopoCore fallback used",
+                    audit_summary.get("fallback_used", "n/a"),
+                    "Whether the TopoCore selector fell back from v6 to v5.",
+                ),
+                (
+                    "TopoCore fallback reason",
+                    audit_summary.get("fallback_reason", "n/a"),
+                    "Sanitized reason for TopoCore fallback when it occurs.",
                 ),
                 (
                     "Remote skipped reason",

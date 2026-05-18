@@ -799,6 +799,14 @@ _TKYA_AUDIT_EXPORT_KEYS: tuple[str, ...] = (
     "trace_inputs_hash",
     "tky_selected_chunk_ids_count",
 )
+_TOPOCORE_BACKEND_AUDIT_KEYS: tuple[str, ...] = (
+    "topocore_backend",
+    "requested_backend",
+    "resolved_backend",
+    "backend_mode",
+    "fallback_used",
+    "fallback_reason",
+)
 _MODEL_ADAPTER_AUDIT_EXPORT_KEYS: tuple[str, ...] = (
     "llm_adapter_contract_version",
     "llm_adapter_provider",
@@ -864,6 +872,56 @@ def _extract_tkya_canonical_audit_fields(compression_stats: dict[str, Any]) -> d
 
 def _copy_tkya_canonical_fields_to_audit(*, audit: dict[str, Any], audit_summary: dict[str, Any]) -> None:
     for key in _TKYA_AUDIT_EXPORT_KEYS:
+        if key in audit_summary:
+            audit[key] = audit_summary[key]
+
+
+def _extract_topocore_backend_audit_fields(compression_stats: dict[str, Any]) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    for key in _TOPOCORE_BACKEND_AUDIT_KEYS:
+        if key in compression_stats:
+            fields[key] = compression_stats[key]
+    return fields
+
+
+def _requested_topocore_backend_from_env() -> str:
+    requested_backend = str(
+        os.environ.get(
+            "RB_TOPOCORE_BACKEND",
+            os.environ.get("RB_TKYA_BACKEND", "auto"),
+        )
+        or "auto"
+    ).strip().lower()
+    return requested_backend or "auto"
+
+
+def _apply_topocore_backend_audit_defaults(
+    *,
+    audit_summary: dict[str, Any],
+    requested_backend: str,
+    effective_tky_mode: str,
+) -> None:
+    requested = (requested_backend or "auto").strip().lower() or "auto"
+    mode_used = str(effective_tky_mode or audit_summary.get("tky_mode_used", "baseline") or "baseline").strip().lower()
+
+    audit_summary.setdefault("requested_backend", requested)
+    audit_summary.setdefault("backend_mode", requested)
+
+    if requested == "v5":
+        audit_summary.setdefault("topocore_backend", "v5")
+        audit_summary.setdefault("resolved_backend", "v5")
+        audit_summary.setdefault("fallback_used", False)
+        audit_summary.setdefault("fallback_reason", "none")
+        return
+
+    if mode_used != "local":
+        audit_summary.setdefault("resolved_backend", "unknown")
+        audit_summary.setdefault("fallback_used", "unknown")
+        audit_summary.setdefault("fallback_reason", "unknown")
+
+
+def _copy_topocore_backend_fields_to_audit(*, audit: dict[str, Any], audit_summary: dict[str, Any]) -> None:
+    for key in _TOPOCORE_BACKEND_AUDIT_KEYS:
         if key in audit_summary:
             audit[key] = audit_summary[key]
 
@@ -5681,9 +5739,16 @@ def _build_qa_markdown(
     audit_summary["tky_mode_used"] = str(
         audit_summary.get("tky_mode_used", effective_tky_mode or "baseline")
     )
+    requested_topocore_backend = _requested_topocore_backend_from_env()
     compression_stats = result.tky.compression_stats if isinstance(result.tky.compression_stats, dict) else {}
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
     audit_summary.update(_extract_tkya_canonical_audit_fields(compression_stats))
+    audit_summary.update(_extract_topocore_backend_audit_fields(compression_stats))
+    _apply_topocore_backend_audit_defaults(
+        audit_summary=audit_summary,
+        requested_backend=requested_topocore_backend,
+        effective_tky_mode=audit_summary["tky_mode_used"],
+    )
     audit_summary["tky_selected_chunk_ids_count"] = int(
         len(getattr(result.tky, "selected_chunk_ids", []) or [])
     )
@@ -6009,6 +6074,7 @@ def _build_qa_markdown(
         audit["tky_fallback_reason"] = str(audit_summary.get("tky_fallback_reason", "n/a") or "n/a")
         audit["rd"] = _extract_rd_summary_from_audit_summary(audit_summary)
         _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
         _copy_model_adapter_fields_to_audit(audit=audit, audit_summary=audit_summary)
         audit["comment_truncated"] = False
         audit["ask_result_artifact"] = "n/a"
@@ -6711,6 +6777,12 @@ def _build_review_markdown(
     audit_summary.update(_execution_from_tky_result(tky_result.tky))
     audit_summary.update(_extract_verification_audit_fields(compression_stats))
     audit_summary.update(_extract_tkya_canonical_audit_fields(compression_stats))
+    audit_summary.update(_extract_topocore_backend_audit_fields(compression_stats))
+    _apply_topocore_backend_audit_defaults(
+        audit_summary=audit_summary,
+        requested_backend=_requested_topocore_backend_from_env(),
+        effective_tky_mode=audit_summary.get("tky_mode_used", effective_tky_mode),
+    )
     audit_summary["tky_selected_chunk_ids_count"] = int(
         len(getattr(tky_result.tky, "selected_chunk_ids", []) or [])
     )
@@ -7647,6 +7719,7 @@ def _build_review_markdown(
                 or "not_applicable"
             )
             _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
+            _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
             _merge_llm_meta(audit, llm_meta)
             _copy_model_adapter_fields_to_audit(audit=audit, audit_summary=audit_summary)
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
@@ -8176,6 +8249,7 @@ def _build_review_markdown(
         audit["tldr_compressed"] = bool(audit_summary.get("tldr_compressed", False))
         audit["patch_validation_artifact"] = patch_validation_path.as_posix()
         _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
         _copy_model_adapter_fields_to_audit(audit=audit, audit_summary=audit_summary)
         if patch_debug_payload is not None:
             audit["patch_generation_debug"] = dict(patch_debug_payload)

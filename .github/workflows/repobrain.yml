@@ -336,7 +336,7 @@ jobs:
           RB_REPOBRAIN_LAB_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         with:
           # remote_url intentionally not set here; use repobrain_remote_stub_test.yml for stub remote tests.
-          tky_mode: "auto"
+          tky_mode: ${{ github.event_name == 'workflow_dispatch' && 'auto' || github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && 'local' || 'auto' }}
           dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
           comment_text: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.comment_text || '' }}
           issue_number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.issue_number || '' }}
