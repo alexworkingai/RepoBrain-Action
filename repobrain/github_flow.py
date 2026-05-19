@@ -53,6 +53,7 @@ from repobrain.output_md import (
     render_patch_markdown,
     render_refuse_markdown,
     render_review_markdown,
+    render_scoped_command_markdown,
     render_wait_markdown,
 )
 from repobrain.retrieve_pro import retrieve_topk_pro
@@ -807,6 +808,11 @@ _TOPOCORE_BACKEND_AUDIT_KEYS: tuple[str, ...] = (
     "fallback_used",
     "fallback_reason",
 )
+_SCOPED_COMMAND_AUDIT_KEYS: tuple[str, ...] = (
+    "scope_status",
+    "patch_authorized",
+    "patch_applied",
+)
 _MODEL_ADAPTER_AUDIT_EXPORT_KEYS: tuple[str, ...] = (
     "llm_adapter_contract_version",
     "llm_adapter_provider",
@@ -924,6 +930,57 @@ def _copy_topocore_backend_fields_to_audit(*, audit: dict[str, Any], audit_summa
     for key in _TOPOCORE_BACKEND_AUDIT_KEYS:
         if key in audit_summary:
             audit[key] = audit_summary[key]
+
+
+def _copy_scoped_command_fields_to_audit(*, audit: dict[str, Any], audit_summary: dict[str, Any]) -> None:
+    for key in _SCOPED_COMMAND_AUDIT_KEYS:
+        if key in audit_summary:
+            audit[key] = audit_summary[key]
+
+
+def _build_scope_audit_summary(
+    *,
+    cmd: str,
+    route_final: str,
+    tky_mode_requested: str,
+    scope_status: str,
+    reason: str,
+) -> dict[str, Any]:
+    requested_backend = _requested_topocore_backend_from_env()
+    requested_norm = str(requested_backend or "auto").strip().lower() or "auto"
+    is_v5_requested = requested_norm == "v5"
+    fallback_value: bool | str = False if is_v5_requested else "not_applicable"
+    fallback_reason = "none" if is_v5_requested else scope_status
+    resolved_backend = "v5" if is_v5_requested else "not_applicable"
+    topocore_backend = "v5" if is_v5_requested else "not_applicable"
+
+    audit_summary: dict[str, Any] = {
+        "route_final": route_final,
+        "pass_count": 1,
+        "retrieved": 0,
+        "selected": 0,
+        "repobrain_version": REPOBRAIN_VERSION,
+        "tky_mode_requested": tky_mode_requested,
+        "tky_mode_used": tky_mode_requested,
+        "tky_engine": "scoped_unsupported",
+        "requested_backend": requested_norm,
+        "resolved_backend": resolved_backend,
+        "backend_mode": requested_norm,
+        "topocore_backend": topocore_backend,
+        "fallback_used": fallback_value,
+        "fallback_reason": fallback_reason,
+        "scope_status": scope_status,
+        "llm_used": False,
+        "llm_skip_reason": scope_status,
+        "execution_mode": "scoped_unsupported",
+        "llm_intent": "none",
+        "llm_decision_reason_short": reason,
+        "llm_decision_reason_code": scope_status.upper(),
+    }
+    if cmd == "fix":
+        audit_summary["patch_authorized"] = False
+        audit_summary["patch_applied"] = False
+    return audit_summary
 
 
 def _apply_model_adapter_contract_fields(
@@ -6410,18 +6467,73 @@ def _build_review_markdown(
     governor: AIBudgetGovernor | None = None,
 ) -> str:
     if not is_pull_request:
+        reason = (
+            "Review is unsupported in issue-only context. No PR review claims or patch actions were attempted."
+            if cmd == "review"
+            else "Fix-lite is unsupported in issue-only context. No patch, branch, commit, or PR action was attempted."
+        )
+        audit_summary = _build_scope_audit_summary(
+            cmd=cmd,
+            route_final="WAIT",
+            tky_mode_requested=tky_mode,
+            scope_status="unsupported_issue_context",
+            reason=reason,
+        )
         if audit is not None:
-            audit["route_final"] = "REVIEW"
-            audit["pass_count"] = 1
-            audit["index_source"] = "n/a"
-        return "Review/fix is available in Pull Requests. Run `/repobrain review` in a PR discussion."
+            audit.update(
+                {
+                    "route_final": "WAIT",
+                    "pass_count": 1,
+                    "index_source": "n/a",
+                    "retrieved": 0,
+                    "selected": 0,
+                }
+            )
+            _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
+            _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        return render_scoped_command_markdown(
+            title="### ⏳ Scoped command not available",
+            message=reason,
+            audit_summary=audit_summary,
+            next_steps=[
+                "Use `/repobrain ask ...` in an issue discussion for repository-level analysis.",
+                "Run the same command in a pull request discussion for PR-scoped review or fix-lite governance.",
+            ],
+        )
 
     if issue_number is None:
+        reason = (
+            "Review scope is pull-request only, but the pull request number was not detected."
+            if cmd == "review"
+            else "Fix-lite scope is pull-request only, but the pull request number was not detected."
+        )
+        audit_summary = _build_scope_audit_summary(
+            cmd=cmd,
+            route_final="WAIT",
+            tky_mode_requested=tky_mode,
+            scope_status="unsupported_pr_context",
+            reason=reason,
+        )
         if audit is not None:
-            audit["route_final"] = "REVIEW"
-            audit["pass_count"] = 1
-            audit["index_source"] = "n/a"
-        return "Review/fix is available in Pull Requests. Pull request number was not detected."
+            audit.update(
+                {
+                    "route_final": "WAIT",
+                    "pass_count": 1,
+                    "index_source": "n/a",
+                    "retrieved": 0,
+                    "selected": 0,
+                }
+            )
+            _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
+            _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        return render_scoped_command_markdown(
+            title="### ⏳ Pull request context missing",
+            message=reason,
+            audit_summary=audit_summary,
+            next_steps=[
+                "Use the command from a pull request discussion with an active PR number.",
+            ],
+        )
 
     files: list[dict[str, Any]]
     head_sha = ""
@@ -7720,6 +7832,7 @@ def _build_review_markdown(
             )
             _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
             _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
+            _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
             _merge_llm_meta(audit, llm_meta)
             _copy_model_adapter_fields_to_audit(audit=audit, audit_summary=audit_summary)
             audit["llm_usage_payload"] = _build_llm_usage_payload(llm_meta)
@@ -8250,6 +8363,7 @@ def _build_review_markdown(
         audit["patch_validation_artifact"] = patch_validation_path.as_posix()
         _copy_tkya_canonical_fields_to_audit(audit=audit, audit_summary=audit_summary)
         _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
         _copy_model_adapter_fields_to_audit(audit=audit, audit_summary=audit_summary)
         if patch_debug_payload is not None:
             audit["patch_generation_debug"] = dict(patch_debug_payload)
@@ -8264,6 +8378,7 @@ def _build_review_markdown(
 
 def _build_verify_markdown(
     *,
+    tky_mode: str,
     is_pull_request: bool,
     issue_number: int | None,
     dry_run: bool,
@@ -8271,28 +8386,87 @@ def _build_verify_markdown(
     audit: dict[str, Any] | None = None,
 ) -> str:
     if not is_pull_request:
+        reason = "Verify is unsupported in issue-only context. No PR verification claims were attempted."
+        audit_summary = _build_scope_audit_summary(
+            cmd="verify",
+            route_final="WAIT",
+            tky_mode_requested=tky_mode,
+            scope_status="unsupported_issue_context",
+            reason=reason,
+        )
         if audit is not None:
-            audit["route_final"] = "VERIFY"
+            audit["route_final"] = "WAIT"
             audit["pass_count"] = 1
             audit["verify_source"] = "none"
-        return (
-            "Verify works in PRs (checks/CI). Create a PR and run `/repobrain verify` "
-            "in PR discussion."
+            audit["retrieved"] = 0
+            audit["selected"] = 0
+            _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
+            _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        return render_scoped_command_markdown(
+            title="### ⏳ Scoped command not available",
+            message=reason,
+            audit_summary=audit_summary,
+            next_steps=[
+                "Run `/repobrain verify` from a pull request discussion to inspect PR checks and CI state.",
+            ],
         )
     if issue_number is None:
+        reason = "Verify scope is pull-request only, but the pull request number was not detected."
+        audit_summary = _build_scope_audit_summary(
+            cmd="verify",
+            route_final="WAIT",
+            tky_mode_requested=tky_mode,
+            scope_status="unsupported_pr_context",
+            reason=reason,
+        )
         if audit is not None:
-            audit["route_final"] = "VERIFY"
+            audit["route_final"] = "WAIT"
             audit["pass_count"] = 1
             audit["verify_source"] = "none"
-        return "Verify is available in Pull Requests. Pull request number was not detected."
+            audit["retrieved"] = 0
+            audit["selected"] = 0
+            _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
+            _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        return render_scoped_command_markdown(
+            title="### ⏳ Pull request context missing",
+            message=reason,
+            audit_summary=audit_summary,
+            next_steps=[
+                "Use the command from a pull request discussion with an active PR number.",
+            ],
+        )
 
     if dry_run:
         report = build_verify_report({}, None, {})
+        audit_summary = _build_scope_audit_summary(
+            cmd="verify",
+            route_final="VERIFY",
+            tky_mode_requested=tky_mode,
+            scope_status="verify_report_only",
+            reason="Verify reports PR checks directly; TopoCore backend evidence is recorded separately from the CI summary.",
+        )
         if audit is not None:
             audit["route_final"] = "VERIFY"
             audit["pass_count"] = 1
         t0 = time.perf_counter()
         body = format_verify_comment(report)
+        body = "\n\n".join(
+            [
+                body,
+                render_scoped_command_markdown(
+                    title="### 🧭 TopoCore backend diagnostics",
+                    message=(
+                        "Verify reports PR checks directly. TopoCore backend evidence is recorded as a scoped observation "
+                        "signal for this command family."
+                    ),
+                    audit_summary=audit_summary,
+                    next_steps=[
+                        "Use PR ask/review runs for full retrieval-backed TopoCore evidence.",
+                        "Use verify to confirm PR checks and workflow status without patch actions.",
+                    ],
+                ),
+            ]
+        )
         if audit is not None:
             audit["retrieved"] = 0
             audit["selected"] = 0
@@ -8300,6 +8474,8 @@ def _build_verify_markdown(
             audit["checks_failure"] = int(report.get("failure", 0) or 0)
             audit["checks_pending"] = int(report.get("pending", 0) or 0)
             audit["verify_source"] = str(report.get("verify_source", "none") or "none")
+            _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
+            _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
             add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
         return body
 
@@ -8317,6 +8493,13 @@ def _build_verify_markdown(
     status = client.get_combined_status(sha) if sha else {"state": "unknown", "statuses": []}
     workflow_runs = client.get_workflow_runs(head_sha=sha or None)
     report = build_verify_report(check_runs, status, workflow_runs, head_sha=sha or None)
+    audit_summary = _build_scope_audit_summary(
+        cmd="verify",
+        route_final="VERIFY",
+        tky_mode_requested=tky_mode,
+        scope_status="verify_report_only",
+        reason="Verify reports PR checks directly; TopoCore backend evidence is recorded separately from the CI summary.",
+    )
     if audit is not None:
         audit["route_final"] = "VERIFY"
         audit["pass_count"] = 1
@@ -8328,7 +8511,26 @@ def _build_verify_markdown(
         audit["verify_source"] = str(report.get("verify_source", "none") or "none")
     t0 = time.perf_counter()
     body = format_verify_comment(report)
+    body = "\n\n".join(
+        [
+            body,
+            render_scoped_command_markdown(
+                title="### 🧭 TopoCore backend diagnostics",
+                message=(
+                    "Verify reports PR checks directly. TopoCore backend evidence is recorded as a scoped observation "
+                    "signal for this command family."
+                ),
+                audit_summary=audit_summary,
+                next_steps=[
+                    "Use PR ask/review runs for full retrieval-backed TopoCore evidence.",
+                    "Use verify to confirm PR checks and workflow status without patch actions.",
+                ],
+            ),
+        ]
+    )
     if audit is not None:
+        _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
+        _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
         add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
     return body
 
@@ -8769,6 +8971,7 @@ def run_github_flow(
         audit["index_source"] = "n/a"
     elif cmd == "verify":
         body_markdown = _build_verify_markdown(
+            tky_mode=tky_mode,
             is_pull_request=event_ctx.is_pull_request,
             issue_number=resolved_issue_number,
             dry_run=dry_run,

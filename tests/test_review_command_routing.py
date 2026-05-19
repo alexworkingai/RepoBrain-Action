@@ -17,7 +17,9 @@ def test_review_requires_pr_context(capsys) -> None:
     )
     output = capsys.readouterr().out
     assert status == "DRY_RUN_OK"
-    assert "Review/fix is available in Pull Requests." in output
+    assert "unsupported in issue-only context" in output
+    assert "Scope status" in output
+    assert "unsupported_issue_context" in output
 
 
 def test_review_in_pr_context_renders_review(capsys, tmp_path: Path) -> None:

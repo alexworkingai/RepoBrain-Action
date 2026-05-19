@@ -182,8 +182,8 @@ def test_action_yml_passes_rb_topocore_backend() -> None:
     action_text = (_ROOT / "action.yml").read_text(encoding="utf-8")
 
     assert "RB_TOPOCORE_BACKEND" in action_text
-    assert "${{ inputs.topocore_backend }}" in action_text
-    assert 'RB_TOPOCORE_BACKEND: ${{ inputs.topocore_backend }}' in action_text
+    assert "${{ env.RB_TOPOCORE_BACKEND || inputs.topocore_backend }}" in action_text
+    assert 'RB_TOPOCORE_BACKEND: ${{ env.RB_TOPOCORE_BACKEND || inputs.topocore_backend }}' in action_text
     assert 'RB_TOPOCORE_BACKEND: "v6"' not in action_text
 
 

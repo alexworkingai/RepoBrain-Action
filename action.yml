@@ -54,7 +54,7 @@ runs:
     - name: Run RepoBrain GitHub dry-run wiring
       shell: bash
       env:
-        RB_TOPOCORE_BACKEND: ${{ inputs.topocore_backend }}
+        RB_TOPOCORE_BACKEND: ${{ env.RB_TOPOCORE_BACKEND || inputs.topocore_backend }}
         RB_TKYA_BACKEND: "v5"
         RB_TKYA_ALLOW_REMOTE: "0"
         RB_TKYA_STRICT: "0"

@@ -256,6 +256,7 @@ Recommended scope:
 Observation results link:
 
 - `docs/architecture/TOPOCORE_V6_SPRINT_57_OBSERVATION_RESULTS.md`
+- `docs/architecture/TOPOCORE_V6_PR_PATH_AND_SCOPED_COMMAND_OBSERVATION_FIX.md`
 
 ## 14. Non-Goals
 

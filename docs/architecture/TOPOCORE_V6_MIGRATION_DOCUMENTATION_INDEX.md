@@ -115,6 +115,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_READINESS_ASSESSMENT.md`
 - `docs/architecture/TOPOCORE_V6_OBSERVATION_AND_V5_DEPRECATION_RUNWAY.md`
 - `docs/architecture/TOPOCORE_V6_SPRINT_57_OBSERVATION_RESULTS.md`
+- `docs/architecture/TOPOCORE_V6_PR_PATH_AND_SCOPED_COMMAND_OBSERVATION_FIX.md`
 
 ## 5. Recommended Reading Paths
 
@@ -154,6 +155,11 @@ Deprecation readiness and post-transition assessment:
 - `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_READINESS_ASSESSMENT.md`
 - `docs/architecture/TOPOCORE_V6_OBSERVATION_AND_V5_DEPRECATION_RUNWAY.md`
 - `docs/architecture/TOPOCORE_V6_SPRINT_57_OBSERVATION_RESULTS.md`
+
+Observation blocker fixes and PR/scoped-command evidence:
+
+- `docs/architecture/TOPOCORE_V6_SPRINT_57_OBSERVATION_RESULTS.md`
+- `docs/architecture/TOPOCORE_V6_PR_PATH_AND_SCOPED_COMMAND_OBSERVATION_FIX.md`
 
 Why implementation is currently blocked:
 

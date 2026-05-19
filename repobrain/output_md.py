@@ -966,6 +966,9 @@ def _version_backend_lines(audit_summary: dict[str, Any]) -> list[str]:
     topocore_resolved = str(audit_summary.get("resolved_backend", "") or "").strip()
     topocore_fallback_used = audit_summary.get("fallback_used", "n/a")
     topocore_fallback_reason = str(audit_summary.get("fallback_reason", "") or "").strip()
+    scope_status = str(audit_summary.get("scope_status", "") or "").strip()
+    patch_authorized = audit_summary.get("patch_authorized", "n/a")
+    patch_applied = audit_summary.get("patch_applied", "n/a")
     lines: list[str] = []
     if version:
         lines.append(f"- RepoBrain version: `{version}`")
@@ -982,6 +985,12 @@ def _version_backend_lines(audit_summary: dict[str, Any]) -> list[str]:
         lines.append(f"- TopoCore fallback used: `{fallback_label}`")
     if topocore_fallback_reason:
         lines.append(f"- TopoCore fallback reason: `{topocore_fallback_reason}`")
+    if scope_status:
+        lines.append(f"- Scope status: `{scope_status}`")
+    if patch_authorized != "n/a":
+        lines.append(f"- Patch authorized: `{_bool_label(patch_authorized)}`")
+    if patch_applied != "n/a":
+        lines.append(f"- Patch applied: `{_bool_label(patch_applied)}`")
     return lines
 
 
@@ -1776,6 +1785,21 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                     "Sanitized reason for TopoCore fallback when it occurs.",
                 ),
                 (
+                    "Scope status",
+                    audit_summary.get("scope_status", "n/a"),
+                    "Explicit scoped-command status for unsupported or report-only contexts.",
+                ),
+                (
+                    "Patch authorized",
+                    audit_summary.get("patch_authorized", "n/a"),
+                    "Whether fix-lite governance authorized any patch action.",
+                ),
+                (
+                    "Patch applied",
+                    audit_summary.get("patch_applied", "n/a"),
+                    "Whether any patch was actually applied.",
+                ),
+                (
                     "Remote skipped reason",
                     audit_summary.get("remote_skipped_reason", "n/a"),
                     "Why remote TKY was skipped, if applicable.",
@@ -2387,6 +2411,36 @@ def render_error_markdown(
             _audit_note(),
         ]
     )
+
+
+def render_scoped_command_markdown(
+    *,
+    title: str,
+    message: str,
+    audit_summary: dict[str, Any],
+    next_steps: list[str] | None = None,
+) -> str:
+    next_step_lines = [str(item).strip() for item in (next_steps or []) if str(item).strip()]
+    if not next_step_lines:
+        next_step_lines = ["Use a supported context and rerun the command."]
+    sections = [
+        title.strip() or "### ⏳ Scoped command status",
+        message.strip() or "This command is intentionally scoped in the current context.",
+        "",
+        "### ✅ Next steps",
+        *(f"- {item}" for item in next_step_lines),
+        "",
+        "### 🧭 Scope details",
+        *_mode_lines(audit_summary),
+        "",
+        *_render_diagnostic_table(audit_summary),
+        "",
+        "### 🧾 Audit anchors",
+        *_version_backend_lines(audit_summary),
+        "",
+        _audit_note(),
+    ]
+    return "\n".join(sections)
 
 
 _LEAKED_SECRET_SIGNAL_PHRASE = "possible secret leakage in patch"

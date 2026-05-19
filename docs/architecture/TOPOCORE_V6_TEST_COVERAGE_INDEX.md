@@ -39,6 +39,7 @@ Current test baseline:
 | `tests/test_github_optional_tkya_evidence_artifact.py` | `.github/workflows/repobrain.yml` | Phase 7 | Optional TKYA evidence-pack upload handling, preserved lab backend evidence visibility, narrow workflow artifact strictness fix, issue-comment and private-checkout safety preservation | No |
 | `tests/test_github_issue_comment_v6_lab_runtime.py` | `.github/workflows/repobrain.yml` | Phase 7 | Controlled issue-comment v6 lab gate, v5 fallback policy, gated private checkout and install, non-fatal issue-comment diagnostics, workflow-dispatch preservation, no patch or repo mutation steps | No |
 | `tests/test_github_issue_comment_v6_gate_env_propagation.py` | `.github/workflows/repobrain.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | Gated issue-comment local provider propagation, explicit action backend override, safe TopoCore backend diagnostics, preserved kill switch and workflow-dispatch path | No |
+| `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
 | `tests/test_topocore_v6_decision_diff.py` | `repobrain/topocore_v6_decision_diff.py` | Phase 1/2 | Sanitized v5/v6 snapshot comparison, severity and category mapping, candidate overlap, fix-governance mismatch detection, forbidden field blocking | No |
 | `tests/test_topocore_v6_advisory_artifact.py` | `repobrain/topocore_v6_advisory_artifact.py` | Phase 2 | Advisory artifact schema, go/no-go hint, fix conservatism, retention defaults, forbidden field blocking, no runtime wiring | No |
@@ -95,6 +96,11 @@ Current tests prove that:
   - workflow-dispatch v6 sanity rerun succeeded
   - gate=`0` kill switch succeeded
   - PR and review/fix observation did not yet provide stable, consistent v6 backend evidence
+- Sprint 58 adds targeted blocker coverage:
+  - workflow-to-action `RB_TOPOCORE_BACKEND` propagation is now tested explicitly
+  - PR ask/review markdown evidence surfaces are covered statically
+  - PR verify report-only scoped diagnostics are covered explicitly
+  - non-PR `review` and `fix` no longer rely on ambiguous PR-only guidance in tests
 
 ## 6. What Tests Do Not Prove
 
@@ -112,6 +118,8 @@ Current tests do not prove:
 - Sprint 55 does not prove v5 deprecation readiness by itself because it is an assessment-only sprint
 - Sprint 56 does not prove repeated live stability because it defines observation requirements rather than executing them
 - Sprint 57 does not prove full promotion readiness because the observation result was `PARTIAL_PASS`
+- Sprint 58 adds no default-CI live GitHub observation by itself:
+  - promotion still depends on rerunning the focused observation subset on `main`
 
 ## 7. Recommended Future Test Maintenance
 
