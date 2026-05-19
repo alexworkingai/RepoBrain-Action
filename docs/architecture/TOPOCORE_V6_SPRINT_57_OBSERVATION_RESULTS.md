@@ -149,6 +149,11 @@ Operational outcome:
 Sprint 58 follow-up:
 
 - `docs/architecture/TOPOCORE_V6_PR_PATH_AND_SCOPED_COMMAND_OBSERVATION_FIX.md`
+- `docs/architecture/TOPOCORE_V6_PR_OUTPUT_BACKEND_EVIDENCE_FIX.md`
 - Sprint 58 targets the exact Sprint 57 blockers:
   - PR-path TopoCore backend evidence under gate=`1`
   - explicit scoped diagnostics for non-PR `review` and `fix`
+
+Sprint 59 follow-up:
+
+- PR paths were functional after Sprint 58, but visible PR comment output still needed explicit TopoCore backend evidence rendering for promotion

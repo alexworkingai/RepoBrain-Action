@@ -958,17 +958,91 @@ def _bool_label(value: Any) -> str:
     return raw
 
 
+def _normalized_backend_evidence(audit_summary: dict[str, Any]) -> dict[str, str]:
+    def _pick_str(*keys: str, default: str) -> str:
+        for key in keys:
+            raw = audit_summary.get(key)
+            text = str(raw or "").strip()
+            if text:
+                return text
+        return default
+
+    requested = _pick_str("requested_backend", "topocore_backend_requested", default="n/a")
+    resolved = _pick_str("resolved_backend", "topocore_backend_resolved", default="n/a")
+    backend_mode = _pick_str("backend_mode", "topocore_backend_mode", default="n/a")
+    tkya_mode = _pick_str("tkya_mode", default=_tkya_mode_label(audit_summary))
+    tky_mode_requested = _pick_str("tky_mode_requested", default="n/a")
+    tky_mode_used = _pick_str("tky_mode_used", default="n/a")
+    fallback_used = _bool_label(
+        audit_summary.get(
+            "fallback_used",
+            audit_summary.get("topocore_fallback_used", "n/a"),
+        )
+    )
+    fallback_reason = _pick_str("fallback_reason", "topocore_fallback_reason", default="n/a")
+    scope_status = _pick_str("scope_status", default="")
+    patch_authorized = _bool_label(audit_summary.get("patch_authorized", "n/a"))
+    patch_applied = _bool_label(audit_summary.get("patch_applied", "n/a"))
+    tkya_backend = _pick_str("tkya_backend", default="")
+
+    return {
+        "tky_mode_requested": tky_mode_requested,
+        "tky_mode_used": tky_mode_used,
+        "tkya_mode": tkya_mode,
+        "tkya_backend": tkya_backend,
+        "topocore_backend_requested": requested,
+        "topocore_backend_resolved": resolved,
+        "topocore_backend_mode": backend_mode,
+        "topocore_fallback_used": fallback_used,
+        "topocore_fallback_reason": fallback_reason,
+        "scope_status": scope_status,
+        "patch_authorized": patch_authorized,
+        "patch_applied": patch_applied,
+    }
+
+
+def _runtime_backend_evidence_lines(audit_summary: dict[str, Any]) -> list[str]:
+    normalized = _normalized_backend_evidence(audit_summary)
+    lines = [
+        "### 🧭 Runtime backend evidence",
+        f"- TKY mode requested: `{normalized['tky_mode_requested']}`",
+        f"- TKY mode used: `{normalized['tky_mode_used']}`",
+        f"- TKYA mode: `{normalized['tkya_mode']}`",
+        f"- TopoCore backend requested: `{normalized['topocore_backend_requested']}`",
+        f"- TopoCore backend resolved: `{normalized['topocore_backend_resolved']}`",
+        f"- TopoCore backend mode: `{normalized['topocore_backend_mode']}`",
+        f"- TopoCore fallback used: `{normalized['topocore_fallback_used']}`",
+        f"- TopoCore fallback reason: `{normalized['topocore_fallback_reason']}`",
+    ]
+    if normalized["scope_status"]:
+        lines.append(f"- Scope status: `{normalized['scope_status']}`")
+    if normalized["patch_authorized"] != "n/a":
+        lines.append(f"- Patch authorized: `{normalized['patch_authorized']}`")
+    if normalized["patch_applied"] != "n/a":
+        lines.append(f"- Patch applied: `{normalized['patch_applied']}`")
+    return lines
+
+
+def _has_pr_backend_evidence_context(audit_summary: dict[str, Any]) -> bool:
+    if bool(audit_summary.get("pr_metadata_used", False)):
+        return True
+    if _int(audit_summary.get("pr_changed_files_count", 0)) > 0:
+        return True
+    summary = str(audit_summary.get("pr_segment_summary", "none") or "none").strip().lower()
+    if summary not in {"", "none", "not_available"}:
+        return True
+    if bool(audit_summary.get("runtime_provenance_status")) and str(
+        audit_summary.get("runtime_provenance_status", "not_applicable") or "not_applicable"
+    ).strip().lower() != "not_applicable":
+        return True
+    return False
+
+
 def _version_backend_lines(audit_summary: dict[str, Any]) -> list[str]:
     version = str(audit_summary.get("repobrain_version", "") or "").strip()
-    backend = str(audit_summary.get("tkya_backend", "") or "").strip()
-    mode = _tkya_mode_label(audit_summary)
-    topocore_requested = str(audit_summary.get("requested_backend", "") or "").strip()
-    topocore_resolved = str(audit_summary.get("resolved_backend", "") or "").strip()
-    topocore_fallback_used = audit_summary.get("fallback_used", "n/a")
-    topocore_fallback_reason = str(audit_summary.get("fallback_reason", "") or "").strip()
-    scope_status = str(audit_summary.get("scope_status", "") or "").strip()
-    patch_authorized = audit_summary.get("patch_authorized", "n/a")
-    patch_applied = audit_summary.get("patch_applied", "n/a")
+    normalized = _normalized_backend_evidence(audit_summary)
+    backend = normalized["tkya_backend"]
+    mode = normalized["tkya_mode"]
     lines: list[str] = []
     if version:
         lines.append(f"- RepoBrain version: `{version}`")
@@ -976,21 +1050,7 @@ def _version_backend_lines(audit_summary: dict[str, Any]) -> list[str]:
         lines.append(f"- TKYA backend: `{backend}`")
     if mode and mode != "n/a":
         lines.append(f"- TKYA mode: `{mode}`")
-    if topocore_requested:
-        lines.append(f"- TopoCore backend requested: `{topocore_requested}`")
-    if topocore_resolved:
-        lines.append(f"- TopoCore backend resolved: `{topocore_resolved}`")
-    if topocore_fallback_used != "n/a":
-        fallback_label = _bool_label(topocore_fallback_used)
-        lines.append(f"- TopoCore fallback used: `{fallback_label}`")
-    if topocore_fallback_reason:
-        lines.append(f"- TopoCore fallback reason: `{topocore_fallback_reason}`")
-    if scope_status:
-        lines.append(f"- Scope status: `{scope_status}`")
-    if patch_authorized != "n/a":
-        lines.append(f"- Patch authorized: `{_bool_label(patch_authorized)}`")
-    if patch_applied != "n/a":
-        lines.append(f"- Patch applied: `{_bool_label(patch_applied)}`")
+    lines.extend(_runtime_backend_evidence_lines(audit_summary)[1:])
     return lines
 
 
@@ -2237,6 +2297,11 @@ def render_answer_markdown(
 
     sections: list[str] = [route_header]
     if command == "locate":
+        promoted_backend_lines = (
+            [*_runtime_backend_evidence_lines(audit_summary), ""]
+            if _has_pr_backend_evidence_context(audit_summary)
+            else []
+        )
         sections.extend(
             [
                 "Top locations found for the query:",
@@ -2246,6 +2311,7 @@ def render_answer_markdown(
                 f"- Selected evidence: `{selected_evidence}`",
                 f"- Verification: `{verification_status}`",
                 "",
+                *promoted_backend_lines,
             ]
         )
         detail_lines = [
@@ -2275,6 +2341,11 @@ def render_answer_markdown(
         ]
         sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
     else:
+        promoted_backend_lines = (
+            ["", *_runtime_backend_evidence_lines(audit_summary)]
+            if _has_pr_backend_evidence_context(audit_summary)
+            else []
+        )
         sections.extend(
             [
                 answer_text.strip() or "No answer generated.",
@@ -2285,6 +2356,7 @@ def render_answer_markdown(
                 f"- Segment summary: `{segment_summary}`",
                 f"- Selected evidence: `{selected_evidence}`",
                 f"- Verification: `{verification_status}`",
+                *promoted_backend_lines,
             ]
         )
         sections.append("")
@@ -2427,6 +2499,8 @@ def render_scoped_command_markdown(
         title.strip() or "### ⏳ Scoped command status",
         message.strip() or "This command is intentionally scoped in the current context.",
         "",
+        *_runtime_backend_evidence_lines(audit_summary),
+        "",
         "### ✅ Next steps",
         *(f"- {item}" for item in next_step_lines),
         "",
@@ -2557,16 +2631,22 @@ def render_review_markdown(
         verification_report.get("summary", verification_report.get("overall", _verification_status(audit_summary)))
         or _verification_status(audit_summary)
     ).strip()
+    promoted_backend_lines = (
+        ["", *_runtime_backend_evidence_lines(audit_summary)]
+        if _has_pr_backend_evidence_context(audit_summary)
+        else []
+    )
     sections = [
         "### ✅ PR Review",
         f"TL;DR: {summary_text}",
         f"Risk level: **{risk_level}**",
         (
-            f"- Decision snapshot: findings `{len(confirmed_block)}` | "
-            f"signals `{len(possible_signals)}` | notes `{len(informational_notes)}`"
+        f"- Decision snapshot: findings `{len(confirmed_block)}` | "
+        f"signals `{len(possible_signals)}` | notes `{len(informational_notes)}`"
         ),
         f"- Segment summary: `{segment_summary}`",
         f"- Verification: `{verification_status}`",
+        *promoted_backend_lines,
     ]
     sections.extend(
         [

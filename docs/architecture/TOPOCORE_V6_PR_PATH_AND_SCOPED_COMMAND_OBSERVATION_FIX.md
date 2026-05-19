@@ -139,3 +139,16 @@ Decision rule after the Sprint 58 rerun subset:
 - no patch application
 - no commit, branch, or PR creation
 - no `repobrain-community` change
+
+## 10. Sprint 59 Follow-Up
+
+Sprint 58 fixed backend propagation and scoped command behavior, but post-merge live PR output still needed stronger visible evidence rendering for promotion.
+
+Follow-up note:
+
+- `docs/architecture/TOPOCORE_V6_PR_OUTPUT_BACKEND_EVIDENCE_FIX.md`
+
+Clarification:
+
+- Sprint 58 made PR/backend evidence available at the runtime and audit seam
+- Sprint 59 targets the remaining visibility gap in PR `ask` / `review` / `verify` output on live `issue_comment` runs
