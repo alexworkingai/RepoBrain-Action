@@ -29,6 +29,9 @@ def test_policy_helper_returns_expected_deprecation_state() -> None:
     assert policy["topocore_v5_removal_approved"] is False
     assert policy["topocore_v5_code_deprecation_active"] is False
     assert policy["topocore_v5_fallback_required"] is True
+    assert policy["topocore_v5_simulation_env"] == "RB_TOPOCORE_V5_SIMULATE_DISABLED"
+    assert policy["topocore_v5_simulated_disabled_reason"] == "v5_simulated_disabled"
+    assert policy["topocore_v5_off_simulation_available"] is True
 
 
 def test_metadata_module_is_dependency_free_and_does_not_enable_patch_behavior() -> None:

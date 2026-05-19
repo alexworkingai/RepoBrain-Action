@@ -149,7 +149,9 @@ Recommended scope:
 Follow-up:
 
 - `docs/architecture/TOPOCORE_V6_CODE_LEVEL_V5_DEPRECATION_PREP.md`
+- `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
 - v5 remains fallback-only and is still not removed in Sprint 62.
+- v5-off simulation now exists, but it is opt-in and does not change the default fallback posture.
 
 ## 10. Non-Goals
 

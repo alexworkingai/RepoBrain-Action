@@ -17,6 +17,7 @@ from .topocore_backend import (
     run_v6_backend,
     should_fallback_to_v5,
 )
+from .topocore_deprecation import TOPOCORE_V5_SIMULATED_DISABLED_REASON, is_v5_simulated_disabled
 from .tkya.engine import describe_engine_instance, get_engine
 from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
 from .tky_provider import CandidateChunk, TKYProvider, TKYResult
@@ -232,6 +233,11 @@ class LocalTKYProvider(TKYProvider):
             except TopoCoreBackendError as exc:
                 if backend.strict_v6 or not should_fallback_to_v5(exc):
                     raise TopoCoreBackendError(str(exc)) from exc
+                if is_v5_simulated_disabled():
+                    raise TopoCoreBackendError(
+                        "TopoCore v5 fallback is unavailable because v5 is simulated disabled. "
+                        f"[{TOPOCORE_V5_SIMULATED_DISABLED_REASON}] requested={backend.requested_backend}"
+                    ) from exc
 
         engine = get_engine()
 

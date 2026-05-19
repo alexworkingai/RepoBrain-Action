@@ -130,6 +130,11 @@ Why not enabled in Sprint 62:
 - Sprint 62 is limited to preparation and classification
 - Sprint 63 can implement it in a controlled way
 
+Sprint 63 follow-up:
+
+- the planned opt-in simulation is now implemented
+- see `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
+
 ## 7. Entry Gates for Code-Level Deprecation
 
 Before active code-level deprecation:

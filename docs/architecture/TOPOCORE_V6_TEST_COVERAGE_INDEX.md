@@ -122,6 +122,11 @@ Current tests prove that:
   - remaining gaps stay explicit:
     - v5-off simulation is not implemented yet
     - v5 removal is not tested or approved
+- Sprint 63 adds opt-in simulation coverage:
+  - simulation helper truthiness is covered
+  - explicit `v5` and legacy `lite` are blocked safely when simulation is enabled
+  - `auto` plus v6 available still resolves to v6
+  - `auto` plus v6 unavailable no longer silently falls back to v5 during simulation
 
 ## 6. What Tests Do Not Prove
 
@@ -150,6 +155,10 @@ Current tests do not prove:
 - Sprint 62 does not implement v5-off simulation yet:
   - runtime behavior remains unchanged
   - removal behavior is still untested and unapproved
+- Sprint 63 does not run a live simulation checkpoint yet:
+  - simulation exists locally and is opt-in
+  - workflow and action defaults remain unchanged
+  - v5 is still not removed
 
 ## 7. Recommended Future Test Maintenance
 

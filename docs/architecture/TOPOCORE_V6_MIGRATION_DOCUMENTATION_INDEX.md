@@ -120,6 +120,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_SPRINT_60_FRESH_PR_OBSERVATION_RESULTS.md`
 - `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_CANDIDATE.md`
 - `docs/architecture/TOPOCORE_V6_CODE_LEVEL_V5_DEPRECATION_PREP.md`
+- `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
 
 ## 5. Recommended Reading Paths
 
@@ -180,6 +181,11 @@ Code-level deprecation preparation and v5 fallback retirement runway:
 
 - `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_CANDIDATE.md`
 - `docs/architecture/TOPOCORE_V6_CODE_LEVEL_V5_DEPRECATION_PREP.md`
+
+v5-off simulation and fallback retirement runway:
+
+- `docs/architecture/TOPOCORE_V6_CODE_LEVEL_V5_DEPRECATION_PREP.md`
+- `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
 
 Why implementation is currently blocked:
 

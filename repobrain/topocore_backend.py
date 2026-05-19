@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from repobrain.execution_mode import decide_semantic_execution
+from repobrain.topocore_deprecation import (
+    TOPOCORE_V5_SIMULATED_DISABLED_REASON,
+    is_v5_simulated_disabled,
+)
 from repobrain.topocore_v6_adapter import (
     RepoBrainTopoCoreV6Adapter,
     RepoBrainV6AdapterRuntimeError,
@@ -75,10 +79,20 @@ def _selected_backend_for_policy(policy_name: TopoCoreBackendPolicyName) -> Topo
     return BACKEND_V6
 
 
+def _raise_v5_simulated_disabled(requested_backend: TopoCoreBackendPolicyName) -> None:
+    raise TopoCoreBackendError(
+        "TopoCore v5 backend is unavailable because v5 is simulated disabled. "
+        f"[{TOPOCORE_V5_SIMULATED_DISABLED_REASON}] requested={requested_backend}"
+    )
+
+
 def resolve_backend(env: dict[str, str] | None = None) -> TopoCoreBackendResolution:
+    simulated_v5_disabled = is_v5_simulated_disabled(env)
     explicit = _env_str("RB_TOPOCORE_BACKEND", "", env)
     if explicit:
         requested_backend = _normalize_backend_policy(explicit)
+        if simulated_v5_disabled and requested_backend == BACKEND_V5:
+            _raise_v5_simulated_disabled(requested_backend)
         return TopoCoreBackendResolution(
             requested_backend=requested_backend,
             selected_backend=_selected_backend_for_policy(requested_backend),
@@ -90,6 +104,8 @@ def resolve_backend(env: dict[str, str] | None = None) -> TopoCoreBackendResolut
     legacy = _env_str("RB_TKYA_BACKEND", "", env)
     if legacy:
         requested_backend = _normalize_backend_policy(legacy)
+        if simulated_v5_disabled and requested_backend == BACKEND_V5:
+            _raise_v5_simulated_disabled(requested_backend)
         return TopoCoreBackendResolution(
             requested_backend=requested_backend,
             selected_backend=_selected_backend_for_policy(requested_backend),
