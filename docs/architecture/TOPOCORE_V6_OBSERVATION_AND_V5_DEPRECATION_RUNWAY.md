@@ -253,6 +253,10 @@ Recommended scope:
 - decide whether to keep gate=`1` or return to `0`
 - no v5 removal
 
+Observation results link:
+
+- `docs/architecture/TOPOCORE_V6_SPRINT_57_OBSERVATION_RESULTS.md`
+
 ## 14. Non-Goals
 
 - no runtime behavior change
