@@ -112,6 +112,10 @@ Current tests prove that:
   - PR `verify` showed explicit `verify_report_only` scoped backend evidence
   - `workflow_dispatch` sanity resolved to v6
   - gate=`0` kill switch still resolved to v5
+- Sprint 61 adds policy and static coverage only:
+  - Sprint 60 remains the runtime evidence basis
+  - v5 fallback and kill-switch coverage remain critical
+  - v5 is documented as fallback-only and deprecation candidate, not removed
 
 ## 6. What Tests Do Not Prove
 
@@ -135,6 +139,8 @@ Current tests do not prove:
   - live PR-path `issue_comment` evidence must still be rerun on `main`
 - Sprint 60 does not add new default-CI runtime coverage:
   - it records live GitHub operational evidence and a fresh-PR promotion result rather than widening local test scope
+- Sprint 61 does not add new runtime coverage by itself:
+  - it locks policy wording and documentation state rather than changing execution paths
 
 ## 7. Recommended Future Test Maintenance
 

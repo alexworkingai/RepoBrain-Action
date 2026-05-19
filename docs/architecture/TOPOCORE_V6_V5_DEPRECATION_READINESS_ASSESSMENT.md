@@ -184,6 +184,12 @@ Given `RB_ENABLE_ISSUE_COMMENT_V6_LAB=0` is intentionally preserved:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_OBSERVATION_AND_V5_DEPRECATION_RUNWAY.md`
+- `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_CANDIDATE.md`
+
+Sprint 61 follow-up:
+
+- Sprint 55 `NO-GO` for immediate code-level deprecation has been superseded by Sprint 60 operational promotion evidence and Sprint 61 deprecation-candidate policy
+- removal remains `NO-GO`
 
 ## 10. Decision
 

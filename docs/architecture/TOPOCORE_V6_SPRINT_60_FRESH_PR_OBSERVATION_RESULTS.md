@@ -127,6 +127,11 @@ Whether v5 deprecation candidate can be proposed next:
 
 - `yes`
 
+Follow-up:
+
+- `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_CANDIDATE.md`
+- Sprint 60 promotion moved v6 to the active lab default and set up Sprint 61 to record v5 as fallback-only and a deprecation candidate.
+
 ## 9. Non-Goals
 
 - no v5 removal

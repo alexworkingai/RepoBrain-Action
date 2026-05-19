@@ -176,6 +176,13 @@ Clarification:
 - Sprint 56 prepares Stage 1
 - Sprint 57 may enter Stage 1 if explicitly approved
 
+Status after Sprint 60 and Sprint 61:
+
+- Stage 2 achieved:
+  - v6 lab default promoted
+- Stage 3 started:
+  - v5 deprecation candidate docs and policy
+
 ## 9. v5 Fallback Exit Criteria
 
 v5 fallback can stop being the default safe mode only when all of the following are true:
