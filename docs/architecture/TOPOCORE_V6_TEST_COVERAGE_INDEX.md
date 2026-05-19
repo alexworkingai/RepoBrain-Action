@@ -87,6 +87,9 @@ Current tests prove that:
 - Sprint 55 adds no new runtime coverage:
   - it maps existing v6 and v5 fallback evidence
   - it identifies missing deprecation evidence rather than adding new execution coverage
+- Sprint 56 adds no new runtime test coverage:
+  - it maps existing tests and operational evidence into an observation window and deprecation runway
+  - repeated live observation remains pending
 
 ## 6. What Tests Do Not Prove
 
@@ -102,6 +105,7 @@ Current tests do not prove:
 - production packaging or private dependency CI strategy
 - Sprint 54 adds no new runtime coverage because it is a docs and policy-freeze closeout sprint
 - Sprint 55 does not prove v5 deprecation readiness by itself because it is an assessment-only sprint
+- Sprint 56 does not prove repeated live stability because it defines observation requirements rather than executing them
 
 ## 7. Recommended Future Test Maintenance
 
@@ -132,3 +136,4 @@ See also:
 - `docs/architecture/TOPOCORE_V6_ISSUE_COMMENT_LAB_GATE_PROPAGATION_FIX.md`
 - `docs/architecture/TOPOCORE_V6_ISSUE_COMMENT_LAB_TRANSITION_CLOSEOUT.md`
 - `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_READINESS_ASSESSMENT.md`
+- `docs/architecture/TOPOCORE_V6_OBSERVATION_AND_V5_DEPRECATION_RUNWAY.md`

@@ -181,6 +181,10 @@ Given `RB_ENABLE_ISSUE_COMMENT_V6_LAB=0` is intentionally preserved:
 - that sprint should remain docs and test planning first
 - only after that should the project consider leaving gate=`1` enabled for an observation window
 
+See also:
+
+- `docs/architecture/TOPOCORE_V6_OBSERVATION_AND_V5_DEPRECATION_RUNWAY.md`
+
 ## 10. Decision
 
 Current decision:
@@ -190,6 +194,7 @@ Current decision:
 - GO for future v6 observation planning
 - GO for keeping v6 lab mode available behind the gate
 - GO for keeping the current safe gate-disabled state
+- GO for beginning deprecation preparation without deprecating v5 yet
 
 ## 11. Non-Goals
 
