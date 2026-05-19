@@ -116,6 +116,12 @@ Current tests prove that:
   - Sprint 60 remains the runtime evidence basis
   - v5 fallback and kill-switch coverage remain critical
   - v5 is documented as fallback-only and deprecation candidate, not removed
+- Sprint 62 adds deprecation-prep metadata and classification coverage:
+  - static seam and test classification is documented
+  - metadata policy is import-safe and side-effect free
+  - remaining gaps stay explicit:
+    - v5-off simulation is not implemented yet
+    - v5 removal is not tested or approved
 
 ## 6. What Tests Do Not Prove
 
@@ -141,6 +147,9 @@ Current tests do not prove:
   - it records live GitHub operational evidence and a fresh-PR promotion result rather than widening local test scope
 - Sprint 61 does not add new runtime coverage by itself:
   - it locks policy wording and documentation state rather than changing execution paths
+- Sprint 62 does not implement v5-off simulation yet:
+  - runtime behavior remains unchanged
+  - removal behavior is still untested and unapproved
 
 ## 7. Recommended Future Test Maintenance
 

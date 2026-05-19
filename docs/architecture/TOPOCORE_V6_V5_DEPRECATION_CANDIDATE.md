@@ -146,6 +146,11 @@ Recommended scope:
 - preserve the kill switch
 - keep patch and autofix out of scope
 
+Follow-up:
+
+- `docs/architecture/TOPOCORE_V6_CODE_LEVEL_V5_DEPRECATION_PREP.md`
+- v5 remains fallback-only and is still not removed in Sprint 62.
+
 ## 10. Non-Goals
 
 - no runtime behavior change
