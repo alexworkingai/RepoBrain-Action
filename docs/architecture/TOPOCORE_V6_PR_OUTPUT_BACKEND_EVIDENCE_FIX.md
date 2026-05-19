@@ -139,3 +139,11 @@ Interpretation:
 - no patch application
 - no commit, branch, or PR creation
 - no `repobrain-community` change
+
+## 10. Operational Follow-up
+
+Fresh current-main PR validation for this fix is recorded in:
+
+- `docs/architecture/TOPOCORE_V6_SPRINT_60_FRESH_PR_OBSERVATION_RESULTS.md`
+
+Sprint 60 replaced stale PR `#87` with fresh fixture PR `#112` and recorded the resulting `PROMOTE_V6_LAB_DEFAULT` decision.

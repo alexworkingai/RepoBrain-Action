@@ -106,6 +106,12 @@ Current tests prove that:
   - PR `ask` / `review` / `verify` now have explicit visible runtime backend evidence coverage
   - missing or partial backend metadata is rendered safely as `n/a` or scoped status rather than being silently omitted
   - gate=`1` v6 and gate=`0` v5 evidence visibility are both locked at the markdown layer
+- Sprint 60 adds live operational evidence rather than new default-CI tests:
+  - fresh PR fixture `#112` replaced stale PR `#87`
+  - PR `ask` and PR `review` showed visible TopoCore backend evidence with `resolved_backend=v6`
+  - PR `verify` showed explicit `verify_report_only` scoped backend evidence
+  - `workflow_dispatch` sanity resolved to v6
+  - gate=`0` kill switch still resolved to v5
 
 ## 6. What Tests Do Not Prove
 
@@ -127,6 +133,8 @@ Current tests do not prove:
   - promotion still depends on rerunning the focused observation subset on `main`
 - Sprint 59 still does not prove promotion by local tests alone:
   - live PR-path `issue_comment` evidence must still be rerun on `main`
+- Sprint 60 does not add new default-CI runtime coverage:
+  - it records live GitHub operational evidence and a fresh-PR promotion result rather than widening local test scope
 
 ## 7. Recommended Future Test Maintenance
 

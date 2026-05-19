@@ -117,6 +117,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_SPRINT_57_OBSERVATION_RESULTS.md`
 - `docs/architecture/TOPOCORE_V6_PR_PATH_AND_SCOPED_COMMAND_OBSERVATION_FIX.md`
 - `docs/architecture/TOPOCORE_V6_PR_OUTPUT_BACKEND_EVIDENCE_FIX.md`
+- `docs/architecture/TOPOCORE_V6_SPRINT_60_FRESH_PR_OBSERVATION_RESULTS.md`
 
 ## 5. Recommended Reading Paths
 
@@ -162,6 +163,11 @@ Observation blocker fixes and PR/scoped-command evidence:
 - `docs/architecture/TOPOCORE_V6_SPRINT_57_OBSERVATION_RESULTS.md`
 - `docs/architecture/TOPOCORE_V6_PR_PATH_AND_SCOPED_COMMAND_OBSERVATION_FIX.md`
 - `docs/architecture/TOPOCORE_V6_PR_OUTPUT_BACKEND_EVIDENCE_FIX.md`
+
+Fresh PR observation and v6 lab default decision:
+
+- `docs/architecture/TOPOCORE_V6_PR_OUTPUT_BACKEND_EVIDENCE_FIX.md`
+- `docs/architecture/TOPOCORE_V6_SPRINT_60_FRESH_PR_OBSERVATION_RESULTS.md`
 
 Why implementation is currently blocked:
 
