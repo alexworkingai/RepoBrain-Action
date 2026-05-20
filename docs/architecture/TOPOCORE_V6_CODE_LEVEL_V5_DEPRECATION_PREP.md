@@ -134,6 +134,8 @@ Sprint 63 follow-up:
 
 - the planned opt-in simulation is now implemented
 - see `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
+- Sprint 64 moves from preparation into disabled-by-default policy
+- see `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`
 
 ## 7. Entry Gates for Code-Level Deprecation
 
@@ -173,6 +175,12 @@ Recommended scope:
 - no workflow or action default change
 - tests prove v6 still works and gate=`0` behavior is understood
 - rollback is documented
+
+Sprint 64 follow-up:
+
+- the repository moves from prep into authoritative-v6 policy
+- v5 is now disabled by default and only emergency opt-in remains
+- emergency opt-in variable: `RB_TOPOCORE_ALLOW_DEPRECATED_V5=1`
 
 ## 10. Non-Goals
 

@@ -35,7 +35,7 @@ def test_gated_issue_comment_passes_topocore_backend_auto_and_local_mode() -> No
     assert "'local'" in tky_mode_expr
 
 
-def test_disabled_issue_comment_stays_on_v5_side_path() -> None:
+def test_disabled_issue_comment_stays_on_explicitly_blocked_legacy_side_path() -> None:
     workflow = _load_workflow_yaml()
     action_step = _action_step(workflow)
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
@@ -49,10 +49,10 @@ def test_disabled_issue_comment_stays_on_v5_side_path() -> None:
     assert "github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && '1'" not in workflow_text
 
 
-def test_action_default_remains_v5_while_workflow_explicitly_overrides_issue_comment() -> None:
+def test_action_default_moves_to_auto_while_workflow_explicitly_overrides_issue_comment() -> None:
     action = yaml.safe_load((_ROOT / "action.yml").read_text(encoding="utf-8"))
 
-    assert action["inputs"]["topocore_backend"]["default"] == "v5"
+    assert action["inputs"]["topocore_backend"]["default"] == "auto"
 
 
 def test_issue_comment_private_checkout_and_diagnostic_are_gate_only() -> None:

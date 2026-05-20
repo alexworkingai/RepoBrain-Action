@@ -23,7 +23,7 @@ on:
       topocore_backend:
         description: "TopoCore backend for manual lab runtime selection"
         required: false
-        default: "v5"
+        default: "auto"
         type: choice
         options:
           - v5

@@ -3,7 +3,8 @@ from pathlib import Path
 from repobrain.external_flow import ExternalFlowInput, run_external_flow
 
 
-def test_external_flow_ask_returns_answer() -> None:
+def test_external_flow_ask_returns_answer(monkeypatch) -> None:
+    monkeypatch.setenv("RB_TOPOCORE_ALLOW_DEPRECATED_V5", "1")
     result = run_external_flow(
         ExternalFlowInput(
             repo_root=Path.cwd(),

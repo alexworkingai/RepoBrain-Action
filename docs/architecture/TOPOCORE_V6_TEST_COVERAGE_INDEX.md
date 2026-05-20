@@ -127,6 +127,14 @@ Current tests prove that:
   - explicit `v5` and legacy `lite` are blocked safely when simulation is enabled
   - `auto` plus v6 available still resolves to v6
   - `auto` plus v6 unavailable no longer silently falls back to v5 during simulation
+- Sprint 64 adds authoritative-default coverage:
+  - v6 authoritative metadata is covered
+  - v5 disabled-by-default behavior is covered
+  - emergency deprecated-v5 allow is covered explicitly
+  - simulation still wins over emergency allow
+  - GitHub action and workflow defaults move to `auto`
+  - remaining gap:
+    - v5 physical removal is still not done until Sprint 65
 
 ## 6. What Tests Do Not Prove
 
@@ -159,6 +167,9 @@ Current tests do not prove:
   - simulation exists locally and is opt-in
   - workflow and action defaults remain unchanged
   - v5 is still not removed
+- Sprint 64 still does not remove v5 physically:
+  - deprecated v5 remains present only for emergency opt-in
+  - post-merge live issue-comment validation is still separate from local test coverage
 
 ## 7. Recommended Future Test Maintenance
 

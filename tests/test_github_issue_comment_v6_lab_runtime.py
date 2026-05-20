@@ -101,12 +101,12 @@ def test_issue_comment_backend_env_changes_correctly() -> None:
     assert "'local'" in tky_mode_expr
 
 
-def test_workflow_dispatch_behavior_is_preserved() -> None:
+def test_workflow_dispatch_behavior_is_preserved_with_auto_default() -> None:
     workflow = _load_workflow_yaml()
     dispatch_inputs = _workflow_on_section(workflow)["workflow_dispatch"]["inputs"]
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
-    assert dispatch_inputs["topocore_backend"]["default"] == "v5"
+    assert dispatch_inputs["topocore_backend"]["default"] == "auto"
     assert dispatch_inputs["topocore_v6_dependency_mode"]["default"] == "none"
     assert dispatch_inputs["repobrain_lab_command"]["default"] == "help"
     assert "Checkout private TopoCore v6 for manual lab run" in workflow_text

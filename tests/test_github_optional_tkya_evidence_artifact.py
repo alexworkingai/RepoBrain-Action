@@ -80,11 +80,11 @@ def test_issue_comment_behavior_is_controlled_by_lab_gate() -> None:
     assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in workflow_text
 
 
-def test_workflow_dispatch_defaults_are_unchanged() -> None:
+def test_workflow_dispatch_defaults_preserve_safe_manual_behavior() -> None:
     workflow = _load_workflow_yaml()
     dispatch_inputs = _workflow_on_section(workflow)["workflow_dispatch"]["inputs"]
 
-    assert dispatch_inputs["topocore_backend"]["default"] == "v5"
+    assert dispatch_inputs["topocore_backend"]["default"] == "auto"
     assert dispatch_inputs["topocore_v6_dependency_mode"]["default"] == "none"
     assert dispatch_inputs["repobrain_lab_command"]["default"] == "help"
 

@@ -85,7 +85,7 @@ def test_no_private_dependency_in_default_ci() -> None:
     workflow = _load_workflow_yaml()
     inputs = _workflow_on_section(workflow)["workflow_dispatch"]["inputs"]
 
-    assert inputs["topocore_backend"]["default"] == "v5"
+    assert inputs["topocore_backend"]["default"] == "auto"
     assert inputs["topocore_v6_dependency_mode"]["default"] == "none"
 
 
@@ -107,13 +107,13 @@ def test_strict_local_mode_only_for_private_checkout_lab_run() -> None:
     assert "|| '0'" in workflow_text
 
 
-def test_action_default_remains_v5() -> None:
+def test_action_and_workflow_defaults_now_use_auto() -> None:
     action = _load_action_yaml()
     workflow = _load_workflow_yaml()
     inputs = _workflow_on_section(workflow)["workflow_dispatch"]["inputs"]
 
-    assert action["inputs"]["topocore_backend"]["default"] == "v5"
-    assert inputs["topocore_backend"]["default"] == "v5"
+    assert action["inputs"]["topocore_backend"]["default"] == "auto"
+    assert inputs["topocore_backend"]["default"] == "auto"
 
 
 def test_no_patch_or_autofix_steps_introduced() -> None:

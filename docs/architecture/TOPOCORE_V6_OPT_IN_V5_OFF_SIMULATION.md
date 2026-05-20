@@ -104,3 +104,19 @@ Recommended scope:
 - optionally run `workflow_dispatch` or `issue_comment` diagnostics if safe
 - decide whether code-level v5 deprecation can be activated
 - still no removal
+
+## 8. Sprint 64 Follow-Up
+
+Sprint 64 supersedes the normal fallback semantics from Sprint 63:
+
+- v5 is now disabled by default
+- deprecated v5 emergency allow is a separate control:
+  - `RB_TOPOCORE_ALLOW_DEPRECATED_V5=1`
+- simulation remains the hard-block test mode:
+  - `RB_TOPOCORE_V5_SIMULATE_DISABLED=1`
+- if both are set, simulation wins and v5 remains blocked with:
+  - `v5_simulated_disabled`
+
+See also:
+
+- `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`

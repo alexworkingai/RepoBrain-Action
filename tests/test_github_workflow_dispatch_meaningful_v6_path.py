@@ -8,6 +8,11 @@ from pathlib import Path
 import pytest
 import yaml
 
+from repobrain.topocore_deprecation import (
+    TOPOCORE_V5_ALLOW_DEPRECATED_ENV,
+    TOPOCORE_V5_DEPRECATED_ALLOWED_REASON,
+)
+
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -120,6 +125,7 @@ def _clear_env_and_artifacts(monkeypatch: pytest.MonkeyPatch) -> None:
         "RB_REPOBRAIN_LAB_FIXTURE",
         "RB_REPOBRAIN_LAB_EVIDENCE",
         "GITHUB_EVENT_NAME",
+        TOPOCORE_V5_ALLOW_DEPRECATED_ENV,
     ):
         monkeypatch.delenv(name, raising=False)
     sys.modules.pop("topocore_v6", None)
@@ -178,7 +184,7 @@ def test_workflow_dispatch_default_remains_safe() -> None:
     workflow = _load_workflow_yaml()
     inputs = _workflow_on_section(workflow)["workflow_dispatch"]["inputs"]
 
-    assert inputs["topocore_backend"]["default"] == "v5"
+    assert inputs["topocore_backend"]["default"] == "auto"
     assert inputs["topocore_v6_dependency_mode"]["default"] == "none"
     assert inputs["repobrain_lab_command"]["default"] == "help"
 
@@ -226,20 +232,33 @@ def test_meaningful_ask_lab_path_produces_backend_evidence(monkeypatch: pytest.M
     assert evidence["confidence_band"] == "high"
 
 
-def test_fallback_evidence_is_produced(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_workflow_dispatch_v6_failure_is_safely_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_run_github_module()
     monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
     monkeypatch.setenv("RB_REPOBRAIN_LAB_COMMAND", "ask")
     monkeypatch.setenv("RB_REPOBRAIN_LAB_FIXTURE", "minimal")
     monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v6")
 
+    with pytest.raises(ValueError) as exc_info:
+        module.run_workflow_dispatch_lab_command(repo_root=_ROOT)
+
+    assert "v6_unavailable_v5_disabled" in str(exc_info.value)
+
+
+def test_emergency_allow_restores_deprecated_fallback_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_run_github_module()
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    monkeypatch.setenv("RB_REPOBRAIN_LAB_COMMAND", "ask")
+    monkeypatch.setenv("RB_REPOBRAIN_LAB_FIXTURE", "minimal")
+    monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v6")
+    monkeypatch.setenv(TOPOCORE_V5_ALLOW_DEPRECATED_ENV, "1")
+
     evidence = module.run_workflow_dispatch_lab_command(repo_root=_ROOT)
 
     assert evidence["requested_backend"] == "v6"
     assert evidence["resolved_backend"] == "v5"
     assert evidence["fallback_used"] is True
-    assert evidence["fallback_reason"] == "v6_unavailable"
-    assert "topocore" not in evidence["fallback_reason"].lower()
+    assert evidence["fallback_reason"] == TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
 
 
 def test_strict_v6_failure_is_safe(monkeypatch: pytest.MonkeyPatch) -> None:

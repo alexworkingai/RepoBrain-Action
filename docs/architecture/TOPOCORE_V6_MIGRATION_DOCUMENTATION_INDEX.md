@@ -6,12 +6,11 @@ Sprint 38 consolidates documentation navigation after the Phase 6 NO-GO checkpoi
 
 Current truth:
 
-- Sprint 38 starts Phase 7 as stabilization and evidence collection
-- Sprint 38 is docs/index only
-- Sprint 38 does not change runtime behavior
-- v5/TKYA remains the active primary runtime
-- TopoCore v6 remains disabled, manual, local, and advisory only
-- advisory experiment implementation remains NO-GO
+- v6 is now the active authoritative runtime direction for RepoBrain issue-comment lab mode
+- `RB_ENABLE_ISSUE_COMMENT_V6_LAB=1` is the intended current operating state
+- v5 remains physically present only as deprecated emergency opt-in runtime
+- Sprint 64 disables v5 fallback by default
+- v5 removal is still not approved until a later sprint
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -121,6 +120,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_V5_DEPRECATION_CANDIDATE.md`
 - `docs/architecture/TOPOCORE_V6_CODE_LEVEL_V5_DEPRECATION_PREP.md`
 - `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
+- `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`
 
 ## 5. Recommended Reading Paths
 
@@ -187,6 +187,11 @@ v5-off simulation and fallback retirement runway:
 - `docs/architecture/TOPOCORE_V6_CODE_LEVEL_V5_DEPRECATION_PREP.md`
 - `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
 
+v6 authoritative default and v5 disabled-by-default runway:
+
+- `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
+- `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`
+
 Why implementation is currently blocked:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
@@ -196,14 +201,13 @@ Why implementation is currently blocked:
 
 Current decision state:
 
-- advisory experiment implementation is not approved
-- runtime advisory activation is not approved
-- canary is not approved
-- route migration is not approved
-- v5 replacement is not approved
-- fix migration is not approved
-- user-visible output change is not approved
-- project remains at still-disabled boundary plus manual/local validation state
+- v6 authoritative default is approved
+- issue-comment lab v6 default is approved
+- deprecated v5 emergency opt-in is still available
+- v5 physical removal is not yet approved
+- fix migration remains conservative
+- patch behavior expansion is not approved
+- production and Marketplace switch are not approved
 
 ## 7. Repository Boundary Summary
 

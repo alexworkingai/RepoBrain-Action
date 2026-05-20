@@ -60,7 +60,8 @@ def test_handle_mcp_request_blocks_missing_query() -> None:
     assert response["reason_code"] == "query_missing"
 
 
-def test_handle_mcp_request_executes_external_ask() -> None:
+def test_handle_mcp_request_executes_external_ask(monkeypatch) -> None:
+    monkeypatch.setenv("RB_TOPOCORE_ALLOW_DEPRECATED_V5", "1")
     response = handle_mcp_request(
         MCPSurfaceRequest(
             capability="ask",

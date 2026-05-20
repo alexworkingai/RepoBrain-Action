@@ -37,7 +37,7 @@ inputs:
   topocore_backend:
     description: "TopoCore backend for lab/runtime selection: v5, v6, or auto"
     required: false
-    default: "v5"
+    default: "auto"
 
 runs:
   using: "composite"

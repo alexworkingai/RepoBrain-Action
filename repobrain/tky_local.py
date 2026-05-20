@@ -13,11 +13,17 @@ from .signatures import build_query_signature
 from .topocore_backend import (
     BACKEND_V6,
     TopoCoreBackendError,
+    V6_UNAVAILABLE_V5_DISABLED_REASON,
     resolve_backend,
     run_v6_backend,
     should_fallback_to_v5,
 )
-from .topocore_deprecation import TOPOCORE_V5_SIMULATED_DISABLED_REASON, is_v5_simulated_disabled
+from .topocore_deprecation import (
+    TOPOCORE_V5_DEPRECATED_ALLOWED_REASON,
+    TOPOCORE_V5_SIMULATED_DISABLED_REASON,
+    is_deprecated_v5_allowed,
+    is_v5_simulated_disabled,
+)
 from .tkya.engine import describe_engine_instance, get_engine
 from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
 from .tky_provider import CandidateChunk, TKYProvider, TKYResult
@@ -182,9 +188,8 @@ class LocalTKYProvider(TKYProvider):
     """Local TKY provider stub.
 
     Local provider backed by selectable TKYA engines.
-    Safe default keeps the current v5/TKYA path. Explicit `RB_TOPOCORE_BACKEND=v6`
-    can select the real TopoCore v6 adapter in local or lab paths without
-    changing default GitHub runtime behavior.
+    Safe default now keeps v6 authoritative and blocks deprecated v5 unless an
+    explicit emergency opt-in is provided.
     """
 
     def compress_context(
@@ -220,6 +225,7 @@ class LocalTKYProvider(TKYProvider):
                 compression_stats.setdefault("backend_mode", backend.requested_backend)
                 compression_stats.setdefault("fallback_used", False)
                 compression_stats.setdefault("fallback_reason", "none")
+                compression_stats.setdefault("deprecated_v5_allowed", backend.deprecated_v5_allowed)
                 return TKYResult(
                     selected_chunk_ids=list(result.selected_chunk_ids),
                     route=result.route,
@@ -237,6 +243,12 @@ class LocalTKYProvider(TKYProvider):
                     raise TopoCoreBackendError(
                         "TopoCore v5 fallback is unavailable because v5 is simulated disabled. "
                         f"[{TOPOCORE_V5_SIMULATED_DISABLED_REASON}] requested={backend.requested_backend}"
+                    ) from exc
+                if not is_deprecated_v5_allowed():
+                    raise TopoCoreBackendError(
+                        "TopoCore v6 is unavailable and deprecated v5 fallback is disabled by default. "
+                        "Set RB_TOPOCORE_ALLOW_DEPRECATED_V5=1 only for emergency fallback. "
+                        f"[{V6_UNAVAILABLE_V5_DISABLED_REASON}] requested={backend.requested_backend}"
                     ) from exc
 
         engine = get_engine()
@@ -274,12 +286,16 @@ class LocalTKYProvider(TKYProvider):
         compression_stats.setdefault("backend_mode", backend.requested_backend)
         compression_stats.setdefault("fallback_used", False)
         compression_stats.setdefault("fallback_reason", "none")
+        compression_stats.setdefault("deprecated_v5_allowed", backend.deprecated_v5_allowed)
+        compression_stats.setdefault("v5_deprecated", True)
+        if backend.deprecated_v5_allowed:
+            compression_stats["fallback_reason"] = TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
         if backend.selected_backend == BACKEND_V6:
             compression_stats["requested_backend"] = backend.requested_backend
             compression_stats["resolved_backend"] = "v5"
             compression_stats["backend_mode"] = backend.requested_backend
             compression_stats["fallback_used"] = True
-            compression_stats["fallback_reason"] = "v6_unavailable"
+            compression_stats["fallback_reason"] = TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
             compression_stats.setdefault("topocore_backend_requested", backend.requested_backend)
             compression_stats.setdefault("topocore_backend_fallback", "v5")
         return TKYResult(

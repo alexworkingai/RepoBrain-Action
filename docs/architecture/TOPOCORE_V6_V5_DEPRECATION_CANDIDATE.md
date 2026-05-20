@@ -152,6 +152,11 @@ Follow-up:
 - `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
 - v5 remains fallback-only and is still not removed in Sprint 62.
 - v5-off simulation now exists, but it is opt-in and does not change the default fallback posture.
+- `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`
+- Sprint 64 changes the default posture:
+  - v5 is now disabled by default
+  - deprecated v5 is emergency opt-in only through `RB_TOPOCORE_ALLOW_DEPRECATED_V5=1`
+  - v5 is still not physically removed
 
 ## 10. Non-Goals
 

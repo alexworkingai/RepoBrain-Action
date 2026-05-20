@@ -30,6 +30,7 @@ def test_indexes_reference_v5_deprecation_candidate_policy() -> None:
     coverage_index = _read("docs/architecture/TOPOCORE_V6_TEST_COVERAGE_INDEX.md").lower()
 
     assert "docs/architecture/TOPOCORE_V6_V5_DEPRECATION_CANDIDATE.md" in migration_index
+    assert "docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md" in migration_index
     assert "v5 is documented as fallback-only and deprecation candidate, not removed" in coverage_index
     assert "docs/architecture/TOPOCORE_V6_CODE_LEVEL_V5_DEPRECATION_PREP.md" in migration_index
 
@@ -42,7 +43,7 @@ def test_sprint_62_prep_note_exists_and_removal_is_still_not_approved() -> None:
     assert "v5 fallback-only" in text
     assert "v5 removal not approved" in text
     assert "rb_topocore_v5_simulate_disabled=1" in text
-    assert "no runtime behavior change" in text
+    assert "rb_topocore_allow_deprecated_v5=1" in text
 
 
 def test_sprint_does_not_change_runtime_files() -> None:

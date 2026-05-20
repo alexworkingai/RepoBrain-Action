@@ -68,6 +68,7 @@ def test_local_provider_builds_policy_context_for_ask(
     monkeypatch.setenv("GITHUB_ACTOR", "alice")
     monkeypatch.setenv("RB_TKYA_ALLOW_REMOTE", "0")
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("RB_TOPOCORE_ALLOW_DEPRECATED_V5", "1")
 
     provider = tky_local.LocalTKYProvider()
     provider.compress_context(
@@ -98,6 +99,7 @@ def test_local_provider_builds_policy_context_for_review(monkeypatch: pytest.Mon
     monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
     monkeypatch.setenv("RB_TKYA_ALLOW_REMOTE", "0")
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setenv("RB_TOPOCORE_ALLOW_DEPRECATED_V5", "1")
 
     provider = tky_local.LocalTKYProvider()
     provider.compress_context(
