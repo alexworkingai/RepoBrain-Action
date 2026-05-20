@@ -12,7 +12,7 @@ It is intentionally evidence-based and reflects the code paths that are active t
 - `repobrain/github_flow.py`
 - `repobrain/tky_local.py`
 - `repobrain/tkya/engine.py`
-- `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
+- `repobrain::tkya::vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
 - `repobrain/llm/github_models.py`
 - `repobrain-community/templates/repobrain.yml`
 - `repobrain-community/.github/workflows/repobrain_external_foundation.yml`
@@ -225,7 +225,7 @@ PR check runs are built/published by:
 
 Yes. TopoCore v5 is still embedded as a vendor file in RepoBrain-Action:
 
-- `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
+- `repobrain::tkya::vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
 
 The primary runtime also explicitly sets:
 
@@ -240,7 +240,7 @@ The current v5/TKYA path is:
 - `repobrain/tky_local.py`
 - `repobrain/tky_engine.py`
 - `repobrain/tkya/engine.py`
-- `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
+- `repobrain::tkya::vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
 
 `repobrain/tky_local.py`:
 
@@ -301,7 +301,7 @@ Evidence:
 - `repobrain/tky_provider.py` includes `compression_stats` on `TKYResult`
 - `repobrain/tky_local.py` forwards `compression_stats` from engine decision into `TKYResult`
 - the vendor v5 file contains trace schema logic and hash-only trace packing
-- `tests/test_topocore_v5_vendor.py` asserts trace schema fields and checks that raw query text does not appear in trace
+- `tests/test_legacy_runtime_removed_vendor.py` asserts trace schema fields and checks that raw query text does not appear in trace
 - `tests/test_tkya_evidence_pack.py` asserts public-safe hash-only evidence-pack behavior
 
 So the current RepoBrain contract still expects both:
@@ -314,7 +314,7 @@ So the current RepoBrain contract still expects both:
 The current TKYA/TopoCore contract is guarded by:
 
 - `tests/test_tkya_engine.py`
-- `tests/test_topocore_v5_vendor.py`
+- `tests/test_legacy_runtime_removed_vendor.py`
 - `tests/test_tkya_evidence_pack.py`
 - `tests/test_tkya_legacy_references_removed.py`
 - `tests/test_contract_guard.py`
@@ -802,7 +802,7 @@ Key files inspected for this document:
   - engine request/decision contract
 - `repobrain/tkya/engine.py`
   - backend selection, vendor loading, remote guards
-- `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
+- `repobrain::tkya::vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
   - embedded v5 vendor runtime
 - `repobrain/tky_provider.py`
   - `TKYResult` contract still used by RepoBrain
@@ -830,7 +830,7 @@ Key files inspected for this document:
   - private primary markdown contract (`PR Review`, `Patch operation`)
 - `tests/test_tkya_engine.py`
   - TKYA backend-selection and remote-guard coverage
-- `tests/test_topocore_v5_vendor.py`
+- `tests/test_legacy_runtime_removed_vendor.py`
   - vendor-v5 contract and trace/compression evidence
 - `tests/test_tkya_evidence_pack.py`
   - public-safe evidence-pack behavior

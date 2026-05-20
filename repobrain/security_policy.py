@@ -16,7 +16,7 @@ _PROTECTED_TARGET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bsystem\s+prompt\b", re.IGNORECASE),
     re.compile(r"\bhidden\s+(rules|prompt|instructions)\b", re.IGNORECASE),
     re.compile(r"\binternal\s+instructions\b", re.IGNORECASE),
-    re.compile(r"repobrain/tkya/vendor", re.IGNORECASE),
+    re.compile(r"repobrain[\\/]+tkya(?:[\\/_ -]+)vendor", re.IGNORECASE),
     re.compile(r"topocore_tcx", re.IGNORECASE),
     re.compile(r"\.env\b", re.IGNORECASE),
     re.compile(r"\bid_rsa\b", re.IGNORECASE),
@@ -158,4 +158,3 @@ def classify_security_scope(
         signals=sorted(legacy_signals),
         risk="low",
     )
-

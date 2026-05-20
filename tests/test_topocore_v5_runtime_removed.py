@@ -124,8 +124,8 @@ def _clear_env_and_modules(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_metadata_says_v5_runtime_removed() -> None:
     policy = get_topocore_deprecation_policy()
 
-    assert policy["topocore_v5_runtime_removed"] is True
-    assert policy["topocore_v5_fallback_required"] is False
+    assert policy["legacy_runtime_removed"] is True
+    assert policy["legacy_runtime_fallback_required"] is False
     assert policy["topocore_v6_authoritative"] is True
 
 

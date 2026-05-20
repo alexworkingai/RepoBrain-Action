@@ -52,18 +52,18 @@ def test_collect_pr_changed_file_entries_from_context_uses_authoritative_status(
         {
             "files": [
                 {"filename": "PRODUCTION_READINESS_ASSESSMENT.md", "status": "removed"},
-                {"filename": "docs/topocore_v5_phase0_phase1_parity.md", "status": "removed"},
+                {"filename": "docs/legacy_runtime_removed_phase0_phase1_parity.md", "status": "removed"},
             ],
             "changed_files": [
                 "PRODUCTION_READINESS_ASSESSMENT.md",
-                "docs/topocore_v5_phase0_phase1_parity.md",
+                "docs/legacy_runtime_removed_phase0_phase1_parity.md",
             ],
         }
     )
 
     assert entries == [
         {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
-        {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+        {"path": "docs/legacy_runtime_removed_phase0_phase1_parity.md", "operation": "removed"},
     ]
 
 
@@ -77,16 +77,16 @@ def test_prepend_pr_metadata_filters_untrusted_changed_file_claims_from_llm_text
         ),
         changed_files=[
             "PRODUCTION_READINESS_ASSESSMENT.md",
-            "docs/topocore_v5_phase0_phase1_parity.md",
+            "docs/legacy_runtime_removed_phase0_phase1_parity.md",
         ],
         changed_file_entries=[
             {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
-            {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+            {"path": "docs/legacy_runtime_removed_phase0_phase1_parity.md", "operation": "removed"},
         ],
     )
 
     assert "- Removed: `PRODUCTION_READINESS_ASSESSMENT.md`" in text
-    assert "- Removed: `docs/topocore_v5_phase0_phase1_parity.md`" in text
+    assert "- Removed: `docs/legacy_runtime_removed_phase0_phase1_parity.md`" in text
     assert "Updated `repobrain/ask.py`" not in text
     assert "Updated `tests/test_pr_review.py`" not in text
     assert "Supporting context: retrieval ranked `repobrain/ask.py`" in text
@@ -96,25 +96,25 @@ def test_prepend_pr_metadata_strips_conflicting_doc_only_claim_lines_without_hea
     text = _prepend_pr_metadata_to_answer(
         answer_text=(
             "Updated PRODUCTION_READINESS_ASSESSMENT.md.\n"
-            "Updated docs/topocore_v5_phase0_phase1_parity.md.\n"
+            "Updated docs/legacy_runtime_removed_phase0_phase1_parity.md.\n"
             "Modified tests/test_pr_review.py (lines 10-20).\n"
             "Modified repobrain/__init__.py.\n"
             "Modified repobrain/ask.py."
         ),
         changed_files=[
             "PRODUCTION_READINESS_ASSESSMENT.md",
-            "docs/topocore_v5_phase0_phase1_parity.md",
+            "docs/legacy_runtime_removed_phase0_phase1_parity.md",
         ],
         changed_file_entries=[
             {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
-            {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+            {"path": "docs/legacy_runtime_removed_phase0_phase1_parity.md", "operation": "removed"},
         ],
     )
 
     assert "- Removed: `PRODUCTION_READINESS_ASSESSMENT.md`" in text
-    assert "- Removed: `docs/topocore_v5_phase0_phase1_parity.md`" in text
+    assert "- Removed: `docs/legacy_runtime_removed_phase0_phase1_parity.md`" in text
     assert "Updated PRODUCTION_READINESS_ASSESSMENT.md." not in text
-    assert "Updated docs/topocore_v5_phase0_phase1_parity.md." not in text
+    assert "Updated docs/legacy_runtime_removed_phase0_phase1_parity.md." not in text
     assert "Modified tests/test_pr_review.py" not in text
     assert "Modified repobrain/__init__.py" not in text
     assert "Modified repobrain/ask.py" not in text
@@ -125,7 +125,7 @@ def test_ask_final_markdown_doc_only_truth_binding_removes_conflicting_llm_claim
         answer_text=(
             "This PR made changes to the following files:\n"
             "- Updated PRODUCTION_READINESS_ASSESSMENT.md.\n"
-            "- Updated docs/topocore_v5_phase0_phase1_parity.md.\n"
+            "- Updated docs/legacy_runtime_removed_phase0_phase1_parity.md.\n"
             "- Modified tests/test_pr_review.py (lines 11-42).\n"
             "- Modified repobrain/__init__.py.\n"
             "- Modified repobrain/ask.py.\n"
@@ -137,11 +137,11 @@ def test_ask_final_markdown_doc_only_truth_binding_removes_conflicting_llm_claim
         ),
         changed_files=[
             "PRODUCTION_READINESS_ASSESSMENT.md",
-            "docs/topocore_v5_phase0_phase1_parity.md",
+            "docs/legacy_runtime_removed_phase0_phase1_parity.md",
         ],
         changed_file_entries=[
             {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
-            {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+            {"path": "docs/legacy_runtime_removed_phase0_phase1_parity.md", "operation": "removed"},
         ],
     )
 
@@ -154,9 +154,9 @@ def test_ask_final_markdown_doc_only_truth_binding_removes_conflicting_llm_claim
     )
 
     assert "- Removed: `PRODUCTION_READINESS_ASSESSMENT.md`" in md
-    assert "- Removed: `docs/topocore_v5_phase0_phase1_parity.md`" in md
+    assert "- Removed: `docs/legacy_runtime_removed_phase0_phase1_parity.md`" in md
     assert "Updated PRODUCTION_READINESS_ASSESSMENT.md." not in md
-    assert "Updated docs/topocore_v5_phase0_phase1_parity.md." not in md
+    assert "Updated docs/legacy_runtime_removed_phase0_phase1_parity.md." not in md
     assert "Modified tests/test_pr_review.py" not in md
     assert "Modified repobrain/__init__.py" not in md
     assert "Modified repobrain/ask.py" not in md
@@ -169,17 +169,17 @@ def test_ask_final_markdown_removes_conflicting_authoritative_modified_duplicate
         answer_text=(
             "Changed files in this PR (authoritative):\n"
             "- PRODUCTION_READINESS_ASSESSMENT.md (modified)\n"
-            "- docs/topocore_v5_phase0_phase1_parity.md (modified)\n"
+            "- docs/legacy_runtime_removed_phase0_phase1_parity.md (modified)\n"
             "\n"
             "Supporting context: evidence includes repo internals for reasoning."
         ),
         changed_files=[
             "PRODUCTION_READINESS_ASSESSMENT.md",
-            "docs/topocore_v5_phase0_phase1_parity.md",
+            "docs/legacy_runtime_removed_phase0_phase1_parity.md",
         ],
         changed_file_entries=[
             {"path": "PRODUCTION_READINESS_ASSESSMENT.md", "operation": "removed"},
-            {"path": "docs/topocore_v5_phase0_phase1_parity.md", "operation": "removed"},
+            {"path": "docs/legacy_runtime_removed_phase0_phase1_parity.md", "operation": "removed"},
         ],
     )
 
@@ -192,10 +192,10 @@ def test_ask_final_markdown_removes_conflicting_authoritative_modified_duplicate
     )
 
     assert "- Removed: `PRODUCTION_READINESS_ASSESSMENT.md`" in md
-    assert "- Removed: `docs/topocore_v5_phase0_phase1_parity.md`" in md
+    assert "- Removed: `docs/legacy_runtime_removed_phase0_phase1_parity.md`" in md
     assert "Changed files in this PR (authoritative):" not in md
     assert "PRODUCTION_READINESS_ASSESSMENT.md (modified)" not in md
-    assert "docs/topocore_v5_phase0_phase1_parity.md (modified)" not in md
+    assert "docs/legacy_runtime_removed_phase0_phase1_parity.md (modified)" not in md
     assert "Supporting context: evidence includes repo internals for reasoning." in md
 
 

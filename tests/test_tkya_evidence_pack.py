@@ -31,7 +31,7 @@ def _sample_audit() -> dict[str, object]:
         "llm_profile_override_applied": False,
         "llm_profile_model_alignment": "balanced_high_tier_selected",
         "tkya_backend": "v5",
-        "tky_engine": "topocore_v5",
+        "tky_engine": "legacy_runtime_removed",
         "selected": 5,
         "retrieved": 21,
         "tky_selected_chunk_ids_count": 5,

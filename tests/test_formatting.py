@@ -67,7 +67,7 @@ def test_format_github_comment_shows_rd_status_from_nested_summary() -> None:
         "Answer body",
         [],
         {
-            "tky_engine": "topocore_v5",
+            "tky_engine": "legacy_runtime_removed",
             "rd": {"rd_used": True, "rd_status": "ok"},
         },
         "Open evidence links and verify logic",

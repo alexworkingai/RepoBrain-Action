@@ -114,7 +114,18 @@ Recommended scope:
 - optional live v6 sanity
 - no patch or autofix
 
-## 10. Non-Goals
+## 10. Sprint 66 Follow-Up
+
+Sprint 66 completes the physical cleanup that Sprint 65 left open:
+
+- orphaned v5 vendor assets are removed
+- stale TKYA residue is reduced to compatibility stubs only
+- active workflow and test surfaces no longer advertise v5 or `lite` as runnable runtime choices
+
+See also:
+
+- `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`
+## 11. Non-Goals
 
 - no patch or autofix
 - no production or Marketplace switch

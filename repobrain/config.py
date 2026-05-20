@@ -913,16 +913,40 @@ def load_config(root: Path, source: Mapping[str, str] | None = None) -> RepoBrai
 
 RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec(
+        "RB_TOPOCORE_BACKEND",
+        "enum",
+        "auto",
+        "Supported TopoCore runtime selector. Supported values: auto or v6. Legacy v5 is unsupported and fails safely.",
+        ("auto", "v6", "v5"),
+    ),
+    EnvVarSpec(
         "RB_TKYA_BACKEND",
         "enum",
         "auto",
-        "Legacy compatibility backend selector. Supported runtime selectors: auto or v6. Legacy lite/v5 values are unsupported and fail safely.",
+        "Legacy compatibility selector. Supported runtime selectors: auto or v6. Legacy lite/v5 values are unsupported and fail safely.",
         ("auto", "v6", "lite", "v5"),
+    ),
+    EnvVarSpec(
+        "RB_TOPOCORE_ALLOW_DEPRECATED_V5",
+        "bool",
+        "0",
+        "Obsolete legacy env. It no longer re-enables any runtime path and is retained only for safe unsupported diagnostics.",
+    ),
+    EnvVarSpec(
+        "RB_TOPOCORE_V5_SIMULATE_DISABLED",
+        "bool",
+        "0",
+        "Obsolete legacy simulation env. V5 runtime is already removed; this variable is retained only for compatibility metadata.",
     ),
     EnvVarSpec("RB_TKYA_ALLOW_REMOTE", "bool", "0", "Allow remote/network operations in TKYA."),
     EnvVarSpec("RB_TKYA_STRICT", "bool", "0", "Strict TKYA load mode."),
     EnvVarSpec("RB_TKYA_STRICT_V5", "bool", "0", "Strict protected-kernel v5 load mode."),
-    EnvVarSpec("RB_TKYA_V5_PATH", "str", "", "Optional override path for protected-kernel v5 runtime file."),
+    EnvVarSpec(
+        "RB_TKYA_V5_PATH",
+        "str",
+        "",
+        "Obsolete legacy override for a removed v5 runtime file. Retained only for safe unsupported diagnostics.",
+    ),
     EnvVarSpec("RB_LLM_ENABLED", "bool", "0", "Enable LLM layer."),
     EnvVarSpec("RB_LLM_PROVIDER", "str", "", "LLM provider name (github_models)."),
     EnvVarSpec("RB_LLM_MODEL_HIGH", "str", "openai/gpt-4.1", "High-tier model id."),

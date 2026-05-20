@@ -40,6 +40,7 @@ Current test baseline:
 | `tests/test_github_issue_comment_v6_lab_runtime.py` | `.github/workflows/repobrain.yml` | Phase 7 | Controlled issue-comment v6 lab gate, v6-only backend policy, gated private checkout and install, non-fatal issue-comment diagnostics, workflow-dispatch preservation, no patch or repo mutation steps | No |
 | `tests/test_github_issue_comment_v6_gate_env_propagation.py` | `.github/workflows/repobrain.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | Gated issue-comment local provider propagation, explicit action backend override, safe TopoCore backend diagnostics, preserved workflow-dispatch path, no legacy runtime re-enable seam | No |
 | `tests/test_topocore_v5_runtime_removed.py` | `repobrain/topocore_deprecation.py`, `repobrain/topocore_backend.py`, `repobrain/tky_local.py`, workflow/action metadata | Phase 7 | Runtime-removal metadata, old-env unsupported diagnostics, no v5 fallback, no v5/lite workflow advertising, no patch or raw decision drift | No |
+| `tests/test_topocore_v5_vendor_assets_removed.py` | filesystem/workflow/action/static cleanup surfaces | Phase 7 | Vendor directory absence, no vendor imports, no legacy workflow advertising, no canary-v5 residue, no patch or raw decision drift | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -141,6 +142,10 @@ Current tests prove that:
   - legacy `lite` execution is removed
   - old env values are covered as safe unsupported diagnostics
   - workflow and action no longer advertise v5 or `lite` as supported runtime choices
+- Sprint 66 adds physical cleanup coverage:
+  - orphaned vendor assets are absent
+  - legacy canary workflow residue is removed
+  - compatibility stubs remain non-executable
 
 ## 6. What Tests Do Not Prove
 
@@ -179,6 +184,9 @@ Current tests do not prove:
 - Sprint 65 does not yet prove post-removal live GitHub sanity:
   - local validation covers the removal policy and safe unsupported diagnostics
   - post-removal hardening and optional live sanity remain Sprint 66 work
+- Sprint 66 does not run live post-removal sanity by itself:
+  - vendor-absence and residue cleanup are covered statically
+  - bounded live v6 sanity remains a follow-up hardening step
 
 ## 7. Recommended Future Test Maintenance
 

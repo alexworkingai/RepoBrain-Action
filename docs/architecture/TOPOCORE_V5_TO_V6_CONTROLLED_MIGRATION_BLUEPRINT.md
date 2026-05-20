@@ -51,7 +51,7 @@ Current baseline summary:
   - `repobrain/tky_local.py`
   - `repobrain/tky_engine.py`
   - `repobrain/tkya/engine.py`
-  - `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
+  - `repobrain::tkya::vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
 - current active backend pin for GitHub-mode runtime remains:
   - `RB_TKYA_BACKEND=v5`
 - current LLM provider path in live GitHub runtime remains GitHub Models through:

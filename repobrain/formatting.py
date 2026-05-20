@@ -33,8 +33,8 @@ def _build_tky_status_line(audit_summary: dict[str, object]) -> str:
         return f"TKY: fallback baseline ({fallback_code})"
     if mode_used == "fallback_baseline":
         return "TKY: fallback baseline (fallback)"
-    if engine == "topocore_v5":
-        return "TKY: topocore_v5"
+    if engine == "legacy_runtime_removed":
+        return "TKY: legacy_runtime_removed"
     if engine == "topocore_lite":
         return "TKY: topocore_lite"
     if engine == "topocore_original":

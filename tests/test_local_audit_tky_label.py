@@ -21,19 +21,19 @@ def test_local_formatting_uses_remote_tky_label_and_local_audit_note(monkeypatch
     assert "Audit: workflow artifact `repobrain-audit` (hash-only)." not in text
 
 
-def test_local_formatting_uses_topocore_v5_label(monkeypatch) -> None:
+def test_local_formatting_uses_legacy_runtime_removed_label(monkeypatch) -> None:
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
 
     text = format_github_comment(
         "Answer body",
         [],
         {
-            "tky_engine": "topocore_v5",
+            "tky_engine": "legacy_runtime_removed",
             "tky_mode_used": "local",
             "remote_used": False,
         },
         "Open evidence links and verify logic",
     )
 
-    assert "TKY: topocore_v5" in text
+    assert "TKY: legacy_runtime_removed" in text
     assert "Audit: local run (no workflow artifacts)." in text

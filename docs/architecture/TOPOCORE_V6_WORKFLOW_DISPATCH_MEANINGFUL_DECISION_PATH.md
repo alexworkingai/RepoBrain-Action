@@ -1,5 +1,8 @@
 # TopoCore v6 Workflow Dispatch Meaningful Decision Path
 
+> Historical note: references below to v5 fallback or legacy `lite` execution are superseded. Sprint 65 removed deprecated v5 runtime execution, and Sprint 66 removed orphaned vendor assets. Current supported runtime policy is v6-only.
+
+
 ## 1. Purpose
 
 Sprint 49 adds a meaningful manual `workflow_dispatch` v6 decision path.

@@ -126,15 +126,15 @@ def test_deprecation_metadata_says_v6_is_authoritative() -> None:
 
     assert TOPOCORE_V6_AUTHORITATIVE is True
     assert policy["topocore_v6_authoritative"] is True
-    assert policy["topocore_v5_runtime_removed"] is True
+    assert policy["legacy_runtime_removed"] is True
 
 
 def test_deprecation_metadata_keeps_v5_disabled_by_default_after_runtime_removal() -> None:
     policy = get_topocore_deprecation_policy()
 
     assert TOPOCORE_V5_DISABLED_BY_DEFAULT is True
-    assert policy["topocore_v5_disabled_by_default"] is True
-    assert policy["topocore_v5_fallback_required"] is False
+    assert policy["legacy_runtime_disabled_by_default"] is True
+    assert policy["legacy_runtime_fallback_required"] is False
 
 
 def test_allow_deprecated_v5_helper_still_only_reflects_env_request() -> None:

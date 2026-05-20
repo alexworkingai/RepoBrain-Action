@@ -1,5 +1,8 @@
 # TopoCore v6 GitHub Lab Dependency Gate
 
+> Historical note: references below to v5 fallback or legacy `lite` execution are superseded. Sprint 65 removed deprecated v5 runtime execution, and Sprint 66 removed orphaned vendor assets. Current supported runtime policy is v6-only.
+
+
 ## 1. Purpose
 
 Sprint 48 adds a manual-only GitHub lab dependency gate for TopoCore v6.

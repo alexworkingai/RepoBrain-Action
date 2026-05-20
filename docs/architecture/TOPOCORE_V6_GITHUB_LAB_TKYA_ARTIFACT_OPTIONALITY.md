@@ -1,5 +1,8 @@
 # TopoCore v6 GitHub Lab TKYA Artifact Optionality
 
+> Historical note: references below to v5 fallback or legacy `lite` execution are superseded. Sprint 65 removed deprecated v5 runtime execution, and Sprint 66 removed orphaned vendor assets. Current supported runtime policy is v6-only.
+
+
 ## 1. Purpose
 
 Sprint 51 makes optional TKYA evidence artifact upload non-fatal for v6 lab `workflow_dispatch` runs.

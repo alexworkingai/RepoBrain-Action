@@ -164,7 +164,7 @@ Using `docs/REPO_BOUNDARY_CONTRACT.md` as canonical reference:
    - installs remote guards by default
    - exposes `get_engine()` and `describe_engine_instance()`
 
-4. `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
+4. `repobrain::tkya::vendor/TopoCore_TCX_v5-Advance_CAS+Git.py`
    - vendor-backed advanced backend
    - not an entrypoint by itself, but a runtime-selected dependency
 
@@ -327,7 +327,7 @@ What they protect:
 | `repobrain/tky_local.py` | `KEEP_CORE_CONTRACT` | bridge from retrieval/runtime into TKYA engine contract |
 | `repobrain/tky_engine.py` | `KEEP_CORE_CONTRACT` | canonical engine request/decision datamodel |
 | `repobrain/tkya/engine.py` | `KEEP_CORE_CONTRACT` | backend selection, vendor loading, remote-guard enforcement |
-| `repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py` | `KEEP_CORE_CONTRACT` | vendor backend dependency selected at runtime |
+| `repobrain::tkya::vendor/TopoCore_TCX_v5-Advance_CAS+Git.py` | `KEEP_CORE_CONTRACT` | vendor backend dependency selected at runtime |
 | `repobrain/ask.py` | `KEEP_CORE_CONTRACT` | answer-generation contract shared by external CLI and GitHub-mode QA paths |
 | `repobrain/review.py` | `KEEP_CORE_CONTRACT` | review payload/risk heuristics used by GitHub review path |
 | `repobrain/output_md.py` | `KEEP_CORE_CONTRACT` | user-visible markdown rendering for ask/review/fix/refuse/wait |

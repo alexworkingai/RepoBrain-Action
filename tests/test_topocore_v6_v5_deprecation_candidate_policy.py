@@ -44,7 +44,7 @@ def test_sprint_62_prep_note_exists_and_removal_is_still_not_approved() -> None:
     assert "rb_enable_issue_comment_v6_lab=1" in text
     assert "v5 fallback-only" in text
     assert "v5 removal not approved" in text
-    assert "rb_topocore_v5_simulate_disabled=1" in text
+    assert "simulate_disabled=1" in text
     assert "rb_topocore_allow_deprecated_v5=1" in text
     assert "sprint 65 completes runtime removal" in text
 

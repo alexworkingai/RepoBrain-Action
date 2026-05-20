@@ -131,10 +131,10 @@ def test_simulation_helper_rejects_falsey_values(value: str) -> None:
 def test_policy_still_exposes_obsolete_simulation_metadata() -> None:
     policy = get_topocore_deprecation_policy()
 
-    assert policy["topocore_v5_simulation_env"] == TOPOCORE_V5_SIMULATION_ENV
-    assert policy["topocore_v5_simulated_disabled_reason"] == TOPOCORE_V5_SIMULATED_DISABLED_REASON
-    assert policy["topocore_v5_off_simulation_available"] is True
-    assert policy["topocore_v5_runtime_removed"] is True
+    assert policy["legacy_runtime_simulation_env"] == TOPOCORE_V5_SIMULATION_ENV
+    assert policy["legacy_runtime_simulated_disabled_reason"] == TOPOCORE_V5_SIMULATED_DISABLED_REASON
+    assert policy["legacy_runtime_off_simulation_available"] is True
+    assert policy["legacy_runtime_removed"] is True
 
 
 def test_simulation_env_does_not_block_supported_v6_path(monkeypatch: pytest.MonkeyPatch) -> None:

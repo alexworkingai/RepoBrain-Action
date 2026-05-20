@@ -297,16 +297,10 @@ Safe defaults:
 - patch is **not** auto-applied unless both `RB_APPLY_PATCH=1` and `RB_TRUSTED_CONTEXT=1`
 - dynamic verification (pytest) is gated by `RB_TRUSTED_CONTEXT=1` and `RB_ALLOW_DYNAMIC_VERIFY=1`
 
-## Canary Workflow
+## Legacy Canary Note
 
-Workflow: `.github/workflows/canary_v5.yml`
+The old `.github/workflows/canary_v5.yml` workflow was removed in Sprint 66.
 
-- trigger: `workflow_dispatch`
-- env:
-  - `RB_TKYA_BACKEND=v5`
-  - `RB_TKYA_ALLOW_REMOTE=0`
-  - `RB_TKYA_STRICT=0`
-- behavior:
-  - runs lint/tests for wiring safety
-  - executes full coverage when protected kernel runtime is available
-  - executes bounded fallback coverage when protected kernel runtime is unavailable
+- v5 vendor execution is no longer supported
+- v6 is the only supported runtime path
+- legacy env values now fail safely instead of enabling any runtime path
