@@ -151,6 +151,10 @@ Current tests prove that:
   - standalone v5 guides are absent
   - stale guide references are removed
   - active code, tests, workflows, and action surfaces stay free of lower-case legacy runtime residue
+- Sprint 68 adds no new runtime coverage:
+  - live issue-comment sanity passed on `main`
+  - optional `workflow_dispatch` v6 sanity passed on `main`
+  - final static proof passed for removed v5 docs, vendor assets, and workflow residue
 
 ## 6. What Tests Do Not Prove
 
@@ -195,6 +199,9 @@ Current tests do not prove:
 - Sprint 67 still does not prove live issue-comment sanity by itself:
   - static cleanup and policy proof are covered
   - bounded live v6 sanity remains optional follow-up work unless explicitly run on `main`
+- Sprint 68 adds no new local runtime test surface:
+  - it records successful live sanity and final static proof
+  - no additional runtime behavior was introduced
 
 ## 7. Recommended Future Test Maintenance
 

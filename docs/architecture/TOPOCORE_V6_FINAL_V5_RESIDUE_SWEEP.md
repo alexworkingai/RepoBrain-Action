@@ -100,6 +100,10 @@ If needed, it should be executed on `main` only, because `issue_comment` runs th
 If a live v6 sanity check is still desired, run one minimal `issue_comment` or `workflow_dispatch` check on `main`.
 If that passes, Sprint 68 can be a final migration closeout and documentation polish sprint rather than another v5-removal sprint.
 
+Sprint 68 completed that follow-up and recorded the final live and static closeout here:
+
+- `docs/architecture/TOPOCORE_V6_FINAL_V6_ONLY_CLOSEOUT.md`
+
 ## 11. Non-Goals
 
 - no patch or autofix

@@ -13,6 +13,7 @@ Current truth:
 - Sprint 65 removed deprecated emergency v5 execution
 - Sprint 66 removed orphaned vendor assets and residual TKYA runtime residue
 - Sprint 67 removes final standalone v5 residue and closes the post-removal documentation gap
+- Sprint 68 records final live sanity and closes the v6-only transition
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -126,6 +127,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
 - `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`
 - `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`
+- `docs/architecture/TOPOCORE_V6_FINAL_V6_ONLY_CLOSEOUT.md`
 
 ## 5. Recommended Reading Paths
 
@@ -211,7 +213,11 @@ final v5 residue cleanup and post-removal hardening:
 
 - `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`
 - `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`
+
+final v6-only closeout, live sanity, and post-removal hardening:
+
 - `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`
+- `docs/architecture/TOPOCORE_V6_FINAL_V6_ONLY_CLOSEOUT.md`
 
 Why implementation is currently blocked:
 
@@ -226,7 +232,9 @@ Current decision state:
 - issue-comment lab v6 default is approved
 - deprecated v5 runtime execution has been removed
 - orphaned vendor assets have been removed
-- final residue cleanup is complete; optional live v6 sanity remains the next hardening step
+- final residue cleanup is complete
+- final live v6 sanity has passed
+- the v6-only transition is closed out
 - fix migration remains conservative
 - patch behavior expansion is not approved
 - production and Marketplace switch are not approved
