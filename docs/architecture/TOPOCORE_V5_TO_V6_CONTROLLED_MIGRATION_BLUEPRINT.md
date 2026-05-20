@@ -1,5 +1,7 @@
 # TopoCore v5 to v6 Controlled Migration Blueprint
 
+> Sprint 67 status: This file is retained only as a historical checkpoint. For current runtime policy use `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`, `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`, and `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.
+
 ## 1. Purpose
 
 This document defines the controlled migration plan from the current embedded TopoCore v5/TKYA runtime to a future TopoCore v6 public-facade integration.

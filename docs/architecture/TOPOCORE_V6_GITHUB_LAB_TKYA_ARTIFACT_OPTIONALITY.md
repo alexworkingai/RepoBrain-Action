@@ -1,5 +1,7 @@
 # TopoCore v6 GitHub Lab TKYA Artifact Optionality
 
+> Sprint 67 status: This file is retained only as a historical checkpoint. For current runtime policy use `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`, `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`, and `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.
+
 > Historical note: references below to v5 fallback or legacy `lite` execution are superseded. Sprint 65 removed deprecated v5 runtime execution, and Sprint 66 removed orphaned vendor assets. Current supported runtime policy is v6-only.
 
 
@@ -94,7 +96,7 @@ Expected:
 
 If the Sprint 51 post-merge operational check succeeds, Sprint 52 may implement:
 
-- GitHub `issue_comment` v6 lab runtime with v5 fallback
+- GitHub `issue_comment` v6 lab runtime; any v5 fallback wording here is historical only
 
 If it fails, Sprint 52 should fix only the specific remaining blocker.
 

@@ -1,14 +1,16 @@
 # TopoCore v6 Issue Comment Lab Runtime
 
+> Sprint 67 status: This file is retained only as a historical checkpoint. For current runtime policy use `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`, `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`, and `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.
+
 > Historical note: references below to v5 fallback or legacy `lite` execution are superseded. Sprint 65 removed deprecated v5 runtime execution, and Sprint 66 removed orphaned vendor assets. Current supported runtime policy is v6-only.
 
 
 ## 1. Purpose
 
-Sprint 52 enables controlled GitHub `issue_comment` TopoCore v6 lab runtime with v5 fallback.
+Sprint 52 originally enabled a controlled GitHub `issue_comment` TopoCore v6 lab runtime experiment. Sprint 67 keeps this file only as historical record.
 It follows the successful `workflow_dispatch` v6 `private_checkout` operational check after Sprint 51.
 It is a lab runtime step, not a production or Marketplace switch.
-v5 remains the fallback backend.
+v5 runtime is removed; legacy references below are historical only.
 Patch application remains disabled.
 
 ## 2. Current Baseline
@@ -33,14 +35,14 @@ Patch application remains disabled.
 
 - repository variable: `RB_ENABLE_ISSUE_COMMENT_V6_LAB`
 - enable value: `1`
-- disabled or absent value: fallback to the legacy safe path
+- disabled or absent value: gate disables the v6 lab path; no legacy v5 runtime remains
 
 Backend selection policy:
 
 - when the gate is enabled for `/repobrain` comments:
   - `RB_TOPOCORE_BACKEND=auto`
 - when the gate is disabled or absent:
-  - backend remains effectively v5-pinned
+  - legacy v5 execution no longer exists; current runtime policy is v6-only
 
 Strict mode is off by default for `issue_comment`.
 
@@ -63,7 +65,7 @@ For gated `issue_comment` lab runs:
 Fallback behavior:
 
 - `auto` attempts v6 when the dependency is available
-- if v6 is unavailable, the runtime falls back to v5 when strict mode is off
+- if v6 is unavailable today, the runtime fails safely without any v5 fallback
 
 Kill switch behavior:
 
@@ -73,9 +75,9 @@ Kill switch behavior:
 Emergency revert path:
 
 - disable the gate
-- or force workflow-level backend handling back to v5 in a follow-up if needed
+- no workflow-level v5 runtime remains to restore
 
-No v5 removal is included.
+Sprint 65 already removed v5 runtime execution.
 
 ## 6. Safety Boundaries
 

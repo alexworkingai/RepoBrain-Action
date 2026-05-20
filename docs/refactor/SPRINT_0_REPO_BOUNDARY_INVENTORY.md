@@ -190,8 +190,7 @@ Paths / areas:
 - `docs/governance/`
 - `docs/tkya_contract.md`
 - `docs/tkya_evidence_pack.md`
-- `docs/topocore_v5_architecture.md`
-- `docs/topocore_v5_complete_guide.md`
+- `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`
 - `docs/benchmarks/current_capabilities_matrix.md`
 - broad regression suites in `tests/`
 

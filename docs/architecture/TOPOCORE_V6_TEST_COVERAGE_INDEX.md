@@ -41,6 +41,7 @@ Current test baseline:
 | `tests/test_github_issue_comment_v6_gate_env_propagation.py` | `.github/workflows/repobrain.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | Gated issue-comment local provider propagation, explicit action backend override, safe TopoCore backend diagnostics, preserved workflow-dispatch path, no legacy runtime re-enable seam | No |
 | `tests/test_topocore_v5_runtime_removed.py` | `repobrain/topocore_deprecation.py`, `repobrain/topocore_backend.py`, `repobrain/tky_local.py`, workflow/action metadata | Phase 7 | Runtime-removal metadata, old-env unsupported diagnostics, no v5 fallback, no v5/lite workflow advertising, no patch or raw decision drift | No |
 | `tests/test_topocore_v5_vendor_assets_removed.py` | filesystem/workflow/action/static cleanup surfaces | Phase 7 | Vendor directory absence, no vendor imports, no legacy workflow advertising, no canary-v5 residue, no patch or raw decision drift | No |
+| `tests/test_topocore_v5_residue_cleanup.py` | docs/runtime/workflow static cleanup surfaces | Phase 7 | Deleted standalone v5 guides, no active lower-case runtime residue, no stale guide references, historical-doc supersession markers, no patch or raw decision drift | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -146,6 +147,10 @@ Current tests prove that:
   - orphaned vendor assets are absent
   - legacy canary workflow residue is removed
   - compatibility stubs remain non-executable
+- Sprint 67 adds final residue-sweep coverage:
+  - standalone v5 guides are absent
+  - stale guide references are removed
+  - active code, tests, workflows, and action surfaces stay free of lower-case legacy runtime residue
 
 ## 6. What Tests Do Not Prove
 
@@ -187,6 +192,9 @@ Current tests do not prove:
 - Sprint 66 does not run live post-removal sanity by itself:
   - vendor-absence and residue cleanup are covered statically
   - bounded live v6 sanity remains a follow-up hardening step
+- Sprint 67 still does not prove live issue-comment sanity by itself:
+  - static cleanup and policy proof are covered
+  - bounded live v6 sanity remains optional follow-up work unless explicitly run on `main`
 
 ## 7. Recommended Future Test Maintenance
 

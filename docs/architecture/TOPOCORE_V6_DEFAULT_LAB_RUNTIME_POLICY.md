@@ -1,5 +1,7 @@
 # TopoCore v6 Default Lab Runtime Policy
 
+> Sprint 67 status: This file is retained only as a historical checkpoint. For current runtime policy use `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`, `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`, and `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.
+
 > Historical note: references below to v5 fallback or legacy `lite` execution are superseded. Sprint 65 removed deprecated v5 runtime execution, and Sprint 66 removed orphaned vendor assets. Current supported runtime policy is v6-only.
 
 
@@ -9,9 +11,9 @@ Sprint 46 makes v6 the preferred default for lab and local runtime policy.
 
 Current truth:
 
-- v5 remains fallback and explicit selectable backend
-- GitHub Actions default behavior remains unchanged because `action.yml` still pins the v5-side backend
-- v5 removal is not included
+- historical note: Sprint 46 still treated v5 as fallback; current runtime is v6-only
+- historical note: GitHub Actions later moved away from any supported v5-side backend
+- Sprint 65 later removed v5 runtime execution
 - patch application is not included
 
 ## 2. Current Baseline
@@ -29,13 +31,13 @@ Current accepted baseline:
 
 Current backend policy:
 
-- `RB_TOPOCORE_BACKEND=v5|v6|auto`
-- `RB_TKYA_BACKEND=v5|v6|lite` remains backward-compatible
+- historical selector set at Sprint 46 time; current supported selectors are `auto` and `v6` only
+- `RB_TKYA_BACKEND` legacy values are now unsupported diagnostics only
 - `RB_TOPOCORE_BACKEND` takes precedence over `RB_TKYA_BACKEND`
 - no-env local or lab default is now `auto`
-- `auto` is v6-preferred and falls back to v5 when v6 is unavailable
-- `action.yml` pin keeps GitHub default on the v5-side backend
-- missing v6 falls back safely unless strict local mode is enabled
+- `auto` is now v6-only and fails safely when v6 is unavailable
+- current workflow and action defaults no longer expose a v5-side backend
+- missing v6 now fails safely; there is no v5 fallback
 - strict local mode is controlled by `RB_TOPOCORE_V6_REQUIRE_LOCAL=1`
 
 ## 4. Lab/Local Default
@@ -44,7 +46,7 @@ Current lab or local default:
 
 - when no backend env is set, the local or lab path attempts v6 first
 - if v6 is available, local or lab runtime uses v6
-- if v6 is unavailable, runtime falls back to v5
+- if v6 is unavailable today, runtime fails safely
 - this does not make `topocore_v6` required in default CI
 
 ## 5. GitHub Runtime Boundary
@@ -79,9 +81,9 @@ Current boundary:
 
 Current fallback and failure behavior:
 
-- explicit `v5` always uses v5
-- explicit `v6` tries v6 and falls back to v5 unless strict local mode is enabled
-- `auto` tries v6 and falls back to v5 unless strict local mode is enabled
+- explicit `v5` is now an unsupported legacy input
+- explicit `v6` now requires v6 and fails safely if unavailable
+- `auto` now tries v6 and fails safely if unavailable
 - invalid backend values fail safely
 - no raw paths or secrets appear in surfaced errors
 
@@ -95,8 +97,8 @@ Expected scope:
 
 - decide whether GitHub Action default remains pinned to v5 or gets a lab-only v6 switch
 - if implementation is allowed, make it explicit and reversible
-- preserve v5 fallback
-- no v5 removal yet
+- no v5 fallback remains in current runtime
+- historical note only; v5 runtime was removed in Sprint 65
 
 ## 10. Non-Goals
 

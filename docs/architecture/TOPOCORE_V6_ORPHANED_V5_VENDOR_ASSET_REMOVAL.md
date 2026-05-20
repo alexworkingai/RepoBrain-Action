@@ -19,7 +19,7 @@ Sprint 66 addresses that gap.
 
 Discovery found:
 
-- `repobrain/tkya/vendor` still existed on disk
+- `repobrain::tkya::vendor` still existed on disk
 - the legacy vendor file under that directory still existed on disk
 - `.github/workflows/canary_v5.yml` still existed
 - active code and tests still contained a small amount of legacy labeling and historical residue
@@ -33,7 +33,7 @@ Discovery did not find:
 
 | File / path | Action | Reason |
 |---|---|---|
-| `repobrain/tkya/vendor/` | deleted | orphaned v5 vendor assets were no longer needed after Sprint 65 runtime removal |
+| `repobrain::tkya::vendor/` | deleted | orphaned v5 vendor assets were no longer needed after Sprint 65 runtime removal |
 | `.github/workflows/canary_v5.yml` | deleted | old v5 canary workflow no longer reflected supported runtime behavior |
 | `repobrain/tkya/engine.py` | kept as stub | import compatibility only; no v5 execution remains |
 | `repobrain/tky_engine.py` | kept | stable request/decision contract, not a v5 runtime engine |
@@ -69,7 +69,7 @@ Behavior:
 
 Sprint 66 verification proves:
 
-- no `repobrain/tkya/vendor` directory remains
+- no `repobrain::tkya::vendor` directory remains
 - no active runtime file imports a vendor-backed v5 engine
 - no workflow file advertises `v5` or `lite` as supported runtime choices
 - no active v5 vendor execution tests remain
@@ -101,3 +101,8 @@ Recommended scope:
 - no patch or autofix
 - no production or Marketplace switch
 - no `repobrain-community` change
+
+
+## 11. Sprint 67 Follow-Up
+
+Sprint 67 removed the remaining standalone v5 guide docs and completed the final residue sweep. See `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.

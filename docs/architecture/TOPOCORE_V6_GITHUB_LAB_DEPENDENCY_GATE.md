@@ -1,16 +1,18 @@
 # TopoCore v6 GitHub Lab Dependency Gate
 
+> Sprint 67 status: This file is retained only as a historical checkpoint. For current runtime policy use `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`, `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`, and `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.
+
 > Historical note: references below to v5 fallback or legacy `lite` execution are superseded. Sprint 65 removed deprecated v5 runtime execution, and Sprint 66 removed orphaned vendor assets. Current supported runtime policy is v6-only.
 
 
 ## 1. Purpose
 
 Sprint 48 adds a manual-only GitHub lab dependency gate for TopoCore v6.
-Default `issue_comment` runtime remains v5.
-`workflow_dispatch` default remains v5 and dependency mode `none`.
+At Sprint 48 time, default `issue_comment` runtime remained v5. Sprint 67 keeps this file only as historical record.
+`workflow_dispatch` originally defaulted to a v5-era safe mode and dependency mode `none`; current supported runtime is v6-only.
 Private checkout is opt-in only.
 Sprint 48 does not make TopoCore v6 a default CI dependency.
-Sprint 48 does not remove v5.
+Sprint 65 later removed v5 runtime execution.
 Sprint 48 does not enable patch application.
 
 ## 2. Current Baseline
@@ -27,7 +29,7 @@ Sprint 48 does not enable patch application.
 - runs for the default `workflow_dispatch` case
 - requires no private secret or private checkout
 - leaves TopoCore v6 unavailable unless the runner already has it
-- keeps fallback behavior available when `v6` or `auto` is requested without an installed dependency
+- this originally kept fallback behavior available; current runtime now fails safely without v5 fallback
 
 ### `private_checkout`
 
@@ -53,7 +55,7 @@ Sprint 48 does not enable patch application.
 - `issue_comment` does not checkout or install private TopoCore v6
 - default `workflow_dispatch` does not checkout or install private TopoCore v6
 - default CI does not require `topocore_v6`
-- v5 fallback remains available
+- current runtime policy no longer includes any v5 fallback
 
 ## 6. Secret Handling
 
@@ -67,7 +69,7 @@ Sprint 48 does not enable patch application.
 
 ### dependency mode `none`
 
-- if v6 is unavailable, the runtime falls back to v5 unless strict mode is explicitly set elsewhere
+- if v6 is unavailable today, runtime fails safely without any v5 fallback
 
 ### dependency mode `private_checkout`
 
@@ -102,7 +104,7 @@ Expected:
 - run manual `workflow_dispatch` v6 `private_checkout` validation
 - review sanitized outcomes
 - decide whether `issue_comment` remains v5 or gets an explicitly approved v6 lab mode
-- keep v5 fallback
+- no v5 fallback remains in current runtime
 - no v5 removal unless separately approved
 
 ## 11. Non-Goals

@@ -11,7 +11,8 @@ Current truth:
 - v5 runtime execution has been removed
 - Sprint 64 disabled v5 fallback by default
 - Sprint 65 removed deprecated emergency v5 execution
-- Sprint 66 removes orphaned vendor assets and residual TKYA runtime residue
+- Sprint 66 removed orphaned vendor assets and residual TKYA runtime residue
+- Sprint 67 removes final standalone v5 residue and closes the post-removal documentation gap
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -124,6 +125,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`
 - `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
 - `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`
+- `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`
 
 ## 5. Recommended Reading Paths
 
@@ -205,6 +207,12 @@ physical v5 cleanup and vendor asset removal:
 - `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
 - `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`
 
+final v5 residue cleanup and post-removal hardening:
+
+- `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`
+- `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`
+- `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`
+
 Why implementation is currently blocked:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
@@ -218,7 +226,7 @@ Current decision state:
 - issue-comment lab v6 default is approved
 - deprecated v5 runtime execution has been removed
 - orphaned vendor assets have been removed
-- post-removal hardening is the remaining follow-up
+- final residue cleanup is complete; optional live v6 sanity remains the next hardening step
 - fix migration remains conservative
 - patch behavior expansion is not approved
 - production and Marketplace switch are not approved

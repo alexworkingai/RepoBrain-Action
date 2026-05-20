@@ -74,12 +74,12 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_RETRIEVAL_W_LEX` | float | `0.55` | 0.0..1.0 | Hybrid lexical weight. |
 | `RB_RETRIEVAL_W_VEC` | float | `0.45` | 0.0..1.0 | Hybrid vector weight. |
 | `RB_TKYA_ALLOW_REMOTE` | bool | `0` | - | Allow remote/network operations in TKYA. |
-| `RB_TKYA_BACKEND` | enum | `auto` | auto, v6, lite, v5 | Legacy compatibility selector. Supported runtime selectors: auto or v6. Legacy lite/v5 values are unsupported and fail safely. |
+| `RB_TKYA_BACKEND` | enum | `auto` | auto, v6 | Legacy compatibility selector. Supported runtime selectors: auto or v6. Legacy lite/v5 values are unsupported and fail safely. |
 | `RB_TKYA_STRICT` | bool | `0` | - | Strict TKYA load mode. |
 | `RB_TKYA_STRICT_V5` | bool | `0` | - | Strict protected-kernel v5 load mode. |
 | `RB_TKYA_V5_PATH` | str | `` | - | Obsolete legacy override for a removed v5 runtime file. Retained only for safe unsupported diagnostics. |
 | `RB_TOPOCORE_ALLOW_DEPRECATED_V5` | bool | `0` | - | Obsolete legacy env. It no longer re-enables any runtime path and is retained only for safe unsupported diagnostics. |
-| `RB_TOPOCORE_BACKEND` | enum | `auto` | auto, v6, v5 | Supported TopoCore runtime selector. Supported values: auto or v6. Legacy v5 is unsupported and fails safely. |
+| `RB_TOPOCORE_BACKEND` | enum | `auto` | auto, v6 | Supported TopoCore runtime selector. Supported values: auto or v6. Legacy v5 is unsupported and fails safely. |
 | `RB_TOPOCORE_V5_SIMULATE_DISABLED` | bool | `0` | - | Obsolete legacy simulation env. V5 runtime is already removed; this variable is retained only for compatibility metadata. |
 | `RB_TRUSTED_CONTEXT` | bool | `0` | - | Trusted execution context. |
 | `RB_VERIFY_TIME_BUDGET_S` | int | `120` | 1..7200 | Verification time budget. |

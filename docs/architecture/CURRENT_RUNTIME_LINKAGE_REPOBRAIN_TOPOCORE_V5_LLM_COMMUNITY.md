@@ -1,5 +1,7 @@
 # Current Runtime Linkage: RepoBrain, TopoCore v5, LLM, and Community Surface
 
+> Sprint 67 status: This file is retained only as a historical checkpoint. For current runtime policy use `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`, `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`, and `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.
+
 ## 1. Purpose
 
 This document records the current RepoBrain-Action runtime wiring before any TopoCore v6 integration work starts.

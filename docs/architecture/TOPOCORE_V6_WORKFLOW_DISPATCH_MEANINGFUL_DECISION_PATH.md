@@ -1,5 +1,7 @@
 # TopoCore v6 Workflow Dispatch Meaningful Decision Path
 
+> Sprint 67 status: This file is retained only as a historical checkpoint. For current runtime policy use `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`, `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`, and `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.
+
 > Historical note: references below to v5 fallback or legacy `lite` execution are superseded. Sprint 65 removed deprecated v5 runtime execution, and Sprint 66 removed orphaned vendor assets. Current supported runtime policy is v6-only.
 
 
@@ -7,9 +9,9 @@
 
 Sprint 49 adds a meaningful manual `workflow_dispatch` v6 decision path.
 It fixes the Sprint 48 validation gap where private install succeeded but only help or dry-run behavior executed.
-`issue_comment` remains v5-pinned.
+`issue_comment` was v5-pinned at Sprint 49 time; current runtime is v6-only.
 `workflow_dispatch` default remains safe.
-v5 fallback remains available.
+v5 fallback has since been removed; any such references below are historical only.
 No patch application is enabled.
 
 ## 2. Current Baseline
@@ -100,7 +102,7 @@ The workflow uploads that artifact only for `workflow_dispatch`.
 
 If the first post-Sprint-49 real GitHub run proves category A:
 
-- Sprint 50 may switch `issue_comment` lab runtime to v6 with v5 fallback
+- Sprint 50 originally considered an `issue_comment` v6 lab runtime with fallback; current runtime no longer has any v5 fallback
 
 If the first post-Sprint-49 real GitHub run still lacks evidence:
 
@@ -108,7 +110,7 @@ If the first post-Sprint-49 real GitHub run still lacks evidence:
 
 ## 8. Non-Goals
 
-- no v5 removal
+- historical note only; Sprint 65 later removed v5 runtime execution
 - no default v6 `issue_comment` runtime
 - no default private dependency install
 - no default CI private dependency

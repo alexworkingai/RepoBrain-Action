@@ -917,14 +917,14 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
         "enum",
         "auto",
         "Supported TopoCore runtime selector. Supported values: auto or v6. Legacy v5 is unsupported and fails safely.",
-        ("auto", "v6", "v5"),
+        ("auto", "v6"),
     ),
     EnvVarSpec(
         "RB_TKYA_BACKEND",
         "enum",
         "auto",
         "Legacy compatibility selector. Supported runtime selectors: auto or v6. Legacy lite/v5 values are unsupported and fail safely.",
-        ("auto", "v6", "lite", "v5"),
+        ("auto", "v6"),
     ),
     EnvVarSpec(
         "RB_TOPOCORE_ALLOW_DEPRECATED_V5",

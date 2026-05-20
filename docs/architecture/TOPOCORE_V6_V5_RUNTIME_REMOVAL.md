@@ -130,3 +130,8 @@ See also:
 - no patch or autofix
 - no production or Marketplace switch
 - no `repobrain-community` change
+
+
+## 12. Sprint 67 Follow-Up
+
+Sprint 67 removed the remaining standalone v5 guide docs and completed the final residue sweep. See `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.

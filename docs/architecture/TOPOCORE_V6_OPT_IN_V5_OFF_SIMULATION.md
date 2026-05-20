@@ -1,5 +1,7 @@
 # TopoCore v6 Opt-In v5-Off Simulation
 
+> Sprint 67 status: This file is retained only as a historical checkpoint. For current runtime policy use `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`, `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`, and `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.
+
 ## 1. Purpose
 
 Sprint 63 implements opt-in v5-off simulation.

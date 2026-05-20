@@ -1,16 +1,18 @@
 # TopoCore v6 GitHub Runtime Lab Switch
 
+> Sprint 67 status: This file is retained only as a historical checkpoint. For current runtime policy use `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`, `docs/architecture/TOPOCORE_V6_ORPHANED_V5_VENDOR_ASSET_REMOVAL.md`, and `docs/architecture/TOPOCORE_V6_FINAL_V5_RESIDUE_SWEEP.md`.
+
 > Historical note: references below to v5 fallback or legacy `lite` execution are superseded. Sprint 65 removed deprecated v5 runtime execution, and Sprint 66 removed orphaned vendor assets. Current supported runtime policy is v6-only.
 
 
 ## 1. Purpose
 
 Sprint 47 adds a reversible GitHub runtime lab switch for TopoCore v6.
-Default GitHub `issue_comment` behavior remains pinned to v5.
-Manual `workflow_dispatch` can request `v5`, `v6`, or `auto`.
-v5 fallback remains available.
+Default GitHub `issue_comment` behavior was pinned to v5 at Sprint 47 time; this file is now historical only.
+Manual `workflow_dispatch` originally supported `v5`, `v6`, or `auto`; current supported selectors are `auto` and `v6` only.
+v5 fallback has since been removed.
 Sprint 47 does not install private TopoCore v6 into GitHub Actions.
-Sprint 47 does not remove v5.
+Sprint 65 later removed v5 runtime execution.
 Sprint 47 does not enable patch application.
 
 ## 2. Current Baseline
@@ -22,18 +24,18 @@ Sprint 47 does not enable patch application.
 
 ## 3. GitHub Runtime Policy
 
-- `issue_comment` default remains v5
-- `workflow_dispatch` default remains v5
-- `workflow_dispatch` may choose `v5`, `v6`, or `auto`
-- action input default is `v5`
+- historical only: `issue_comment` default remained v5 at Sprint 47 time
+- historical only: `workflow_dispatch` default remained v5 at Sprint 47 time
+- current supported `workflow_dispatch` selectors are `auto` and `v6`; historical `v5` selection is unsupported
+- action input default later moved away from `v5`
 - `RB_TOPOCORE_BACKEND` controls selector behavior when passed
-- `RB_TKYA_BACKEND=v5` remains the compatible pin behavior inside the action
+- `RB_TKYA_BACKEND=v5` is now an unsupported legacy diagnostic input
 
 ## 4. Lab Switch Behavior
 
-- `v5`: force v5
-- `v6`: try v6, fallback to v5 unless strict local mode is enabled
-- `auto`: try v6, fallback to v5 unless strict local mode is enabled
+- historical only: `v5` once forced v5; it is now unsupported
+- `v6` now requires v6 and fails safely if unavailable
+- `auto` now uses v6 or fails safely if unavailable
 - missing `topocore_v6` does not break default GitHub runtime
 - real GitHub v6 execution still requires future private dependency or install work
 
@@ -57,8 +59,8 @@ Sprint 47 does not enable patch application.
 
 ## 7. Fallback and Failure Behavior
 
-- default GitHub behavior stays on v5
-- manual `v6` or `auto` selection falls back to v5 when v6 is unavailable
+- current GitHub behavior no longer uses v5
+- manual `v6` or `auto` selection now fails safely when v6 is unavailable
 - strict local mode remains opt-in
 - no raw paths or secrets are exposed in backend-selection errors
 
@@ -69,7 +71,7 @@ Sprint 48 — GitHub Lab v6 Dependency Strategy / Optional Private Install Gate
 Expected:
 - decide whether manual GitHub v6 lab runs should install private TopoCore v6
 - choose between no install, local artifact, private package, or private checkout
-- keep default `issue_comment` v5 unless explicitly changed later
+- historical note only; the current issue-comment lab runtime is v6-only
 - no v5 removal
 
 ## 9. Non-Goals
