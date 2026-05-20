@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import argparse
-from hashlib import sha256
 import hmac
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
+from hashlib import sha256
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import orjson
 
-from .tkya.engine import get_engine
-from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
+from .tky_local import LocalTKYProvider
+from .tky_provider import CandidateChunk
 
 PRIVACY_FORBIDDEN_KEYS = {"text", "snippet", "content"}
 
@@ -44,7 +44,7 @@ def verify_signature(
 
 
 def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Build stub response via selected TKYA engine from a privacy-safe payload."""
+    """Build a privacy-safe response via the supported local provider."""
     candidates = payload.get("candidates", [])
     if not isinstance(candidates, list):
         candidates = []
@@ -57,7 +57,7 @@ def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, ValueError):
             max_sources = 8
 
-    engine_candidates: list[EngineCandidate] = []
+    provider_candidates: list[CandidateChunk] = []
     for item in candidates:
         if not isinstance(item, dict):
             continue
@@ -68,10 +68,10 @@ def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         signature = item.get("signature", [])
         if not isinstance(signature, list):
             signature = []
-        engine_candidates.append(
-            EngineCandidate(
+        provider_candidates.append(
+            CandidateChunk(
                 chunk_id=str(item.get("chunk_id", "")),
-                score_local=score_local,
+                score=score_local,
                 signature=[int(x) for x in signature],
                 file_path=str(item.get("file_path", "")) or None,
                 line_start=int(item["line_start"]) if item.get("line_start") is not None else None,
@@ -88,60 +88,43 @@ def build_response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     query_signature = query.get("signature", [])
     if not isinstance(query_signature, list):
         query_signature = []
-    github_context = payload.get("github_context", {})
-    if not isinstance(github_context, dict):
-        github_context = {}
-    verification_context = payload.get("verification_context", {})
-    if not isinstance(verification_context, dict):
-        verification_context = {}
-
-    req = EngineRequest(
-        task_type=task_type,  # type: ignore[arg-type]
-        query=EngineQuery(
-            text=str(query.get("text", "")),
-            signature=[int(x) for x in query_signature],
-        ),
-        candidates=engine_candidates,
-        limits={**(limits if isinstance(limits, dict) else {}), "max_sources": max_sources},
-        policy={
-            "corelocked": True,
-            "github_context": github_context,
-            "verification_context": verification_context,
-            "runtime": {
-                "mode": "stub",
-                "network_allowed": os.environ.get("RB_TKYA_ALLOW_REMOTE", "").strip() == "1",
-            },
+    result = LocalTKYProvider().compress_context(
+        question=str(query.get("text", "")),
+        candidates=provider_candidates,
+        limits={
+            **(limits if isinstance(limits, dict) else {}),
+            "max_sources": max_sources,
+            "task_type": task_type,
         },
     )
-    decision = get_engine().decide(req)
 
     return {
         "schema_version": "1.0",
         "decision": {
-            "route": decision.route,
-            "reason": decision.rationale,
-            "execution_mode": getattr(decision, "execution_mode", "retrieval_only"),
-            "llm_intent": getattr(decision, "llm_intent", "none"),
+            "route": result.route,
+            "reason": result.rationale,
+            "execution_mode": getattr(result, "execution_mode", "retrieval_only"),
+            "llm_intent": getattr(result, "llm_intent", "none"),
             "llm_decision_reason_short": getattr(
-                decision,
+                result,
                 "llm_decision_reason_short",
                 "LLM not used: direct answer available from retrieved evidence.",
             ),
             "llm_decision_reason_code": getattr(
-                decision,
+                result,
                 "llm_decision_reason_code",
                 "DEFAULT_RETRIEVAL_ONLY",
             ),
         },
-        "selection": {"selected_chunk_ids": decision.selected_chunk_ids},
-        "compression_stats": dict(decision.compression_stats),
+        "selection": {"selected_chunk_ids": result.selected_chunk_ids},
+        "compression_stats": dict(result.compression_stats),
         "security": {
-            "blocked": decision.security.blocked,
-            "injection_risk": decision.security.injection_risk,
-            "exfiltration_risk": decision.security.exfiltration_risk,
-            "signals": decision.security.signals,
+            "blocked": result.route == "REFUSE",
+            "injection_risk": "unknown",
+            "exfiltration_risk": "unknown",
+            "signals": [],
         },
-        "stable_tokens": decision.stable_tokens,
+        "stable_tokens": [],
         "rationale": "Stub response",
     }
 

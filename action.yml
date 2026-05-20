@@ -35,7 +35,7 @@ inputs:
     required: false
     default: ""
   topocore_backend:
-    description: "TopoCore backend for lab/runtime selection: v5, v6, or auto"
+    description: "TopoCore backend for lab/runtime selection: auto or v6 (legacy v5/lite envs are unsupported)"
     required: false
     default: "auto"
 
@@ -55,7 +55,6 @@ runs:
       shell: bash
       env:
         RB_TOPOCORE_BACKEND: ${{ env.RB_TOPOCORE_BACKEND || inputs.topocore_backend }}
-        RB_TKYA_BACKEND: "v5"
         RB_TKYA_ALLOW_REMOTE: "0"
         RB_TKYA_STRICT: "0"
         RB_DISABLE_INTERNAL_REACTIONS: "1"

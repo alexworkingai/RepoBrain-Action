@@ -3,13 +3,16 @@
 on:
   workflow_dispatch:
     inputs:
-      tkya_backend:
-        description: "TKYA backend for local test: lite|v5"
+      topocore_backend:
+        description: "TopoCore backend for local test: auto|v6"
         required: false
-        default: "lite"
-        type: string
-      tkya_strict_v5:
-        description: "Fail if v5 backend is requested but vendor file is missing"
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - v6
+      topocore_v6_require_local:
+        description: "Require a local/private TopoCore v6 dependency during the dry run"
         required: false
         default: "false"
         type: string
@@ -24,9 +27,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./. 
         env:
-          RB_TKYA_BACKEND: ${{ github.event.inputs.tkya_backend || 'lite' }}
+          RB_TOPOCORE_BACKEND: ${{ github.event.inputs.topocore_backend || 'auto' }}
           RB_TKYA_ALLOW_REMOTE: "0"
-          RB_TKYA_STRICT_V5: ${{ github.event.inputs.tkya_strict_v5 || 'false' }}
+          RB_TOPOCORE_V6_REQUIRE_LOCAL: ${{ github.event.inputs.topocore_v6_require_local || 'false' }}
         with:
           dry_run: "true"
           comment_text: "/repobrain ask Где реализована логика TKYProvider?"

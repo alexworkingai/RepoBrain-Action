@@ -181,6 +181,10 @@ Sprint 64 follow-up:
 - the repository moves from prep into authoritative-v6 policy
 - v5 is now disabled by default and only emergency opt-in remains
 - emergency opt-in variable: `RB_TOPOCORE_ALLOW_DEPRECATED_V5=1`
+- Sprint 65 completes runtime removal:
+  - deprecated v5 runtime execution is removed
+  - legacy `lite` execution is removed
+  - see `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
 
 ## 10. Non-Goals
 

@@ -17,8 +17,9 @@ from repobrain.topocore_backend import (
 )
 from repobrain.topocore_deprecation import (
     TOPOCORE_V5_ALLOW_DEPRECATED_ENV,
-    TOPOCORE_V5_DEPRECATED_ALLOWED_REASON,
     TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON,
+    TOPOCORE_V5_RUNTIME_REMOVED_REASON,
+    TOPOCORE_UNSUPPORTED_LEGACY_BACKEND_REASON,
 )
 from repobrain.tky_engine import EngineDecision, EngineSecurity
 from repobrain.tky_provider import CandidateChunk
@@ -198,9 +199,6 @@ def test_auto_policy_uses_v6_when_fake_v6_is_available() -> None:
 
 
 def test_auto_policy_fails_safely_when_v6_unavailable_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    capture = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
-
     with pytest.raises(TopoCoreBackendError) as exc_info:
         tky_local.LocalTKYProvider().compress_context(
             question="Locate provider logic.",
@@ -208,7 +206,6 @@ def test_auto_policy_fails_safely_when_v6_unavailable_by_default(monkeypatch: py
             limits={"task_type": "locate"},
         )
 
-    assert capture.calls == 0
     assert V6_UNAVAILABLE_V5_DISABLED_REASON in str(exc_info.value)
 
 
@@ -235,26 +232,17 @@ def test_rb_topocore_backend_v5_is_blocked_without_emergency_allow(monkeypatch: 
     with pytest.raises(TopoCoreBackendError) as exc_info:
         resolve_backend()
 
-    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
+    assert TOPOCORE_V5_RUNTIME_REMOVED_REASON in str(exc_info.value)
 
 
-def test_rb_topocore_backend_v5_can_run_under_emergency_allow(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_allow_flag_does_not_reenable_explicit_v5(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v5")
     monkeypatch.setenv(TOPOCORE_V5_ALLOW_DEPRECATED_ENV, "1")
-    capture = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
 
-    result = tky_local.LocalTKYProvider().compress_context(
-        question="Ask on forced deprecated v5.",
-        candidates=_sample_candidates(),
-        limits={"task_type": "ask"},
-    )
+    with pytest.raises(TopoCoreBackendError) as exc_info:
+        resolve_backend()
 
-    assert capture.calls == 1
-    assert result.compression_stats["requested_backend"] == "v5"
-    assert result.compression_stats["resolved_backend"] == "v5"
-    assert result.compression_stats["deprecated_v5_allowed"] is True
-    assert result.compression_stats["fallback_reason"] == TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
+    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
 
 
 def test_rb_topocore_backend_v6_forces_v6(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -283,40 +271,26 @@ def test_rb_topocore_backend_has_precedence_over_rb_tkya_backend(monkeypatch: py
     monkeypatch.setenv("RB_TKYA_BACKEND", "v6")
     with pytest.raises(TopoCoreBackendError) as exc_info:
         resolve_backend()
-    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
+    assert TOPOCORE_V5_RUNTIME_REMOVED_REASON in str(exc_info.value)
 
 
-def test_rb_tkya_backend_v5_requires_emergency_allow(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rb_tkya_backend_v5_is_unsupported(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RB_TKYA_BACKEND", "v5")
-    capture = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
 
     with pytest.raises(TopoCoreBackendError) as exc_info:
-        tky_local.LocalTKYProvider().compress_context(
-            question="Review under GitHub-style pin.",
-            candidates=_sample_candidates(),
-            limits={"task_type": "review"},
-        )
+        resolve_backend()
 
-    assert capture.calls == 0
-    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
+    assert TOPOCORE_UNSUPPORTED_LEGACY_BACKEND_REASON in str(exc_info.value)
 
 
-def test_rb_tkya_backend_v5_can_run_under_emergency_allow(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_allow_flag_does_not_reenable_legacy_v5(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RB_TKYA_BACKEND", "v5")
     monkeypatch.setenv(TOPOCORE_V5_ALLOW_DEPRECATED_ENV, "1")
-    capture = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
 
-    result = tky_local.LocalTKYProvider().compress_context(
-        question="Review under emergency legacy pin.",
-        candidates=_sample_candidates(),
-        limits={"task_type": "review"},
-    )
+    with pytest.raises(TopoCoreBackendError) as exc_info:
+        resolve_backend()
 
-    assert capture.calls == 1
-    assert result.compression_stats["requested_backend"] == "v5"
-    assert result.compression_stats["resolved_backend"] == "v5"
+    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
 
 
 def test_rb_tkya_backend_lite_is_blocked_by_default() -> None:
@@ -408,7 +382,6 @@ def test_github_default_files_are_aligned_to_authoritative_v6_policy() -> None:
     action_text = (_ROOT / "action.yml").read_text(encoding="utf-8")
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
-    assert "RB_TKYA_BACKEND" in action_text
     assert "RB_TOPOCORE_BACKEND" in action_text
     assert 'default: "auto"' in action_text
     assert "issue_comment:" in workflow_text

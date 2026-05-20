@@ -23,18 +23,23 @@ def test_metadata_module_imports_without_runtime_side_effects() -> None:
 def test_policy_helper_returns_expected_deprecation_state() -> None:
     policy = get_topocore_deprecation_policy()
 
-    assert policy["topocore_v6_status"] == "active_lab_default"
+    assert policy["topocore_v6_status"] == "authoritative"
     assert policy["topocore_v6_authoritative"] is True
-    assert policy["topocore_v5_status"] == "deprecation_candidate"
-    assert policy["topocore_v5_role"] == "fallback_only"
+    assert policy["topocore_v5_status"] == "removed_from_runtime"
+    assert policy["topocore_v5_role"] == "unsupported_legacy_runtime"
     assert policy["topocore_v5_disabled_by_default"] is True
     assert policy["topocore_v5_allow_deprecated_env"] == "RB_TOPOCORE_ALLOW_DEPRECATED_V5"
-    assert policy["topocore_v5_deprecated_not_allowed_reason"] == "deprecated_v5_not_allowed"
-    assert policy["topocore_v5_deprecated_allowed_reason"] == "v5_deprecated_emergency_allowed"
+    assert policy["topocore_v5_deprecated_not_allowed_reason"] == "deprecated_v5_env_unsupported"
+    assert policy["topocore_v5_deprecated_allowed_reason"] == "deprecated_v5_env_unsupported"
     assert policy["topocore_v5_default_disabled_reason"] == "v5_disabled_by_default"
-    assert policy["topocore_v5_removal_approved"] is False
+    assert policy["topocore_v5_runtime_removed_reason"] == "deprecated_v5_removed"
+    assert policy["topocore_legacy_lite_removed_reason"] == "legacy_lite_removed"
+    assert policy["topocore_unsupported_legacy_backend_reason"] == "unsupported_legacy_backend"
+    assert policy["topocore_v5_removal_approved"] is True
+    assert policy["topocore_v5_runtime_removed"] is True
+    assert policy["topocore_v5_removal_completed"] is True
     assert policy["topocore_v5_code_deprecation_active"] is False
-    assert policy["topocore_v5_fallback_required"] is True
+    assert policy["topocore_v5_fallback_required"] is False
     assert policy["topocore_v5_simulation_env"] == "RB_TOPOCORE_V5_SIMULATE_DISABLED"
     assert policy["topocore_v5_simulated_disabled_reason"] == "v5_simulated_disabled"
     assert policy["topocore_v5_off_simulation_available"] is True
@@ -47,7 +52,7 @@ def test_metadata_module_is_dependency_free_and_does_not_enable_patch_behavior()
     assert "tkya.engine" not in text
     assert "apply_patch" not in text
     assert "autofix" not in text
-    assert "removal_approved = true" not in text
+    assert "gh pr create" not in text
 
 
 def test_sprint_62_docs_reference_metadata_and_simulation_plan() -> None:

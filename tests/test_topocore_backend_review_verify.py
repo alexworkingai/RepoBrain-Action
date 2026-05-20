@@ -9,7 +9,7 @@ import pytest
 
 import repobrain.tky_local as tky_local
 from repobrain.topocore_backend import TopoCoreBackendError, V6_UNAVAILABLE_V5_DISABLED_REASON
-from repobrain.topocore_deprecation import TOPOCORE_V5_ALLOW_DEPRECATED_ENV, TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
+from repobrain.topocore_deprecation import TOPOCORE_V5_ALLOW_DEPRECATED_ENV
 from repobrain.tky_engine import EngineDecision, EngineSecurity
 from repobrain.tky_provider import CandidateChunk
 
@@ -161,9 +161,6 @@ def _clear_env_and_modules(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_review_task_fails_safely_without_v6_or_emergency_allow(monkeypatch: pytest.MonkeyPatch) -> None:
-    capture = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
-
     with pytest.raises(TopoCoreBackendError) as exc_info:
         tky_local.LocalTKYProvider().compress_context(
             question="Review this change set.",
@@ -171,14 +168,10 @@ def test_review_task_fails_safely_without_v6_or_emergency_allow(monkeypatch: pyt
             limits={"task_type": "review"},
         )
 
-    assert capture.calls == 0
     assert V6_UNAVAILABLE_V5_DISABLED_REASON in str(exc_info.value)
 
 
 def test_verify_task_fails_safely_without_v6_or_emergency_allow(monkeypatch: pytest.MonkeyPatch) -> None:
-    capture = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
-
     with pytest.raises(TopoCoreBackendError) as exc_info:
         tky_local.LocalTKYProvider().compress_context(
             question="Verify current checks.",
@@ -186,7 +179,6 @@ def test_verify_task_fails_safely_without_v6_or_emergency_allow(monkeypatch: pyt
             limits={"task_type": "verify"},
         )
 
-    assert capture.calls == 0
     assert V6_UNAVAILABLE_V5_DISABLED_REASON in str(exc_info.value)
 
 
@@ -238,25 +230,24 @@ def test_verify_task_can_select_v6_explicitly(monkeypatch: pytest.MonkeyPatch) -
     assert result.compression_stats["message_code"] == "VERIFY_SIGNAL_READY"
 
 
-def test_review_and_verify_can_still_use_emergency_deprecated_v5(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_review_and_verify_do_not_reenable_removed_v5_with_allow_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(TOPOCORE_V5_ALLOW_DEPRECATED_ENV, "1")
-    capture = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
 
-    review_result = tky_local.LocalTKYProvider().compress_context(
-        question="Review the fallback behavior.",
-        candidates=_sample_candidates(),
-        limits={"task_type": "review"},
-    )
-    verify_result = tky_local.LocalTKYProvider().compress_context(
-        question="Verify the fallback behavior.",
-        candidates=_sample_candidates(),
-        limits={"task_type": "verify"},
-    )
+    with pytest.raises(TopoCoreBackendError) as review_exc:
+        tky_local.LocalTKYProvider().compress_context(
+            question="Review the fallback behavior.",
+            candidates=_sample_candidates(),
+            limits={"task_type": "review"},
+        )
+    with pytest.raises(TopoCoreBackendError) as verify_exc:
+        tky_local.LocalTKYProvider().compress_context(
+            question="Verify the fallback behavior.",
+            candidates=_sample_candidates(),
+            limits={"task_type": "verify"},
+        )
 
-    assert capture.calls == 2
-    assert review_result.compression_stats["fallback_reason"] == TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
-    assert verify_result.compression_stats["fallback_reason"] == TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
+    assert V6_UNAVAILABLE_V5_DISABLED_REASON in str(review_exc.value)
+    assert V6_UNAVAILABLE_V5_DISABLED_REASON in str(verify_exc.value)
 
 
 def test_missing_v6_dependency_strict_mode_fails_safely(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -378,11 +369,10 @@ def test_fix_path_remains_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "create_pr" not in rendered
 
 
-def test_github_default_behavior_is_authoritative_v6_plus_emergency_v5() -> None:
+def test_github_default_behavior_is_authoritative_v6_only() -> None:
     action_text = (_ROOT / "action.yml").read_text(encoding="utf-8")
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
-    assert "RB_TKYA_BACKEND" in action_text
     assert "RB_TOPOCORE_BACKEND" in action_text
     assert 'default: "auto"' in action_text
     assert "issue_comment:" in workflow_text

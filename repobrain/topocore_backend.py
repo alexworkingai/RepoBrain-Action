@@ -5,10 +5,12 @@ from typing import Any, Literal
 
 from repobrain.execution_mode import decide_semantic_execution
 from repobrain.topocore_deprecation import (
+    TOPOCORE_LEGACY_LITE_REMOVED_REASON,
+    TOPOCORE_UNSUPPORTED_LEGACY_BACKEND_REASON,
     TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON,
-    TOPOCORE_V5_SIMULATED_DISABLED_REASON,
-    is_deprecated_v5_allowed,
-    is_v5_simulated_disabled,
+    TOPOCORE_V5_RUNTIME_REMOVED_REASON,
+    TOPOCORE_V6_REQUIRED_REASON,
+    TOPOCORE_V6_UNAVAILABLE_REASON,
 )
 from repobrain.topocore_v6_adapter import (
     RepoBrainTopoCoreV6Adapter,
@@ -23,8 +25,8 @@ TopoCoreBackendPolicyName = Literal["v5", "v6", "auto"]
 BACKEND_V5: TopoCoreBackendName = "v5"
 BACKEND_V6: TopoCoreBackendName = "v6"
 BACKEND_AUTO: TopoCoreBackendPolicyName = "auto"
-LEGACY_LITE_DISABLED_REASON = "legacy_lite_disabled_by_default"
-V6_UNAVAILABLE_V5_DISABLED_REASON = "v6_unavailable_v5_disabled"
+LEGACY_LITE_DISABLED_REASON = TOPOCORE_LEGACY_LITE_REMOVED_REASON
+V6_UNAVAILABLE_V5_DISABLED_REASON = TOPOCORE_V6_UNAVAILABLE_REASON
 _V5_ENGINE_TASK_TYPES = frozenset({"ask", "locate", "explain", "review"})
 _V6_REQUEST_TASK_TYPES = frozenset({"ask", "locate", "explain", "review", "verify", "fix"})
 
@@ -79,23 +81,19 @@ def _normalize_backend_policy(value: str) -> TopoCoreBackendPolicyName:
 
 
 def _selected_backend_for_policy(policy_name: TopoCoreBackendPolicyName) -> TopoCoreBackendName:
-    if policy_name == BACKEND_V5:
-        return BACKEND_V5
     return BACKEND_V6
 
 
-def _raise_v5_simulated_disabled(requested_backend: TopoCoreBackendPolicyName) -> None:
+def _raise_unsupported_legacy_backend(
+    *,
+    requested_backend: TopoCoreBackendPolicyName,
+    reason: str,
+    source_env: str,
+) -> None:
     raise TopoCoreBackendError(
-        "TopoCore v5 backend is unavailable because v5 is simulated disabled. "
-        f"[{TOPOCORE_V5_SIMULATED_DISABLED_REASON}] requested={requested_backend}"
-    )
-
-
-def _raise_deprecated_v5_not_allowed(*, requested_backend: TopoCoreBackendPolicyName, reason: str) -> None:
-    raise TopoCoreBackendError(
-        "TopoCore v5 backend is deprecated and disabled by default. "
-        "Set RB_TOPOCORE_ALLOW_DEPRECATED_V5=1 only for emergency fallback. "
-        f"[{reason}] requested={requested_backend}"
+        "Legacy TopoCore runtime selection is unsupported. "
+        "Use RB_TOPOCORE_BACKEND=auto or RB_TOPOCORE_BACKEND=v6. "
+        f"[{reason}] requested={requested_backend} source={source_env}"
     )
 
 
@@ -118,28 +116,30 @@ def _resolution(
 
 
 def resolve_backend(env: dict[str, str] | None = None) -> TopoCoreBackendResolution:
-    simulated_v5_disabled = is_v5_simulated_disabled(env)
-    deprecated_v5_allowed = is_deprecated_v5_allowed(env)
+    deprecated_v5_requested = _env_bool("RB_TOPOCORE_ALLOW_DEPRECATED_V5", False, env)
     explicit = _env_str("RB_TOPOCORE_BACKEND", "", env)
     if explicit:
         normalized_explicit = str(explicit or "").strip().lower()
         requested_backend = _normalize_backend_policy(explicit)
         if requested_backend == BACKEND_V5:
-            if simulated_v5_disabled:
-                _raise_v5_simulated_disabled(requested_backend)
-            if not deprecated_v5_allowed:
-                reason = (
-                    LEGACY_LITE_DISABLED_REASON
-                    if normalized_explicit == "lite"
-                    else TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON
-                )
-                _raise_deprecated_v5_not_allowed(requested_backend=requested_backend, reason=reason)
+            reason = (
+                LEGACY_LITE_DISABLED_REASON
+                if normalized_explicit == "lite"
+                else TOPOCORE_V5_RUNTIME_REMOVED_REASON
+            )
+            if deprecated_v5_requested:
+                reason = TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON
+            _raise_unsupported_legacy_backend(
+                requested_backend=requested_backend,
+                reason=reason,
+                source_env="RB_TOPOCORE_BACKEND",
+            )
         return _resolution(
             requested_backend=requested_backend,
             selected_backend=_selected_backend_for_policy(requested_backend),
             source_env="RB_TOPOCORE_BACKEND",
             env=env,
-            deprecated_v5_allowed=deprecated_v5_allowed,
+            deprecated_v5_allowed=False,
         )
 
     legacy = _env_str("RB_TKYA_BACKEND", "", env)
@@ -147,21 +147,24 @@ def resolve_backend(env: dict[str, str] | None = None) -> TopoCoreBackendResolut
         normalized_legacy = str(legacy or "").strip().lower()
         requested_backend = _normalize_backend_policy(legacy)
         if requested_backend == BACKEND_V5:
-            if simulated_v5_disabled:
-                _raise_v5_simulated_disabled(requested_backend)
-            if not deprecated_v5_allowed:
-                reason = (
-                    LEGACY_LITE_DISABLED_REASON
-                    if normalized_legacy == "lite"
-                    else TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON
-                )
-                _raise_deprecated_v5_not_allowed(requested_backend=requested_backend, reason=reason)
+            reason = (
+                LEGACY_LITE_DISABLED_REASON
+                if normalized_legacy == "lite"
+                else TOPOCORE_UNSUPPORTED_LEGACY_BACKEND_REASON
+            )
+            if deprecated_v5_requested:
+                reason = TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON
+            _raise_unsupported_legacy_backend(
+                requested_backend=requested_backend,
+                reason=reason,
+                source_env="RB_TKYA_BACKEND",
+            )
         return _resolution(
             requested_backend=requested_backend,
             selected_backend=_selected_backend_for_policy(requested_backend),
             source_env="RB_TKYA_BACKEND",
             env=env,
-            deprecated_v5_allowed=deprecated_v5_allowed,
+            deprecated_v5_allowed=False,
         )
 
     return _resolution(
@@ -169,13 +172,12 @@ def resolve_backend(env: dict[str, str] | None = None) -> TopoCoreBackendResolut
         selected_backend=BACKEND_V6,
         source_env="default_auto",
         env=env,
-        deprecated_v5_allowed=deprecated_v5_allowed,
+        deprecated_v5_allowed=False,
     )
 
 
 def should_fallback_to_v5(exc: Exception) -> bool:
-    message = str(exc).lower()
-    return "unavailable" in message or "local path is not available" in message
+    return False
 
 
 def _sanitize_mapping(value: Any) -> dict[str, Any]:
@@ -715,4 +717,5 @@ __all__ = [
     "resolve_backend",
     "run_v6_backend",
     "should_fallback_to_v5",
+    "TOPOCORE_V6_REQUIRED_REASON",
 ]

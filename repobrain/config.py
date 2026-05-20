@@ -175,7 +175,7 @@ def _mask_value(name: str, value: Any) -> Any:
 
 @dataclass(frozen=True)
 class TKYAConfig:
-    backend: str = "lite"
+    backend: str = "auto"
     allow_remote: bool = False
     strict: bool = False
     strict_v5: bool = False
@@ -313,14 +313,14 @@ class RepoBrainConfig:
         env_source = source or os.environ
         warnings: list[str] = []
 
-        backend_raw = env_str("RB_TKYA_BACKEND", "lite", source=env_source).strip().lower()
-        if backend_raw in {"lite", "v5"}:
+        backend_raw = env_str("RB_TKYA_BACKEND", "auto", source=env_source).strip().lower()
+        if backend_raw in {"auto", "v6", "lite", "v5"}:
             tkya_backend = backend_raw
         else:
             warnings.append(
-                f"Invalid RB_TKYA_BACKEND='{backend_raw}' -> fallback to default 'lite'."
+                f"Invalid RB_TKYA_BACKEND='{backend_raw}' -> fallback to default 'auto'."
             )
-            tkya_backend = "lite"
+            tkya_backend = "auto"
 
         tkya = TKYAConfig(
             backend=tkya_backend,
@@ -915,9 +915,9 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec(
         "RB_TKYA_BACKEND",
         "enum",
-        "lite",
-        "TKYA backend selection (active backends: lite or v5).",
-        ("lite", "v5"),
+        "auto",
+        "Legacy compatibility backend selector. Supported runtime selectors: auto or v6. Legacy lite/v5 values are unsupported and fail safely.",
+        ("auto", "v6", "lite", "v5"),
     ),
     EnvVarSpec("RB_TKYA_ALLOW_REMOTE", "bool", "0", "Allow remote/network operations in TKYA."),
     EnvVarSpec("RB_TKYA_STRICT", "bool", "0", "Strict TKYA load mode."),

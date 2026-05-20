@@ -23,10 +23,10 @@ def test_issue_comment_action_step_exports_effective_topocore_backend_env() -> N
     env_expr = action_step["env"]["RB_TOPOCORE_BACKEND"]
     with_expr = action_step["with"]["topocore_backend"]
 
-    assert "github.event_name == 'issue_comment'" in env_expr
-    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in env_expr
+    assert "github.event_name == 'workflow_dispatch'" in env_expr
+    assert "github.event.inputs.topocore_backend" in env_expr
     assert "'auto'" in env_expr
-    assert "'v5'" in env_expr
+    assert "'v5'" not in env_expr
     assert with_expr == env_expr
 
 

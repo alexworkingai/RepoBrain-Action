@@ -120,3 +120,13 @@ Sprint 64 supersedes the normal fallback semantics from Sprint 63:
 See also:
 
 - `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`
+- `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
+
+## 9. Sprint 65 Follow-Up
+
+Sprint 65 supersedes the simulation path as a removal mechanism:
+
+- v5 runtime execution is removed
+- legacy `lite` execution is removed
+- `RB_TOPOCORE_V5_SIMULATE_DISABLED=1` is now obsolete as a removal tool
+- supported runtime selection is now v6-only

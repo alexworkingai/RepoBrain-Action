@@ -1,30 +1,28 @@
+"""Compatibility stubs for the removed v5/lite TKYA runtime.
+
+Sprint 65 removed executable v5/lite runtime behavior. This module remains only
+to preserve stable imports while returning sanitized unsupported diagnostics.
+"""
+
 from __future__ import annotations
 
-import hashlib
-import importlib.util
-import os
-from pathlib import Path
-import sys
-from types import ModuleType
 from typing import Any, Literal
 
-from repobrain.topocore_lite import TopoCoreLite
+from repobrain.topocore_deprecation import (
+    TOPOCORE_LEGACY_LITE_REMOVED_REASON,
+    TOPOCORE_UNSUPPORTED_LEGACY_BACKEND_REASON,
+    TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON,
+    TOPOCORE_V5_RUNTIME_REMOVED_REASON,
+)
 from repobrain.tky_engine import TKYEngine
 
 BACKEND_LITE = "lite"
 BACKEND_V5 = "v5"
 TKYABackend = Literal["lite", "v5"]
 
-_V5_FILENAME = "TopoCore_TCX_v5-Advance_CAS+Git.py"
-_REMOTE_METHOD_GUARDS = (
-    "remote_call",
-    "call_remote",
-    "request_remote",
-    "send_remote",
-    "_remote_call",
-    "http_call",
-)
-_WARNED_MESSAGES: set[str] = set()
+
+class DeprecatedV5RuntimeRemovedError(RuntimeError):
+    """Raised when legacy v5/lite runtime execution is requested."""
 
 
 def _to_bool(value: Any) -> bool:
@@ -37,144 +35,52 @@ def _to_bool(value: Any) -> bool:
     return False
 
 
-def _get_backend(value: str | None) -> TKYABackend:
-    normalized = (value or "").strip().lower()
-    if normalized in {BACKEND_V5, "advance", "final"}:
-        return BACKEND_V5
-    return BACKEND_LITE
+def _backend_reason_from_env() -> str:
+    import os
 
+    explicit = str(os.getenv("RB_TOPOCORE_BACKEND", "") or "").strip().lower()
+    legacy = str(os.getenv("RB_TKYA_BACKEND", "") or "").strip().lower()
+    allow_requested = _to_bool(os.getenv("RB_TOPOCORE_ALLOW_DEPRECATED_V5", "0"))
 
-def _default_backend() -> TKYABackend:
-    explicit = os.getenv("RB_TKYA_BACKEND", "")
-    if explicit.strip():
-        return _get_backend(explicit)
-    return BACKEND_V5 if _vendor_path_v5().exists() else BACKEND_LITE
-
-
-def _vendor_path_v5() -> Path:
-    override = os.getenv("RB_TKYA_V5_PATH", "").strip()
-    if override:
-        return Path(override).expanduser().resolve()
-    return (Path(__file__).resolve().parent / "vendor" / _V5_FILENAME).resolve()
-
-
-def _load_module_from_path(path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location("repobrain_tkya_vendor_topocore", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Failed to build import spec for: {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def _warn_once(message: str) -> None:
-    if message in _WARNED_MESSAGES:
-        return
-    _WARNED_MESSAGES.add(message)
-    print(message)
-
-
-def _stable_percent_bucket(value: str) -> int:
-    digest = hashlib.blake2s(value.encode("utf-8"), digest_size=8).digest()
-    number = int.from_bytes(digest, "little", signed=False)
-    return number % 100
-
-
-def _canary_allows_v5() -> bool:
-    raw_percent = os.getenv("RB_TKYA_V5_CANARY_PERCENT", "").strip()
-    if not raw_percent:
-        return True
-    try:
-        percent = int(raw_percent)
-    except ValueError:
-        return True
-    percent = max(0, min(100, percent))
-    if percent >= 100:
-        return True
-    if percent <= 0:
-        return False
-    key = (
-        os.getenv("RB_TKYA_CANARY_KEY", "").strip()
-        or os.getenv("GITHUB_REPOSITORY", "").strip()
-        or os.getenv("GITHUB_RUN_ID", "").strip()
-        or "local"
-    )
-    return _stable_percent_bucket(key) < percent
-
-
-def _blocked_remote_call(*_args: Any, **_kwargs: Any) -> Any:
-    raise RuntimeError("Remote operations are disabled (RB_TKYA_ALLOW_REMOTE=0).")
-
-
-def install_remote_guards(core: Any) -> None:
-    """Fail-closed remote hooks for vendor backends unless explicitly enabled."""
-    for method_name in _REMOTE_METHOD_GUARDS:
-        if not hasattr(core, method_name):
-            continue
-        try:
-            setattr(core, method_name, _blocked_remote_call)
-        except Exception:
-            continue
-
-
-def describe_engine_instance(engine: Any) -> str:
-    """Return stable local engine label for audit/formatting."""
-    name = type(engine).__name__.lower()
-    if "v5" in name or "advance" in name:
-        return "topocore_v5"
-    if "lite" in name:
-        return "topocore_lite"
-    return "topocore_local"
-
-
-def _build_v5_engine(path: Path, *, allow_remote: bool) -> TKYEngine:
-    module = _load_module_from_path(path)
-    core_cls = (
-        getattr(module, "TopoCoreTCXv5AdvanceCASGit", None)
-        or getattr(module, "TopoCoreTCXv5AdvanceCAS", None)
-    )
-    if core_cls is None:
-        raise RuntimeError(
-            "TopoCore v5 module is missing TopoCoreTCXv5AdvanceCASGit/TopoCoreTCXv5AdvanceCAS."
+    if explicit == "v5":
+        return (
+            TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON
+            if allow_requested
+            else TOPOCORE_V5_RUNTIME_REMOVED_REASON
         )
-    core = core_cls()
-    if not callable(getattr(core, "decide", None)):
-        raise RuntimeError("TopoCore v5 backend must expose decide(req).")
-    if not allow_remote:
-        install_remote_guards(core)
-    return core
+    if explicit == "lite":
+        return TOPOCORE_LEGACY_LITE_REMOVED_REASON
+    if legacy == "lite":
+        return TOPOCORE_LEGACY_LITE_REMOVED_REASON
+    if legacy == "v5":
+        return (
+            TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON
+            if allow_requested
+            else TOPOCORE_UNSUPPORTED_LEGACY_BACKEND_REASON
+        )
+    if allow_requested:
+        return TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON
+    return TOPOCORE_V5_RUNTIME_REMOVED_REASON
+
+
+def describe_engine_instance(_engine: Any) -> str:
+    return "legacy_runtime_removed"
 
 
 def get_engine() -> TKYEngine:
-    """Return the selected TKYA engine with safe defaults."""
-    backend = _default_backend()
-    allow_remote = _to_bool(os.getenv("RB_TKYA_ALLOW_REMOTE", "0"))
-    strict_common = _to_bool(os.getenv("RB_TKYA_STRICT", "0"))
-    strict_v5 = _to_bool(os.getenv("RB_TKYA_STRICT_V5", "0")) or strict_common
+    reason = _backend_reason_from_env()
+    raise DeprecatedV5RuntimeRemovedError(
+        "Deprecated TopoCore v5/lite runtime execution was removed. "
+        "Use RB_TOPOCORE_BACKEND=auto or RB_TOPOCORE_BACKEND=v6. "
+        f"[{reason}]"
+    )
 
-    if backend == BACKEND_LITE:
-        return TopoCoreLite()
 
-    if not _canary_allows_v5():
-        _warn_once("WARN: TopoCore v5 skipped by canary rollout policy, fallback to lite backend.")
-        return TopoCoreLite()
-
-    v5_path = _vendor_path_v5()
-    if not v5_path.exists():
-        message = (
-            f"TopoCore v5 backend requested but vendor file is missing: {v5_path}. "
-            "Place TopoCore_TCX_v5-Advance_CAS+Git.py under repobrain/tkya/vendor/."
-        )
-        if strict_v5:
-            raise RuntimeError(message)
-        _warn_once("WARN: TopoCore v5 file not found, fallback to lite backend.")
-        return TopoCoreLite()
-
-    try:
-        return _build_v5_engine(v5_path, allow_remote=allow_remote)
-    except Exception as exc:
-        if strict_v5:
-            raise RuntimeError("Failed to initialize TopoCore v5 backend.") from exc
-        _warn_once("WARN: TopoCore v5 initialization failed, fallback to lite backend.")
-        return TopoCoreLite()
+__all__ = [
+    "BACKEND_LITE",
+    "BACKEND_V5",
+    "DeprecatedV5RuntimeRemovedError",
+    "TKYABackend",
+    "describe_engine_instance",
+    "get_engine",
+]

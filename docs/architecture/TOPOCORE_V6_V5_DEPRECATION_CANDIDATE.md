@@ -157,6 +157,11 @@ Follow-up:
   - v5 is now disabled by default
   - deprecated v5 is emergency opt-in only through `RB_TOPOCORE_ALLOW_DEPRECATED_V5=1`
   - v5 is still not physically removed
+- Sprint 65 advances the candidate state to runtime removal:
+  - deprecated v5 runtime execution is removed
+  - legacy `lite` execution is removed
+  - old env values are now safe unsupported diagnostics
+  - see `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
 
 ## 10. Non-Goals
 

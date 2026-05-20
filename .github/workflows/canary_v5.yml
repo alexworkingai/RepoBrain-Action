@@ -1,4 +1,4 @@
-name: Canary V5 Wiring
+name: Canary Runtime Wiring
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
   canary:
     runs-on: ubuntu-latest
     env:
-      RB_TKYA_BACKEND: "v5"
+      RB_TOPOCORE_BACKEND: "auto"
       RB_TKYA_ALLOW_REMOTE: "0"
       RB_TKYA_STRICT: "0"
     steps:
@@ -30,18 +30,5 @@ jobs:
         run: python scripts/usersafe_scan.py
       - name: Guard TKYA contract
         run: python scripts/check_tkya_contract_guard.py
-      - name: Detect v5 vendor file
-        id: v5_vendor
-        run: |
-          if [ -f "repobrain/tkya/vendor/TopoCore_TCX_v5-Advance_CAS+Git.py" ]; then
-            echo "present=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=0" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Tests (full suite when v5 exists)
-        if: steps.v5_vendor.outputs.present == '1'
+      - name: Tests
         run: pytest -q
-      - name: Tests (wiring fallback when v5 missing)
-        if: steps.v5_vendor.outputs.present != '1'
-        run: |
-          pytest -q tests/test_smoke.py tests/test_tkya_engine.py

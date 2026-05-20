@@ -26,24 +26,20 @@ def test_gated_issue_comment_passes_topocore_backend_auto_and_local_mode() -> No
     topocore_backend_expr = action_step["with"]["topocore_backend"]
     tky_mode_expr = action_step["with"]["tky_mode"]
 
-    assert "github.event_name == 'issue_comment'" in topocore_backend_expr
-    assert "startsWith(github.event.comment.body, '/repobrain')" in topocore_backend_expr
-    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in topocore_backend_expr
-    assert "'auto'" in topocore_backend_expr
+    assert topocore_backend_expr == "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.topocore_backend || 'auto' }}"
     assert "github.event_name == 'issue_comment'" in tky_mode_expr
     assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in tky_mode_expr
     assert "'local'" in tky_mode_expr
 
 
-def test_disabled_issue_comment_stays_on_explicitly_blocked_legacy_side_path() -> None:
+def test_disabled_issue_comment_stays_on_nonlocal_safe_path() -> None:
     workflow = _load_workflow_yaml()
     action_step = _action_step(workflow)
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
     topocore_backend_expr = action_step["with"]["topocore_backend"]
 
-    assert "'v5'" in topocore_backend_expr
-    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && 'auto' || 'v5'" in topocore_backend_expr
+    assert topocore_backend_expr == "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.topocore_backend || 'auto' }}"
     assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && 'local' || 'auto'" in action_step["with"]["tky_mode"]
     assert "RB_TOPOCORE_V6_REQUIRE_LOCAL" in workflow_text
     assert "github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && '1'" not in workflow_text

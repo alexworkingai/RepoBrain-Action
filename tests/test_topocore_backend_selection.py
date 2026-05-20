@@ -13,13 +13,15 @@ from repobrain.topocore_backend import (
     BACKEND_V6,
     LEGACY_LITE_DISABLED_REASON,
     TopoCoreBackendError,
-    V6_UNAVAILABLE_V5_DISABLED_REASON,
     resolve_backend,
 )
 from repobrain.topocore_deprecation import (
     TOPOCORE_V5_ALLOW_DEPRECATED_ENV,
-    TOPOCORE_V5_DEPRECATED_ALLOWED_REASON,
     TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON,
+    TOPOCORE_V5_RUNTIME_REMOVED_REASON,
+    TOPOCORE_UNSUPPORTED_LEGACY_BACKEND_REASON,
+    TOPOCORE_V6_REQUIRED_REASON,
+    TOPOCORE_V6_UNAVAILABLE_REASON,
 )
 from repobrain.tky_engine import EngineDecision, EngineSecurity
 from repobrain.tky_provider import CandidateChunk
@@ -171,7 +173,7 @@ def test_rb_tkya_backend_v5_is_blocked_without_emergency_allow(monkeypatch: pyte
     with pytest.raises(TopoCoreBackendError) as exc_info:
         resolve_backend()
 
-    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
+    assert TOPOCORE_UNSUPPORTED_LEGACY_BACKEND_REASON in str(exc_info.value)
 
 
 def test_rb_topocore_backend_v6_selects_v6(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -191,7 +193,7 @@ def test_rb_topocore_backend_has_precedence_even_when_v5_is_blocked(monkeypatch:
     monkeypatch.setenv("RB_TKYA_BACKEND", "v6")
     with pytest.raises(TopoCoreBackendError) as exc_info:
         resolve_backend()
-    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
+    assert TOPOCORE_V5_RUNTIME_REMOVED_REASON in str(exc_info.value)
 
 
 def test_invalid_backend_fails_safely(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -213,8 +215,6 @@ def test_invalid_backend_fails_safely(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_missing_v6_dependency_fails_safely_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v6")
-    v5_engine = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: v5_engine)
 
     with pytest.raises(TopoCoreBackendError) as exc_info:
         tky_local.LocalTKYProvider().compress_context(
@@ -223,8 +223,7 @@ def test_missing_v6_dependency_fails_safely_by_default(monkeypatch: pytest.Monke
             limits={"task_type": "ask"},
         )
 
-    assert v5_engine.calls == 0
-    assert V6_UNAVAILABLE_V5_DISABLED_REASON in str(exc_info.value)
+    assert TOPOCORE_V6_REQUIRED_REASON in str(exc_info.value)
 
 
 def test_missing_v6_dependency_strict_mode_fails_safely(
@@ -298,42 +297,28 @@ def test_fix_path_remains_not_migrated(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "create_pr" not in rendered
 
 
-def test_explicit_v5_can_run_under_emergency_allow(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_allow_flag_does_not_reenable_explicit_v5(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v5")
     monkeypatch.setenv(TOPOCORE_V5_ALLOW_DEPRECATED_ENV, "1")
-    v5_engine = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: v5_engine)
 
-    result = tky_local.LocalTKYProvider().compress_context(
-        question="Emergency v5 only.",
-        candidates=_sample_candidates(),
-        limits={"task_type": "ask"},
-    )
+    with pytest.raises(TopoCoreBackendError) as exc_info:
+        resolve_backend()
 
-    assert v5_engine.calls == 1
-    assert result.compression_stats["topocore_backend"] == "v5"
-    assert result.compression_stats["deprecated_v5_allowed"] is True
-    assert result.compression_stats["fallback_reason"] == TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
+    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
 
 
-def test_auto_can_fallback_to_v5_only_under_emergency_allow(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_allow_flag_does_not_restore_auto_fallback_to_v5(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RB_TOPOCORE_BACKEND", "auto")
     monkeypatch.setenv(TOPOCORE_V5_ALLOW_DEPRECATED_ENV, "1")
-    v5_engine = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: v5_engine)
 
-    result = tky_local.LocalTKYProvider().compress_context(
-        question="Fallback only if necessary.",
-        candidates=_sample_candidates(),
-        limits={"task_type": "ask"},
-    )
+    with pytest.raises(TopoCoreBackendError) as exc_info:
+        tky_local.LocalTKYProvider().compress_context(
+            question="Fallback only if necessary.",
+            candidates=_sample_candidates(),
+            limits={"task_type": "ask"},
+        )
 
-    assert v5_engine.calls == 1
-    assert result.compression_stats["requested_backend"] == "auto"
-    assert result.compression_stats["resolved_backend"] == "v5"
-    assert result.compression_stats["fallback_used"] is True
-    assert result.compression_stats["fallback_reason"] == TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
-    assert result.compression_stats["topocore_backend_fallback"] == "v5"
+    assert TOPOCORE_V6_UNAVAILABLE_REASON in str(exc_info.value)
 
 
 def test_legacy_lite_remains_blocked_without_emergency_allow() -> None:
@@ -346,7 +331,6 @@ def test_no_github_runtime_private_import_drift() -> None:
     action_text = (_ROOT / "action.yml").read_text(encoding="utf-8")
     workflow_text = (_ROOT / ".github" / "workflows" / "repobrain.yml").read_text(encoding="utf-8")
 
-    assert "RB_TKYA_BACKEND" in action_text
     assert "RB_TOPOCORE_BACKEND" in action_text
     assert "auto" in action_text
     assert "issue_comment:" in workflow_text

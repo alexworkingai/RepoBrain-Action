@@ -8,24 +8,14 @@ import shutil
 import sys
 from typing import Any
 
-from .execution_mode import coerce_execution_decision
-from .signatures import build_query_signature
 from .topocore_backend import (
     BACKEND_V6,
     TopoCoreBackendError,
+    TOPOCORE_V6_REQUIRED_REASON,
     V6_UNAVAILABLE_V5_DISABLED_REASON,
     resolve_backend,
     run_v6_backend,
-    should_fallback_to_v5,
 )
-from .topocore_deprecation import (
-    TOPOCORE_V5_DEPRECATED_ALLOWED_REASON,
-    TOPOCORE_V5_SIMULATED_DISABLED_REASON,
-    is_deprecated_v5_allowed,
-    is_v5_simulated_disabled,
-)
-from .tkya.engine import describe_engine_instance, get_engine
-from .tky_engine import EngineCandidate, EngineQuery, EngineRequest
 from .tky_provider import CandidateChunk, TKYProvider, TKYResult
 
 
@@ -187,9 +177,8 @@ def _build_policy(limits: dict[str, Any]) -> dict[str, Any]:
 class LocalTKYProvider(TKYProvider):
     """Local TKY provider stub.
 
-    Local provider backed by selectable TKYA engines.
-    Safe default now keeps v6 authoritative and blocks deprecated v5 unless an
-    explicit emergency opt-in is provided.
+    Local provider backed by the authoritative TopoCore v6 path.
+    Legacy v5/lite runtime execution was removed in Sprint 65.
     """
 
     def compress_context(
@@ -237,74 +226,24 @@ class LocalTKYProvider(TKYProvider):
                     llm_decision_reason_code=result.llm_decision_reason_code,
                 )
             except TopoCoreBackendError as exc:
-                if backend.strict_v6 or not should_fallback_to_v5(exc):
-                    raise TopoCoreBackendError(str(exc)) from exc
-                if is_v5_simulated_disabled():
-                    raise TopoCoreBackendError(
-                        "TopoCore v5 fallback is unavailable because v5 is simulated disabled. "
-                        f"[{TOPOCORE_V5_SIMULATED_DISABLED_REASON}] requested={backend.requested_backend}"
-                    ) from exc
-                if not is_deprecated_v5_allowed():
-                    raise TopoCoreBackendError(
-                        "TopoCore v6 is unavailable and deprecated v5 fallback is disabled by default. "
-                        "Set RB_TOPOCORE_ALLOW_DEPRECATED_V5=1 only for emergency fallback. "
-                        f"[{V6_UNAVAILABLE_V5_DISABLED_REASON}] requested={backend.requested_backend}"
-                    ) from exc
-
-        engine = get_engine()
-
-        req = EngineRequest(
-            task_type=task_type,  # type: ignore[arg-type]
-            query=EngineQuery(text=question, signature=build_query_signature(question)),
-            candidates=[
-                EngineCandidate(
-                    chunk_id=c.chunk_id,
-                    score_local=float(c.score),
-                    signature=c.signature,
-                    file_path=c.file_path,
-                    line_start=c.line_start,
-                    line_end=c.line_end,
+                reason = (
+                    TOPOCORE_V6_REQUIRED_REASON
+                    if backend.requested_backend == BACKEND_V6
+                    else V6_UNAVAILABLE_V5_DISABLED_REASON
                 )
-                for c in candidates
-            ],
-            limits=limits,
-            policy=policy,
-        )
-        decision = engine.decide(req)
-        execution = coerce_execution_decision(
-            route=decision.route,
-            execution_mode=getattr(decision, "execution_mode", None),
-            llm_intent=getattr(decision, "llm_intent", None),
-            reason_short=getattr(decision, "llm_decision_reason_short", None),
-            reason_code=getattr(decision, "llm_decision_reason_code", None),
-        )
-        compression_stats = dict(decision.compression_stats)
-        compression_stats.setdefault("tky_engine_local", describe_engine_instance(engine))
-        compression_stats.setdefault("topocore_backend", "v5")
-        compression_stats.setdefault("requested_backend", backend.requested_backend)
-        compression_stats.setdefault("resolved_backend", "v5")
-        compression_stats.setdefault("backend_mode", backend.requested_backend)
-        compression_stats.setdefault("fallback_used", False)
-        compression_stats.setdefault("fallback_reason", "none")
-        compression_stats.setdefault("deprecated_v5_allowed", backend.deprecated_v5_allowed)
-        compression_stats.setdefault("v5_deprecated", True)
-        if backend.deprecated_v5_allowed:
-            compression_stats["fallback_reason"] = TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
-        if backend.selected_backend == BACKEND_V6:
-            compression_stats["requested_backend"] = backend.requested_backend
-            compression_stats["resolved_backend"] = "v5"
-            compression_stats["backend_mode"] = backend.requested_backend
-            compression_stats["fallback_used"] = True
-            compression_stats["fallback_reason"] = TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
-            compression_stats.setdefault("topocore_backend_requested", backend.requested_backend)
-            compression_stats.setdefault("topocore_backend_fallback", "v5")
-        return TKYResult(
-            selected_chunk_ids=decision.selected_chunk_ids,
-            route=decision.route,
-            compression_stats=compression_stats,
-            rationale=decision.rationale,
-            execution_mode=execution.execution_mode,
-            llm_intent=execution.llm_intent,
-            llm_decision_reason_short=execution.reason_short,
-            llm_decision_reason_code=execution.reason_code,
+                if backend.requested_backend == BACKEND_V6:
+                    message = (
+                        "TopoCore v6 is required but unavailable. "
+                        f"[{reason}] requested={backend.requested_backend}"
+                    )
+                else:
+                    message = (
+                        "TopoCore v6 is unavailable and no legacy fallback exists. "
+                        f"[{reason}] requested={backend.requested_backend}"
+                    )
+                raise TopoCoreBackendError(message) from exc
+
+        raise TopoCoreBackendError(
+            "Legacy runtime selection is unsupported. "
+            f"[{TOPOCORE_V6_REQUIRED_REASON}] requested={backend.requested_backend}"
         )

@@ -8,34 +8,15 @@ import pytest
 import yaml
 
 import repobrain.tky_local as tky_local
-from repobrain.topocore_backend import TopoCoreBackendError, V6_UNAVAILABLE_V5_DISABLED_REASON, resolve_backend
-from repobrain.topocore_deprecation import TOPOCORE_V5_ALLOW_DEPRECATED_ENV, TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
-from repobrain.tky_engine import EngineDecision, EngineSecurity
+from repobrain.topocore_backend import TopoCoreBackendError, resolve_backend
+from repobrain.topocore_deprecation import (
+    TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON,
+    TOPOCORE_V6_REQUIRED_REASON,
+)
 from repobrain.tky_provider import CandidateChunk
 
 
 _ROOT = Path(__file__).resolve().parents[1]
-
-
-class _CaptureV5Engine:
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def decide(self, req):  # noqa: ANN001
-        self.calls += 1
-        return EngineDecision(
-            route="FAST",
-            selected_chunk_ids=[req.candidates[0].chunk_id] if req.candidates else [],
-            compression_stats={"retrieved": len(req.candidates), "selected": 1},
-            security=EngineSecurity(
-                blocked=False,
-                injection_risk="low",
-                exfiltration_risk="low",
-                signals=[],
-            ),
-            rationale="v5 ok",
-            stable_tokens=["s1"],
-        )
 
 
 def _sample_candidates() -> list[CandidateChunk]:
@@ -137,7 +118,6 @@ def _clear_env_and_modules(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("RB_TKYA_BACKEND", raising=False)
     monkeypatch.delenv("RB_TOPOCORE_V6_REQUIRE_LOCAL", raising=False)
     monkeypatch.delenv("RB_TOPOCORE_V6_LOCAL_PATH", raising=False)
-    monkeypatch.delenv(TOPOCORE_V5_ALLOW_DEPRECATED_ENV, raising=False)
     sys.modules.pop("topocore_v6", None)
     yield
     sys.modules.pop("topocore_v6", None)
@@ -166,14 +146,13 @@ def test_action_yml_exposes_topocore_backend_input() -> None:
     inputs = action["inputs"]
     assert "topocore_backend" in inputs
     assert inputs["topocore_backend"]["default"] == "auto"
-    assert "v5" in inputs["topocore_backend"]["description"]
+    assert "auto or v6" in inputs["topocore_backend"]["description"]
 
 
 def test_action_yml_default_moves_to_auto() -> None:
     action = _load_action_yaml()
 
     assert action["inputs"]["topocore_backend"]["default"] == "auto"
-    assert action["runs"]["steps"][-1]["env"]["RB_TKYA_BACKEND"] == "v5"
     assert action["inputs"]["topocore_backend"]["default"] != "v5"
 
 
@@ -193,7 +172,7 @@ def test_workflow_dispatch_exposes_lab_backend_choice() -> None:
 
     assert backend["default"] == "auto"
     assert backend["type"] == "choice"
-    assert backend["options"] == ["v5", "v6", "auto"]
+    assert backend["options"] == ["auto", "v6"]
 
 
 def test_issue_comment_path_has_controlled_v6_lab_gate_with_safe_disabled_default() -> None:
@@ -203,7 +182,7 @@ def test_issue_comment_path_has_controlled_v6_lab_gate_with_safe_disabled_defaul
     assert "workflow_dispatch:" in workflow_text
     assert "topocore_backend:" in workflow_text
     assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in workflow_text
-    assert "&& 'auto' || 'v5'" in workflow_text
+    assert "github.event_name == 'workflow_dispatch' && github.event.inputs.topocore_backend || 'auto'" in workflow_text
     assert "startsWith(github.event.comment.body, '/repobrain')" in workflow_text
 
 
@@ -263,8 +242,6 @@ def test_workflow_dispatch_v6_without_dependency_fails_safely_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v6")
-    capture = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
 
     with pytest.raises(TopoCoreBackendError) as exc_info:
         tky_local.LocalTKYProvider().compress_context(
@@ -273,8 +250,7 @@ def test_workflow_dispatch_v6_without_dependency_fails_safely_by_default(
             limits={"task_type": "ask"},
         )
 
-    assert capture.calls == 0
-    assert V6_UNAVAILABLE_V5_DISABLED_REASON in str(exc_info.value)
+    assert TOPOCORE_V6_REQUIRED_REASON in str(exc_info.value)
 
 
 def test_manual_workflow_dispatch_auto_simulation_is_valid(
@@ -293,20 +269,14 @@ def test_manual_workflow_dispatch_auto_simulation_is_valid(
     assert result.compression_stats["resolved_backend"] == "v6"
 
 
-def test_emergency_allow_reopens_deprecated_v5_only_explicitly(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RB_TOPOCORE_BACKEND", "auto")
-    monkeypatch.setenv(TOPOCORE_V5_ALLOW_DEPRECATED_ENV, "1")
-    capture = _CaptureV5Engine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
+def test_allow_env_does_not_restore_removed_v5_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_TKYA_BACKEND", "v5")
+    monkeypatch.setenv("RB_TOPOCORE_ALLOW_DEPRECATED_V5", "1")
 
-    result = tky_local.LocalTKYProvider().compress_context(
-        question="Fallback only if necessary.",
-        candidates=_sample_candidates(),
-        limits={"task_type": "ask"},
-    )
+    with pytest.raises(TopoCoreBackendError) as exc_info:
+        resolve_backend()
 
-    assert capture.calls == 1
-    assert result.compression_stats["fallback_reason"] == TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
+    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
 
 
 def test_no_patch_or_autofix_behavior_from_lab_switch() -> None:

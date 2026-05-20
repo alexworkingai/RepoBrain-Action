@@ -9,8 +9,8 @@ import pytest
 import yaml
 
 from repobrain.topocore_deprecation import (
-    TOPOCORE_V5_ALLOW_DEPRECATED_ENV,
-    TOPOCORE_V5_DEPRECATED_ALLOWED_REASON,
+    TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON,
+    TOPOCORE_V6_REQUIRED_REASON,
 )
 
 
@@ -125,7 +125,6 @@ def _clear_env_and_artifacts(monkeypatch: pytest.MonkeyPatch) -> None:
         "RB_REPOBRAIN_LAB_FIXTURE",
         "RB_REPOBRAIN_LAB_EVIDENCE",
         "GITHUB_EVENT_NAME",
-        TOPOCORE_V5_ALLOW_DEPRECATED_ENV,
     ):
         monkeypatch.delenv(name, raising=False)
     sys.modules.pop("topocore_v6", None)
@@ -242,23 +241,21 @@ def test_default_workflow_dispatch_v6_failure_is_safely_reported(monkeypatch: py
     with pytest.raises(ValueError) as exc_info:
         module.run_workflow_dispatch_lab_command(repo_root=_ROOT)
 
-    assert "v6_unavailable_v5_disabled" in str(exc_info.value)
+    assert TOPOCORE_V6_REQUIRED_REASON in str(exc_info.value)
 
 
-def test_emergency_allow_restores_deprecated_fallback_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_allow_env_does_not_restore_removed_v5_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_run_github_module()
     monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
     monkeypatch.setenv("RB_REPOBRAIN_LAB_COMMAND", "ask")
     monkeypatch.setenv("RB_REPOBRAIN_LAB_FIXTURE", "minimal")
-    monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v6")
-    monkeypatch.setenv(TOPOCORE_V5_ALLOW_DEPRECATED_ENV, "1")
+    monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v5")
+    monkeypatch.setenv("RB_TOPOCORE_ALLOW_DEPRECATED_V5", "1")
 
-    evidence = module.run_workflow_dispatch_lab_command(repo_root=_ROOT)
+    with pytest.raises(ValueError) as exc_info:
+        module.run_workflow_dispatch_lab_command(repo_root=_ROOT)
 
-    assert evidence["requested_backend"] == "v6"
-    assert evidence["resolved_backend"] == "v5"
-    assert evidence["fallback_used"] is True
-    assert evidence["fallback_reason"] == TOPOCORE_V5_DEPRECATED_ALLOWED_REASON
+    assert TOPOCORE_V5_DEPRECATED_NOT_ALLOWED_REASON in str(exc_info.value)
 
 
 def test_strict_v6_failure_is_safe(monkeypatch: pytest.MonkeyPatch) -> None:

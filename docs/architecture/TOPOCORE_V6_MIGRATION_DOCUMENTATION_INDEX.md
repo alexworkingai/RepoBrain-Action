@@ -8,9 +8,9 @@ Current truth:
 
 - v6 is now the active authoritative runtime direction for RepoBrain issue-comment lab mode
 - `RB_ENABLE_ISSUE_COMMENT_V6_LAB=1` is the intended current operating state
-- v5 remains physically present only as deprecated emergency opt-in runtime
-- Sprint 64 disables v5 fallback by default
-- v5 removal is still not approved until a later sprint
+- v5 runtime execution has been removed
+- Sprint 64 disabled v5 fallback by default
+- Sprint 65 removed deprecated emergency v5 execution
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -121,6 +121,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_CODE_LEVEL_V5_DEPRECATION_PREP.md`
 - `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
 - `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`
+- `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
 
 ## 5. Recommended Reading Paths
 
@@ -192,6 +193,11 @@ v6 authoritative default and v5 disabled-by-default runway:
 - `docs/architecture/TOPOCORE_V6_OPT_IN_V5_OFF_SIMULATION.md`
 - `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`
 
+v5 runtime removal:
+
+- `docs/architecture/TOPOCORE_V6_AUTHORITATIVE_DISABLE_V5_DEFAULT.md`
+- `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
+
 Why implementation is currently blocked:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
@@ -203,8 +209,8 @@ Current decision state:
 
 - v6 authoritative default is approved
 - issue-comment lab v6 default is approved
-- deprecated v5 emergency opt-in is still available
-- v5 physical removal is not yet approved
+- deprecated v5 runtime execution has been removed
+- post-removal hardening is the remaining follow-up
 - fix migration remains conservative
 - patch behavior expansion is not approved
 - production and Marketplace switch are not approved

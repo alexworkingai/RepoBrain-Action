@@ -124,7 +124,18 @@ If Sprint 64 validation passes and no post-merge blocker appears:
 - removal still needs explicit Sprint 65 approval
 - the emergency allow flag may be removed or converted to an unsupported-old-env diagnostic in Sprint 65
 
-## 9. Non-Goals
+## 9. Sprint 65 Follow-Up
+
+Sprint 65 completed the next removal step:
+
+- deprecated emergency v5 runtime execution was removed
+- legacy `lite` execution was removed
+- old v5 and `lite` env values now fail safely instead of executing
+
+See also:
+
+- `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
+## 10. Non-Goals
 
 - no v5 physical removal
 - no production or Marketplace switch

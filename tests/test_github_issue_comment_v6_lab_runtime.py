@@ -36,7 +36,7 @@ def test_issue_comment_default_safe_behavior_is_defined() -> None:
 
     assert action_step["with"]["topocore_backend"]
     assert action_step["with"]["tky_mode"]
-    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in action_step["with"]["topocore_backend"]
+    assert action_step["with"]["topocore_backend"] == "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.topocore_backend || 'auto' }}"
     assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in action_step["with"]["tky_mode"]
 
 
@@ -92,10 +92,7 @@ def test_issue_comment_backend_env_changes_correctly() -> None:
     topocore_backend_expr = action_step["with"]["topocore_backend"]
     tky_mode_expr = action_step["with"]["tky_mode"]
 
-    assert "github.event_name == 'issue_comment'" in topocore_backend_expr
-    assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in topocore_backend_expr
-    assert "'auto'" in topocore_backend_expr
-    assert "'v5'" in topocore_backend_expr
+    assert topocore_backend_expr == "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.topocore_backend || 'auto' }}"
     assert "github.event_name == 'issue_comment'" in tky_mode_expr
     assert "vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'" in tky_mode_expr
     assert "'local'" in tky_mode_expr

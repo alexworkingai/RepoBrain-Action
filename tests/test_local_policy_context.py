@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
 import pytest
@@ -14,23 +15,58 @@ class _CaptureEngine:
     def __init__(self) -> None:
         self.last_req: Any | None = None
 
-    def decide(self, req):  # noqa: ANN001
-        self.last_req = req
-        from repobrain.tky_engine import EngineDecision, EngineSecurity
+    def module(self):
+        capture = self
 
-        return EngineDecision(
-            route="FAST",
-            selected_chunk_ids=[req.candidates[0].chunk_id] if req.candidates else [],
-            compression_stats={"retrieved": len(req.candidates), "selected": 1},
-            security=EngineSecurity(
-                blocked=False,
-                injection_risk="low",
-                exfiltration_risk="low",
-                signals=[],
-            ),
-            rationale="ok",
-            stable_tokens=["s1"],
-        )
+        class EngineQuery:
+            def __init__(self, *, text: str, signature=None) -> None:  # noqa: ANN001
+                self.text = text
+                self.signature = signature
+
+        class EngineCandidate:
+            def __init__(self, **kwargs) -> None:  # noqa: ANN003
+                self.chunk_id = kwargs["chunk_id"]
+                self.score_local = kwargs["score_local"]
+                self.signature = kwargs.get("signature")
+                self.file_path = kwargs.get("file_path")
+                self.line_start = kwargs.get("line_start")
+                self.line_end = kwargs.get("line_end")
+
+        class EngineRequest:
+            def __init__(self, **kwargs) -> None:  # noqa: ANN003
+                self.task_type = kwargs["task_type"]
+                self.query = kwargs["query"]
+                self.candidates = kwargs["candidates"]
+                self.limits = kwargs["limits"]
+                self.policy = kwargs["policy"]
+
+        class ExternalDecisionView:
+            def __init__(self) -> None:
+                self.status = "ready"
+                self.action = "proceed"
+                self.reference_hash = "safe-ref"
+                self.selected_count = 1
+                self.blocked = False
+                self.confidence_band = "high"
+                self.message_code = "DECISION_READY"
+
+        class FakeFacade:
+            def health(self) -> dict[str, object]:
+                return {"status": "ok"}
+
+            def decide_external(self, request: EngineRequest) -> ExternalDecisionView:
+                capture.last_req = request
+                return ExternalDecisionView()
+
+        import types
+
+        fake_module = types.ModuleType("topocore_v6")
+        fake_module.create_topocore = lambda: FakeFacade()
+        fake_module.EngineRequest = EngineRequest
+        fake_module.EngineQuery = EngineQuery
+        fake_module.EngineCandidate = EngineCandidate
+        fake_module.ExternalDecisionView = ExternalDecisionView
+        return fake_module
 
 
 def _sample_candidates() -> list[CandidateChunk]:
@@ -58,7 +94,7 @@ def test_local_provider_builds_policy_context_for_ask(
     event_path.write_text(json.dumps(payload), encoding="utf-8")
 
     capture = _CaptureEngine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
+    sys.modules["topocore_v6"] = capture.module()
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event_path))
     monkeypatch.setenv("GITHUB_EVENT_NAME", "issue_comment")
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
@@ -68,7 +104,7 @@ def test_local_provider_builds_policy_context_for_ask(
     monkeypatch.setenv("GITHUB_ACTOR", "alice")
     monkeypatch.setenv("RB_TKYA_ALLOW_REMOTE", "0")
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
-    monkeypatch.setenv("RB_TOPOCORE_ALLOW_DEPRECATED_V5", "1")
+    monkeypatch.setenv("RB_TOPOCORE_BACKEND", "auto")
 
     provider = tky_local.LocalTKYProvider()
     provider.compress_context(
@@ -80,26 +116,26 @@ def test_local_provider_builds_policy_context_for_ask(
     req = capture.last_req
     assert req is not None
     policy = req.policy
-    assert policy["corelocked"] is True
-    assert "github_context" in policy
-    assert "verification_context" in policy
-    assert "runtime" in policy
-    github_context = policy["github_context"]
-    assert github_context["event_name"] == "issue_comment"
-    assert github_context["repository"] == "owner/repo"
-    assert github_context["pr_number"] == 17
-    verification_context = policy["verification_context"]
-    assert verification_context["mode"] == "ci"
-    assert verification_context["network_allowed"] is False
+    assert "project_audit_summary" in policy
+    assert "verification_summary" in policy
+    assert "evidence_summary" in policy
+    pr_context = policy["project_audit_summary"]["pr_context"]
+    assert pr_context["is_pr"] is True
+    assert pr_context["pr_number"] == 17
+    assert pr_context["issue_number"] == 17
+    assert policy["verification_summary"]["mode"] == "ci"
+    assert policy["verification_summary"]["network_allowed"] is False
+    assert policy["evidence_summary"]["pr_context_available"] is True
+    sys.modules.pop("topocore_v6", None)
 
 
 def test_local_provider_builds_policy_context_for_review(monkeypatch: pytest.MonkeyPatch) -> None:
     capture = _CaptureEngine()
-    monkeypatch.setattr(tky_local, "get_engine", lambda: capture)
+    sys.modules["topocore_v6"] = capture.module()
     monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
     monkeypatch.setenv("RB_TKYA_ALLOW_REMOTE", "0")
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-    monkeypatch.setenv("RB_TOPOCORE_ALLOW_DEPRECATED_V5", "1")
+    monkeypatch.setenv("RB_TOPOCORE_BACKEND", "auto")
 
     provider = tky_local.LocalTKYProvider()
     provider.compress_context(
@@ -111,5 +147,8 @@ def test_local_provider_builds_policy_context_for_review(monkeypatch: pytest.Mon
     req = capture.last_req
     assert req is not None
     assert req.task_type == "review"
-    assert "github_context" in req.policy
-    assert "verification_context" in req.policy
+    assert "project_audit_summary" in req.policy
+    assert "verification_summary" in req.policy
+    assert req.policy["project_audit_summary"]["pr_context"]["is_pr"] is False
+    assert req.policy["verification_summary"]["mode"] == "local"
+    sys.modules.pop("topocore_v6", None)
