@@ -126,6 +126,12 @@ Sprint 72 should focus on:
 - tightening issue-side overview signal quality
 - sharpening PR explain prose when the PR is docs-heavy but low risk
 
+Sprint 72 follow-up:
+
+- external PR `verify` now reports explicit `PASS/WARN/FAIL/PENDING/NOT_RUN/UNKNOWN` semantics
+- live external verify now records source availability, limitations, and head-SHA audit anchors
+- see `docs/architecture/SPRINT_72_VERIFY_COMMAND_PRODUCTIONIZATION.md`
+
 ## Non-Goals
 
 - no `v5`

@@ -64,6 +64,15 @@ The consumer workflow must:
 3. expose the private checkout path through `RB_TOPOCORE_V6_LOCAL_PATH` and `PYTHONPATH`
 4. call `alexworkingai/RepoBrain-Action@main`
 
+Recommended caller-workflow permissions for external verify:
+
+- `contents: read`
+- `issues: write`
+- `pull-requests: write`
+- `checks: write`
+- `statuses: read`
+- `actions: read`
+
 Do not vendor or copy TopoCore v6 into `RepoBrain-Action` or the consumer repository.
 
 ## Commands For First Smoke
@@ -93,7 +102,7 @@ Validated command surface after Sprint 70:
 - PR scope:
   - `/repobrain ask ...`
   - `/repobrain review ...`
-  - `/repobrain verify ...` as report-only verification
+  - `/repobrain verify ...` as informational PR verification with explicit `PASS/WARN/FAIL/PENDING/NOT_RUN/UNKNOWN` status labels
   - `/repobrain fix ...` as conservative no-patch guidance
 
 Retrieval quality note after Sprint 71:
@@ -113,6 +122,14 @@ Expected evidence in a healthy smoke run:
 - no v5 fallback
 - no patch/autofix behavior
 - no commit/branch/PR creation by RepoBrain behavior
+
+Expected verify truth after Sprint 72:
+
+- issue-scope `/repobrain verify` remains scoped unsupported and points users to PR context
+- PR-scope `/repobrain verify` is informational only
+- `PASS` means observed verification signals are passing, not that merge is approved
+- `NOT_RUN` means no concrete checks/statuses/workflow runs were observed for the PR head SHA
+- limitations and source availability should appear directly in the comment
 
 ## Troubleshooting
 

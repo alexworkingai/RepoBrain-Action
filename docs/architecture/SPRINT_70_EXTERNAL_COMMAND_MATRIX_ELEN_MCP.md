@@ -131,6 +131,13 @@ Sprint 71 follow-up:
 - `.github/workflows/repobrain.yml` is now indexed and surfaces as primary evidence for workflow-setup queries
 - see `docs/architecture/SPRINT_71_EXTERNAL_RETRIEVAL_EVIDENCE_QUALITY.md`
 
+Sprint 72 follow-up:
+
+- PR `verify` is now productionized beyond the earlier report-only `NOT_RUN` baseline
+- verification output now uses explicit `PASS/WARN/FAIL/PENDING/NOT_RUN/UNKNOWN` semantics
+- source availability, limitations, and audit anchors are now part of the live external verify comment
+- see `docs/architecture/SPRINT_72_VERIFY_COMMAND_PRODUCTIONIZATION.md`
+
 ## Non-Goals
 
 - no v5

@@ -95,7 +95,7 @@ Validated command surface:
 - PR scope:
   - `ask`
   - `review`
-  - report-only `verify`
+  - report-only `verify` with explicit verification status semantics and source limitations
   - conservative `fix` with `no_patch`
 
 Validated runtime truth:
@@ -112,3 +112,18 @@ Sprint 71 validated evidence quality on the same external pilot path and fixed a
 - `.github/workflows/repobrain.yml` is now indexed in the default retrieval scan
 - workflow-focused issue queries now surface the caller workflow as primary evidence
 - changed-file prioritization on PR commands remained intact
+
+## Sprint 72 Verify Productionization Follow-up
+
+Sprint 72 made the external PR `verify` path production-useful without changing runtime policy:
+
+- issue-scope `verify` remains scoped unsupported and safe
+- PR-scope `verify` now reports explicit `PASS/WARN/FAIL/PENDING/NOT_RUN/UNKNOWN` status labels
+- source availability is explicit:
+  - `checks`
+  - `statuses`
+  - `workflow_runs`
+- limitations are explicit when evidence is missing, permission-limited, or coarse
+- verify remains informational only:
+  - no safe-to-merge claim
+  - no security approval claim

@@ -18,6 +18,7 @@ Use inside PR/issue comments:
 - `/repobrain help`
 - `/repobrain ask ...`
 - `/repobrain review`
+- `/repobrain verify`
 - `/repobrain fix ...`
 
 Execution profile flags are user-facing:
@@ -84,6 +85,7 @@ Supported now: `ask` only.
 ### Works Today
 
 - GitHub mode ask/review/fix on configured repositories.
+- GitHub mode verify on PRs with informational verification status reporting.
 - Direct external repository pilot install from `RepoBrain-Action`.
 - External mode ask execution on third-party repository checkouts.
 - Operator readiness contract for GitHub App onboarding.
@@ -95,6 +97,23 @@ Supported now: `ask` only.
 - MCP surface review/fix capabilities.
 - Broad production rollout claims for third-party repositories.
 - Marketplace-style product packaging/admin portal.
+
+### Verify Semantics
+
+- issue scope:
+  - `/repobrain verify` stays scoped unsupported and directs users to PR context
+- PR scope:
+  - `/repobrain verify` reports observed GitHub verification signals only
+  - status labels:
+    - `PASS`
+    - `WARN`
+    - `FAIL`
+    - `PENDING`
+    - `NOT_RUN`
+    - `UNKNOWN`
+  - informational only:
+    - not merge approval
+    - not security approval
 
 ## Artifacts You Should Expect
 
