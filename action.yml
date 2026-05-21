@@ -50,7 +50,7 @@ runs:
       run: python -m pip install -U pip
     - name: Install dependencies
       shell: bash
-      run: pip install -e ".[dev]"
+      run: pip install -e "${GITHUB_ACTION_PATH}[dev]"
     - name: Run RepoBrain GitHub dry-run wiring
       shell: bash
       env:
@@ -61,7 +61,7 @@ runs:
         RB_INDEX_CACHE_RESTORED: ${{ env.RB_INDEX_CACHE_RESTORED }}
         GITHUB_TOKEN: ${{ github.token }}
       run: >
-        python scripts/run_github.py
+        python "${GITHUB_ACTION_PATH}/scripts/run_github.py"
         --dry-run "${{ inputs.dry_run }}"
         --issue-number "${{ inputs.issue_number }}"
         --tky-mode "${{ inputs.tky_mode }}"
@@ -70,3 +70,4 @@ runs:
         --hmac-secret "${{ inputs.hmac_secret }}"
         --enable-hmac "${{ inputs.enable_hmac }}"
         --comment-text "${{ inputs.comment_text }}"
+        --repo-root "${{ github.workspace }}"

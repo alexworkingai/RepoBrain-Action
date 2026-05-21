@@ -1,4 +1,4 @@
-# RepoBrain Action
+﻿# RepoBrain Action
 
 Current release candidate: `0.5.0-rc.1`
 
@@ -22,13 +22,30 @@ Execution profile controls:
 - default: `balanced`
 - safety guardrail: review/fix requests for `cheap` are normalized to governed `balanced`
 
-### External mode (bounded surface)
+### External repository pilot (direct RepoBrain-Action install)
 
-Third-party GitHub-native foundation (bounded):
+RepoBrain-Action now owns the external repository pilot install path directly.
 
-- canonical public install template: `repobrain-community/templates/repobrain.yml`
-- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual-only patch suggestion)
-- unsupported (explicit block): out-of-contract commands
+Current pilot shape:
+
+- workflow lives in the consumer repository
+- action ref is `alexworkingai/RepoBrain-Action@main`
+- TopoCore v6 stays private and is checked out separately with a repo secret
+- `repobrain-community` is retired from the working product architecture and is not required
+
+Current Sprint 69 validation target:
+
+- issue `/repobrain ask ...`
+- PR `/repobrain ask ...`
+- visible backend evidence showing `resolved_backend=v6`
+
+Primary operator references:
+
+- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
+- `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
+- `docs/examples/repobrain_external_pilot_workflow.yml`
+
+### External CLI mode (bounded surface)
 
 CLI entrypoint:
 
@@ -40,7 +57,7 @@ python scripts/run_github.py \
   --query "What changed in module X?"
 ```
 
-Current external support:
+Current external CLI support:
 
 - supported: `ask`
 - unsupported (explicit block): `review`, `fix`, other non-ask commands
@@ -65,6 +82,7 @@ GitHub App onboarding/readiness references:
 
 - `docs/onboarding/github_app_setup.md`
 - `docs/onboarding/permissions.md`
+- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
 
 Readiness artifacts:
 
@@ -86,9 +104,9 @@ Common artifacts include:
 - User guide: `docs/USER_GUIDE.md`
 - Operator quickstart: `docs/OPERATOR_QUICKSTART.md`
 - External mode: `docs/EXTERNAL_MODE.md`
+- External repository pilot install: `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
+- External product architecture: `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
 - Repository boundary contract: `docs/REPO_BOUNDARY_CONTRACT.md`
-- Refactor phase closeout: `docs/refactor/REFACTOR_PHASE_CLOSEOUT.md`
-- External GitHub foundation boundary reference: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
 - MCP surface contract: `docs/MCP_SURFACE.md`
 - Trial template: `docs/trials/external_repo_trial_template.md`
 - Historical Sprint 59 trial runbook artifact: `docs/trials/external_repo_trial_01_elen_mcp.md`
@@ -104,8 +122,8 @@ Common artifacts include:
 
 RepoBrain currently does not claim:
 
-- full external GitHub-native review/fix runtime,
-- external review/fix support in CLI external mode,
-- marketplace/admin-portal product surface.
+- full production-ready external rollout across arbitrary repositories,
+- autofix or patch application by default,
+- Marketplace/admin-portal product surface.
 
 This repository intentionally keeps protected kernel internals out of public-facing operator documentation.

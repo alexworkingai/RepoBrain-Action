@@ -21,45 +21,23 @@ References:
 - `docs/onboarding/permissions.md`
 - `docs/OPERATOR_QUICKSTART.md`
 
-## Surface 2: External GitHub Mode Foundation (Bounded Public Surface)
+## Surface 2: External Repository Pilot (Direct)
 
-Use when you need a third-party GitHub-native entry path with bounded public behavior.
+Use when you need a pilot consumer repository wired directly to `RepoBrain-Action`.
 
-Current supported commands:
+Required shape:
 
-- `/repobrain doctor`
-- `/repobrain help`
-- `/repobrain ask ...`
-- `/repobrain review` as bounded read-only Review Candidate
-- `/repobrain fix` as bounded Fix-Lite Candidate manual-only patch suggestion
+1. Consumer repository installs `.github/workflows/repobrain.yml`.
+2. Workflow uses `alexworkingai/RepoBrain-Action@main`.
+3. Consumer repository provides `TOPOCORE_V6_REPO_TOKEN`.
+4. TopoCore v6 is checked out privately.
+5. Initial smoke is issue/PR `ask` with visible backend evidence.
 
-Current unsupported commands:
+References:
 
-- out-of-contract commands
-
-Bounded non-claims that remain true:
-
-- no patch application
-- no file modification
-- no commit creation
-- no branch pushing
-- no PR creation
-- no autofix claim
-- no full review parity claim
-- no security verdicts
-- no safe-to-merge claim
-- no approval/rejection verdicts
-- no autonomous repair behavior
-
-Canonical public host and install kit live in `repobrain-community`.
-
-Canonical public install template:
-
-- `repobrain-community/templates/repobrain.yml`
-
-RepoBrain-Action boundary/reference doc:
-
-- `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
+- `docs/examples/repobrain_external_pilot_workflow.yml`
+- `docs/examples/repobrain.instructions.md`
 
 ## Surface 3: External CLI Mode (Bounded)
 

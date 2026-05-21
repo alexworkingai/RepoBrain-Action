@@ -1,0 +1,130 @@
+﻿name: RepoBrain
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = print only, false = post comment"
+        required: false
+        default: "false"
+        type: string
+      comment_text:
+        description: "RepoBrain command text"
+        required: false
+        default: "/repobrain ask Summarize current RepoBrain TopoCore backend status."
+        type: string
+      issue_number:
+        description: "Issue or PR number for workflow_dispatch"
+        required: false
+        default: ""
+        type: string
+      topocore_backend:
+        description: "TopoCore backend for pilot runtime selection"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - v6
+      topocore_v6_dependency_mode:
+        description: "Private TopoCore v6 dependency mode"
+        required: false
+        default: "private_checkout"
+        type: choice
+        options:
+          - private_checkout
+      topocore_v6_ref:
+        description: "Private TopoCore v6 ref"
+        required: false
+        default: "main"
+        type: string
+      topocore_v6_repository:
+        description: "Private TopoCore v6 repository slug"
+        required: false
+        default: "alexworkingai/topocore"
+        type: string
+
+permissions:
+  contents: read
+  models: read
+  checks: write
+  statuses: read
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  repobrain:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/repobrain')
+    runs-on: ubuntu-latest
+    env:
+      RB_TRUSTED_CONTEXT: "0"
+      RB_ALLOW_DYNAMIC_VERIFY: "0"
+      RB_APPLY_PATCH: "0"
+      RB_CREATE_PR: "0"
+      RB_LLM_ENABLED: "1"
+      RB_LLM_PROVIDER: github_models
+      RB_LLM_ENABLE_ISSUE_COMMENT: "1"
+      RB_LLM_ENABLE_PR_COMMENTS: "1"
+      RB_LLM_ENABLE_ISSUE_ONLY: "0"
+      RB_LLM_BATCH_ENABLE: "0"
+      RB_EMBED_ENABLED: "0"
+      RB_CHECK_RUN_PUBLISH_MODE: deferred
+      RB_TOPOCORE_V6_REQUIRE_LOCAL: "1"
+    steps:
+      - uses: actions/github-script@v7
+        id: checkout_ref
+        with:
+          script: |
+            let ref = context.sha;
+            let reason = "default_workflow_sha";
+            if (context.eventName === "issue_comment" && context.payload.issue?.pull_request) {
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const pullNumber = Number(context.payload.issue.number);
+              const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: pullNumber });
+              const baseRepo = `${owner}/${repo}`.toLowerCase();
+              const headRepo = String(pull.head?.repo?.full_name || "").toLowerCase();
+              const headSha = String(pull.head?.sha || "").trim();
+              if (headRepo === baseRepo && headSha && String(pull.state || "").toLowerCase() === "open") {
+                ref = headSha;
+                reason = "same_repo_pr_head_sha";
+              }
+            }
+            core.info(`RepoBrain checkout ref resolution: ${reason} -> ${ref}`);
+            core.setOutput("ref", ref);
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.checkout_ref.outputs.ref }}
+      - name: Checkout private TopoCore v6
+        if: github.event_name == 'issue_comment' || inputs.topocore_v6_dependency_mode == 'private_checkout'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && inputs.topocore_v6_repository || 'alexworkingai/topocore' }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.topocore_v6_ref || 'main' }}
+          token: ${{ secrets.TOPOCORE_V6_REPO_TOKEN }}
+          path: .topocore-v6
+      - name: Install private TopoCore v6
+        if: github.event_name == 'issue_comment' || inputs.topocore_v6_dependency_mode == 'private_checkout'
+        shell: bash
+        run: python -m pip install -e ./.topocore-v6
+      - name: Expose private TopoCore v6 path
+        if: github.event_name == 'issue_comment' || inputs.topocore_v6_dependency_mode == 'private_checkout'
+        shell: bash
+        run: |
+          if [ -d ".topocore-v6/src" ]; then
+            echo "RB_TOPOCORE_V6_LOCAL_PATH=${GITHUB_WORKSPACE}/.topocore-v6/src" >> "$GITHUB_ENV"
+            echo "PYTHONPATH=${GITHUB_WORKSPACE}/.topocore-v6/src:${PYTHONPATH}" >> "$GITHUB_ENV"
+          else
+            echo "RB_TOPOCORE_V6_LOCAL_PATH=${GITHUB_WORKSPACE}/.topocore-v6" >> "$GITHUB_ENV"
+            echo "PYTHONPATH=${GITHUB_WORKSPACE}/.topocore-v6:${PYTHONPATH}" >> "$GITHUB_ENV"
+          fi
+      - uses: alexworkingai/RepoBrain-Action@main
+        with:
+          tky_mode: local
+          dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          comment_text: ${{ github.event_name == 'workflow_dispatch' && inputs.comment_text || github.event.comment.body }}
+          issue_number: ${{ github.event_name == 'workflow_dispatch' && inputs.issue_number || github.event.issue.number }}
+          topocore_backend: ${{ github.event_name == 'workflow_dispatch' && inputs.topocore_backend || 'auto' }}

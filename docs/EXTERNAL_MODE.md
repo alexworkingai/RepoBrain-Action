@@ -1,50 +1,44 @@
-# RepoBrain External Mode
+﻿# RepoBrain External Mode
 
 ## Purpose
 
-RepoBrain currently exposes two bounded external paths:
+RepoBrain currently exposes three external-facing paths:
 
-1. External GitHub mode foundation (third-party GitHub-native doctor/help/ask plus bounded Review Candidate and Fix-Lite Candidate through the public `repobrain-community` host).
+1. Direct external repository pilot install from `RepoBrain-Action`.
 2. External CLI mode (ask-only on local checkout).
+3. MCP ask-first integration surface.
 
-Both paths are intentionally bounded and must block unsupported capabilities honestly.
+The old `repobrain-community` bridge is retired from the working product architecture and is not required for current onboarding.
 
-## External GitHub Mode Foundation (Third-Party)
+## External Repository Pilot (Direct GitHub Path)
 
-Use this when a third-party repository needs GitHub-native command entry via workflow.
+Use this when a pilot repository needs GitHub-native command entry via workflow.
 
-Canonical public host and install kit:
+Current direct pilot install truth:
 
-- `repobrain-community`
-- install template: `repobrain-community/templates/repobrain.yml`
-- reusable workflow host:
-  `alexworkingai/repobrain-community/.github/workflows/repobrain_external_foundation.yml@main`
+- the caller repository owns `.github/workflows/repobrain.yml`
+- the workflow uses `alexworkingai/RepoBrain-Action@main`
+- the caller repository provides a private TopoCore v6 checkout token
+- Sprint 69 smoke target is issue and PR `ask` with visible v6 backend evidence
 
-Contract in this foundation stage:
+Install and architecture references:
 
-- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual-only patch suggestion)
-- unsupported (explicit block): out-of-contract commands
+- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
+- `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
+- `docs/examples/repobrain_external_pilot_workflow.yml`
+- `docs/examples/repobrain.instructions.md`
 
-Bounded non-claims in this public surface:
+Bounded non-claims remain in force:
 
 - no patch application
 - no file modification
 - no commit creation
 - no branch pushing
-- no PR creation
+- no PR creation by RepoBrain behavior
 - no security verdicts
 - no safe-to-merge claims
 - no approval/rejection verdicts
 - no autofix
-- no full review parity
-
-Boundary/reference and onboarding details:
-
-- `docs/REPO_BOUNDARY_CONTRACT.md`
-- `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
-- `docs/onboarding/github_app_setup.md`
-
-Use `/repobrain doctor` to verify the external setup surface before first ask/review/fix commands.
 
 ## External CLI Mode (Ask-Only)
 
@@ -58,15 +52,6 @@ python scripts/run_github.py \
   --query "your question"
 ```
 
-Arguments:
-
-- `--mode external` enables external path.
-- `--repo-root` points to repository checkout.
-- `--command` currently supports only `ask`.
-- `--query` is required for ask.
-- `--dry-run` defaults to true and is accepted for parity.
-- `--tky-mode` defaults to `auto`.
-
 Support in CLI external mode:
 
 - `ask`: supported
@@ -74,30 +59,20 @@ Support in CLI external mode:
 - `fix`: unsupported (blocked)
 - any other command: unsupported (blocked)
 
-Block behavior is explicit:
+## MCP Surface (Ask-Only)
 
-- `status=blocked`
-- `decision=UNSUPPORTED_COMMAND`
-- message includes requested unsupported command
+Entrypoint:
 
-## Runtime Behavior (CLI External Ask)
+```bash
+python scripts/run_mcp_surface.py \
+  --capability ask \
+  --repo-root /path/to/repo \
+  --query "your question"
+```
 
-For supported ask path, external CLI mode:
+Supported now: `ask` only.
 
-1. loads config from target repo root,
-2. builds external index package,
-3. runs retrieval over indexed chunks,
-4. synthesizes ask answer via local provider path.
-
-No `GITHUB_TOKEN` is required for this external CLI ask flow.
-
-## What External Mode Is Not (Yet)
-
-External mode is not currently:
-
-- full ask/review/fix parity on third-party GitHub repositories,
-- replacement for primary GitHub-mode review/fix runtime,
-- complete third-party repo automation surface.
+Unsupported capability requests must block explicitly.
 
 ## Trial Usage Reference
 

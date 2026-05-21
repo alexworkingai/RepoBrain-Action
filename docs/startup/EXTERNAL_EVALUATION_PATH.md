@@ -19,36 +19,24 @@ What it proves:
 - governance-aware behavior,
 - artifact-backed observability.
 
-What it does not prove:
+## Path B: External Repository Pilot (Direct Product Proof)
 
-- external CLI parity for review/fix.
+What to run in a pilot repository:
 
-## Path B: External GitHub Mode Foundation (Bounded Public Proof)
-
-Public runtime host:
-
-- `repobrain-community`
-
-What to run in a third-party repository:
-
-- install the caller workflow from the public community template
-- `/repobrain doctor`
-- `/repobrain help`
-- `/repobrain ask ...`
-- `/repobrain review`
-- `/repobrain fix`
+- install the caller workflow from `docs/examples/repobrain_external_pilot_workflow.yml`
+- configure private TopoCore v6 access
+- run issue `/repobrain ask ...`
+- run PR `/repobrain ask ...`
 
 What it proves:
 
-- real third-party GitHub-native bounded public runtime,
-- doctor/help truth is externally visible,
-- review is available as bounded read-only Review Candidate,
-- fix is available as bounded Fix-Lite Candidate manual-only patch suggestion,
-- duplicate-response regressions remain absent.
+- real external repository wiring directly to `RepoBrain-Action`
+- visible v6 backend evidence in the consumer repository
+- no `repobrain-community` dependency in the active install path
 
 What it does not prove:
 
-- full external ask/review/fix parity,
+- full external command-matrix parity,
 - patch application, file modification, commit creation, branch pushing, or PR creation,
 - security verdicts, safe-to-merge claims, or approval/rejection decisions.
 
@@ -69,10 +57,6 @@ python scripts/run_github.py --mode external --repo-root /path/to/repo --command
 What it proves:
 
 - real third-party ask execution path.
-
-What it does not prove:
-
-- external CLI review/fix support.
 
 ## Path D: MCP Surface (Bounded Integration Proof)
 

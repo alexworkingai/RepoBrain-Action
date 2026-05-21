@@ -1,4 +1,4 @@
-# RepoBrain User Guide (Current Reality)
+﻿# RepoBrain User Guide (Current Reality)
 
 ## What RepoBrain Is
 
@@ -26,20 +26,28 @@ Execution profile flags are user-facing:
 - default remains `balanced`
 - safety guardrail: review/fix normalize `cheap -> balanced` with explicit audit truth
 
-### External GitHub Mode Foundation (Third-Party)
+### External Repository Pilot (Direct)
 
-GitHub-native bounded entry path for external repositories:
+GitHub-native bounded entry path for external repositories now installs directly from `RepoBrain-Action`.
 
-- supported: `/repobrain help`, `/repobrain doctor`, `/repobrain ask ...`, `/repobrain review` (bounded read-only Review Candidate), `/repobrain fix` (bounded Fix-Lite Candidate manual-only patch suggestion)
-- unsupported (explicit block): out-of-contract commands
+Current direct pilot truth:
 
-Canonical public install template:
+- action ref: `alexworkingai/RepoBrain-Action@main`
+- TopoCore v6 remains private and is checked out separately with a private repo token
+- `repobrain-community` is retired from the working architecture and is not required
+- Sprint 69 pilot smoke target is issue/PR `ask` with visible v6 backend evidence
 
-- `repobrain-community/templates/repobrain.yml`
+Primary install reference:
 
-Boundary/reference doc:
+- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
 
-- `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+Architecture reference:
+
+- `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
+
+Example caller workflow:
+
+- `docs/examples/repobrain_external_pilot_workflow.yml`
 
 ### External CLI Mode (`scripts/run_github.py --mode external`)
 
@@ -76,7 +84,7 @@ Supported now: `ask` only.
 ### Works Today
 
 - GitHub mode ask/review/fix on configured repositories.
-- External GitHub mode foundation on third-party repos for help/doctor/ask plus bounded read-only Review Candidate and bounded Fix-Lite Candidate manual-only patch suggestion mode.
+- Direct external repository pilot install from `RepoBrain-Action`.
 - External mode ask execution on third-party repository checkouts.
 - Operator readiness contract for GitHub App onboarding.
 - Evidence/audit artifact generation, including TKYA evidence pack.
@@ -85,7 +93,7 @@ Supported now: `ask` only.
 
 - Autofix execution in any external surface.
 - MCP surface review/fix capabilities.
-- Full ask/review/fix parity in third-party GitHub-native mode.
+- Broad production rollout claims for third-party repositories.
 - Marketplace-style product packaging/admin portal.
 
 ## Artifacts You Should Expect
@@ -101,11 +109,10 @@ Depending on command and mode:
 ## Where To Go Next
 
 - Operator install/readiness: `docs/OPERATOR_QUICKSTART.md`
+- External repository pilot install: `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
+- External product architecture: `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
 - External mode details: `docs/EXTERNAL_MODE.md`
-- External GitHub foundation boundary reference: `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
-- MCP surface details: `docs/MCP_SURFACE.md`
 - Packaging overview: `docs/packaging/PACKAGING_OVERVIEW.md`
 - Startup readiness: `docs/startup/STARTUP_READINESS.md`
-- Trial protocol/templates: `docs/trials/external_repo_trial_template.md`
 - Historical Sprint 59 trial runbook artifact: `docs/trials/external_repo_trial_01_elen_mcp.md`
 - Historical benchmark narrative artifact: `docs/benchmarks/external_trial_01_elen_mcp_report.md`

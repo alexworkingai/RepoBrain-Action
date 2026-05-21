@@ -1,42 +1,29 @@
-# External GitHub Foundation Boundary
+﻿# External GitHub Foundation (Pilot)
 
 ## Purpose
 
-This document is a RepoBrain-Action boundary reference for the public external
-GitHub foundation surface.
+This document describes the current external repository pilot install shape.
+RepoBrain-Action is now the direct product host for the pilot workflow.
 
-RepoBrain-Action is not the public runtime or install-template host for this
-surface. The canonical public host and install kit live in
-`repobrain-community`.
+## Current Install Truth
 
-## Canonical Public Host
+Use these files for direct pilot setup:
 
-Use these community-owned public artifacts for third-party GitHub-native setup:
+- install guide: `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
+- product architecture: `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
+- example workflow: `docs/examples/repobrain_external_pilot_workflow.yml`
+- example repo guidance: `docs/examples/repobrain.instructions.md`
 
-- install template: `repobrain-community/templates/repobrain.yml`
-- reusable workflow host:
-  `alexworkingai/repobrain-community/.github/workflows/repobrain_external_foundation.yml@main`
+Direct pilot workflow shape:
 
-For current public install steps and examples, use the `repobrain-community`
-README and template files rather than local copies in RepoBrain-Action.
+- caller repository owns `.github/workflows/repobrain.yml`
+- workflow uses `alexworkingai/RepoBrain-Action@main`
+- private TopoCore v6 checkout remains required
+- `repobrain-community` is retired and not required
 
-## Current Public Command Truth
+## Current Safety Boundaries
 
-Supported in the external GitHub foundation:
-
-- `/repobrain doctor`
-- `/repobrain help`
-- `/repobrain ask ...`
-- `/repobrain review` (bounded read-only Review Candidate)
-- `/repobrain fix` (bounded Fix-Lite Candidate manual-only patch suggestion)
-
-Unsupported:
-
-- out-of-contract commands
-
-## Bounded Non-Claims
-
-The public external GitHub foundation does not claim:
+The direct external pilot does not claim:
 
 - autofix
 - patch application
@@ -50,22 +37,6 @@ The public external GitHub foundation does not claim:
 - approval/rejection verdicts
 - autonomous repair behavior
 
-Mandatory Fix-Lite boundary:
+Mandatory boundary:
 
 - `No patch was applied. No files were modified.`
-
-## What Stays In RepoBrain-Action
-
-RepoBrain-Action remains the source of:
-
-- current-truth docs and capability alignment,
-- governance and regression tests,
-- bounded external CLI ask-only and MCP ask-only secondary surfaces.
-
-Use these local docs for current operator/context references:
-
-- `docs/REPO_BOUNDARY_CONTRACT.md`
-- `docs/EXTERNAL_MODE.md`
-- `docs/USER_GUIDE.md`
-- `docs/OPERATOR_QUICKSTART.md`
-- `docs/benchmarks/current_capabilities_matrix.md`

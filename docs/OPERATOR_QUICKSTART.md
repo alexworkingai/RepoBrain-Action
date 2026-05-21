@@ -5,7 +5,7 @@
 This quickstart is for operators validating RepoBrain in:
 
 - GitHub App mode (primary runtime),
-- external GitHub mode foundation (third-party GitHub-native bounded public path hosted publicly through `repobrain-community`),
+- direct external repository pilot mode,
 - external CLI mode (ask-only trial path).
 
 It describes what to verify first, what to run, and how to classify outcomes.
@@ -46,39 +46,27 @@ What to verify:
 - profile truth is coherent in audit/evidence,
 - review/fix `cheap` normalization guardrail remains explicit when applicable.
 
-## 3) External GitHub Mode Foundation Validation (Third-Party)
+## 3) External Repository Pilot Validation (Direct)
 
-Public runtime host and install kit:
+Direct pilot install references:
 
-- `repobrain-community`
+- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
+- `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
+- `docs/examples/repobrain_external_pilot_workflow.yml`
 
-RepoBrain-Action boundary/reference doc:
+Run first on a safe issue or PR:
 
-- `docs/REPO_BOUNDARY_CONTRACT.md`
-- `docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md`
+1. `/repobrain ask Summarize current RepoBrain TopoCore backend status.`
 
-Run on a third-party PR:
+Expected first-smoke truth:
 
-1. `/repobrain doctor`
-2. `/repobrain help`
-3. `/repobrain ask ...`
-4. `/repobrain review`
-5. `/repobrain fix`
-
-Expected:
-
-- workflow executes via the reusable external foundation path,
-- readiness artifact is uploaded,
-- doctor/help truth is current and compact,
-- review is a bounded read-only Review Candidate,
-- fix is a bounded Fix-Lite Candidate manual-only patch suggestion,
-- Fix-Lite may return `suggestion available`, `blocked`, or `not applicable`,
-- no duplicate comments appear,
-- no patch-applied, file-modified, commit-created, branch-pushed, PR-created, security-verdict, safe-to-merge, approval/rejection, or autofix claims appear.
-
-Mandatory Fix-Lite boundary:
-
-- `No patch was applied. No files were modified.`
+- workflow executes from the caller repository using `alexworkingai/RepoBrain-Action@main`
+- TopoCore v6 is checked out privately
+- backend evidence is visible
+- requested backend is `auto` or `v6`
+- resolved backend is `v6`
+- fallback used is `no`
+- no patch/applied, file-modified, commit-created, branch-pushed, PR-created, security-verdict, safe-to-merge, approval/rejection, or autofix claims appear
 
 ## 4) External CLI Mode Validation (Ask-Only)
 
@@ -98,16 +86,7 @@ Expected:
 - `DECISION=ANSWER`
 - answer text returned
 
-Unsupported commands must block honestly:
-
-```bash
-python scripts/run_github.py --mode external --repo-root /path --command review --query "..."
-```
-
-Expected:
-
-- blocked status
-- decision `UNSUPPORTED_COMMAND`
+Unsupported commands must block honestly.
 
 ## 5) MCP Surface Validation (Ask-Only)
 
@@ -123,17 +102,6 @@ Expected:
 - JSON response
 - `status=success`
 - `decision=ANSWER`
-
-Unsupported capability probe:
-
-```bash
-python scripts/run_mcp_surface.py --capability review --repo-root /path --query "..."
-```
-
-Expected:
-
-- `status=blocked`
-- `decision=UNSUPPORTED_CAPABILITY`
 
 ## 6) Trial Evidence Capture
 
