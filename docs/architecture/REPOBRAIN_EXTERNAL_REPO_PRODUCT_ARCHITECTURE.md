@@ -79,3 +79,28 @@ Next external-product work should focus on:
 - visible backend evidence across issue and PR scopes
 - hardening caller-repo install/readiness guidance
 - release-readiness review for wider distribution
+
+## Sprint 70 Validated External Surface
+
+Sprint 70 validated the direct external consumer path on `alexworkingai/Elen-MCP-v.2.2.0`.
+
+Validated command surface:
+
+- issue scope:
+  - `help`
+  - `ask`
+  - `locate`
+  - `explain`
+  - honest scoped unsupported for `review`, `verify`, and `fix`
+- PR scope:
+  - `ask`
+  - `review`
+  - report-only `verify`
+  - conservative `fix` with `no_patch`
+
+Validated runtime truth:
+
+- requested backend: `auto`
+- resolved backend: `v6` for backend-invoking ask/review/fix and retrieval commands
+- no `v5`
+- no `repobrain-community`

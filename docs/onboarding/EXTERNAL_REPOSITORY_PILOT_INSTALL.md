@@ -80,6 +80,22 @@ Safe first smoke on PR:
 /repobrain ask Summarize this PR with RepoBrain backend diagnostics.
 ```
 
+Validated command surface after Sprint 70:
+
+- issue scope:
+  - `/repobrain help`
+  - `/repobrain ask ...`
+  - `/repobrain locate ...`
+  - `/repobrain explain ...`
+  - `/repobrain review` returns honest scoped unsupported guidance
+  - `/repobrain verify` returns honest scoped unsupported guidance
+  - `/repobrain fix ...` returns honest scoped unsupported guidance
+- PR scope:
+  - `/repobrain ask ...`
+  - `/repobrain review ...`
+  - `/repobrain verify ...` as report-only verification
+  - `/repobrain fix ...` as conservative no-patch guidance
+
 ## Expected Backend Evidence
 
 Expected evidence in a healthy smoke run:

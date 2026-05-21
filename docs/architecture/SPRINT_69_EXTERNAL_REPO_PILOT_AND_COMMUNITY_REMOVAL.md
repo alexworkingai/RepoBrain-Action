@@ -152,6 +152,16 @@ What remains blocked:
 - live PR smoke
 - workflow_dispatch v6 private-checkout proof on the pilot repo
 
+## Sprint 70 Follow-up
+
+Sprint 70 removed the remaining pilot blockers:
+
+- `TOPOCORE_V6_REPO_TOKEN` was configured in `Elen-MCP-v.2.2.0`
+- GitHub Actions policy in `Elen-MCP-v.2.2.0` was changed from `local_only` to `all`
+- external issue and PR `ask` smoke passed on the direct `RepoBrain-Action` install path
+- the full external command matrix is recorded in:
+  - `docs/architecture/SPRINT_70_EXTERNAL_COMMAND_MATRIX_ELEN_MCP.md`
+
 ## Next Step
 
 Recommended Sprint 70:

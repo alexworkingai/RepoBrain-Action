@@ -44,6 +44,7 @@ Current test baseline:
 | `tests/test_topocore_v5_residue_cleanup.py` | docs/runtime/workflow static cleanup surfaces | Phase 7 | Deleted standalone v5 guides, no active lower-case runtime residue, no stale guide references, historical-doc supersession markers, no patch or raw decision drift | No |
 | `tests/test_external_github_foundation_workflow.py` | external pilot docs/examples | Phase 7 | Direct RepoBrain-Action pilot install truth, direct caller workflow example, no community-hosted install claims in active pilot docs | No |
 | `tests/test_repobrain_community_removed_from_product.py` | active runtime/onboarding/workflow product surfaces | Phase 7 | No repobrain-community dependency in runtime/workflow/action surfaces, no v5/lite reintroduction, no copied private TopoCore source in product repo | No |
+| `tests/test_external_command_matrix_docs.py` | Sprint 70 external command matrix documentation and indexes | Phase 7 | External command matrix report exists, v6-only runtime truth is recorded, no v5/community reintroduction in the Sprint 70 evidence layer, indexes link the result | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -161,6 +162,10 @@ Current tests prove that:
   - active install docs now point directly to `RepoBrain-Action`
   - community-hosted workflow dependency is statically blocked on active runtime/onboarding surfaces
   - no new runtime behavior is claimed by tests alone
+- Sprint 70 adds external command-matrix evidence documentation coverage:
+  - issue and PR command outcomes on `Elen-MCP-v.2.2.0` are recorded
+  - v6 backend evidence and scoped unsupported behavior are linked in current indexes
+  - no new runtime behavior is claimed by local tests alone
 
 ## 6. What Tests Do Not Prove
 
@@ -211,6 +216,9 @@ Current tests do not prove:
 - Sprint 69 does not prove external pilot runtime execution yet:
   - `Elen-MCP-v.2.2.0` live issue/PR smoke remained blocked on missing private TopoCore access
   - local pilot-repo Node validation was blocked because `npm` / `npx` were unavailable in the operator environment
+- Sprint 70 documentation tests do not replace live GitHub evidence:
+  - they guard the recorded matrix and indexes
+  - the live command matrix evidence still comes from GitHub runs on `Elen-MCP-v.2.2.0`
 
 ## 7. Recommended Future Test Maintenance
 

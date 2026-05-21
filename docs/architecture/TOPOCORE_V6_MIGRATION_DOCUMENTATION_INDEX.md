@@ -131,6 +131,7 @@ Phase 7:
 - `docs/architecture/TOPOCORE_V6_FINAL_V6_ONLY_CLOSEOUT.md`
 - `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
 - `docs/architecture/SPRINT_69_EXTERNAL_REPO_PILOT_AND_COMMUNITY_REMOVAL.md`
+- `docs/architecture/SPRINT_70_EXTERNAL_COMMAND_MATRIX_ELEN_MCP.md`
 
 ## 5. Recommended Reading Paths
 
@@ -228,6 +229,11 @@ direct external pilot, product-host install path, and post-community architectur
 - `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
 - `docs/architecture/SPRINT_69_EXTERNAL_REPO_PILOT_AND_COMMUNITY_REMOVAL.md`
 
+external command matrix validation on the pilot repo:
+
+- `docs/architecture/SPRINT_69_EXTERNAL_REPO_PILOT_AND_COMMUNITY_REMOVAL.md`
+- `docs/architecture/SPRINT_70_EXTERNAL_COMMAND_MATRIX_ELEN_MCP.md`
+
 Why implementation is currently blocked:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
@@ -245,6 +251,7 @@ Current decision state:
 - final live v6 sanity has passed
 - the v6-only transition is closed out
 - direct external pilot architecture now points to `RepoBrain-Action`, not `repobrain-community`
+- external issue and PR command matrix validation on `Elen-MCP-v.2.2.0` has passed
 - fix migration remains conservative
 - patch behavior expansion is not approved
 - production and Marketplace switch are not approved
