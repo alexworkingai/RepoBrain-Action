@@ -983,6 +983,10 @@ def _normalized_backend_evidence(audit_summary: dict[str, Any]) -> dict[str, str
     scope_status = _pick_str("scope_status", default="")
     patch_authorized = _bool_label(audit_summary.get("patch_authorized", "n/a"))
     patch_applied = _bool_label(audit_summary.get("patch_applied", "n/a"))
+    files_modified = _bool_label(audit_summary.get("files_modified", "n/a"))
+    branch_created = _bool_label(audit_summary.get("branch_created", "n/a"))
+    commit_created = _bool_label(audit_summary.get("commit_created", "n/a"))
+    pr_created = _bool_label(audit_summary.get("pr_created", "n/a"))
     tkya_backend = _pick_str("tkya_backend", default="")
 
     return {
@@ -998,6 +1002,10 @@ def _normalized_backend_evidence(audit_summary: dict[str, Any]) -> dict[str, str
         "scope_status": scope_status,
         "patch_authorized": patch_authorized,
         "patch_applied": patch_applied,
+        "files_modified": files_modified,
+        "branch_created": branch_created,
+        "commit_created": commit_created,
+        "pr_created": pr_created,
     }
 
 
@@ -1020,6 +1028,14 @@ def _runtime_backend_evidence_lines(audit_summary: dict[str, Any]) -> list[str]:
         lines.append(f"- Patch authorized: `{normalized['patch_authorized']}`")
     if normalized["patch_applied"] != "n/a":
         lines.append(f"- Patch applied: `{normalized['patch_applied']}`")
+    if normalized["files_modified"] != "n/a":
+        lines.append(f"- Files modified: `{normalized['files_modified']}`")
+    if normalized["branch_created"] != "n/a":
+        lines.append(f"- Branch created: `{normalized['branch_created']}`")
+    if normalized["commit_created"] != "n/a":
+        lines.append(f"- Commit created: `{normalized['commit_created']}`")
+    if normalized["pr_created"] != "n/a":
+        lines.append(f"- PR created: `{normalized['pr_created']}`")
     return lines
 
 
@@ -2704,6 +2720,100 @@ def render_review_markdown(
     return "\n".join(sections)
 
 
+def _fix_status_label(*, review: dict[str, Any], audit_summary: dict[str, Any]) -> str:
+    explicit = str(audit_summary.get("fix_status", "") or "").strip().upper()
+    if explicit:
+        return explicit
+    scope_status = str(audit_summary.get("scope_status", "") or "").strip().lower()
+    if scope_status.startswith("unsupported_"):
+        return "UNSUPPORTED_SCOPE"
+    if bool(audit_summary.get("fix_request_requires_mutation", False)):
+        return "BLOCKED_BY_SAFETY"
+    if bool(audit_summary.get("fix_request_is_vague", False)):
+        return "NEEDS_MORE_INFORMATION"
+    patch_generation_result = str(audit_summary.get("patch_generation_result", "n/a") or "n/a").strip().lower()
+    selected = _int(audit_summary.get("selected", 0))
+    if patch_generation_result in {"provider_failed", "patch_missing"}:
+        return "ERROR_SANITIZED"
+    if patch_generation_result == "patch_validation_failed":
+        return "NEEDS_MORE_INFORMATION"
+    if patch_generation_result == "no_patch" and selected <= 0:
+        return "NO_ACTION_NEEDED"
+    if isinstance(review.get("risks", []), list):
+        risks = [str(item).strip().lower() for item in review.get("risks", []) if str(item).strip()]
+        if risks == ["no obvious high-risk patterns detected"] and selected <= 0:
+            return "NO_ACTION_NEEDED"
+    return "PROPOSAL_READY"
+
+
+def _fix_confidence_label(*, review: dict[str, Any], audit_summary: dict[str, Any]) -> str:
+    if bool(audit_summary.get("fix_request_requires_mutation", False)):
+        return "high"
+    localized = _int(audit_summary.get("localized_patch_evidence_count", 0))
+    selected = _int(audit_summary.get("selected", 0))
+    if localized > 0 or selected >= 3:
+        return "high"
+    if selected > 0:
+        return "medium"
+    risks = review.get("risks", [])
+    if isinstance(risks, list) and risks:
+        return "medium"
+    return "low"
+
+
+def _fix_candidate_issue_lines(*, review: dict[str, Any], status_label: str) -> list[str]:
+    if status_label == "BLOCKED_BY_SAFETY":
+        return [
+            "The request asked for mutation behavior that is disabled in this product path.",
+        ]
+    risks = review.get("risks", [])
+    if isinstance(risks, list):
+        cleaned = [str(item).strip() for item in risks if str(item).strip()]
+        if cleaned:
+            return cleaned[:2]
+    return ["No clear repository change was proposed from the current evidence set."]
+
+
+def _fix_proposed_change_lines(*, review: dict[str, Any], audit_summary: dict[str, Any], status_label: str) -> list[str]:
+    if status_label == "BLOCKED_BY_SAFETY":
+        return [
+            "Patch/autofix is disabled. Review the proposal manually and apply any change outside RepoBrain.",
+        ]
+    notes = review.get("notes", [])
+    if isinstance(notes, list):
+        cleaned = [str(item).strip() for item in notes if str(item).strip()]
+        if cleaned:
+            return cleaned[:2]
+    summary_text = str(review.get("summary_text", "") or "").strip()
+    if summary_text:
+        return [summary_text]
+    return ["No concrete proposal text was produced from the available PR evidence."]
+
+
+def _fix_affected_files_lines(review: dict[str, Any]) -> list[str]:
+    files_changed = review.get("files_changed", [])
+    if not isinstance(files_changed, list):
+        return ["- None identified."]
+    paths = [str(item.get("path", "")).strip() for item in files_changed if isinstance(item, dict)]
+    paths = [path for path in paths if path]
+    if not paths:
+        return ["- None identified."]
+    lines = [f"- `{path}`" for path in paths[:5]]
+    if len(paths) > 5:
+        lines.append(f"- +{len(paths) - 5} more")
+    return lines
+
+
+def _fix_validation_suggestion_lines(review: dict[str, Any]) -> list[str]:
+    suggestions = review.get("suggested_tests", review.get("next_steps", []))
+    if not isinstance(suggestions, list):
+        return ["- Review the proposal manually before making any change."]
+    cleaned = [str(item).strip() for item in suggestions if str(item).strip()]
+    if not cleaned:
+        return ["- Review the proposal manually before making any change."]
+    return [f"- {item}" for item in cleaned[:4]]
+
+
 def render_patch_markdown(
     *,
     review: dict[str, Any],
@@ -2740,7 +2850,47 @@ def render_patch_markdown(
         verification_report.get("summary", verification_report.get("overall", _verification_status(audit_summary)))
         or _verification_status(audit_summary)
     ).strip()
+    fix_status = _fix_status_label(review=review, audit_summary=audit_summary)
+    fix_scope = "pull_request" if _has_pr_backend_evidence_context(audit_summary) else "repository"
+    fix_confidence = _fix_confidence_label(review=review, audit_summary=audit_summary)
+    risk_level = str(review.get("risk_level", "low") or "low").strip().lower() or "low"
+    candidate_issue_lines = _fix_candidate_issue_lines(review=review, status_label=fix_status)
+    proposed_change_lines = _fix_proposed_change_lines(
+        review=review,
+        audit_summary=audit_summary,
+        status_label=fix_status,
+    )
+    validation_suggestion_lines = _fix_validation_suggestion_lines(review)
+    safety_gate_lines = [
+        f"- Patch authorized: `{_bool_label(audit_summary.get('patch_authorized', False))}`",
+        f"- Patch applied: `{_bool_label(audit_summary.get('patch_applied', False))}`",
+        f"- Files modified: `{_bool_label(audit_summary.get('files_modified', False))}`",
+        f"- Branch created: `{_bool_label(audit_summary.get('branch_created', False))}`",
+        f"- Commit created: `{_bool_label(audit_summary.get('commit_created', False))}`",
+        f"- PR created: `{_bool_label(audit_summary.get('pr_created', False))}`",
+    ]
     sections = [
+        "### 🛠️ Fix proposal / governance",
+        f"- Status: `{fix_status}`",
+        f"- Scope: `{fix_scope}`",
+        f"- Risk: `{risk_level}`",
+        f"- Confidence: `{fix_confidence}`",
+        "",
+        "Candidate issue / risk:",
+        *(f"- {item}" for item in candidate_issue_lines),
+        "",
+        "Proposed change:",
+        *(f"- {item}" for item in proposed_change_lines),
+        "",
+        "Affected files:",
+        *_fix_affected_files_lines(review),
+        "",
+        "Validation suggestions:",
+        *validation_suggestion_lines,
+        "",
+        "Safety gates:",
+        *safety_gate_lines,
+        "",
         "### 🛠️ Patch operation",
         f"Summary: {summary_text}",
         "",

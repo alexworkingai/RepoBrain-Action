@@ -812,6 +812,11 @@ _SCOPED_COMMAND_AUDIT_KEYS: tuple[str, ...] = (
     "scope_status",
     "patch_authorized",
     "patch_applied",
+    "files_modified",
+    "branch_created",
+    "commit_created",
+    "pr_created",
+    "fix_status",
 )
 _MODEL_ADAPTER_AUDIT_EXPORT_KEYS: tuple[str, ...] = (
     "llm_adapter_contract_version",
@@ -980,7 +985,44 @@ def _build_scope_audit_summary(
     if cmd == "fix":
         audit_summary["patch_authorized"] = False
         audit_summary["patch_applied"] = False
+        audit_summary["files_modified"] = False
+        audit_summary["branch_created"] = False
+        audit_summary["commit_created"] = False
+        audit_summary["pr_created"] = False
+        audit_summary["fix_status"] = "UNSUPPORTED_SCOPE"
     return audit_summary
+
+
+def _analyze_fix_request(query: str) -> dict[str, Any]:
+    raw = str(query or "").strip()
+    normalized = raw.lower()
+    unsafe_markers = (
+        "apply the patch",
+        "apply patch",
+        "commit the changes",
+        "commit changes",
+        "create pr",
+        "open pr",
+        "push branch",
+        "push the branch",
+        "modify files",
+        "edit files",
+    )
+    vague_markers = {
+        "fix",
+        "fix this",
+        "fix this.",
+        "please fix",
+        "please fix this",
+        "repair this",
+    }
+    matched_unsafe = [marker for marker in unsafe_markers if marker in normalized]
+    return {
+        "raw": raw,
+        "requests_mutation": bool(matched_unsafe),
+        "matched_unsafe_markers": matched_unsafe,
+        "is_vague": normalized in vague_markers,
+    }
 
 
 def _apply_model_adapter_contract_fields(
@@ -6466,6 +6508,7 @@ def _build_review_markdown(
     audit: dict[str, Any] | None = None,
     governor: AIBudgetGovernor | None = None,
 ) -> str:
+    fix_request = _analyze_fix_request(query) if cmd == "fix" else {}
     if not is_pull_request:
         reason = (
             "Review is unsupported in issue-only context. No PR review claims or patch actions were attempted."
@@ -6895,6 +6938,18 @@ def _build_review_markdown(
         requested_backend=_requested_topocore_backend_from_env(),
         effective_tky_mode=audit_summary.get("tky_mode_used", effective_tky_mode),
     )
+    if cmd == "fix":
+        audit_summary.setdefault("patch_authorized", False)
+        audit_summary.setdefault("patch_applied", False)
+        audit_summary.setdefault("files_modified", False)
+        audit_summary.setdefault("branch_created", False)
+        audit_summary.setdefault("commit_created", False)
+        audit_summary.setdefault("pr_created", False)
+        audit_summary["fix_request_requires_mutation"] = bool(fix_request.get("requests_mutation", False))
+        audit_summary["fix_request_matched_unsafe_markers"] = ",".join(
+            str(item).strip() for item in fix_request.get("matched_unsafe_markers", []) if str(item).strip()
+        ) or "none"
+        audit_summary["fix_request_is_vague"] = bool(fix_request.get("is_vague", False))
     audit_summary["tky_selected_chunk_ids_count"] = int(
         len(getattr(tky_result.tky, "selected_chunk_ids", []) or [])
     )
@@ -7913,6 +7968,25 @@ def _build_review_markdown(
             patch_validation_failed = True
             patch_text = ""
 
+    if cmd == "fix" and bool(fix_request.get("requests_mutation", False)):
+        patch_text = ""
+        no_patch_response = True
+        patch_validation_failed = False
+        patch_validation_payload = {
+            "status": "no_patch",
+            "reason_code": "FIX_MUTATION_BLOCKED_BY_POLICY",
+            "reason_short": (
+                "Patch/autofix is disabled in the product fix path. "
+                "RepoBrain returned a proposal-only governance response without modifying files."
+            ),
+            "valid": False,
+            "touched_files": [],
+            "placeholder_detected": False,
+            "grounded": False,
+        }
+        audit_summary["fix_status"] = "BLOCKED_BY_SAFETY"
+        audit_summary["fix_status_reason"] = str(patch_validation_payload["reason_short"])
+
     patch_written = False
     patch_apply_message = "safe no_patch outcome: no sufficiently localized, evidence-backed patch target."
     patch_apply_result: dict[str, Any] = {
@@ -7934,7 +8008,7 @@ def _build_review_markdown(
         )
         patch_pr_message = "auto-pr skipped (validation failed)"
     if patch_text:
-        patch_path = _write_patch_artifact(repo_root, patch_text)
+        _write_patch_artifact(repo_root, patch_text)
         patch_written = True
         snippet = _patch_snippet(patch_text, max_lines=300)
         if batch_patch_conflicts:
@@ -7947,27 +8021,8 @@ def _build_review_markdown(
                 "Review partial diffs in artifacts and resolve manually."
             ).strip()
         else:
-            patch_apply_result = _maybe_apply_patch(repo_root=repo_root, patch_path=patch_path)
-            patch_apply_message = str(patch_apply_result.get("message", patch_apply_message))
-            patch_branch = str(patch_apply_result.get("branch", "") or "")
-            if client is not None and patch_branch and bool(patch_apply_result.get("pushed", False)):
-                base_branch = ""
-                if isinstance(github_context_seed, dict):
-                    base_branch = str(github_context_seed.get("base_ref", "") or "").strip()
-                if not base_branch:
-                    base_branch = extract_branch_from_env()
-                patch_pr_message = _maybe_create_patch_pr(
-                    repo_name=repo_name,
-                    token=client.token,
-                    patch_branch=patch_branch,
-                    base_branch=base_branch or "main",
-                    body_markdown=(
-                        "RepoBrain generated and applied a suggested patch.\n\n"
-                        f"Verification: {verification_report.get('summary', 'n/a')}"
-                    ),
-                )
-            else:
-                patch_pr_message = "auto-pr skipped (patch not pushed)"
+            patch_apply_message = "proposal-only mode: patch application disabled"
+            patch_pr_message = "auto-pr disabled (proposal-only fix path)"
     else:
         provider_http_status = llm_meta.get("llm_provider_http_status")
         provider_error_type = str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a")
