@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]
+_ACTION_REF = "alexworkingai/RepoBrain-Action@main"
 
 
 def _read(relative_path: str) -> str:
@@ -24,12 +25,14 @@ def test_runtime_python_files_do_not_reference_repobrain_community() -> None:
 def test_action_and_workflows_do_not_depend_on_repobrain_community() -> None:
     action_text = _read("action.yml").lower()
     workflow_text = _read(".github/workflows/repobrain.yml").lower()
-    example_text = _read("docs/examples/repobrain_external_pilot_workflow.yml").lower()
+    example_text = _read("docs/examples/repobrain_external_pilot_workflow.yml")
+    example_text_lower = example_text.lower()
 
     assert "repobrain-community" not in action_text
     assert "repobrain-community" not in workflow_text
-    assert "repobrain-community" not in example_text
-    assert "uses: alexworkingai/repobrain-action@main" in example_text
+    assert "repobrain-community" not in example_text_lower
+    assert "uses: alexworkingai/repobrain-action@main" not in example_text
+    assert f"uses: {_ACTION_REF}" in example_text
 
 
 def test_active_onboarding_docs_make_community_not_required() -> None:
@@ -41,13 +44,15 @@ def test_active_onboarding_docs_make_community_not_required() -> None:
         "docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md",
         "docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md",
     ]
-    combined = "\n".join(_read(path) for path in active_docs).lower()
+    combined = "\n".join(_read(path) for path in active_docs)
+    combined_lower = combined.lower()
 
-    assert "alexworkingai/repobrain-action@main" in combined
-    assert "repobrain-community/.github/workflows" not in combined
-    assert "repobrain-community/templates/repobrain.yml" not in combined
-    assert "retired" in combined
-    assert "not required" in combined
+    assert "alexworkingai/repobrain-action@main" not in combined
+    assert _ACTION_REF in combined
+    assert "repobrain-community/.github/workflows" not in combined_lower
+    assert "repobrain-community/templates/repobrain.yml" not in combined_lower
+    assert "retired" in combined_lower
+    assert "not required" in combined_lower
 
 
 def test_product_architecture_doc_removes_community_from_working_architecture() -> None:
