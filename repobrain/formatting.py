@@ -225,6 +225,7 @@ def format_refusal_comment(
 def format_verify_comment(report: dict[str, object]) -> str:
     """Format a PR verification report based on GitHub checks/status APIs."""
     state = str(report.get("state", "unknown")).lower()
+    status_label = str(report.get("status_label", state.upper() or "UNKNOWN")).upper()
     message = str(report.get("message", "")).strip()
     total = int(report.get("total", 0) or 0)
     success = int(report.get("success", 0) or 0)
@@ -233,15 +234,22 @@ def format_verify_comment(report: dict[str, object]) -> str:
     neutral = int(report.get("neutral", 0) or 0)
     failures = list(report.get("failures", []))
     verify_source = str(report.get("verify_source", "none") or "none")
+    head_sha = str(report.get("head_sha", "") or "").strip()
+    limitations = report.get("limitations", [])
+    if not isinstance(limitations, list):
+        limitations = []
     sources = report.get("sources", {})
     if not isinstance(sources, dict):
         sources = {}
 
     status_icon = {
-        "success": "✅",
-        "pending": "🟡",
-        "failure": "❌",
-    }.get(state, "❔")
+        "PASS": "✅",
+        "WARN": "⚠️",
+        "FAIL": "❌",
+        "PENDING": "🟡",
+        "NOT_RUN": "⚪",
+        "UNKNOWN": "❔",
+    }.get(status_label, "❔")
 
     failing_lines: list[str] = []
     for item in failures:
@@ -256,26 +264,38 @@ def format_verify_comment(report: dict[str, object]) -> str:
         else:
             failing_lines.append(f"- `{name}` ({conclusion})")
 
-    if state == "pending":
+    if status_label == "PENDING":
         next_steps = ["Wait for checks to finish, then run `/repobrain verify` again."]
-    elif state == "failure":
+    elif status_label == "FAIL":
         next_steps = ["Open failing checks, fix issues, push changes, then verify again."]
-    elif state == "success":
-        next_steps = ["Looks good; proceed with review or merge when ready."]
+    elif status_label == "PASS":
+        next_steps = ["No failing checks were observed. Proceed with human review before merge."]
+    elif status_label == "WARN":
+        next_steps = [
+            "Observed signals are mixed or partial. Review the limitations below before making a merge decision."
+        ]
+    elif status_label == "NOT_RUN":
+        next_steps = ["No verification signals were observed yet. Re-run `/repobrain verify` after checks start."]
     else:
-        next_steps = ["No checks/statuses detected yet. Re-run `/repobrain verify` later."]
+        next_steps = [
+            "Verification signals were unavailable or ambiguous. Inspect workflow permissions and CI visibility, then verify again."
+        ]
 
     audit_summary = {
         "route": "VERIFY",
+        "verification_status": status_label,
         "checks_total": total,
         "checks_failure": failure,
         "checks_pending": pending,
         "verify_source": verify_source,
     }
+    if head_sha:
+        audit_summary["head_sha"] = head_sha[:12]
 
     sections = [
         "### ✅ Verification report",
-        f"Status: {status_icon} `{state}`",
+        f"Verification status: {status_icon} `{status_label}`",
+        "Informational only. This report does not grant merge, security, or production approval.",
         "",
     ]
     if message:
@@ -297,11 +317,22 @@ def format_verify_comment(report: dict[str, object]) -> str:
         [
             "",
             "### 🧩 Sources",
+            f"- primary_source: {verify_source}",
             f"- checks: {sources.get('checks', 'empty')}",
             f"- statuses: {sources.get('statuses', 'empty')}",
             f"- workflow_runs: {sources.get('workflow_runs', 'empty')}",
         ]
     )
+
+    rendered_limitations = [str(item).strip() for item in limitations if str(item).strip()]
+    if rendered_limitations:
+        sections.extend(
+            [
+                "",
+                "### ⚠️ Limitations",
+                *[f"- {item}" for item in rendered_limitations],
+            ]
+        )
 
     sections.extend(
         [

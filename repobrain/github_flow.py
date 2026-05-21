@@ -8445,6 +8445,12 @@ def _build_verify_markdown(
             scope_status="verify_report_only",
             reason="Verify reports PR checks directly; TopoCore backend evidence is recorded separately from the CI summary.",
         )
+        audit_summary["pr_metadata_used"] = bool(issue_number)
+        audit_summary["verification_status"] = str(report.get("status_label", "UNKNOWN") or "UNKNOWN")
+        audit_summary["verify_source"] = str(report.get("verify_source", "none") or "none")
+        audit_summary["checks_total"] = int(report.get("total", 0) or 0)
+        audit_summary["checks_failure"] = int(report.get("failure", 0) or 0)
+        audit_summary["checks_pending"] = int(report.get("pending", 0) or 0)
         if audit is not None:
             audit["route_final"] = "VERIFY"
             audit["pass_count"] = 1
@@ -8500,6 +8506,14 @@ def _build_verify_markdown(
         scope_status="verify_report_only",
         reason="Verify reports PR checks directly; TopoCore backend evidence is recorded separately from the CI summary.",
     )
+    audit_summary["pr_metadata_used"] = bool(sha)
+    audit_summary["verification_status"] = str(report.get("status_label", "UNKNOWN") or "UNKNOWN")
+    audit_summary["verify_source"] = str(report.get("verify_source", "none") or "none")
+    audit_summary["checks_total"] = int(report.get("total", 0) or 0)
+    audit_summary["checks_failure"] = int(report.get("failure", 0) or 0)
+    audit_summary["checks_pending"] = int(report.get("pending", 0) or 0)
+    if sha:
+        audit_summary["head_sha"] = sha
     if audit is not None:
         audit["route_final"] = "VERIFY"
         audit["pass_count"] = 1
