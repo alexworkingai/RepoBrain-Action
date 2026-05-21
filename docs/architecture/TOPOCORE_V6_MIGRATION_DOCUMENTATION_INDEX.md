@@ -15,6 +15,8 @@ Current truth:
 - Sprint 67 removes final standalone v5 residue and closes the post-removal documentation gap
 - Sprint 68 records final live sanity and closes the v6-only transition
 - Sprint 69 starts the direct external repository pilot and removes `repobrain-community` from the working product architecture
+- Sprint 70 validates the external command matrix on Elen-MCP
+- Sprint 71 validates and improves external retrieval/evidence quality on Elen-MCP
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -132,6 +134,7 @@ Phase 7:
 - `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
 - `docs/architecture/SPRINT_69_EXTERNAL_REPO_PILOT_AND_COMMUNITY_REMOVAL.md`
 - `docs/architecture/SPRINT_70_EXTERNAL_COMMAND_MATRIX_ELEN_MCP.md`
+- `docs/architecture/SPRINT_71_EXTERNAL_RETRIEVAL_EVIDENCE_QUALITY.md`
 
 ## 5. Recommended Reading Paths
 
@@ -234,6 +237,11 @@ external command matrix validation on the pilot repo:
 - `docs/architecture/SPRINT_69_EXTERNAL_REPO_PILOT_AND_COMMUNITY_REMOVAL.md`
 - `docs/architecture/SPRINT_70_EXTERNAL_COMMAND_MATRIX_ELEN_MCP.md`
 
+external retrieval and evidence quality on the pilot repo:
+
+- `docs/architecture/SPRINT_70_EXTERNAL_COMMAND_MATRIX_ELEN_MCP.md`
+- `docs/architecture/SPRINT_71_EXTERNAL_RETRIEVAL_EVIDENCE_QUALITY.md`
+
 Why implementation is currently blocked:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
@@ -252,6 +260,7 @@ Current decision state:
 - the v6-only transition is closed out
 - direct external pilot architecture now points to `RepoBrain-Action`, not `repobrain-community`
 - external issue and PR command matrix validation on `Elen-MCP-v.2.2.0` has passed
+- external retrieval and evidence quality validation on `Elen-MCP-v.2.2.0` has passed
 - fix migration remains conservative
 - patch behavior expansion is not approved
 - production and Marketplace switch are not approved

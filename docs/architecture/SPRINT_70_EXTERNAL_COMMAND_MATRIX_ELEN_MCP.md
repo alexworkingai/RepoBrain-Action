@@ -125,6 +125,12 @@ Sprint 71 should focus on:
 - sharper issue-scope answer quality
 - PR review/fix evidence richness on larger diffs
 
+Sprint 71 follow-up:
+
+- issue-side workflow discovery quality was improved after Sprint 70
+- `.github/workflows/repobrain.yml` is now indexed and surfaces as primary evidence for workflow-setup queries
+- see `docs/architecture/SPRINT_71_EXTERNAL_RETRIEVAL_EVIDENCE_QUALITY.md`
+
 ## Non-Goals
 
 - no v5

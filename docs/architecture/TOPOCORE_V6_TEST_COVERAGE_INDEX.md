@@ -45,6 +45,7 @@ Current test baseline:
 | `tests/test_external_github_foundation_workflow.py` | external pilot docs/examples | Phase 7 | Direct RepoBrain-Action pilot install truth, direct caller workflow example, no community-hosted install claims in active pilot docs | No |
 | `tests/test_repobrain_community_removed_from_product.py` | active runtime/onboarding/workflow product surfaces | Phase 7 | No repobrain-community dependency in runtime/workflow/action surfaces, no v5/lite reintroduction, no copied private TopoCore source in product repo | No |
 | `tests/test_external_command_matrix_docs.py` | Sprint 70 external command matrix documentation and indexes | Phase 7 | External command matrix report exists, v6-only runtime truth is recorded, no v5/community reintroduction in the Sprint 70 evidence layer, indexes link the result | No |
+| `tests/test_external_retrieval_quality_docs.py` | Sprint 71 external retrieval-quality documentation and indexes | Phase 7 | External retrieval/evidence quality report exists, v6 backend evidence is recorded, fixed workflow-evidence defect is documented, no v5/community/patch drift in the Sprint 71 evidence layer | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -166,6 +167,10 @@ Current tests prove that:
   - issue and PR command outcomes on `Elen-MCP-v.2.2.0` are recorded
   - v6 backend evidence and scoped unsupported behavior are linked in current indexes
   - no new runtime behavior is claimed by local tests alone
+- Sprint 71 adds retrieval-quality documentation and regression coverage:
+  - workflow files are now part of the default retrieval scan
+  - external issue and PR evidence quality is recorded against live Elen-MCP runs
+  - no new runtime policy is claimed beyond the live evidence and targeted retrieval fix
 
 ## 6. What Tests Do Not Prove
 
@@ -219,6 +224,9 @@ Current tests do not prove:
 - Sprint 70 documentation tests do not replace live GitHub evidence:
   - they guard the recorded matrix and indexes
   - the live command matrix evidence still comes from GitHub runs on `Elen-MCP-v.2.2.0`
+- Sprint 71 documentation and retrieval tests do not replace live GitHub evidence:
+  - they guard the documented quality results and the workflow-indexing fix
+  - the retrieval/evidence quality result still comes from GitHub runs on `Elen-MCP-v.2.2.0`
 
 ## 7. Recommended Future Test Maintenance
 

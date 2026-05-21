@@ -96,6 +96,11 @@ Validated command surface after Sprint 70:
   - `/repobrain verify ...` as report-only verification
   - `/repobrain fix ...` as conservative no-patch guidance
 
+Retrieval quality note after Sprint 71:
+
+- setup-oriented issue queries should surface `.github/workflows/repobrain.yml` as primary evidence
+- `.github/repobrain.instructions.md` and `docs/repobrain_pilot.md` should appear as supporting evidence rather than replacing the workflow file
+
 ## Expected Backend Evidence
 
 Expected evidence in a healthy smoke run:

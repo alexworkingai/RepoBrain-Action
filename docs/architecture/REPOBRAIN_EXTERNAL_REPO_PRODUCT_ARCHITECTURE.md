@@ -104,3 +104,11 @@ Validated runtime truth:
 - resolved backend: `v6` for backend-invoking ask/review/fix and retrieval commands
 - no `v5`
 - no `repobrain-community`
+
+## Sprint 71 Retrieval Quality Follow-up
+
+Sprint 71 validated evidence quality on the same external pilot path and fixed an issue-side retrieval defect:
+
+- `.github/workflows/repobrain.yml` is now indexed in the default retrieval scan
+- workflow-focused issue queries now surface the caller workflow as primary evidence
+- changed-file prioritization on PR commands remained intact
