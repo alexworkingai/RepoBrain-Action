@@ -61,6 +61,29 @@ STOP_WORDS = {
     "этот",
 }
 
+_WORKFLOW_QUERY_TOKENS = {
+    "workflow",
+    "workflows",
+    "config",
+    "configuration",
+    "configure",
+    "configured",
+    "github",
+    "action",
+    "actions",
+    "pipeline",
+    "pipelines",
+    "repobrain",
+}
+_TOPOCORE_INTENT_TOKENS = {
+    "topocore",
+    "tkya",
+    "dependency",
+    "dependencies",
+    "backend",
+    "v6",
+}
+
 
 def _dedupe_keep_order(values: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(values))
@@ -116,6 +139,10 @@ def _path_terms(file_path: str) -> list[str]:
     return _dedupe_keep_order(term for term in terms if term and term not in STOP_WORDS)
 
 
+def _has_query_token(query_terms: list[str], allowed: set[str]) -> bool:
+    return any(term in allowed for term in query_terms)
+
+
 def _jaccard(a: set[int], b: set[int]) -> float:
     if not a or not b:
         return 0.0
@@ -151,10 +178,18 @@ def score_chunk_pro(question: str, chunk: CandidateChunk) -> float:
 
     priors = 0.0
     path_lower = chunk.file_path.lower()
+    workflow_intent = _has_query_token(query_terms, _WORKFLOW_QUERY_TOKENS)
+    topocore_intent = _has_query_token(query_terms, _TOPOCORE_INTENT_TOKENS)
     if path_lower.startswith(("repobrain/", "src/")):
         priors += 0.02
     elif path_lower.startswith("tests/"):
         priors -= 0.01
+    if workflow_intent and path_lower.startswith(".github/workflows/"):
+        priors += 0.12
+    elif workflow_intent and path_lower.startswith(".github/"):
+        priors += 0.05
+    if path_lower.startswith(".topocore-v6/") and not topocore_intent:
+        priors -= 0.10
 
     score = 0.70 * base_overlap + 0.25 * path_overlap + exact_hits + priors
     return max(0.0, min(1.0, score))

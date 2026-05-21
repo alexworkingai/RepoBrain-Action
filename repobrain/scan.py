@@ -8,6 +8,7 @@ DEFAULT_INCLUDE_GLOBS = [
     "repobrain/**",
     "scripts/**",
     "tests/**",
+    ".github/workflows/**",
     "README.md",
     "*.md",
 ]

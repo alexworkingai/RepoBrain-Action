@@ -45,3 +45,23 @@ def test_hybrid_rerank_fallback_for_single_candidate() -> None:
     assert result.hybrid_rerank_used is False
     assert result.retrieval_ranking_mode == "fallback_lexical"
     assert result.reason_codes == ["single_candidate"]
+
+
+def test_hybrid_rerank_boosts_workflow_paths_for_workflow_queries() -> None:
+    candidates = [
+        _candidate("docs/repobrain_pilot.md", 0.74, 1),
+        _candidate(".github/workflows/repobrain.yml", 0.60, 2),
+        _candidate(".topocore-v6/docs/CONNECT_APPLICATION_TO_TOPOCORE_V6.md", 0.78, 3),
+    ]
+
+    result = rerank_candidates(
+        candidates,
+        query_context={
+            "question": "Where is the RepoBrain workflow configured and how does it connect to RepoBrain-Action?",
+            "command": "ask",
+        },
+    )
+
+    assert result.hybrid_rerank_used is True
+    assert result.candidates[0].file_path == ".github/workflows/repobrain.yml"
+    assert "workflow_query_boost" in result.reason_codes

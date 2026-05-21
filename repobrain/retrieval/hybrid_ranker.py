@@ -9,6 +9,28 @@ from repobrain.tky_provider import CandidateChunk
 
 _DOC_EXTENSIONS = (".md", ".rst", ".txt", ".adoc")
 _LOW_SIGNAL_PATH_TOKENS = ("node_modules/", "dist/", "build/", ".min.", "package-lock.json", "pnpm-lock.yaml")
+_WORKFLOW_QUERY_TOKENS = {
+    "workflow",
+    "workflows",
+    "config",
+    "configuration",
+    "configure",
+    "configured",
+    "github",
+    "action",
+    "actions",
+    "pipeline",
+    "pipelines",
+    "repobrain",
+}
+_TOPOCORE_INTENT_TOKENS = {
+    "topocore",
+    "tkya",
+    "dependency",
+    "dependencies",
+    "backend",
+    "v6",
+}
 
 
 @dataclass(frozen=True)
@@ -35,6 +57,10 @@ def _is_docs_path(path: str) -> bool:
 def _contains_any(text: str, tokens: tuple[str, ...]) -> bool:
     lowered = str(text or "").lower()
     return any(token in lowered for token in tokens)
+
+
+def _has_query_token(query_terms: list[str], allowed: set[str]) -> bool:
+    return any(term in allowed for term in query_terms)
 
 
 def _query_term_overlap(path: str, chunk_id: str, query_terms: list[str]) -> float:
@@ -73,6 +99,8 @@ def rerank_candidates(
     )
     query_terms = extract_query_terms(question)
     explicit_doc_request = bool(re.search(r"\b(readme|docs?|documentation)\b", question, flags=re.IGNORECASE))
+    workflow_intent = _has_query_token(query_terms, _WORKFLOW_QUERY_TOKENS)
+    topocore_intent = _has_query_token(query_terms, _TOPOCORE_INTENT_TOKENS)
 
     try:
         ranked: list[tuple[float, CandidateChunk]] = []
@@ -82,13 +110,27 @@ def rerank_candidates(
             lexical = _query_term_overlap(candidate.file_path, candidate.chunk_id, query_terms)
 
             structural = 0.0
+            hybrid_bonus = 0.0
             if changed_files and candidate.file_path in changed_files:
                 structural += 0.22
                 reason_codes.add("pr_path_boost")
+            if workflow_intent and candidate.file_path.lower().startswith(".github/workflows/"):
+                structural += 0.45
+                hybrid_bonus += 0.12
+                reason_codes.add("workflow_query_boost")
+            elif workflow_intent and candidate.file_path.lower().startswith(".github/"):
+                structural += 0.12
+                reason_codes.add("github_config_boost")
+            if workflow_intent and _is_docs_path(candidate.file_path) and not explicit_doc_request:
+                structural -= 0.08
+                reason_codes.add("workflow_query_docs_penalty")
             if candidate.score_local is not None:
                 structural += 0.06 * _clamp(candidate.score_local)
             if candidate.score_vec is not None:
                 structural += 0.06 * _clamp(candidate.score_vec)
+            if candidate.file_path.lower().startswith(".topocore-v6/") and not topocore_intent:
+                structural -= 0.16
+                reason_codes.add("private_dependency_penalty")
             if _contains_any(candidate.file_path, _LOW_SIGNAL_PATH_TOKENS):
                 structural -= 0.10
                 reason_codes.add("low_signal_path_penalty")
@@ -96,7 +138,7 @@ def rerank_candidates(
                 structural -= 0.10
                 reason_codes.add("docs_context_penalty")
 
-            hybrid_score = _clamp(0.68 * base + 0.22 * lexical + 0.10 * _clamp(structural))
+            hybrid_score = _clamp(0.68 * base + 0.22 * lexical + 0.10 * _clamp(structural) + hybrid_bonus)
             ranked.append((hybrid_score, candidate))
 
         ranked.sort(
