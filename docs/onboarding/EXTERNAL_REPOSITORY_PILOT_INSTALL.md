@@ -103,7 +103,7 @@ Validated command surface after Sprint 70:
   - `/repobrain ask ...`
   - `/repobrain review ...`
   - `/repobrain verify ...` as informational PR verification with explicit `PASS/WARN/FAIL/PENDING/NOT_RUN/UNKNOWN` status labels
-  - `/repobrain fix ...` as conservative no-patch guidance
+  - `/repobrain fix ...` as safe proposal/governance with explicit no-mutation safety gates
 
 Retrieval quality note after Sprint 71:
 
@@ -130,6 +130,23 @@ Expected verify truth after Sprint 72:
 - `PASS` means observed verification signals are passing, not that merge is approved
 - `NOT_RUN` means no concrete checks/statuses/workflow runs were observed for the PR head SHA
 - limitations and source availability should appear directly in the comment
+
+Expected fix truth after Sprint 73:
+
+- issue-scope `/repobrain fix` remains scoped unsupported and no-mutation
+- PR-scope `/repobrain fix` may return:
+  - `PROPOSAL_READY`
+  - `NO_ACTION_NEEDED`
+  - `NEEDS_MORE_INFORMATION`
+  - `BLOCKED_BY_SAFETY`
+- visible safety gates should show:
+  - `patch_authorized=false`
+  - `patch_applied=false`
+  - `files_modified=false`
+  - `branch_created=false`
+  - `commit_created=false`
+  - `pr_created=false`
+- unsafe requests such as “apply the patch and commit the changes” should be blocked explicitly
 
 ## Troubleshooting
 

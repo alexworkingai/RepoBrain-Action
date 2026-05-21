@@ -132,6 +132,12 @@ Sprint 72 follow-up:
 - live external verify now records source availability, limitations, and head-SHA audit anchors
 - see `docs/architecture/SPRINT_72_VERIFY_COMMAND_PRODUCTIONIZATION.md`
 
+Sprint 73 follow-up:
+
+- external PR `/repobrain fix` now surfaces proposal/governance status, affected files, and visible no-mutation safety gates
+- unsafe mutation prompts are blocked safely on the external product path
+- see `docs/architecture/SPRINT_73_FIX_COMMAND_PRODUCT_PATH.md`
+
 ## Non-Goals
 
 - no `v5`

@@ -138,6 +138,12 @@ Sprint 72 follow-up:
 - source availability, limitations, and audit anchors are now part of the live external verify comment
 - see `docs/architecture/SPRINT_72_VERIFY_COMMAND_PRODUCTIONIZATION.md`
 
+Sprint 73 follow-up:
+
+- PR `/repobrain fix` now renders a product-grade proposal/governance header with explicit no-mutation safety gates
+- unsafe mutation prompts are blocked explicitly instead of relying on implicit `no_patch`
+- see `docs/architecture/SPRINT_73_FIX_COMMAND_PRODUCT_PATH.md`
+
 ## Non-Goals
 
 - no v5

@@ -127,3 +127,22 @@ Sprint 72 made the external PR `verify` path production-useful without changing 
 - verify remains informational only:
   - no safe-to-merge claim
   - no security approval claim
+
+## Sprint 73 Fix Productization Follow-up
+
+Sprint 73 made the external PR `fix` path product-useful without enabling mutation:
+
+- issue-scope `fix` remains scoped unsupported and safe
+- PR-scope `fix` now renders a visible proposal/governance header before lower-level patch diagnostics
+- explicit safety gates are user-visible:
+  - `patch_authorized=false`
+  - `patch_applied=false`
+  - `files_modified=false`
+  - `branch_created=false`
+  - `commit_created=false`
+  - `pr_created=false`
+- unsafe mutation prompts are blocked explicitly with `BLOCKED_BY_SAFETY`
+- `fix` remains informational only:
+  - no patch application
+  - no branch/commit/PR creation
+  - no merge/security approval claim

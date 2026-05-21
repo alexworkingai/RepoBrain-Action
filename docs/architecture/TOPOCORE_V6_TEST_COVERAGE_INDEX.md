@@ -47,6 +47,7 @@ Current test baseline:
 | `tests/test_external_command_matrix_docs.py` | Sprint 70 external command matrix documentation and indexes | Phase 7 | External command matrix report exists, v6-only runtime truth is recorded, no v5/community reintroduction in the Sprint 70 evidence layer, indexes link the result | No |
 | `tests/test_external_retrieval_quality_docs.py` | Sprint 71 external retrieval-quality documentation and indexes | Phase 7 | External retrieval/evidence quality report exists, v6 backend evidence is recorded, fixed workflow-evidence defect is documented, no v5/community/patch drift in the Sprint 71 evidence layer | No |
 | `tests/test_verify_command_productionization.py` | `repobrain/verify.py`, `repobrain/formatting.py`, `repobrain/github_flow.py` | Phase 7 | Verify status-label mapping, source/limitation rendering, permission-safe fallback handling, issue-scope safety preservation, no unsafe merge/security wording, no v5/community/patch drift in verify output | No |
+| `tests/test_fix_command_product_path.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Fix proposal/governance rendering, visible no-mutation safety markers, unsafe mutation blocking, issue-scope fix safety preservation, no v5/community/autofix drift in fix output | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -176,6 +177,10 @@ Current tests prove that:
   - explicit `PASS/WARN/FAIL/PENDING/NOT_RUN/UNKNOWN` verify semantics are tested locally
   - missing verification signals no longer collapse into an implied pass
   - permission-limited or coarse-source verify output remains informational and safe
+- Sprint 73 adds fix-product-path coverage:
+  - PR fix now has explicit proposal/governance rendering coverage
+  - visible no-mutation markers are tested directly
+  - unsafe mutation prompts are tested as blocked product-path requests
 
 ## 6. What Tests Do Not Prove
 

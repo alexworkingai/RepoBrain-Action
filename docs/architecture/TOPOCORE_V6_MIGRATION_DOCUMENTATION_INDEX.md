@@ -18,6 +18,7 @@ Current truth:
 - Sprint 70 validates the external command matrix on Elen-MCP
 - Sprint 71 validates and improves external retrieval/evidence quality on Elen-MCP
 - Sprint 72 productionizes external PR `verify` semantics on Elen-MCP
+- Sprint 73 productizes external PR `fix` semantics as safe proposal/governance on Elen-MCP
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -137,6 +138,7 @@ Phase 7:
 - `docs/architecture/SPRINT_70_EXTERNAL_COMMAND_MATRIX_ELEN_MCP.md`
 - `docs/architecture/SPRINT_71_EXTERNAL_RETRIEVAL_EVIDENCE_QUALITY.md`
 - `docs/architecture/SPRINT_72_VERIFY_COMMAND_PRODUCTIONIZATION.md`
+- `docs/architecture/SPRINT_73_FIX_COMMAND_PRODUCT_PATH.md`
 
 ## 5. Recommended Reading Paths
 

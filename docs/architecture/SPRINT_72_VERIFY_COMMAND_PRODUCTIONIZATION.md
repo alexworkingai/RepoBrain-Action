@@ -174,6 +174,12 @@ Focus:
 - keep external fix guidance useful while preserving no-patch safety by default
 - continue improving user-facing diagnostics without widening runtime policy
 
+Sprint 73 follow-up:
+
+- `/repobrain fix` is now productized as a safe proposal/governance path on external PRs
+- visible safety gates now show `patch_authorized=false`, `patch_applied=false`, `files_modified=false`, `branch_created=false`, `commit_created=false`, and `pr_created=false`
+- unsafe mutation requests are blocked explicitly with `BLOCKED_BY_SAFETY`
+
 ## 10. Non-Goals
 
 - no v5

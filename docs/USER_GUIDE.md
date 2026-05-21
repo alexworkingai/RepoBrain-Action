@@ -115,6 +115,31 @@ Supported now: `ask` only.
     - not merge approval
     - not security approval
 
+### Fix Semantics
+
+- issue scope:
+  - `/repobrain fix` stays scoped unsupported and explicitly reports no mutation
+- PR scope:
+  - `/repobrain fix` is proposal/governance only
+  - possible product statuses:
+    - `PROPOSAL_READY`
+    - `NO_ACTION_NEEDED`
+    - `NEEDS_MORE_INFORMATION`
+    - `UNSUPPORTED_SCOPE`
+    - `BLOCKED_BY_SAFETY`
+    - `ERROR_SANITIZED`
+  - visible safety gates should show:
+    - `patch_authorized=false`
+    - `patch_applied=false`
+    - `files_modified=false`
+    - `branch_created=false`
+    - `commit_created=false`
+    - `pr_created=false`
+  - informational only:
+    - not patch application
+    - not merge approval
+    - not security approval
+
 ## Artifacts You Should Expect
 
 Depending on command and mode:
