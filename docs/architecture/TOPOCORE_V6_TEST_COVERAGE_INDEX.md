@@ -48,6 +48,7 @@ Current test baseline:
 | `tests/test_external_retrieval_quality_docs.py` | Sprint 71 external retrieval-quality documentation and indexes | Phase 7 | External retrieval/evidence quality report exists, v6 backend evidence is recorded, fixed workflow-evidence defect is documented, no v5/community/patch drift in the Sprint 71 evidence layer | No |
 | `tests/test_verify_command_productionization.py` | `repobrain/verify.py`, `repobrain/formatting.py`, `repobrain/github_flow.py` | Phase 7 | Verify status-label mapping, source/limitation rendering, permission-safe fallback handling, issue-scope safety preservation, no unsafe merge/security wording, no v5/community/patch drift in verify output | No |
 | `tests/test_fix_command_product_path.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Fix proposal/governance rendering, visible no-mutation safety markers, unsafe mutation blocking, issue-scope fix safety preservation, no v5/community/autofix drift in fix output | No |
+| `tests/test_external_security_permissions_fork_safety.py` | external workflow example, onboarding docs, readiness guidance, verify/fix security wording | Phase 7 | Minimal external permission baseline, private-action troubleshooting, secret/token degradation docs, fork-safety policy, no `pull_request_target`, no broad write permissions, no v5/community/patch drift in security guidance | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -181,6 +182,10 @@ Current tests prove that:
   - PR fix now has explicit proposal/governance rendering coverage
   - visible no-mutation markers are tested directly
   - unsafe mutation prompts are tested as blocked product-path requests
+- Sprint 74 adds external security hardening coverage:
+  - consumer workflow permissions are statically constrained to a read-mostly baseline
+  - private action access and missing-token failure modes are documented and guarded
+  - fork-safety policy is recorded without widening runtime trust
 
 ## 6. What Tests Do Not Prove
 
@@ -237,6 +242,9 @@ Current tests do not prove:
 - Sprint 71 documentation and retrieval tests do not replace live GitHub evidence:
   - they guard the documented quality results and the workflow-indexing fix
   - the retrieval/evidence quality result still comes from GitHub runs on `Elen-MCP-v.2.2.0`
+- Sprint 74 documentation and static-guard tests do not replace full live fork/security chaos testing:
+  - they guard the published permissions, token, and fork-safety policy
+  - live missing-secret and untrusted-fork secret-withholding scenarios remain intentionally conservative unless run in isolated fixtures
 
 ## 7. Recommended Future Test Maintenance
 

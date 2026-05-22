@@ -37,6 +37,15 @@ Current direct pilot truth:
 - TopoCore v6 remains private and is checked out separately with a private repo token
 - `repobrain-community` is retired from the working architecture and is not required
 - Sprint 69 pilot smoke target is issue/PR `ask` with visible v6 backend evidence
+- current external workflow baseline is read-mostly:
+  - `contents: read`
+  - `models: read`
+  - `issues: write`
+  - `pull-requests: read`
+  - `checks: read`
+  - `statuses: read`
+  - `actions: read`
+- `contents: write` and `pull_request_target` are not part of the default external pilot
 
 Primary install reference:
 
@@ -139,6 +148,17 @@ Supported now: `ask` only.
     - not patch application
     - not merge approval
     - not security approval
+
+### Security And Fork Safety
+
+- `TOPOCORE_V6_REPO_TOKEN` is required only for private TopoCore checkout
+- missing or invalid private-token access is a setup failure, not a v5 fallback case
+- private action access must be enabled for `alexworkingai/RepoBrain-Action`
+- `Unable to resolve action ... repository not found` can mean Actions policy/private-action access is blocked, not only that the action ref is wrong
+- the current external pilot does not use `pull_request_target`
+- untrusted fork PRs should not receive private TopoCore secrets or direct execution of fork head code
+- `/repobrain verify` remains informational only
+- `/repobrain fix` remains no-patch and no-mutation
 
 ## Artifacts You Should Expect
 

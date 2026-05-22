@@ -19,6 +19,7 @@ Current truth:
 - Sprint 71 validates and improves external retrieval/evidence quality on Elen-MCP
 - Sprint 72 productionizes external PR `verify` semantics on Elen-MCP
 - Sprint 73 productizes external PR `fix` semantics as safe proposal/governance on Elen-MCP
+- Sprint 74 hardens the external product path around permissions, private action access, token degradation, and fork safety
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -139,6 +140,7 @@ Phase 7:
 - `docs/architecture/SPRINT_71_EXTERNAL_RETRIEVAL_EVIDENCE_QUALITY.md`
 - `docs/architecture/SPRINT_72_VERIFY_COMMAND_PRODUCTIONIZATION.md`
 - `docs/architecture/SPRINT_73_FIX_COMMAND_PRODUCT_PATH.md`
+- `docs/architecture/SPRINT_74_SECURITY_PERMISSIONS_FORK_SAFETY.md`
 
 ## 5. Recommended Reading Paths
 
@@ -246,6 +248,12 @@ external retrieval and evidence quality on the pilot repo:
 - `docs/architecture/SPRINT_70_EXTERNAL_COMMAND_MATRIX_ELEN_MCP.md`
 - `docs/architecture/SPRINT_71_EXTERNAL_RETRIEVAL_EVIDENCE_QUALITY.md`
 
+external security, permission, token, and fork-safety hardening on the pilot repo:
+
+- `docs/architecture/SPRINT_72_VERIFY_COMMAND_PRODUCTIONIZATION.md`
+- `docs/architecture/SPRINT_73_FIX_COMMAND_PRODUCT_PATH.md`
+- `docs/architecture/SPRINT_74_SECURITY_PERMISSIONS_FORK_SAFETY.md`
+
 Why implementation is currently blocked:
 
 - `docs/architecture/TOPOCORE_V6_PHASE_6_CONTROLLED_ADVISORY_EXPERIMENT_PROPOSAL.md`
@@ -265,6 +273,7 @@ Current decision state:
 - direct external pilot architecture now points to `RepoBrain-Action`, not `repobrain-community`
 - external issue and PR command matrix validation on `Elen-MCP-v.2.2.0` has passed
 - external retrieval and evidence quality validation on `Elen-MCP-v.2.2.0` has passed
+- external security, permission, token, and fork-safety hardening on `Elen-MCP-v.2.2.0` is the current product-hardening focus
 - fix migration remains conservative
 - patch behavior expansion is not approved
 - production and Marketplace switch are not approved

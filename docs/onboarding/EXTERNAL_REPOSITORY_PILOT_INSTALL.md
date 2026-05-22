@@ -67,11 +67,42 @@ The consumer workflow must:
 Recommended caller-workflow permissions for external verify:
 
 - `contents: read`
+- `models: read`
 - `issues: write`
-- `pull-requests: write`
-- `checks: write`
+- `pull-requests: read`
+- `checks: read`
 - `statuses: read`
 - `actions: read`
+
+Why this is the current minimum for the direct pilot:
+
+- `contents: read`
+  - read repository files and diffs
+- `models: read`
+  - allow the current GitHub Models-backed external runtime path
+- `issues: write`
+  - post issue comments and PR issue-comment replies
+- `pull-requests: read`
+  - read PR metadata and changed-file context
+- `checks: read`
+  - read check-run state for `/repobrain verify`
+- `statuses: read`
+  - read combined commit status for `/repobrain verify`
+- `actions: read`
+  - read workflow-run state for `/repobrain verify`
+
+Permissions not required for the current external product path:
+
+- `contents: write`
+- `checks: write`
+- `pull-requests: write`
+- `pull_request_target`
+- deployment/package write permissions
+
+Important:
+
+- internal `RepoBrain-Action` maintenance workflows may retain broader permissions for deferred check publication
+- consumer repositories should not copy those broader permissions into the external pilot workflow
 
 Do not vendor or copy TopoCore v6 into `RepoBrain-Action` or the consumer repository.
 
@@ -164,6 +195,85 @@ Check:
 - token has read access to `alexworkingai/topocore`
 - workflow still checks out the private repo before running RepoBrain
 
+Expected failure shape:
+
+- the workflow may fail during checkout or install before RepoBrain comment rendering starts
+- the secret name can appear in setup logs
+- the secret value must not appear
+- private local paths or raw token material should not be printed
+
+### Invalid private dependency token or private repo access mismatch
+
+Symptoms:
+
+- checkout of `alexworkingai/topocore` fails even though the secret exists
+- RepoBrain never reaches backend execution
+
+Check:
+
+- `TOPOCORE_V6_REPO_TOKEN` still has read access to `alexworkingai/topocore`
+- the token has not expired or been rotated without updating the repository secret
+- the workflow still uses `secrets.TOPOCORE_V6_REPO_TOKEN`
+
+Treat this as a sanitized setup failure, not as a runtime fallback case.
+
+### Private action access or Actions policy failure
+
+Symptoms:
+
+- setup fails before RepoBrain starts
+- GitHub Actions shows:
+  - `Unable to resolve action ... repository not found`
+
+This does not always mean the action ref is wrong.
+It can also mean private action access is blocked.
+
+Check:
+
+- caller workflow uses `alexworkingai/RepoBrain-Action@main`
+- `RepoBrain-Action` private action sharing is enabled for repositories owned by `alexworkingai`
+- the consumer repository Actions policy does not stay on `local_only`
+- if using selected actions, allow `alexworkingai/RepoBrain-Action`
+
+Known pilot root cause from Sprint 69:
+
+- `alexworkingai/Elen-MCP-v.2.2.0` had `allowed_actions=local_only`
+- GitHub then surfaced `Unable to resolve action ... repository not found`
+
+### Insufficient workflow permissions
+
+Symptoms:
+
+- `/repobrain verify` returns source limitations or permission guidance
+- PR metadata or workflow-run evidence is incomplete
+
+Check:
+
+- the caller workflow still grants:
+  - `models: read`
+  - `issues: write`
+  - `pull-requests: read`
+  - `checks: read`
+  - `statuses: read`
+  - `actions: read`
+- no one tightened the workflow by removing read scopes needed for verification
+
+### Fork PR restricted behavior
+
+Current direct-pilot policy:
+
+- do not use `pull_request_target` for the RepoBrain external pilot
+- do not expose `TOPOCORE_V6_REPO_TOKEN` to untrusted fork code
+- do not checkout untrusted fork head code with the private TopoCore token
+
+Current example workflow is conservative:
+
+- same-repo PR comments use the PR head SHA
+- fork PR comments stay on the default workflow/runtime SHA
+- private TopoCore checkout still happens only inside the trusted base repository workflow context
+
+If you need richer fork support later, treat it as separate hardening work rather than widening the current pilot by default.
+
 ### Wrong action install shape
 
 Symptoms:
@@ -194,4 +304,5 @@ Do not use:
 - `repobrain-community`
 - `v5`
 - `lite`
+- `pull_request_target` for the current external pilot
 - patch/autofix by default

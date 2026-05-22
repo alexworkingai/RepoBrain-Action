@@ -12,9 +12,10 @@ import orjson
 
 _REQUIRED_WORKFLOW_PERMISSIONS: dict[str, str] = {
     "contents": "read",
+    "models": "read",
     "issues": "write",
-    "pull-requests": "write",
-    "checks": "write",
+    "pull-requests": "read",
+    "checks": "read",
     "statuses": "read",
     "actions": "read",
 }

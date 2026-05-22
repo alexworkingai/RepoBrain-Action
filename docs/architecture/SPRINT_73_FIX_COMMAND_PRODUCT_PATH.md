@@ -207,6 +207,7 @@ Focus:
 
 - validate external product behavior under tighter permission/fork boundaries
 - keep fix/verify/ask safety contracts explicit
+- keep private action access, token degradation, and fork policy explicit
 
 ## 10. Non-Goals
 

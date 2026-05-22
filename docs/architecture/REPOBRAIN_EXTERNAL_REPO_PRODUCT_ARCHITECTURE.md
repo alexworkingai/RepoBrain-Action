@@ -66,10 +66,33 @@ The external consumer repository owns:
 ## Security Boundaries
 
 - TopoCore v6 source stays private
+- `TOPOCORE_V6_REPO_TOKEN` is required for private TopoCore checkout and must never be printed
+- private `RepoBrain-Action` access must be enabled from consumer repositories during the pilot
+- consumer repositories should use read-mostly workflow permissions:
+  - `contents: read`
+  - `models: read`
+  - `issues: write`
+  - `pull-requests: read`
+  - `checks: read`
+  - `statuses: read`
+  - `actions: read`
+- `contents: write` is not required for the current external product path
+- `pull_request_target` is not part of the current external pilot
+- untrusted fork PRs must not receive the private TopoCore token by default
 - no patch/autofix by default
 - no file modification by RepoBrain behavior
 - no RepoBrain-created commit/branch/PR behavior
 - no `repobrain-community` dependency in active product runtime/onboarding
+
+## Sprint 74 Security Hardening Follow-up
+
+Sprint 74 hardens the same external product path around:
+
+- minimal caller-workflow permissions
+- private action access troubleshooting
+- missing/invalid private TopoCore token degradation
+- no-`pull_request_target` fork safety guidance
+- explicit no-mutation security boundaries
 
 ## Next Product Roadmap
 

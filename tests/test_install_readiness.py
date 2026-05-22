@@ -14,7 +14,13 @@ def _load_module():
     return module
 
 
-def _write_workflow(path: Path, *, checks_permission: str = "write", include_issue_comment: bool = True) -> None:
+def _write_workflow(
+    path: Path,
+    *,
+    checks_permission: str = "read",
+    pull_requests_permission: str = "read",
+    include_issue_comment: bool = True,
+) -> None:
     issue_comment_block = "  issue_comment:\n    types: [created]\n" if include_issue_comment else ""
     path.write_text(
         "\n".join(
@@ -25,8 +31,9 @@ def _write_workflow(path: Path, *, checks_permission: str = "write", include_iss
                 "  workflow_dispatch:",
                 "permissions:",
                 "  contents: read",
+                "  models: read",
                 "  issues: write",
-                "  pull-requests: write",
+                f"  pull-requests: {pull_requests_permission}",
                 f"  checks: {checks_permission}",
                 "  statuses: read",
                 "  actions: read",
@@ -107,7 +114,7 @@ def test_install_readiness_reports_missing_permission_when_workflow_permissions_
 ) -> None:
     module = _load_module()
     workflow = tmp_path / "repobrain.yml"
-    _write_workflow(workflow, checks_permission="read")
+    _write_workflow(workflow, checks_permission="none")
     payload = module.evaluate_install_readiness(
         workflow_path=workflow,
         env={
@@ -121,7 +128,7 @@ def test_install_readiness_reports_missing_permission_when_workflow_permissions_
 
     assert payload["overall_status"] == "MISSING_PERMISSION"
     assert payload["status_reason_code"] == "workflow_permissions_missing"
-    assert "checks:write" in payload["workflow_probe"]["missing_permissions"]
+    assert "checks:read" in payload["workflow_probe"]["missing_permissions"]
 
 
 def test_install_readiness_reports_unsupported_setup_for_invalid_selection_mode(tmp_path: Path) -> None:

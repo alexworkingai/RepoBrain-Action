@@ -180,6 +180,11 @@ Sprint 73 follow-up:
 - visible safety gates now show `patch_authorized=false`, `patch_applied=false`, `files_modified=false`, `branch_created=false`, `commit_created=false`, and `pr_created=false`
 - unsafe mutation requests are blocked explicitly with `BLOCKED_BY_SAFETY`
 
+Sprint 74 follow-up target:
+
+- harden the external product path around permissions, private action access, token degradation, and fork safety
+- preserve verify as informational and no-mutation while tightening external trust boundaries
+
 ## 10. Non-Goals
 
 - no v5

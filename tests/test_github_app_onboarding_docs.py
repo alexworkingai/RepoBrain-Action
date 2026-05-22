@@ -25,8 +25,9 @@ def test_github_app_setup_doc_covers_selected_repo_and_readiness_statuses() -> N
 def test_permissions_doc_covers_required_workflow_permissions() -> None:
     text = Path("docs/onboarding/permissions.md").read_text(encoding="utf-8")
 
-    assert "checks: write" in text
+    assert "models: read" in text
+    assert "checks: read" in text
     assert "issues: write" in text
-    assert "pull-requests: write" in text
+    assert "pull-requests: read" in text
     assert "statuses: read" in text
     assert "actions: read" in text
