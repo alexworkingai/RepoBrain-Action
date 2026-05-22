@@ -998,9 +998,11 @@ def _analyze_fix_request(query: str) -> dict[str, Any]:
     normalized = raw.lower()
     unsafe_markers = (
         "apply the patch",
+        "apply a patch",
         "apply patch",
         "commit the changes",
         "commit changes",
+        "commit it",
         "create pr",
         "open pr",
         "push branch",

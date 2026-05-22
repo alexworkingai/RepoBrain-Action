@@ -152,8 +152,12 @@ def test_issue_fix_scope_can_render_full_no_mutation_markers() -> None:
 
 def test_fix_request_analysis_detects_unsafe_and_vague_prompts() -> None:
     unsafe = _analyze_fix_request("Apply the patch and commit the changes.")
+    unsafe_short = _analyze_fix_request("Apply a patch and commit it.")
     vague = _analyze_fix_request("Fix this.")
 
     assert unsafe["requests_mutation"] is True
     assert "apply the patch" in unsafe["matched_unsafe_markers"]
+    assert unsafe_short["requests_mutation"] is True
+    assert "apply a patch" in unsafe_short["matched_unsafe_markers"]
+    assert "commit it" in unsafe_short["matched_unsafe_markers"]
     assert vague["is_vague"] is True
