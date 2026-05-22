@@ -1,4 +1,4 @@
-﻿# Repo Boundary Contract
+# Repo Boundary Contract
 
 ## 1. Purpose
 
@@ -48,7 +48,7 @@ Mandatory safety boundaries remain in force:
 - the GitHub Action product surface
 - v6-only runtime integration
 - action packaging and workflow truth
-- external repository pilot onboarding/examples
+- external repository onboarding, command docs, and troubleshooting
 - docs/tests/current-truth alignment
 - governance and regression tests
 - external CLI ask-only secondary surface
@@ -71,10 +71,11 @@ It may remain only as a historical repository until explicitly archived later.
 
 ## 4. Active Product Onboarding
 
-Use these files for current external onboarding:
+Use these canonical files for current external onboarding:
 
-- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
-- `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
+- `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
+- `docs/commands/REPOBRAIN_COMMANDS.md`
+- `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
 - `docs/examples/repobrain_external_pilot_workflow.yml`
 - `docs/examples/repobrain.instructions.md`
 
@@ -90,6 +91,6 @@ They must not override current operator guidance.
 Do not reintroduce into active product docs or workflows:
 
 - `repobrain-community` as required install/runtime host
-- v5 or `lite` as supported runtime choices
+- `v5` or `lite` as supported runtime choices
 - stale external workflow copies that contradict current product truth
 - patch/autofix claims beyond accepted governance

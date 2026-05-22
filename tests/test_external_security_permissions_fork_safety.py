@@ -36,7 +36,7 @@ def test_external_workflow_example_keeps_no_mutation_flags_and_private_token_ref
 
 
 def test_onboarding_docs_cover_private_action_access_secret_degradation_and_fork_policy() -> None:
-    text = _read("docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md")
+    text = _read("docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md")
 
     assert "TOPOCORE_V6_REPO_TOKEN" in text
     assert "must not appear" in text

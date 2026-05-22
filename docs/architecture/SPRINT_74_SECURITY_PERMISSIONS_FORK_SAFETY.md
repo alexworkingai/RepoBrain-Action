@@ -272,3 +272,7 @@ Focus:
 - no patch/autofix
 - no production/Marketplace switch
 - no RepoBrain-created branch/commit/PR behavior
+
+## Follow-on UX Note
+
+Sprint 75 consolidates the active external user path into canonical install, command, and troubleshooting docs so operators no longer need to assemble the flow from multiple pages.

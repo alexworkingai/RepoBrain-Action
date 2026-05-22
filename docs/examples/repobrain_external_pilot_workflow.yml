@@ -1,4 +1,9 @@
-﻿name: RepoBrain
+﻿# Canonical external docs:
+# - docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md
+# - docs/commands/REPOBRAIN_COMMANDS.md
+# - docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md
+
+name: RepoBrain
 
 on:
   issue_comment:

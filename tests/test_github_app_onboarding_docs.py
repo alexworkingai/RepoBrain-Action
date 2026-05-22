@@ -31,3 +31,5 @@ def test_permissions_doc_covers_required_workflow_permissions() -> None:
     assert "pull-requests: read" in text
     assert "statuses: read" in text
     assert "actions: read" in text
+    assert "INSTALL_REPOBRAIN_EXTERNAL_REPO.md" in text
+    assert "REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md" in text

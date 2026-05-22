@@ -1,129 +1,65 @@
-﻿# RepoBrain Action
+# RepoBrain Action
 
 Current release candidate: `0.5.0-rc.1`
 
-RepoBrain is a governed repository cognition runtime for GitHub workflows.
-It provides compact decision outputs, explicit safety governance, and auditable artifacts while keeping the protected internal kernel undisclosed.
+RepoBrain is a governed repository cognition action for GitHub workflows.
+Current product runtime is v6-only, with `RepoBrain-Action` as the external product entrypoint and private TopoCore v6 as a separate dependency.
 
-## What Works Today
+## Quick Start
 
-### GitHub mode (primary runtime)
+For a new external repository install, start here:
 
-Run in PR/issue comments:
+- Install guide: `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
+- Command guide: `docs/commands/REPOBRAIN_COMMANDS.md`
+- Troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
+- Example workflow: `docs/examples/repobrain_external_pilot_workflow.yml`
+
+## Product Surface
+
+Current external GitHub command surface:
 
 - `/repobrain help`
-- `/repobrain ask ...`
+- `/repobrain ask <query>`
+- `/repobrain locate <query>`
+- `/repobrain explain <query>`
 - `/repobrain review`
-- `/repobrain fix ...`
+- `/repobrain verify`
+- `/repobrain fix`
 
-Execution profile controls:
+Unsupported command spellings today:
 
-- `--profile cheap|balanced|premium`
-- default: `balanced`
-- safety guardrail: review/fix requests for `cheap` are normalized to governed `balanced`
+- `/repobrain status`
+- `/repobrain doctor`
+- `/repobrain fix-lite`
 
-### External repository pilot (direct RepoBrain-Action install)
+## Safety Guarantees
 
-RepoBrain-Action now owns the external repository pilot install path directly.
+Current external product behavior remains intentionally conservative:
 
-Current pilot shape:
+- v6-only runtime
+- no `repobrain-community` dependency
+- no patch/autofix
+- no RepoBrain-created branch/commit/PR behavior
+- `/repobrain verify` is informational only
+- `/repobrain review` is not merge approval
+- `/repobrain fix` is no-patch proposal/governance only
 
-- workflow lives in the consumer repository
-- action ref is `alexworkingai/RepoBrain-Action@main`
-- TopoCore v6 stays private and is checked out separately with a repo secret
-- `repobrain-community` is retired from the working product architecture and is not required
+## Current Pilot Model
 
-Current Sprint 69 validation target:
+The current external pilot uses:
 
-- issue `/repobrain ask ...`
-- PR `/repobrain ask ...`
-- visible backend evidence showing `resolved_backend=v6`
+- `alexworkingai/RepoBrain-Action@main`
+- private TopoCore v6 checked out separately with `TOPOCORE_V6_REPO_TOKEN`
+- a caller-owned workflow in the consumer repository
 
-Primary operator references:
+RepoBrain-Action remains private during the current pilot phase.
+TopoCore v6 remains private.
+`repobrain-community` is retired from the working product architecture and is not required.
 
-- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
-- `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
-- `docs/examples/repobrain_external_pilot_workflow.yml`
-
-### External CLI mode (bounded surface)
-
-CLI entrypoint:
-
-```bash
-python scripts/run_github.py \
-  --mode external \
-  --repo-root /path/to/repo \
-  --command ask \
-  --query "What changed in module X?"
-```
-
-Current external CLI support:
-
-- supported: `ask`
-- unsupported (explicit block): `review`, `fix`, other non-ask commands
-
-### MCP-facing bounded surface (ask-first)
-
-CLI adapter:
-
-```bash
-python scripts/run_mcp_surface.py \
-  --capability ask \
-  --repo-root /path/to/repo \
-  --query "What changed in module X?"
-```
-
-- supported capability: `ask`
-- unsupported capability requests are blocked explicitly with structured public-safe responses
-
-## Readiness and Operator Path
-
-GitHub App onboarding/readiness references:
-
-- `docs/onboarding/github_app_setup.md`
-- `docs/onboarding/permissions.md`
-- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
-
-Readiness artifacts:
-
-- `artifacts/onboarding/repobrain_install_readiness.json`
-- `artifacts/onboarding/repobrain_install_readiness.md`
-
-## Artifacts
-
-Common artifacts include:
-
-- `repobrain-audit`
-- `repobrain-diagnostic-summary`
-- `repobrain-tkya-evidence-pack`
-- `repobrain-install-readiness`
-- `repobrain-stability-benchmark` (when benchmark path is active)
-
-## Documentation Index
+## Additional References
 
 - User guide: `docs/USER_GUIDE.md`
 - Operator quickstart: `docs/OPERATOR_QUICKSTART.md`
-- External mode: `docs/EXTERNAL_MODE.md`
-- External repository pilot install: `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
-- External product architecture: `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
+- External mode overview: `docs/EXTERNAL_MODE.md`
+- External architecture: `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
 - Repository boundary contract: `docs/REPO_BOUNDARY_CONTRACT.md`
-- MCP surface contract: `docs/MCP_SURFACE.md`
-- Trial template: `docs/trials/external_repo_trial_template.md`
-- Historical Sprint 59 trial runbook artifact: `docs/trials/external_repo_trial_01_elen_mcp.md`
-- Historical benchmark narrative artifact: `docs/benchmarks/external_trial_01_elen_mcp_report.md`
-- Capabilities matrix: `docs/benchmarks/current_capabilities_matrix.md`
-- Environment reference: `docs/env_reference.md`
-- Team governance layer: `docs/governance/TEAM_GOVERNANCE.md`
-- Packaging overview: `docs/packaging/PACKAGING_OVERVIEW.md`
-- Startup readiness: `docs/startup/STARTUP_READINESS.md`
-- Strategic attention pack: `docs/strategy/ATTENTION_PACK_INDEX.md`
-
-## Scope Boundaries
-
-RepoBrain currently does not claim:
-
-- full production-ready external rollout across arbitrary repositories,
-- autofix or patch application by default,
-- Marketplace/admin-portal product surface.
-
-This repository intentionally keeps protected kernel internals out of public-facing operator documentation.

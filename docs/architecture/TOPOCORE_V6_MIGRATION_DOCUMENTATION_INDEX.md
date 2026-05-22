@@ -141,6 +141,7 @@ Phase 7:
 - `docs/architecture/SPRINT_72_VERIFY_COMMAND_PRODUCTIONIZATION.md`
 - `docs/architecture/SPRINT_73_FIX_COMMAND_PRODUCT_PATH.md`
 - `docs/architecture/SPRINT_74_SECURITY_PERMISSIONS_FORK_SAFETY.md`
+- `docs/architecture/SPRINT_75_UX_ONBOARDING_TROUBLESHOOTING.md`
 
 ## 5. Recommended Reading Paths
 

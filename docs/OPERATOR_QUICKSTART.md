@@ -1,127 +1,43 @@
-﻿# RepoBrain Operator Quickstart
+# RepoBrain Operator Quickstart
 
 ## Scope
 
 This quickstart is for operators validating RepoBrain in:
 
-- GitHub App mode (primary runtime),
-- direct external repository pilot mode,
-- external CLI mode (ask-only trial path).
+- GitHub mode
+- direct external repository pilot mode
+- external CLI ask-only mode
 
-It describes what to verify first, what to run, and how to classify outcomes.
+## Canonical Operator References
 
-## 1) GitHub App Readiness First
+Use these first:
 
-Before command validation, run install/readiness checks and confirm explicit verdict:
+- Install guide: `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
+- Command guide: `docs/commands/REPOBRAIN_COMMANDS.md`
+- Troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
+- Permissions reference: `docs/onboarding/permissions.md`
 
-- `READY`
-- `MISSING_PERMISSION`
-- `MISSING_CONFIG`
-- `UNSUPPORTED_SETUP`
+## First External Validation Steps
 
-Readiness artifacts:
+1. install the caller workflow from `docs/examples/repobrain_external_pilot_workflow.yml`
+2. configure `TOPOCORE_V6_REPO_TOKEN`
+3. run an issue `/repobrain ask ...`
+4. run a PR `/repobrain ask ...`
+5. if needed, validate `/repobrain verify` and `/repobrain fix` in PR scope
 
-- `artifacts/onboarding/repobrain_install_readiness.json`
-- `artifacts/onboarding/repobrain_install_readiness.md`
+Expected first-smoke backend truth:
 
-Required operator references:
+- requested backend: `auto` or `v6`
+- resolved backend: `v6`
+- fallback used: `no`
+- fallback reason: `none`
 
-- `docs/onboarding/github_app_setup.md`
-- `docs/onboarding/permissions.md`
+## Stop Conditions
 
-If readiness is not `READY`, stop and resolve blockers before command runs.
+Stop and resolve setup if:
 
-## 2) GitHub Mode Validation (Primary)
-
-On an open PR:
-
-1. `/repobrain help`
-2. `/repobrain ask --profile balanced ...`
-3. `/repobrain review --profile balanced`
-4. `/repobrain fix --profile premium ...` (safe `no_patch` is acceptable when grounded patch target is absent)
-
-What to verify:
-
-- compact PR-visible output remains intact,
-- profile truth is coherent in audit/evidence,
-- review/fix `cheap` normalization guardrail remains explicit when applicable.
-
-## 3) External Repository Pilot Validation (Direct)
-
-Direct pilot install references:
-
-- `docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md`
-- `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
-- `docs/examples/repobrain_external_pilot_workflow.yml`
-
-Run first on a safe issue or PR:
-
-1. `/repobrain ask Summarize current RepoBrain TopoCore backend status.`
-
-Expected first-smoke truth:
-
-- workflow executes from the caller repository using `alexworkingai/RepoBrain-Action@main`
-- TopoCore v6 is checked out privately
-- backend evidence is visible
-- requested backend is `auto` or `v6`
-- resolved backend is `v6`
-- fallback used is `no`
-- no patch/applied, file-modified, commit-created, branch-pushed, PR-created, security-verdict, safe-to-merge, approval/rejection, or autofix claims appear
-
-## 4) External CLI Mode Validation (Ask-Only)
-
-Run against a local checkout of target repository:
-
-```bash
-python scripts/run_github.py \
-  --mode external \
-  --repo-root /absolute/path/to/repo \
-  --command ask \
-  --query "What changed around module X?"
-```
-
-Expected:
-
-- `STATUS=success`
-- `DECISION=ANSWER`
-- answer text returned
-
-Unsupported commands must block honestly.
-
-## 5) MCP Surface Validation (Ask-Only)
-
-```bash
-python scripts/run_mcp_surface.py \
-  --capability ask \
-  --repo-root /absolute/path/to/repo \
-  --query "What changed around module X?"
-```
-
-Expected:
-
-- JSON response
-- `status=success`
-- `decision=ANSWER`
-
-## 6) Trial Evidence Capture
-
-Use:
-
-- `docs/trials/external_repo_trial_evidence_template.md`
-
-Capture for each executed step:
-
-- command
-- run/log reference
-- artifacts present/missing
-- operator blockers
-- final verdict (`TRIAL_PASS|TRIAL_PARTIAL|TRIAL_BLOCKED`)
-
-## 7) Stop Conditions
-
-Stop and file product issue if:
-
-1. readiness result is ambiguous,
-2. artifact truth contradicts command result,
-3. unsupported path behaves as if supported,
-4. operator cannot determine deterministic next action.
+- private action access is not working
+- `TOPOCORE_V6_REPO_TOKEN` is missing or invalid
+- the workflow permissions are tighter than the read-mostly baseline
+- unsupported commands are being treated as supported
+- docs and observed command behavior diverge

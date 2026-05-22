@@ -42,7 +42,7 @@ def test_active_onboarding_docs_make_community_not_required() -> None:
         "docs/USER_GUIDE.md",
         "docs/OPERATOR_QUICKSTART.md",
         "docs/packaging/EXTERNAL_GITHUB_FOUNDATION.md",
-        "docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md",
+        "docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md",
     ]
     combined = "\n".join(_read(path) for path in active_docs)
     combined_lower = combined.lower()
@@ -71,7 +71,7 @@ def test_no_v5_or_lite_runtime_choices_are_reintroduced() -> None:
             "action.yml",
             ".github/workflows/repobrain.yml",
             "docs/examples/repobrain_external_pilot_workflow.yml",
-            "docs/onboarding/EXTERNAL_REPOSITORY_PILOT_INSTALL.md",
+            "docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md",
         )
     )
 
@@ -86,7 +86,7 @@ def test_no_active_runtime_surface_reintroduces_removed_runtime_or_autofix() -> 
         _ROOT / "action.yml",
         _ROOT / ".github" / "workflows" / "repobrain.yml",
         _ROOT / "docs" / "examples" / "repobrain_external_pilot_workflow.yml",
-        _ROOT / "docs" / "onboarding" / "EXTERNAL_REPOSITORY_PILOT_INSTALL.md",
+        _ROOT / "docs" / "onboarding" / "INSTALL_REPOBRAIN_EXTERNAL_REPO.md",
         _ROOT / "docs" / "architecture" / "REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md",
     ]
     combined = "\n".join(p.read_text(encoding="utf-8", errors="ignore") for p in paths).lower()
