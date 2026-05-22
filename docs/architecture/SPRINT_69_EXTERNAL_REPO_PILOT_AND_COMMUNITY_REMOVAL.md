@@ -13,7 +13,7 @@ It removes `repobrain-community` from the working architecture and connects the 
 - `RB_ENABLE_ISSUE_COMMENT_V6_LAB=1`
 - TopoCore v6 remains private
 - pilot repository local path:
-  - `D:\ARIADNA_Minsk\1MyProjects\Elen-MCP-v.2.2.0`
+  - `<EXTERNAL_CONSUMER_REPO>`
 - pilot repository GitHub:
   - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0`
 

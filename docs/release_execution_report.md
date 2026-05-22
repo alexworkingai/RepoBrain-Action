@@ -1,3 +1,10 @@
+> Historical/internal release note. This file is retained for repository history and is not current public release, public install, or Marketplace publication guidance.
+>
+> Current release-readiness guidance lives in:
+> - `docs/release/RELEASE_CANDIDATE_CHECKLIST.md`
+> - `docs/release/PUBLIC_READINESS_ASSESSMENT.md`
+> - `docs/release/MARKETPLACE_READINESS_ASSESSMENT.md`
+> - `docs/release/RELEASE_NOTES_RC1.md`
 # Release Execution Report (`0.5.0-rc.1`)
 
 ## Release context

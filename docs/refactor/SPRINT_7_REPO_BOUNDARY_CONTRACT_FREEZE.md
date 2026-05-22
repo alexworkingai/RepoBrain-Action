@@ -12,11 +12,11 @@ repository owns, what it does not own, and what must not be reintroduced into
 ## 2. Repository States and Local Paths
 
 - Primary repository:
-  `D:\ARIADNA_Minsk\1MyProjects\RepoBrain-Action`
+  `<LOCAL_REPO_ROOT>`
 - Public external runtime repository:
-  `D:\ARIADNA_Minsk\1MyProjects\repobrain-community`
+  `<LOCAL_PROJECT_ROOT>\repobrain-community`
 - Third-party validation repository:
-  `D:\ARIADNA_Minsk\1MyProjects\elen-mcp-prod_v2`
+  `<EXTERNAL_CONSUMER_REPO>`
 
 At Sprint 7 start:
 

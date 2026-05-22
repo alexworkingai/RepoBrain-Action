@@ -1,0 +1,77 @@
+﻿RepoBrain Action Source-Available BYO-LLM License v0.2
+
+Copyright (c) RepoBrain contributors and licensors.
+
+1. Scope
+
+This license applies only to the contents of the RepoBrain-Action repository.
+This license does not apply to TopoCore v6 or to any private TopoCore component.
+TopoCore v6 and all private TopoCore components remain excluded from this license.
+
+2. Source-Available, Not Open Source
+
+RepoBrain-Action is source-available software.
+It is not released under an OSI-approved open-source license.
+No rights are granted except as expressly stated in this license.
+
+3. Permitted Use
+
+You may view, use, copy internally, and modify RepoBrain-Action for:
+- self-use
+- evaluation
+- private beta testing
+- internal repository automation
+- internal developer tooling and governance workflows
+
+You may use RepoBrain-Action with:
+- free GitHub-hosted or GitHub Models access
+- paid GitHub Models billed to your own GitHub account
+- your own paid LLM, model, or API accounts
+- your own BYOK provider or model configuration
+
+All model, LLM, API, provider, quota, and billing costs are your responsibility.
+RepoBrain does not include, resell, subsidize, guarantee, or bill for LLM or model usage.
+Paid LLM usage through your own account is allowed for your own internal repository use.
+
+4. Restrictions
+
+Without separate written permission, you may not:
+- resell RepoBrain-Action
+- offer RepoBrain-Action as a hosted service
+- offer RepoBrain-Action as a managed service
+- offer RepoBrain-Action as SaaS
+- use RepoBrain-Action as a client-facing paid service
+- sublicense RepoBrain-Action
+- redistribute RepoBrain-Action as a competing product
+- redistribute RepoBrain-Action as a hosted repository intelligence platform
+
+5. TopoCore v6 Exclusion
+
+TopoCore v6 and all private TopoCore components are permanently excluded.
+No right is granted to view, copy, modify, redistribute, sublicense, reverse engineer, extract, reconstruct, publish, or otherwise access TopoCore v6 source code through RepoBrain-Action.
+Authorized runtime access to TopoCore v6, if provided separately, does not grant any TopoCore v6 source-code rights.
+RepoBrain-Action must not be treated as a source grant, mirror, bundle, or reconstruction path for TopoCore v6.
+
+6. Product Boundaries
+
+RepoBrain-Action does not represent that its output is:
+- security approval
+- legal approval
+- merge approval
+- production certification
+- risk-free certification
+
+RepoBrain-Action does not grant repository mutation, patch application, branch creation, commit creation, or pull-request creation rights beyond explicitly documented product behavior.
+Current documented product behavior remains no-patch and no-mutation unless a future version explicitly documents otherwise.
+
+7. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, OR THAT OUTPUTS ARE CORRECT, COMPLETE, SAFE, OR FIT FOR ANY DECISION.
+
+8. Termination
+
+Any use outside the permissions granted by this license is unauthorized and terminates the permissions granted here.
+
+9. Reservation Of Rights
+
+All rights not expressly granted are reserved.

@@ -1,14 +1,14 @@
-# Release Candidate Checklist
+﻿# Release Candidate Checklist
 
 ## Purpose
 
 This checklist evaluates whether the current RepoBrain-Action state is ready for:
 
 - continued private beta use
-- a release-candidate handoff
+- release-candidate handoff
 - future public or Marketplace preparation
 
-It does not publish the repository or change visibility by itself.
+It does not publish the repository, change visibility, create a release tag, or publish to Marketplace by itself.
 
 ## Runtime Readiness
 
@@ -33,6 +33,9 @@ It does not publish the repository or change visibility by itself.
   - `/repobrain status`
   - `/repobrain doctor`
   - `/repobrain fix-lite`
+- roadmap commands documented without claiming implementation:
+  - `/repobrain audit`
+  - `/repobrain score`
 
 ## External Install Readiness
 
@@ -47,45 +50,41 @@ It does not publish the repository or change visibility by itself.
 
 ## Security Readiness
 
-- Status: `READY_WITH_NOTES`
-- no token values or private keys found in tracked repo content
+- Status: `READY`
+- no token values or private keys found in tracked docs
 - no private TopoCore source present in product repo
 - no `pull_request_target` in the external example
 - no patch/autofix
 - no `contents: write` in the external pilot baseline
-- notes:
-  - live missing-secret degradation remains documented/static-guarded rather than re-exercised on `main`
-  - live untrusted-fork secret-withholding remains documented/static-guarded
+- high-security TopoCore policy is documented
 
 ## Public Scrub Readiness
 
-- Status: `BLOCKED`
-- blockers:
-  - no top-level `LICENSE`
-  - historical docs still contain local Windows paths such as `D:\\ARIADNA_Minsk\\...`
-  - historical docs still contain old v5/community narratives that are safe as history but not scrubbed for public face-value reading
-  - legacy release docs describe an outdated release flow and need relabeling or replacement before public exposure
+- Status: `READY`
+- top-level `LICENSE` exists
+- local machine paths have been sanitized from tracked docs
+- legacy release docs are relabeled as historical/internal
+- support and pinning strategy are documented
 
 ## Marketplace Readiness
 
 - Status: `BLOCKED`
 - blockers:
   - repository is still private
-  - product still depends on a private TopoCore v6 checkout token
-  - no public release/tag strategy is finalized
-  - no public support policy is formalized
-  - no top-level `LICENSE`
-  - current install path is still private-beta oriented rather than Marketplace turnkey
+  - product still depends on a private TopoCore v6 tokenized access path
+  - no approved public distribution strategy for TopoCore exists yet
+  - no public support channel is approved
+  - no immutable public release tag exists yet
 
 ## Release Engineering Readiness
 
 - Status: `READY_WITH_NOTES`
 - `VERSION` exists and is `0.5.0-rc.1`
 - `CHANGELOG.md` exists
-- legacy release docs exist
+- release notes exist
 - notes:
   - no current Git tags are present
-  - immutable pinned-ref guidance for public consumers should be formalized before public release
+  - immutable pinned-ref guidance for public consumers is documented but not yet executed
 
 ## Known Limitations
 
@@ -93,12 +92,16 @@ It does not publish the repository or change visibility by itself.
 - RepoBrain-Action remains private in the current pilot state
 - external install still requires `TOPOCORE_V6_REPO_TOKEN`
 - verify is informational only
-- fix is no-patch/no-mutation governance only
+- fix is no-patch and no-mutation governance only
 - no patch/autofix
-- no RepoBrain-created branch/commit/PR behavior
+- no RepoBrain-created branch, commit, or PR behavior
+- audit, score, doctor, and status roadmap commands are not implemented yet
 
 ## Approval Gates
 
-- `PRIVATE_BETA_RC_READY`: yes
-- `PUBLIC_READY_PENDING_APPROVAL`: no, blocked by scrub work
-- `MARKETPLACE_READY_PENDING_APPROVAL`: no, blocked by packaging/support/private-dependency work
+- `PRIVATE_BETA_RC_CONFIRMED`: yes
+- `TOPOCORE_SECURITY_POLICY_ADOPTED`: yes
+- `PUBLIC_READY_PENDING_APPROVAL`: no
+- `PUBLIC_BLOCKED_BY_DISTRIBUTION_STRATEGY`: yes
+- `MARKETPLACE_READY_FOR_PREP_PENDING_APPROVAL`: no
+- `MARKETPLACE_NOT_READY`: yes

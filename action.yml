@@ -1,5 +1,5 @@
-name: "RepoBrain Action"
-description: "Governed GitHub workflow action for repository questions, review guidance, informational verify, and safe no-patch fix proposals"
+﻿name: "RepoBrain Action"
+description: "GitHub-native repository intelligence action for evidence-grounded questions, review guidance, informational verify, and safe no-patch fix proposals"
 
 inputs:
   tky_mode:

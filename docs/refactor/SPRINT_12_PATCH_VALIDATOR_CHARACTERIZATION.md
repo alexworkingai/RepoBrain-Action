@@ -6,12 +6,12 @@ Add narrow characterization coverage around `repobrain/patch_validator.py` befor
 
 ## 2. Repository states and local paths
 
-- Primary repository: `D:\ARIADNA_Minsk\1MyProjects\RepoBrain-Action`
+- Primary repository: `<LOCAL_REPO_ROOT>`
   - Branch at sprint start: `main`
   - Starting commit: `10c2352 Merge pull request #105 from alexworkingai/codex/refactor-11-patch-targeting-microrefactor`
-- Public external runtime repository: `D:\ARIADNA_Minsk\1MyProjects\repobrain-community`
+- Public external runtime repository: `<LOCAL_PROJECT_ROOT>\repobrain-community`
   - Expected branch/state reviewed from sprint instructions only: `codex/sprint-78-fix-lite-candidate`, clean
-- Third-party validation repository: `D:\ARIADNA_Minsk\1MyProjects\elen-mcp-prod_v2`
+- Third-party validation repository: `<EXTERNAL_CONSUMER_REPO>`
   - Expected branch/state reviewed from sprint instructions only: `test/sprint-73-guidance-live-validation`, with possible pre-existing `artifacts/` noise
 
 ## 3. Current command truth and primary/external contract split

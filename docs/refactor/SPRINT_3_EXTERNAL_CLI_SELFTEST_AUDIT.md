@@ -1,4 +1,4 @@
-﻿# Sprint 3 External CLI / Self-Test Surface Audit
+# Sprint 3 External CLI / Self-Test Surface Audit
 
 ## 1. Purpose
 
@@ -14,12 +14,12 @@ This sprint does not delete, move, or refactor runtime behavior. It records what
 
 Primary repository under audit:
 
-- `D:\ARIADNA_Minsk\1MyProjects\RepoBrain-Action`
+- `<LOCAL_REPO_ROOT>`
 
 Reference repositories only:
 
-- `D:\ARIADNA_Minsk\1MyProjects\repobrain-community`
-- `D:\ARIADNA_Minsk\1MyProjects\elen-mcp-prod_v2`
+- `<LOCAL_PROJECT_ROOT>\repobrain-community`
+- `<EXTERNAL_CONSUMER_REPO>`
 
 Observed branch state at audit start:
 

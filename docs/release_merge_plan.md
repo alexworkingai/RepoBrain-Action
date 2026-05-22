@@ -1,3 +1,10 @@
+> Historical/internal release note. This file is retained for repository history and is not current public release, public install, or Marketplace publication guidance.
+>
+> Current release-readiness guidance lives in:
+> - `docs/release/RELEASE_CANDIDATE_CHECKLIST.md`
+> - `docs/release/PUBLIC_READINESS_ASSESSMENT.md`
+> - `docs/release/MARKETPLACE_READINESS_ASSESSMENT.md`
+> - `docs/release/RELEASE_NOTES_RC1.md`
 # Release Merge Plan: `0.5.0-rc.1`
 
 ## Recommended merge order
@@ -54,4 +61,3 @@ Resolve with explicit manual review. Do not use `-X ours`.
 - Confirm budget governor interventions appear in audit/usage artifacts.
 - Confirm `artifacts/config_snapshot.json` exists and is usersafe.
 - Run `ruff check .` and `pytest -q` on release branch before tagging.
-

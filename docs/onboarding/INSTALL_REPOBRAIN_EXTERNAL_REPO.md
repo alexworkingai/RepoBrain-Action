@@ -1,8 +1,9 @@
-# Install RepoBrain In An External Repository
+﻿# Install RepoBrain In An External Repository
 
 ## What RepoBrain Is
 
-RepoBrain is a governed GitHub workflow action for repository questions, review guidance, verify reporting, and safe no-patch fix proposals.
+RepoBrain is a GitHub-native Repository Intelligence and Quality Scoring Platform.
+Today it ships as a governed GitHub workflow action for repository questions, review guidance, informational verify reporting, and safe no-patch fix proposals.
 
 Current product runtime is v6-only:
 
@@ -13,8 +14,9 @@ Current product runtime is v6-only:
 
 Current distribution stage:
 
-- private beta / pilot path
+- private beta RC / pilot path
 - not a public Marketplace install flow yet
+- public visibility is not changed by this guide
 
 ## Repository Model
 
@@ -40,6 +42,14 @@ Before installation, confirm all of the following:
 - the consumer repository Actions policy allows external action resolution
 - you have a token with read access to the private TopoCore v6 repository
 - you can store that token as `TOPOCORE_V6_REPO_TOKEN`
+- you understand that model/API costs are paid through your own provider accounts
+
+Reference docs:
+
+- permissions: `docs/onboarding/permissions.md`
+- support policy: `docs/release/SUPPORT_POLICY.md`
+- version pinning: `docs/release/VERSIONING_AND_PINNING_STRATEGY.md`
+- license model: `docs/release/LICENSE_MODEL.md`
 
 ## Step 1: Configure Private Action Access
 
@@ -67,6 +77,7 @@ Required property:
 - read access to the private TopoCore v6 repository
 
 Do not print, commit, or paste the token into docs, comments, or workflow logs.
+Private runtime access does not grant any TopoCore v6 source rights.
 
 ## Step 3: Add The Repository Secret
 
@@ -86,9 +97,13 @@ Copy the workflow example into the consumer repository:
 - source: `docs/examples/repobrain_external_pilot_workflow.yml`
 - destination: `.github/workflows/repobrain.yml`
 
-The workflow should use this exact action ref:
+The current controlled-pilot workflow uses this action ref:
 
 - `alexworkingai/RepoBrain-Action@main`
+
+For controlled private beta this is acceptable.
+For stronger reproducibility, prefer an immutable SHA pin when you operate your own rollout.
+Public release tag strategy is documented in `docs/release/VERSIONING_AND_PINNING_STRATEGY.md` and is not finalized by this guide.
 
 Optional repository guidance file:
 
@@ -191,6 +206,7 @@ Full troubleshooting guide:
 - do not checkout untrusted fork head code with the private TopoCore token by default
 - `/repobrain verify` is informational only
 - `/repobrain fix` is no-patch proposal/governance only
+- TopoCore v6 source is not licensed through RepoBrain-Action
 
 ## Current Limitations
 
@@ -200,8 +216,9 @@ Current supported commands are documented in:
 
 Important current limitations:
 
-- `/repobrain status` is unsupported
-- `/repobrain doctor` is unsupported
+- `/repobrain status` is unsupported today
+- `/repobrain doctor` is unsupported today
 - `/repobrain fix-lite` is unsupported as a user-facing command spelling
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
 - there is no patch/autofix mode in the current external product path
+- public or Marketplace distribution requires separate approval and a finalized private TopoCore distribution strategy

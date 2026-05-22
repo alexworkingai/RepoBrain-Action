@@ -1,9 +1,16 @@
-# RepoBrain Action
+﻿# RepoBrain Action
 
 Current release candidate: `0.5.0-rc.1`
 
-RepoBrain is a governed repository cognition action for GitHub workflows.
-Current product runtime is v6-only, with `RepoBrain-Action` as the external product entrypoint and private TopoCore v6 as a separate dependency.
+RepoBrain is a GitHub-native Repository Intelligence and Quality Scoring Platform.
+It operates as a governed GitHub workflow action for repository questions, review guidance, informational verify reporting, and safe no-patch fix proposals.
+
+Current product runtime is v6-only:
+
+- `RepoBrain-Action` is the external product entrypoint
+- private TopoCore v6 is a separate proprietary dependency
+- external users bring and pay for their own LLM or model provider access
+- current product behavior remains no-patch and no-mutation
 
 ## Quick Start
 
@@ -16,7 +23,7 @@ For a new external repository install, start here:
 
 ## Product Surface
 
-Current external GitHub command surface:
+Current supported external GitHub commands:
 
 - `/repobrain help`
 - `/repobrain ask <query>`
@@ -26,7 +33,7 @@ Current external GitHub command surface:
 - `/repobrain verify`
 - `/repobrain fix`
 
-Unsupported command spellings today:
+Current unsupported command spellings:
 
 - `/repobrain status`
 - `/repobrain doctor`
@@ -48,13 +55,25 @@ Current external product behavior remains intentionally conservative:
 
 The current external pilot uses:
 
-- `alexworkingai/RepoBrain-Action@main`
+- `alexworkingai/RepoBrain-Action@main` in controlled pilot repositories
 - private TopoCore v6 checked out separately with `TOPOCORE_V6_REPO_TOKEN`
 - a caller-owned workflow in the consumer repository
+- a bring-your-own-LLM or user-paid model provider model
 
+RepoBrain is not an LLM reseller.
 RepoBrain-Action remains private during the current pilot phase.
 TopoCore v6 remains private.
 `repobrain-community` is retired from the working product architecture and is not required.
+
+## Release And Policy References
+
+- Source-available license: `LICENSE`
+- License model: `docs/release/LICENSE_MODEL.md`
+- Service/commercial model: `docs/release/SERVICE_AND_COMMERCIAL_MODEL.md`
+- Support policy: `docs/release/SUPPORT_POLICY.md`
+- Versioning and pinning: `docs/release/VERSIONING_AND_PINNING_STRATEGY.md`
+- Public readiness assessment: `docs/release/PUBLIC_READINESS_ASSESSMENT.md`
+- Marketplace readiness assessment: `docs/release/MARKETPLACE_READINESS_ASSESSMENT.md`
 
 ## Additional References
 
@@ -63,4 +82,5 @@ TopoCore v6 remains private.
 - External mode overview: `docs/EXTERNAL_MODE.md`
 - External architecture: `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
 - Repository boundary contract: `docs/REPO_BOUNDARY_CONTRACT.md`
-- Public/readiness assessment: `docs/release/PUBLIC_READINESS_ASSESSMENT.md`
+- RepoBrain v6 scoring model: `docs/release/REPOBRAIN_V6_SCORING_MODEL.md`
+- Microsoft/GitHub positioning: `docs/release/MICROSOFT_GITHUB_STRATEGIC_POSITIONING.md`

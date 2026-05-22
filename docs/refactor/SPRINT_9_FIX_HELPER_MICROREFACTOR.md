@@ -4,9 +4,9 @@ Perform the first safe post-audit code cleanup in the Fix-Lite helper surface wi
 
 ## Repository states and local paths
 
-- Primary repository: `D:\ARIADNA_Minsk\1MyProjects\RepoBrain-Action`
-- Public runtime reference: `D:\ARIADNA_Minsk\1MyProjects\repobrain-community`
-- Validation repository reference: `D:\ARIADNA_Minsk\1MyProjects\elen-mcp-prod_v2`
+- Primary repository: `<LOCAL_REPO_ROOT>`
+- Public runtime reference: `<LOCAL_PROJECT_ROOT>\repobrain-community`
+- Validation repository reference: `<EXTERNAL_CONSUMER_REPO>`
 - RepoBrain-Action working branch: `codex/refactor-9-fix-helper-microrefactor`
 
 ## Current Sprint 78 truth

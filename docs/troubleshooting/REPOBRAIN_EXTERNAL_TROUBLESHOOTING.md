@@ -1,4 +1,4 @@
-# RepoBrain External Troubleshooting
+﻿# RepoBrain External Troubleshooting
 
 ## 1. `Unable to resolve action ... repository not found`
 
@@ -93,7 +93,7 @@ Current product policy keeps patch/autofix disabled.
 ### Meaning
 
 Issue context is not treated as PR context.
-PR-only review/verification/fix behavior requires an open PR.
+PR-only review, verification, and fix behavior requires an open PR.
 
 ### What to do
 
@@ -154,3 +154,20 @@ Unsupported command spellings today:
 - `/repobrain status`
 - `/repobrain doctor`
 - `/repobrain fix-lite`
+
+Roadmap note:
+
+- `/repobrain status` and `/repobrain doctor` are planned but not implemented yet
+- `/repobrain fix-lite` is not a product command; use `/repobrain fix`
+
+## 10. Support Boundary
+
+Current support policy is documented in:
+
+- `docs/release/SUPPORT_POLICY.md`
+
+Important current boundaries:
+
+- no support for untrusted fork workflows with private secrets
+- no support for undocumented custom workflow mutations beyond the published baseline
+- no public Marketplace support promise exists yet

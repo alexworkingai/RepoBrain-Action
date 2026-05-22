@@ -16,6 +16,7 @@ def test_release_readiness_docs_exist() -> None:
     assert (ROOT / "docs/release/MARKETPLACE_READINESS_ASSESSMENT.md").exists()
     assert (ROOT / "docs/release/RELEASE_NOTES_RC1.md").exists()
     assert (ROOT / "docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md").exists()
+    assert (ROOT / "docs/architecture/SPRINT_77_PUBLIC_SCRUB_LICENSE_TOPOCORE_SECURITY_POSITIONING.md").exists()
 
 
 def test_release_readiness_docs_preserve_private_topocore_and_no_publication_claims() -> None:
@@ -27,6 +28,7 @@ def test_release_readiness_docs_preserve_private_topocore_and_no_publication_cla
             "docs/release/MARKETPLACE_READINESS_ASSESSMENT.md",
             "docs/release/RELEASE_NOTES_RC1.md",
             "docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md",
+            "docs/architecture/SPRINT_77_PUBLIC_SCRUB_LICENSE_TOPOCORE_SECURITY_POSITIONING.md",
         )
     ).lower()
 
@@ -36,12 +38,14 @@ def test_release_readiness_docs_preserve_private_topocore_and_no_publication_cla
     assert "no v5" in combined
     assert "no repobrain-community" in combined
     assert "no patch/autofix" in combined
+    assert "public_blocked_by_distribution_strategy" in combined
+    assert "marketplace_not_ready" in combined
 
 
 def test_release_readiness_docs_cover_supported_unsupported_commands_and_limitations() -> None:
     checklist = _read("docs/release/RELEASE_CANDIDATE_CHECKLIST.md")
     notes = _read("docs/release/RELEASE_NOTES_RC1.md")
-    sprint = _read("docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md")
+    sprint = _read("docs/architecture/SPRINT_77_PUBLIC_SCRUB_LICENSE_TOPOCORE_SECURITY_POSITIONING.md")
 
     for command in (
         "/repobrain help",
@@ -64,6 +68,8 @@ def test_release_readiness_docs_cover_supported_unsupported_commands_and_limitat
     assert "Known Limitations" in checklist
     assert "Decision" in _read("docs/release/PUBLIC_READINESS_ASSESSMENT.md")
     assert "Decision" in _read("docs/release/MARKETPLACE_READINESS_ASSESSMENT.md")
+    assert "/repobrain audit" in sprint
+    assert "/repobrain score" in sprint
 
 
 def test_active_docs_do_not_reintroduce_old_or_unsafe_release_truth() -> None:

@@ -1,5 +1,7 @@
 # Sprint 76 - Release Candidate and Public Readiness Assessment
 
+> Historical readiness checkpoint. Public-scrub, license, TopoCore security, support, and positioning gates were advanced further in `docs/architecture/SPRINT_77_PUBLIC_SCRUB_LICENSE_TOPOCORE_SECURITY_POSITIONING.md`.
+
 ## Purpose
 
 Sprint 76 assesses RepoBrain-Action release-candidate, public-readiness, and Marketplace-readiness status.
@@ -43,7 +45,7 @@ Findings:
 - secret/token/private key values:
   - none found in tracked content
 - private paths:
-  - historical docs still contain local Windows paths such as `D:\\ARIADNA_Minsk\\...`
+  - historical docs still contain local Windows paths such as `<LOCAL_PROJECT_ROOT>\\...`
 - private TopoCore source:
   - not present in product repo
 - v5 residue:

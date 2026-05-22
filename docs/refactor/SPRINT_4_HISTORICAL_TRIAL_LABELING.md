@@ -1,4 +1,4 @@
-# Sprint 4 Historical Trial Labeling
+﻿# Sprint 4 Historical Trial Labeling
 
 ## 1. Purpose
 
@@ -10,12 +10,12 @@ This sprint is docs-only. It does not change runtime code, tests, workflows, or 
 
 Primary repository:
 
-- `D:\ARIADNA_Minsk\1MyProjects\RepoBrain-Action`
+- `<LOCAL_REPO_ROOT>`
 
 Reference repositories only:
 
-- `D:\ARIADNA_Minsk\1MyProjects\repobrain-community`
-- `D:\ARIADNA_Minsk\1MyProjects\elen-mcp-prod_v2`
+- `<LOCAL_PROJECT_ROOT>\repobrain-community`
+- `<EXTERNAL_CONSUMER_REPO>`
 
 Observed start state:
 

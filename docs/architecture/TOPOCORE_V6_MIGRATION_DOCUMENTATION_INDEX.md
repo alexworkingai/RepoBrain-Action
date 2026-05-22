@@ -20,6 +20,9 @@ Current truth:
 - Sprint 72 productionizes external PR `verify` semantics on Elen-MCP
 - Sprint 73 productizes external PR `fix` semantics as safe proposal/governance on Elen-MCP
 - Sprint 74 hardens the external product path around permissions, private action access, token degradation, and fork safety
+- Sprint 75 consolidates canonical onboarding, commands, and troubleshooting for external users
+- Sprint 76 records RC, public-readiness, and Marketplace-readiness assessment
+- Sprint 77 adds public scrub, source-available licensing, TopoCore security policy, and scoring-positioning gates
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -143,6 +146,7 @@ Phase 7:
 - `docs/architecture/SPRINT_74_SECURITY_PERMISSIONS_FORK_SAFETY.md`
 - `docs/architecture/SPRINT_75_UX_ONBOARDING_TROUBLESHOOTING.md`
 - `docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md`
+- `docs/architecture/SPRINT_77_PUBLIC_SCRUB_LICENSE_TOPOCORE_SECURITY_POSITIONING.md`
 
 ## 5. Recommended Reading Paths
 
@@ -255,6 +259,9 @@ external security, permission, token, and fork-safety hardening on the pilot rep
 - `docs/architecture/SPRINT_72_VERIFY_COMMAND_PRODUCTIONIZATION.md`
 - `docs/architecture/SPRINT_73_FIX_COMMAND_PRODUCT_PATH.md`
 - `docs/architecture/SPRINT_74_SECURITY_PERMISSIONS_FORK_SAFETY.md`
+- `docs/architecture/SPRINT_75_UX_ONBOARDING_TROUBLESHOOTING.md`
+- `docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md`
+- `docs/architecture/SPRINT_77_PUBLIC_SCRUB_LICENSE_TOPOCORE_SECURITY_POSITIONING.md`
 
 Why implementation is currently blocked:
 

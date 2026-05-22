@@ -1,4 +1,4 @@
-# RepoBrain Commands
+﻿# RepoBrain Commands
 
 ## Product Command Matrix
 
@@ -13,9 +13,9 @@ Current external GitHub command surface is intentionally bounded.
 | `/repobrain review` | scoped unsupported or safe guidance | supported | none | issue: not applicable; PR: `v6` | review is not approval |
 | `/repobrain verify` | scoped unsupported or issue-safe guidance | supported | none | usually report-only / informational | verify is informational only |
 | `/repobrain fix` | scoped unsupported or safe no-patch guidance | supported | no patch, no mutation | issue: not applicable; PR: `v6` | proposal/governance only |
-| `/repobrain status` | unsupported | unsupported | none | not applicable | command spelling not supported |
-| `/repobrain doctor` | unsupported | unsupported | none | not applicable | command spelling not supported |
-| `/repobrain fix-lite` | unsupported | unsupported | none | not applicable | internal terminology, not supported user-facing command |
+| `/repobrain status` | unsupported | unsupported | none | not applicable | roadmap command spelling, not implemented |
+| `/repobrain doctor` | unsupported | unsupported | none | not applicable | roadmap command spelling, not implemented |
+| `/repobrain fix-lite` | unsupported | unsupported | none | not applicable | internal terminology, use `/repobrain fix` |
 
 ## Scope Rules
 
@@ -93,3 +93,14 @@ Visible no-mutation expectations:
 - `pr_created=false`
 
 `/repobrain fix` does not apply patches and does not mutate the repository.
+
+## Roadmap Commands (Not Implemented Yet)
+
+These command names are part of the documented roadmap, not the current supported external command surface:
+
+- `/repobrain audit`: planned full repository audit and 100-point score
+- `/repobrain score`: planned compact score summary
+- `/repobrain doctor`: planned installation/runtime diagnostic command
+- `/repobrain status`: planned runtime status snapshot
+
+`/repobrain fix-lite` is not a product command and should redirect users to `/repobrain fix`.
