@@ -63,3 +63,4 @@ TopoCore v6 remains private.
 - External mode overview: `docs/EXTERNAL_MODE.md`
 - External architecture: `docs/architecture/REPOBRAIN_EXTERNAL_REPO_PRODUCT_ARCHITECTURE.md`
 - Repository boundary contract: `docs/REPO_BOUNDARY_CONTRACT.md`
+- Public/readiness assessment: `docs/release/PUBLIC_READINESS_ASSESSMENT.md`

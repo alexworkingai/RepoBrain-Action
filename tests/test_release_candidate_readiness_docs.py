@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _read(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def test_release_readiness_docs_exist() -> None:
+    assert (ROOT / "docs/release/RELEASE_CANDIDATE_CHECKLIST.md").exists()
+    assert (ROOT / "docs/release/PUBLIC_READINESS_ASSESSMENT.md").exists()
+    assert (ROOT / "docs/release/MARKETPLACE_READINESS_ASSESSMENT.md").exists()
+    assert (ROOT / "docs/release/RELEASE_NOTES_RC1.md").exists()
+    assert (ROOT / "docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md").exists()
+
+
+def test_release_readiness_docs_preserve_private_topocore_and_no_publication_claims() -> None:
+    combined = "\n".join(
+        _read(path)
+        for path in (
+            "docs/release/RELEASE_CANDIDATE_CHECKLIST.md",
+            "docs/release/PUBLIC_READINESS_ASSESSMENT.md",
+            "docs/release/MARKETPLACE_READINESS_ASSESSMENT.md",
+            "docs/release/RELEASE_NOTES_RC1.md",
+            "docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md",
+        )
+    ).lower()
+
+    assert "topocore v6 remains private" in combined
+    assert "does not itself publish repobrain-action publicly" in combined
+    assert "does not itself publish repobrain-action publicly or to github marketplace" in combined
+    assert "no v5" in combined
+    assert "no repobrain-community" in combined
+    assert "no patch/autofix" in combined
+
+
+def test_release_readiness_docs_cover_supported_unsupported_commands_and_limitations() -> None:
+    checklist = _read("docs/release/RELEASE_CANDIDATE_CHECKLIST.md")
+    notes = _read("docs/release/RELEASE_NOTES_RC1.md")
+    sprint = _read("docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md")
+
+    for command in (
+        "/repobrain help",
+        "/repobrain ask <query>",
+        "/repobrain locate <query>",
+        "/repobrain explain <query>",
+        "/repobrain review",
+        "/repobrain verify",
+        "/repobrain fix",
+    ):
+        assert command in checklist or command in notes
+
+    for command in (
+        "/repobrain status",
+        "/repobrain doctor",
+        "/repobrain fix-lite",
+    ):
+        assert command in notes or command in sprint
+
+    assert "Known Limitations" in checklist
+    assert "Decision" in _read("docs/release/PUBLIC_READINESS_ASSESSMENT.md")
+    assert "Decision" in _read("docs/release/MARKETPLACE_READINESS_ASSESSMENT.md")
+
+
+def test_active_docs_do_not_reintroduce_old_or_unsafe_release_truth() -> None:
+    active = "\n".join(
+        _read(path)
+        for path in (
+            "README.md",
+            "docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md",
+            "docs/commands/REPOBRAIN_COMMANDS.md",
+            "docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md",
+            "docs/release/RELEASE_CANDIDATE_CHECKLIST.md",
+            "docs/release/PUBLIC_READINESS_ASSESSMENT.md",
+            "docs/release/MARKETPLACE_READINESS_ASSESSMENT.md",
+            "docs/release/RELEASE_NOTES_RC1.md",
+        )
+    ).lower()
+
+    assert "use v5" not in active
+    assert "repobrain-community/.github/workflows" not in active
+    assert "repobrain-community/templates/repobrain.yml" not in active
+    assert "safe-to-merge claim" in active
+    assert "security approval" in active
+    assert "contents: write" in active
+    assert "checks: write" in active
+    assert "pull-requests: write" in active

@@ -1,5 +1,5 @@
-name: "RepoBrain Local MVP"
-description: "Run RepoBrain in GitHub Actions (dry-run by default)"
+name: "RepoBrain Action"
+description: "Governed GitHub workflow action for repository questions, review guidance, informational verify, and safe no-patch fix proposals"
 
 inputs:
   tky_mode:
@@ -71,3 +71,7 @@ runs:
         --enable-hmac "${{ inputs.enable_hmac }}"
         --comment-text "${{ inputs.comment_text }}"
         --repo-root "${{ github.workspace }}"
+
+branding:
+  icon: "search"
+  color: "blue"

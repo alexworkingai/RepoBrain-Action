@@ -11,6 +11,11 @@ Current product runtime is v6-only:
 - the consumer repository owns the caller workflow and secret configuration
 - `repobrain-community` is retired and not required
 
+Current distribution stage:
+
+- private beta / pilot path
+- not a public Marketplace install flow yet
+
 ## Repository Model
 
 Current external pilot shape:
