@@ -48,6 +48,7 @@ def test_release_readiness_docs_cover_supported_unsupported_commands_and_limitat
     sprint = _read("docs/architecture/SPRINT_77_PUBLIC_SCRUB_LICENSE_TOPOCORE_SECURITY_POSITIONING.md")
 
     for command in (
+        "/repobrain audit",
         "/repobrain help",
         "/repobrain ask <query>",
         "/repobrain locate <query>",

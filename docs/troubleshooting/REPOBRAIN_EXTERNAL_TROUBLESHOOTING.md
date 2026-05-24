@@ -141,6 +141,7 @@ This preserves the current private dependency boundary and avoids widening trust
 
 Supported commands:
 
+- `/repobrain audit`
 - `/repobrain help`
 - `/repobrain ask <query>`
 - `/repobrain locate <query>`
@@ -151,12 +152,14 @@ Supported commands:
 
 Unsupported command spellings today:
 
+- `/repobrain score`
 - `/repobrain status`
 - `/repobrain doctor`
 - `/repobrain fix-lite`
 
 Roadmap note:
 
+- `/repobrain score` is a planned compact audit view and is not implemented yet
 - `/repobrain status` and `/repobrain doctor` are planned but not implemented yet
 - `/repobrain fix-lite` is not a product command; use `/repobrain fix`
 

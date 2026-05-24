@@ -41,6 +41,7 @@ def test_command_guide_documents_supported_and_unsupported_commands_honestly() -
     for command in (
         "/repobrain help",
         "/repobrain ask <query>",
+        "/repobrain audit",
         "/repobrain locate <query>",
         "/repobrain explain <query>",
         "/repobrain review",
@@ -60,6 +61,7 @@ def test_command_guide_documents_supported_and_unsupported_commands_honestly() -
     assert "informational only" in text
     assert "safe to merge" in text
     assert "security approval" in text
+    assert "100-point" in text.lower()
 
 
 def test_troubleshooting_guide_covers_real_external_failures() -> None:

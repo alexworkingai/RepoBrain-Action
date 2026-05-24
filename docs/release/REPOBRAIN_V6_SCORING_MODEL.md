@@ -57,6 +57,15 @@ A full audit output should include:
 ### `/repobrain audit`
 
 - flagship full repository audit and score
+- implemented as an MVP in Sprint 78
+- current output includes:
+  - executive summary
+  - overall score
+  - category breakdown
+  - blockers and improvements
+  - 30/60/90-day roadmap
+  - confidence and limitations
+  - explicit no-mutation safety statement
 
 ### `/repobrain score`
 
@@ -77,6 +86,10 @@ A full audit output should include:
 
 ## 7. Implementation Status
 
-- Sprint 77 documents the model and roadmap.
-- `/repobrain audit` MVP is planned for Sprint 78.
+Implementation status:
+
+- Sprint 77 documented the model and roadmap.
+- Sprint 78 implements the `/repobrain audit` MVP.
+- Current audit scoring is deterministic, repository-static, and evidence-grounded.
+- `/repobrain score` remains roadmap-only.
 - `/repobrain doctor` and `/repobrain status` are planned for Sprint 79 unless priorities change.

@@ -19,6 +19,7 @@ from repobrain.ai_budget_governor import (
     build_governor_from_env,
 )
 from repobrain.audit import add_timing, build_audit_base, finalize_audit
+from repobrain.audit_scoring import score_repository_audit
 from repobrain.ask import AnswerResult, answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.checks_md import (
@@ -47,6 +48,7 @@ from repobrain.github_publisher import (
 from repobrain.index_store import build_index, load_index, load_index_embeddings
 from repobrain.output_md import (
     enforce_comment_limit,
+    render_audit_markdown,
     render_diagnostic_summary_markdown,
     render_answer_markdown,
     render_error_markdown,
@@ -112,15 +114,23 @@ from repobrain.verification_runner import (
     run_verification,
 )
 from repobrain.verify import build_verify_report
+from repobrain.topocore_backend import TopoCoreBackendError, resolve_backend
 
 HELP_TEXT = """RepoBrain command examples:
 - /repobrain help
 - /repobrain ask --profile balanced How does provider selection work?
+- /repobrain audit
+- /repobrain audit Focus on repository readiness for a Microsoft/GitHub-facing demo.
 - /repobrain locate TKYProvider
 - /repobrain explain retrieve_topk
 - /repobrain review --profile balanced
 - /repobrain fix --profile premium Improve guard conditions in github_flow
 - /repobrain verify (PR checks-based verification ladder v0)
+
+Supported today:
+- `/repobrain audit` is a repository-level, no-mutation audit MVP.
+- `/repobrain score`, `/repobrain doctor`, and `/repobrain status` are roadmap commands, not supported command spellings today.
+- `/repobrain fix-lite` is unsupported; use `/repobrain fix`.
 
 Execution profile:
 - Use `--profile cheap|balanced|premium` with ask/review/fix.
@@ -1045,6 +1055,13 @@ def _copy_model_adapter_fields_to_audit(*, audit: dict[str, Any], audit_summary:
 
 def _write_ask_result_markdown(repo_root: Path, markdown: str) -> Path:
     path = repo_root / "artifacts" / "ask_result.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(markdown, encoding="utf-8")
+    return path
+
+
+def _write_audit_result_markdown(repo_root: Path, markdown: str) -> Path:
+    path = repo_root / "artifacts" / "audit_result.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(markdown, encoding="utf-8")
     return path
@@ -6246,6 +6263,129 @@ def _build_qa_markdown(
     return body
 
 
+def _build_audit_markdown(
+    *,
+    repo_root: Path,
+    query: str,
+    tky_mode: str,
+    github_context_seed: dict[str, Any] | None = None,
+    audit: dict[str, Any] | None = None,
+) -> str:
+    resolved_repo_root = resolve_repo_root(repo_root)
+    effective_tky_mode = str(tky_mode or "local").strip().lower() or "local"
+    try:
+        backend_resolution = resolve_backend()
+        requested_backend = str(backend_resolution.requested_backend or "auto").strip().lower() or "auto"
+    except TopoCoreBackendError:
+        requested_backend = _requested_topocore_backend_from_env()
+        audit_summary = {
+            "route_final": "ERROR",
+            "pass_count": 1,
+            "retrieved": 0,
+            "selected": 0,
+            "repobrain_version": REPOBRAIN_VERSION,
+            "tky_mode_requested": effective_tky_mode,
+            "tky_mode_used": effective_tky_mode,
+            "tkya_mode": "audit_mvp_static",
+            "tkya_backend": "audit_mvp_static",
+            "requested_backend": requested_backend,
+            "resolved_backend": "not_applicable",
+            "backend_mode": "audit_mvp_static_scoring",
+            "fallback_used": "not_applicable",
+            "fallback_reason": "legacy_backend_selection_unsupported",
+            "scope_status": "repository_audit",
+            "patch_authorized": False,
+            "patch_applied": False,
+            "files_modified": False,
+            "branch_created": False,
+            "commit_created": False,
+            "pr_created": False,
+        }
+        diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
+        diagnostic_path = _write_diagnostic_summary_markdown(resolved_repo_root, diagnostic_markdown)
+        audit_summary["diagnostic_summary_artifact"] = "artifacts/diagnostic_summary.md"
+        if audit is not None:
+            audit.update(audit_summary)
+            audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
+        return render_error_markdown(
+            message=(
+                "RepoBrain audit could not start because legacy TopoCore runtime selection is unsupported. "
+                "Use RB_TOPOCORE_BACKEND=auto or RB_TOPOCORE_BACKEND=v6."
+            ),
+            audit_summary=audit_summary,
+        )
+
+    github_context = _enrich_github_context_with_pr_metadata(
+        github_context_seed=github_context_seed,
+    )
+    report = score_repository_audit(
+        repo_root=resolved_repo_root,
+        query=query,
+        github_context=github_context,
+    )
+    pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
+    evidence_summary = (
+        report.get("evidence_summary", {}) if isinstance(report.get("evidence_summary", {}), dict) else {}
+    )
+    inventory_summary = (
+        report.get("inventory_summary", {}) if isinstance(report.get("inventory_summary", {}), dict) else {}
+    )
+    pr_context_used = bool(pr_context.get("is_pr", False))
+    scope_status = "repository_audit_with_pr_context" if pr_context_used else "repository_audit"
+    audit_summary: dict[str, Any] = {
+        "command": "audit",
+        "route_final": "AUDIT",
+        "pass_count": 1,
+        "retrieved": int(inventory_summary.get("file_count", 0) or 0),
+        "selected": int(evidence_summary.get("evidence_count", 0) or 0),
+        "repobrain_version": REPOBRAIN_VERSION,
+        "tky_mode_requested": effective_tky_mode,
+        "tky_mode_used": effective_tky_mode,
+        "tkya_mode": "audit_mvp_static",
+        "tkya_backend": "audit_mvp_static",
+        "requested_backend": requested_backend,
+        "resolved_backend": "not_applicable",
+        "backend_mode": "audit_mvp_static_scoring",
+        "fallback_used": "not_applicable",
+        "fallback_reason": "audit_static_scoring",
+        "scope_status": scope_status,
+        "patch_authorized": False,
+        "patch_applied": False,
+        "files_modified": False,
+        "branch_created": False,
+        "commit_created": False,
+        "pr_created": False,
+        "llm_used": False,
+        "llm_skip_reason": "audit_mvp_static_scoring",
+        "execution_mode": "repository_audit",
+        "pr_metadata_used": pr_context_used,
+        "pr_changed_files_count": int(pr_context.get("changed_files_count", 0) or 0),
+        "audit_overall_score": int(report.get("overall_score", 0) or 0),
+        "audit_readiness_band": str(report.get("readiness_band", "WEAK") or "WEAK").strip().upper(),
+        "audit_confidence": str(report.get("confidence", "medium") or "medium").strip().lower(),
+        "evidence_count": int(evidence_summary.get("evidence_count", 0) or 0),
+        "inventory_truncated": bool(inventory_summary.get("inventory_truncated", False)),
+    }
+
+    diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
+    diagnostic_path = _write_diagnostic_summary_markdown(resolved_repo_root, diagnostic_markdown)
+    audit_summary["diagnostic_summary_artifact"] = "artifacts/diagnostic_summary.md"
+
+    t0 = time.perf_counter()
+    full_body = render_audit_markdown(report=report, audit_summary=audit_summary)
+    body, was_truncated = enforce_comment_limit(full_body)
+    if audit is not None:
+        audit.update(audit_summary)
+        audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
+        audit["comment_truncated"] = bool(was_truncated)
+        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+    if was_truncated:
+        artifact_path = _write_audit_result_markdown(resolved_repo_root, full_body)
+        if audit is not None:
+            audit["audit_result_artifact"] = artifact_path.as_posix()
+    return body
+
+
 def _review_candidates_from_files(files: list[dict[str, Any]]) -> list[CandidateChunk]:
     candidates: list[CandidateChunk] = []
     for idx, item in enumerate(files):
@@ -9019,6 +9159,15 @@ def run_github_flow(
         add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
         audit["route_final"] = "HELP"
         audit["pass_count"] = 1
+        audit["index_source"] = "n/a"
+    elif cmd == "audit":
+        body_markdown = _build_audit_markdown(
+            repo_root=repo_root,
+            query=query,
+            tky_mode=tky_mode,
+            github_context_seed=github_context_seed,
+            audit=audit,
+        )
         audit["index_source"] = "n/a"
     elif cmd in {"review", "fix"}:
         body_markdown = _build_review_markdown(

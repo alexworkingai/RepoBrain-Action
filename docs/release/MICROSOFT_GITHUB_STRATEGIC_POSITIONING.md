@@ -15,6 +15,7 @@ It is:
 
 - full repository analysis
 - 100-point quality and readiness scoring
+- `/repobrain audit` as the first flagship repository-intelligence command
 - evidence-grounded recommendations
 - improvement roadmaps
 - safe GitHub-native governance workflows

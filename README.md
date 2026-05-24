@@ -25,6 +25,7 @@ For a new external repository install, start here:
 
 Current supported external GitHub commands:
 
+- `/repobrain audit`
 - `/repobrain help`
 - `/repobrain ask <query>`
 - `/repobrain locate <query>`
@@ -47,6 +48,7 @@ Current external product behavior remains intentionally conservative:
 - no `repobrain-community` dependency
 - no patch/autofix
 - no RepoBrain-created branch/commit/PR behavior
+- `/repobrain audit` is informational repository scoring only
 - `/repobrain verify` is informational only
 - `/repobrain review` is not merge approval
 - `/repobrain fix` is no-patch proposal/governance only

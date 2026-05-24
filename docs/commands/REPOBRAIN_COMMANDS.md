@@ -8,6 +8,7 @@ Current external GitHub command surface is intentionally bounded.
 |---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
 | `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` | primary repo/PR question flow |
+| `/repobrain audit` | supported | supported as repository audit with PR context | none | repository-static MVP; backend diagnostics stay explicit | 100-point repository quality/readiness scoring |
 | `/repobrain locate <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | returns likely files and evidence |
 | `/repobrain explain <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | explains setup or changed context |
 | `/repobrain review` | scoped unsupported or safe guidance | supported | none | issue: not applicable; PR: `v6` | review is not approval |
@@ -25,6 +26,7 @@ Supported in issues:
 
 - `/repobrain help`
 - `/repobrain ask <query>`
+- `/repobrain audit`
 - `/repobrain locate <query>`
 - `/repobrain explain <query>`
 
@@ -42,6 +44,7 @@ Supported in PRs:
 
 - `/repobrain help`
 - `/repobrain ask <query>`
+- `/repobrain audit`
 - `/repobrain review`
 - `/repobrain verify`
 - `/repobrain fix`
@@ -69,6 +72,24 @@ It does not mean:
 - safe to merge
 - merge approval
 - security approval
+
+## Audit Policy
+
+`/repobrain audit` is a repository-level, no-mutation audit MVP.
+
+It provides:
+
+- a 0-100 overall repository quality/readiness score
+- all 10 scoring categories with bounded weights totaling 100
+- critical blockers
+- top improvements
+- a 30/60/90-day roadmap
+- evidence references
+- confidence and limitations
+- explicit runtime/safety diagnostics
+
+`/repobrain audit` is informational only.
+It does not certify merge safety, security approval, or production readiness.
 
 ## Fix Policy
 
@@ -98,7 +119,6 @@ Visible no-mutation expectations:
 
 These command names are part of the documented roadmap, not the current supported external command surface:
 
-- `/repobrain audit`: planned full repository audit and 100-point score
 - `/repobrain score`: planned compact score summary
 - `/repobrain doctor`: planned installation/runtime diagnostic command
 - `/repobrain status`: planned runtime status snapshot

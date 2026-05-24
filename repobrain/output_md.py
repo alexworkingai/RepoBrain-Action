@@ -2963,3 +2963,229 @@ def render_patch_markdown(
     ]
     sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
     return "\n".join(sections)
+
+
+def _audit_category_table_lines(categories: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "| Category | Score | Label | Rationale | Evidence |",
+        "| --- | ---: | --- | --- | --- |",
+    ]
+    for item in categories:
+        title = str(item.get("title", "Category") or "Category").strip()
+        score = _int(item.get("score", 0))
+        max_score = _int(item.get("max_score", 0))
+        label = str(item.get("label", "UNKNOWN") or "UNKNOWN").strip().upper()
+        rationale = str(item.get("rationale", "No rationale captured.") or "No rationale captured.").strip()
+        evidence_paths_raw = item.get("evidence_paths", [])
+        evidence_paths = (
+            [str(path).strip() for path in evidence_paths_raw if str(path).strip()]
+            if isinstance(evidence_paths_raw, list)
+            else []
+        )
+        evidence_text = ", ".join(f"`{path}`" for path in evidence_paths[:2]) if evidence_paths else "none"
+        lines.append(
+            f"| {title} | {score}/{max_score} | `{label}` | {rationale} | {evidence_text} |"
+        )
+    return lines
+
+
+def _audit_blocker_lines(blockers: list[dict[str, Any]]) -> list[str]:
+    if not blockers:
+        return ["- No critical blockers observed from the available evidence."]
+    lines: list[str] = []
+    for item in blockers[:5]:
+        title = str(item.get("title", "Critical blocker") or "Critical blocker").strip()
+        category = str(item.get("category", "n/a") or "n/a").strip()
+        rationale = str(item.get("rationale", "") or "").strip()
+        evidence_paths_raw = item.get("evidence_paths", [])
+        evidence_paths = (
+            [str(path).strip() for path in evidence_paths_raw if str(path).strip()]
+            if isinstance(evidence_paths_raw, list)
+            else []
+        )
+        evidence_suffix = f" Evidence: {_compact_anchor_list(evidence_paths)}." if evidence_paths else ""
+        lines.append(f"- **{title}** (`{category}`): {rationale}{evidence_suffix}")
+    return lines
+
+
+def _audit_improvement_lines(improvements: list[dict[str, Any]]) -> list[str]:
+    if not improvements:
+        return ["- No improvement plan was generated from the current evidence sample."]
+    lines: list[str] = []
+    for item in improvements[:8]:
+        category = str(item.get("category", "Repository health") or "Repository health").strip()
+        title = str(item.get("title", "Improve repository quality") or "Improve repository quality").strip()
+        rationale = str(item.get("rationale", "") or "").strip()
+        impact = str(item.get("expected_score_impact", "medium") or "medium").strip().lower()
+        affected_raw = item.get("affected_files", [])
+        affected = (
+            [str(path).strip() for path in affected_raw if str(path).strip()]
+            if isinstance(affected_raw, list)
+            else []
+        )
+        lines.append(
+            f"- **{category}** (`{impact}` impact): {title} "
+            f"Affected: {_compact_anchor_list(affected)}. Rationale: {rationale}"
+        )
+    return lines
+
+
+def _audit_roadmap_lines(roadmap: dict[str, Any]) -> list[str]:
+    def _phase_lines(key: str, title: str) -> list[str]:
+        raw_items = roadmap.get(key, [])
+        items = [str(item).strip() for item in raw_items if str(item).strip()] if isinstance(raw_items, list) else []
+        if not items:
+            items = ["No specific roadmap item emitted for this phase."]
+        return [f"**{title}**", *(f"- {item}" for item in items)]
+
+    lines = _phase_lines("30_days", "30 days")
+    lines.append("")
+    lines.extend(_phase_lines("60_days", "60 days"))
+    lines.append("")
+    lines.extend(_phase_lines("90_days", "90 days"))
+    return lines
+
+
+def _audit_evidence_summary_lines(evidence_summary: dict[str, Any], pr_context: dict[str, Any]) -> list[str]:
+    key_files_raw = evidence_summary.get("key_files", [])
+    key_files = (
+        [str(path).strip() for path in key_files_raw if str(path).strip()]
+        if isinstance(key_files_raw, list)
+        else []
+    )
+    workflows_raw = evidence_summary.get("workflows_considered", [])
+    workflows = (
+        [str(path).strip() for path in workflows_raw if str(path).strip()]
+        if isinstance(workflows_raw, list)
+        else []
+    )
+    docs_raw = evidence_summary.get("docs_considered", [])
+    docs = [str(path).strip() for path in docs_raw if str(path).strip()] if isinstance(docs_raw, list) else []
+    tests_raw = evidence_summary.get("tests_considered", [])
+    tests = [str(path).strip() for path in tests_raw if str(path).strip()] if isinstance(tests_raw, list) else []
+    manifests_raw = evidence_summary.get("manifests_considered", [])
+    manifests = (
+        [str(path).strip() for path in manifests_raw if str(path).strip()]
+        if isinstance(manifests_raw, list)
+        else []
+    )
+    lines = [
+        f"- Evidence count: `{_int(evidence_summary.get('evidence_count', len(key_files)))}`",
+        f"- Key files: {_compact_anchor_list(key_files, max_items=4)}",
+        f"- Workflows considered: {_compact_anchor_list(workflows, max_items=3)}",
+        f"- Docs considered: {_compact_anchor_list(docs, max_items=3)}",
+        f"- Tests considered: {_compact_anchor_list(tests, max_items=3)}",
+        f"- Manifests considered: {_compact_anchor_list(manifests, max_items=3)}",
+        f"- Inventory sampled: `{_bool_label(evidence_summary.get('sampled_inventory', False))}`",
+    ]
+    if bool(pr_context.get("is_pr", False)):
+        changed_files_raw = pr_context.get("changed_files_sample", [])
+        changed_files = (
+            [str(path).strip() for path in changed_files_raw if str(path).strip()]
+            if isinstance(changed_files_raw, list)
+            else []
+        )
+        lines.append(f"- PR context: `yes` (PR #{pr_context.get('pr_number', 'n/a')})")
+        lines.append(f"- Changed files considered: `{_int(pr_context.get('changed_files_count', 0))}`")
+        lines.append(f"- Changed file sample: {_compact_anchor_list(changed_files, max_items=3)}")
+    else:
+        lines.append("- PR context: `no`")
+    return lines
+
+
+def _audit_confidence_and_limitations_lines(report: dict[str, Any]) -> list[str]:
+    limitations_raw = report.get("limitations", [])
+    limitations = (
+        [str(item).strip() for item in limitations_raw if str(item).strip()]
+        if isinstance(limitations_raw, list)
+        else []
+    )
+    lines = [f"- Confidence: `{str(report.get('confidence', 'medium') or 'medium').strip().lower()}`"]
+    if limitations:
+        lines.extend(f"- {item}" for item in limitations[:6])
+    else:
+        lines.append("- No additional limitations were recorded.")
+    return lines
+
+
+def _audit_safety_statement_lines(audit_summary: dict[str, Any]) -> list[str]:
+    return [
+        "- Audit is informational only.",
+        f"- Files modified: `{_bool_label(audit_summary.get('files_modified', False))}`",
+        f"- Patch applied: `{_bool_label(audit_summary.get('patch_applied', False))}`",
+        f"- Branch created: `{_bool_label(audit_summary.get('branch_created', False))}`",
+        f"- Commit created: `{_bool_label(audit_summary.get('commit_created', False))}`",
+        f"- PR created: `{_bool_label(audit_summary.get('pr_created', False))}`",
+        "- Not a security approval.",
+        "- Not a merge approval.",
+    ]
+
+
+def render_audit_markdown(
+    *,
+    report: dict[str, Any],
+    audit_summary: dict[str, Any],
+) -> str:
+    overall_score = _int(report.get("overall_score", 0))
+    readiness_band = str(report.get("readiness_band", "WEAK") or "WEAK").strip().upper()
+    executive_summary = str(report.get("executive_summary", "No executive summary generated.") or "").strip()
+    categories_raw = report.get("categories", [])
+    categories = [item for item in categories_raw if isinstance(item, dict)] if isinstance(categories_raw, list) else []
+    blockers_raw = report.get("critical_blockers", [])
+    blockers = [item for item in blockers_raw if isinstance(item, dict)] if isinstance(blockers_raw, list) else []
+    improvements_raw = report.get("top_improvements", [])
+    improvements = [item for item in improvements_raw if isinstance(item, dict)] if isinstance(improvements_raw, list) else []
+    roadmap = report.get("roadmap", {}) if isinstance(report.get("roadmap", {}), dict) else {}
+    evidence_summary = (
+        report.get("evidence_summary", {}) if isinstance(report.get("evidence_summary", {}), dict) else {}
+    )
+    pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
+    query = str(report.get("query", "") or "").strip()
+    sections = [
+        "# RepoBrain Repository Audit",
+        "",
+        "## Executive summary",
+        executive_summary or "No executive summary generated.",
+        "",
+        f"Overall score: **{overall_score} / 100**",
+        f"Readiness band: **{readiness_band}**",
+    ]
+    if query:
+        sections.extend(["", f"Requested focus: {query}"])
+    sections.extend(
+        [
+            "",
+            "## Category scores",
+            *_audit_category_table_lines(categories),
+            "",
+            "## Critical blockers",
+            *_audit_blocker_lines(blockers),
+            "",
+            "## Top improvements",
+            *_audit_improvement_lines(improvements),
+            "",
+            "## 30/60/90-day roadmap",
+            *_audit_roadmap_lines(roadmap),
+            "",
+            "## Evidence summary",
+            *_audit_evidence_summary_lines(evidence_summary, pr_context),
+            "",
+            "## Confidence and limitations",
+            *_audit_confidence_and_limitations_lines(report),
+            "",
+            "## Runtime and safety",
+            *_runtime_backend_evidence_lines(audit_summary),
+            "- No `v5`: `yes`",
+            "- No legacy community dependency: `yes`",
+            "- No patch/autofix: `yes`",
+            "",
+            "## Safety statement",
+            *_audit_safety_statement_lines(audit_summary),
+            "",
+            "### 🧾 Audit anchors",
+            *_version_backend_lines(audit_summary),
+            "",
+            _audit_note(),
+        ]
+    )
+    return "\n".join(sections)

@@ -166,6 +166,24 @@ Expected healthy backend evidence:
 - fallback used: `no`
 - fallback reason: `none`
 
+## Step 8: Run The First Repository Audit
+
+Open a safe issue comment and run:
+
+```text
+/repobrain audit Focus on repository readiness for a Microsoft/GitHub-facing demo.
+```
+
+Expected healthy audit behavior:
+
+- overall score between `0` and `100`
+- all 10 categories shown
+- evidence summary shown
+- critical blockers, top improvements, and 30/60/90-day roadmap shown
+- no patch/autofix
+- no mutation
+- repository-level informational output
+
 ## Expected Backend Evidence
 
 In a healthy external install, backend-invoking commands should show:
@@ -216,6 +234,7 @@ Current supported commands are documented in:
 
 Important current limitations:
 
+- `/repobrain audit` is implemented as an MVP repository-level audit
 - `/repobrain status` is unsupported today
 - `/repobrain doctor` is unsupported today
 - `/repobrain fix-lite` is unsupported as a user-facing command spelling

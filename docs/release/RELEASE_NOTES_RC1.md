@@ -11,11 +11,13 @@ This release-candidate draft reflects the current external RepoBrain product pat
 - supported external command matrix:
   - help
   - ask
+  - audit
   - locate
   - explain
   - review
   - verify
   - fix
+- audit MVP implemented with 100-point repository quality/readiness scoring
 - verify productionized as informational verification reporting
 - fix productized as safe proposal/governance with explicit no-mutation markers
 - security, permissions, token degradation, fork-safety, and TopoCore security hardening
@@ -48,7 +50,8 @@ The strategic differentiator is full repository intelligence, quality scoring, e
 
 - TopoCore v6 remains private permanently
 - RepoBrain-Action remains private in the current pilot stage
-- `/repobrain audit` and `/repobrain score` are roadmap commands, not implemented in RC1
+- `/repobrain audit` is implemented as an MVP repository-level audit
+- `/repobrain score` is still roadmap-only
 - `/repobrain status` is unsupported today
 - `/repobrain doctor` is unsupported today
 - `/repobrain fix-lite` is unsupported as a user-facing command spelling

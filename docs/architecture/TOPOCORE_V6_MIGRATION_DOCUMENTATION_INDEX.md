@@ -23,6 +23,7 @@ Current truth:
 - Sprint 75 consolidates canonical onboarding, commands, and troubleshooting for external users
 - Sprint 76 records RC, public-readiness, and Marketplace-readiness assessment
 - Sprint 77 adds public scrub, source-available licensing, TopoCore security policy, and scoring-positioning gates
+- Sprint 78 implements the `/repobrain audit` MVP with 100-point repository scoring
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -147,6 +148,7 @@ Phase 7:
 - `docs/architecture/SPRINT_75_UX_ONBOARDING_TROUBLESHOOTING.md`
 - `docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md`
 - `docs/architecture/SPRINT_77_PUBLIC_SCRUB_LICENSE_TOPOCORE_SECURITY_POSITIONING.md`
+- `docs/architecture/SPRINT_78_AUDIT_MVP_100_POINT_SCORING.md`
 
 ## 5. Recommended Reading Paths
 
