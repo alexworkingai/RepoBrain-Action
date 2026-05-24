@@ -172,3 +172,19 @@ def test_report_includes_confidence_and_limitations(tmp_path: Path) -> None:
     assert isinstance(limitations, list)
     assert limitations
     assert report["executive_summary"]
+
+
+def test_hidden_private_checkout_directory_is_not_scored_as_consumer_repo_evidence(tmp_path: Path) -> None:
+    _build_sparse_repo(tmp_path)
+    _write(tmp_path, ".topocore-v6/docs/SECRET_ARCHITECTURE.md", "# private\n")
+    _write(tmp_path, ".topocore-v6/pyproject.toml", "[project]\nname='private'\n")
+
+    report = score_repository_audit(repo_root=tmp_path)
+
+    combined_paths = []
+    for item in report["categories"]:
+        assert isinstance(item, dict)
+        combined_paths.extend(item.get("evidence_paths", []))
+    combined_paths.extend(report["evidence_summary"]["key_files"])
+
+    assert all(".topocore-v6/" not in str(path) for path in combined_paths)

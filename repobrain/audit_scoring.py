@@ -201,7 +201,7 @@ def _scan_inventory(repo_root: Path) -> dict[str, Any]:
         dir_names[:] = [
             item
             for item in dir_names
-            if item not in _IGNORE_DIR_NAMES and item != ".git"
+            if item not in _IGNORE_DIR_NAMES and item != ".git" and (not item.startswith(".") or item == ".github")
         ]
         for file_name in file_names:
             absolute = Path(current_root) / file_name
