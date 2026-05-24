@@ -96,6 +96,9 @@ It does not change runtime policy or enable mutation.
   - resolved backend remains honest
   - no `v5` fallback
   - no `repobrain-community`
+  - repository-static MVP reports `resolved backend: not_applicable` instead of faking a v6 scoring call
+- live fix during Sprint 78:
+  - hidden private checkout directories such as `.topocore-v6` are excluded from consumer-repository scoring
 
 ## 6. Unit Test Coverage
 
@@ -135,38 +138,49 @@ It does not change runtime policy or enable mutation.
 Issue audit:
 
 - issue URL:
-  - pending live run
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/23`
 - run URL:
-  - pending live run
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26368436600`
 - conclusion:
-  - pending live run
+  - `success`
 - score:
-  - pending live run
+  - `77 / 100`
 - readiness band:
-  - pending live run
+  - `GOOD`
 - backend requested/resolved:
-  - pending live run
+  - requested `auto`
+  - resolved `not_applicable`
 - fallback:
-  - pending live run
+  - used `not_applicable`
+  - reason `audit_static_scoring`
 - evidence count:
-  - pending live run
+  - `10`
 - safety result:
-  - pending live run
+  - pass
+  - no patch
+  - no mutation
+  - no branch/commit/PR creation
+  - no `v5`
+  - no `repobrain-community`
 
 PR audit:
 
 - PR URL:
-  - pending live run or explicit deferral
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/pull/24`
 - run URL:
-  - pending live run or explicit deferral
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26368470601`
 - conclusion:
-  - pending live run or explicit deferral
+  - `success`
 - PR metadata used:
-  - pending live run or explicit deferral
+  - `yes`
 - score:
-  - pending live run or explicit deferral
+  - `77 / 100`
 - safety:
-  - pending live run or explicit deferral
+  - pass
+  - audit remained repository-level
+  - changed-file context included
+  - no patch
+  - no mutation
 
 ## 8. Defects / Gaps
 
@@ -174,23 +188,18 @@ PR audit:
   - audit route and parser gap
   - no real repository scoring command existed before Sprint 78
   - roadmap-only positioning is now backed by an MVP command
+  - consumer-repository audit now excludes private checkout directories such as `.topocore-v6`
 - deferred:
   - `/repobrain score`
   - `/repobrain doctor`
   - `/repobrain status`
   - v6-backed deeper audit calibration
 - blockers:
-  - none recorded yet before local validation and live run
+  - none
 
 ## 9. Product Status
 
-- pending final classification:
-  - `AUDIT_MVP_PASSED`
-  - `AUDIT_MVP_PARTIAL`
-  - `BLOCKED_ON_AUDIT_ROUTING`
-  - `BLOCKED_ON_SCORING_MODEL`
-  - `BLOCKED_ON_V6_BACKEND`
-  - `BLOCKED_ON_EXTERNAL_LIVE_RUN`
+- `AUDIT_MVP_PASSED`
 
 ## 10. Next Step
 
