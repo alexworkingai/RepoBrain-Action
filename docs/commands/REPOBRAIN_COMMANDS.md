@@ -125,7 +125,7 @@ It reports:
 - supported commands
 - roadmap-only commands
 - v6-only backend policy
-- audit static-scoring MVP truth
+- audit static baseline truth with optional contract-validated private `v6` enrichment
 - no-patch/no-mutation policy
 - install hints for `/repobrain doctor` and `/repobrain audit`
 

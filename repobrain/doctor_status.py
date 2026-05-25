@@ -55,7 +55,7 @@ def build_status_report(
             "v6-only runtime policy",
             "no v5 fallback",
             "private_checkout beta-only",
-            "audit currently uses repository-static MVP scoring",
+            "audit keeps a static baseline and may apply contract-validated private v6 enrichment when available",
         ],
         "safety_policy": [
             "no patch/autofix",
@@ -250,7 +250,7 @@ def _backend_policy_check() -> tuple[str, str]:
         (
             f"Requested backend policy is `{resolution.requested_backend}` from `{resolution.source_env}`; "
             "selected backend stays `v6`, there is no v5 fallback, private_checkout is beta-only, "
-            "and audit currently uses repository-static MVP scoring."
+            "and audit keeps a static baseline with optional contract-validated private v6 enrichment when the runtime exposes it."
         ),
     )
 
