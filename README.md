@@ -26,18 +26,19 @@ For a new external repository install, start here:
 Current supported external GitHub commands:
 
 - `/repobrain audit`
+- `/repobrain doctor`
 - `/repobrain help`
 - `/repobrain ask <query>`
 - `/repobrain locate <query>`
 - `/repobrain explain <query>`
 - `/repobrain review`
+- `/repobrain status`
 - `/repobrain verify`
 - `/repobrain fix`
 
 Current unsupported command spellings:
 
-- `/repobrain status`
-- `/repobrain doctor`
+- `/repobrain score`
 - `/repobrain fix-lite`
 
 ## Safety Guarantees
@@ -49,7 +50,9 @@ Current external product behavior remains intentionally conservative:
 - no patch/autofix
 - no RepoBrain-created branch/commit/PR behavior
 - `/repobrain audit` is informational repository scoring only
+- `/repobrain doctor` is report-only setup/runtime diagnostics
 - `/repobrain verify` is informational only
+- `/repobrain status` is report-only runtime status
 - `/repobrain review` is not merge approval
 - `/repobrain fix` is no-patch proposal/governance only
 

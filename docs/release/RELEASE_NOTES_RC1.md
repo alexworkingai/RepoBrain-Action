@@ -18,6 +18,8 @@ This release-candidate draft reflects the current external RepoBrain product pat
   - verify
   - fix
 - audit MVP implemented with 100-point repository quality/readiness scoring
+- doctor implemented as a report-only installation/runtime diagnostic
+- status implemented as a report-only runtime snapshot
 - verify productionized as informational verification reporting
 - fix productized as safe proposal/governance with explicit no-mutation markers
 - security, permissions, token degradation, fork-safety, and TopoCore security hardening
@@ -52,8 +54,6 @@ The strategic differentiator is full repository intelligence, quality scoring, e
 - RepoBrain-Action remains private in the current pilot stage
 - `/repobrain audit` is implemented as an MVP repository-level audit
 - `/repobrain score` is still roadmap-only
-- `/repobrain status` is unsupported today
-- `/repobrain doctor` is unsupported today
 - `/repobrain fix-lite` is unsupported as a user-facing command spelling
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
 - this RC does not enable Marketplace or public release

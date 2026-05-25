@@ -23,19 +23,20 @@ It does not publish the repository, change visibility, create a release tag, or 
 - Status: `READY`
 - supported commands:
   - `/repobrain audit`
+  - `/repobrain doctor`
   - `/repobrain help`
   - `/repobrain ask <query>`
   - `/repobrain locate <query>`
   - `/repobrain explain <query>`
   - `/repobrain review`
+  - `/repobrain status`
   - `/repobrain verify`
   - `/repobrain fix`
 - unsupported commands documented honestly:
-  - `/repobrain status`
-  - `/repobrain doctor`
+  - `/repobrain score`
   - `/repobrain fix-lite`
 - roadmap commands documented without claiming implementation:
-  - `/repobrain score`
+  - none beyond `/repobrain score`
 
 ## External Install Readiness
 
@@ -96,7 +97,8 @@ It does not publish the repository, change visibility, create a release tag, or 
 - no patch/autofix
 - no RepoBrain-created branch, commit, or PR behavior
 - audit MVP is implemented
-- score, doctor, and status roadmap commands are not implemented yet
+- doctor and status are implemented as report-only diagnostics
+- score remains roadmap-only
 
 ## Approval Gates
 

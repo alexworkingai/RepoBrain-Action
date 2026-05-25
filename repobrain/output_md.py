@@ -3121,6 +3121,19 @@ def _audit_safety_statement_lines(audit_summary: dict[str, Any]) -> list[str]:
     ]
 
 
+def _audit_anchor_lines(audit_summary: dict[str, Any]) -> list[str]:
+    route = str(audit_summary.get("route_final", "AUDIT") or "AUDIT").strip().upper()
+    version = str(audit_summary.get("repobrain_version", "") or "").strip()
+    backend_mode = str(audit_summary.get("backend_mode", "n/a") or "n/a").strip()
+    scope_status = str(audit_summary.get("scope_status", "n/a") or "n/a").strip()
+    lines = [f"- Route: `{route}`"]
+    if version:
+        lines.append(f"- RepoBrain version: `{version}`")
+    lines.append(f"- Backend mode: `{backend_mode}`")
+    lines.append(f"- Scope status: `{scope_status}`")
+    return lines
+
+
 def render_audit_markdown(
     *,
     report: dict[str, Any],
@@ -3183,9 +3196,218 @@ def render_audit_markdown(
             *_audit_safety_statement_lines(audit_summary),
             "",
             "### 🧾 Audit anchors",
-            *_version_backend_lines(audit_summary),
+            *_audit_anchor_lines(audit_summary),
             "",
             _audit_note(),
         ]
     )
     return "\n".join(sections)
+
+
+def _supported_command_lines(report: dict[str, Any]) -> list[str]:
+    supported_raw = report.get("supported_commands", [])
+    supported = (
+        [str(item).strip() for item in supported_raw if str(item).strip()]
+        if isinstance(supported_raw, list)
+        else []
+    )
+    roadmap_raw = report.get("roadmap_commands", [])
+    roadmap = (
+        [str(item).strip() for item in roadmap_raw if str(item).strip()]
+        if isinstance(roadmap_raw, list)
+        else []
+    )
+    fix_lite_guidance = str(report.get("fix_lite_guidance", "") or "").strip()
+    lines = [
+        f"- Supported: {', '.join(f'`{item}`' for item in supported) if supported else '`n/a`'}",
+        f"- Roadmap-only: {', '.join(f'`{item}`' for item in roadmap) if roadmap else '`none`'}",
+    ]
+    if fix_lite_guidance:
+        lines.append(f"- fix-lite: {fix_lite_guidance}")
+    return lines
+
+
+def _policy_lines(items: list[str], *, fallback: str) -> list[str]:
+    cleaned = [str(item).strip() for item in items if str(item).strip()]
+    if not cleaned:
+        return [f"- {fallback}"]
+    return [f"- {item}" for item in cleaned]
+
+
+def _doctor_check_table_lines(checks: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "| Check | Status | Detail |",
+        "| --- | --- | --- |",
+    ]
+    for item in checks:
+        name = str(item.get("name", "Unnamed check") or "Unnamed check").strip()
+        status = str(item.get("status", "UNKNOWN") or "UNKNOWN").strip().upper()
+        detail = str(item.get("detail", "No detail recorded.") or "No detail recorded.").strip()
+        lines.append(f"| {name} | `{status}` | {detail} |")
+    return lines
+
+
+def render_status_markdown(
+    *,
+    report: dict[str, Any],
+    audit_summary: dict[str, Any],
+) -> str:
+    query = str(report.get("query", "") or "").strip()
+    topocore_policy = report.get("topocore_policy", [])
+    safety_policy = report.get("safety_policy", [])
+    install_hints = report.get("install_hints", [])
+    workflow = report.get("workflow", {}) if isinstance(report.get("workflow", {}), dict) else {}
+    sections = [
+        "# RepoBrain Status",
+        "",
+        f"- RepoBrain version: `{str(report.get('version', 'n/a') or 'n/a').strip()}`",
+        f"- Runtime mode: `{str(report.get('action_runtime_mode', 'n/a') or 'n/a').strip()}`",
+        f"- Repository: `{str(report.get('repo_name', 'unknown') or 'unknown').strip()}`",
+        f"- Event context: `{str(report.get('event_context', 'unknown') or 'unknown').strip()}`",
+    ]
+    if query:
+        sections.extend(["", f"Requested focus: {query}"])
+    sections.extend(
+        [
+            "",
+            "## Command surface",
+            *_supported_command_lines(report),
+            "",
+            "## Backend policy",
+            *_policy_lines(topocore_policy if isinstance(topocore_policy, list) else [], fallback="No backend policy notes recorded."),
+            f"- TopoCore dependency mode: `{str(report.get('topocore_dependency_mode', 'not_detected') or 'not_detected').strip()}`",
+            "",
+            "## Workflow snapshot",
+            f"- RepoBrain workflow detected: `{_bool_label(bool(workflow.get('exists', False)))}`",
+            f"- Explicit permissions block: `{_bool_label(bool(workflow.get('permissions_explicit', False)))}`",
+            f"- Read-mostly baseline detected: `{_bool_label(bool(workflow.get('read_mostly_baseline', False)))}`",
+            "",
+            "## Safety policy",
+            *_policy_lines(safety_policy if isinstance(safety_policy, list) else [], fallback="No safety policy notes recorded."),
+            "",
+            "## Install hints",
+            *_policy_lines(install_hints if isinstance(install_hints, list) else [], fallback="No install hints recorded."),
+            "",
+            "## Runtime and safety",
+            *_runtime_backend_evidence_lines(audit_summary),
+            "- No `v5`: `yes`",
+            "- No legacy community dependency: `yes`",
+            "- No patch/autofix: `yes`",
+            "",
+            "## Safety statement",
+            "- Status is informational only.",
+            "- No files modified.",
+            "- No patch applied.",
+            "- No branch, commit, or PR created by RepoBrain.",
+            "- Not a security approval.",
+            "- Not a merge approval.",
+            "",
+            "### 🧾 Audit anchors",
+            *_audit_anchor_lines(audit_summary),
+            "",
+            _audit_note(),
+        ]
+    )
+    return "\n".join(sections)
+
+
+def render_doctor_markdown(
+    *,
+    report: dict[str, Any],
+    audit_summary: dict[str, Any],
+) -> str:
+    query = str(report.get("query", "") or "").strip()
+    checks_raw = report.get("checks", [])
+    checks = [item for item in checks_raw if isinstance(item, dict)] if isinstance(checks_raw, list) else []
+    issues_raw = report.get("issues_found", [])
+    issues_found = [str(item).strip() for item in issues_raw if str(item).strip()] if isinstance(issues_raw, list) else []
+    fixes_raw = report.get("recommended_fixes", [])
+    fixes = [str(item).strip() for item in fixes_raw if str(item).strip()] if isinstance(fixes_raw, list) else []
+    limitations_raw = report.get("limitations", [])
+    limitations = (
+        [str(item).strip() for item in limitations_raw if str(item).strip()]
+        if isinstance(limitations_raw, list)
+        else []
+    )
+    issue_lines = [f"- {item}" for item in issues_found] or [
+        "- No blocking issue was confirmed from the current safe diagnostics."
+    ]
+    fix_lines = [f"- {item}" for item in fixes] or ["- No immediate fix recommendation was generated."]
+    limitation_lines = [f"- {item}" for item in limitations] or ["- No additional limitation was recorded."]
+    sections = [
+        "# RepoBrain Doctor",
+        "",
+        f"Overall diagnostic status: **{str(report.get('overall_status', 'UNKNOWN') or 'UNKNOWN').strip().upper()}**",
+        f"- Repository: `{str(report.get('repo_name', 'unknown') or 'unknown').strip()}`",
+        f"- Event context: `{str(report.get('event_context', 'unknown') or 'unknown').strip()}`",
+    ]
+    if query:
+        sections.extend(["", f"Requested focus: {query}"])
+    sections.extend(
+        [
+            "",
+            "## Diagnostic checks",
+            *_doctor_check_table_lines(checks),
+            "",
+            "## Issues found",
+            *issue_lines,
+            "",
+            "## Recommended fixes",
+            *fix_lines,
+            "",
+            "## Limitations",
+            *limitation_lines,
+            "",
+            "## Runtime and safety",
+            *_runtime_backend_evidence_lines(audit_summary),
+            "- No `v5`: `yes`",
+            "- No legacy community dependency: `yes`",
+            "- No patch/autofix: `yes`",
+            "",
+            "## Safety statement",
+            "- Doctor is informational only.",
+            "- No files modified.",
+            "- No patch applied.",
+            "- No branch, commit, or PR created by RepoBrain.",
+            "- Not a security approval.",
+            "- Not a merge approval.",
+            "",
+            "### 🧾 Audit anchors",
+            *_audit_anchor_lines(audit_summary),
+            "",
+            _audit_note(),
+        ]
+    )
+    return "\n".join(sections)
+
+
+def render_unsupported_command_markdown(
+    *,
+    command: str,
+    message: str,
+    next_steps: list[str],
+    audit_summary: dict[str, Any],
+) -> str:
+    steps = [str(item).strip() for item in next_steps if str(item).strip()]
+    step_lines = [f"- {item}" for item in steps] or ["- Use `/repobrain help` to review supported commands."]
+    return "\n".join(
+        [
+            f"# RepoBrain `{command}`",
+            "",
+            message.strip() or "This command is not supported in the current product surface.",
+            "",
+            "## Next steps",
+            *step_lines,
+            "",
+            "## Runtime and safety",
+            *_runtime_backend_evidence_lines(audit_summary),
+            "- No `v5`: `yes`",
+            "- No legacy community dependency: `yes`",
+            "- No patch/autofix: `yes`",
+            "",
+            "### 🧾 Audit anchors",
+            *_audit_anchor_lines(audit_summary),
+            "",
+            _audit_note(),
+        ]
+    )

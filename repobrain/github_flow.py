@@ -29,6 +29,11 @@ from repobrain.checks_md import (
 )
 from repobrain.config import RepoBrainConfig, env_bool, env_int, load_config
 from repobrain import __version__ as REPOBRAIN_VERSION
+from repobrain.doctor_status import (
+    FIX_LITE_GUIDANCE,
+    build_doctor_report,
+    build_status_report,
+)
 from repobrain.evidence import EvidenceItem
 from repobrain.evidence_filter import filter_candidate_evidence, filter_evidence_items
 from repobrain.execution_mode import coerce_execution_decision
@@ -49,6 +54,7 @@ from repobrain.index_store import build_index, load_index, load_index_embeddings
 from repobrain.output_md import (
     enforce_comment_limit,
     render_audit_markdown,
+    render_doctor_markdown,
     render_diagnostic_summary_markdown,
     render_answer_markdown,
     render_error_markdown,
@@ -56,6 +62,8 @@ from repobrain.output_md import (
     render_refuse_markdown,
     render_review_markdown,
     render_scoped_command_markdown,
+    render_status_markdown,
+    render_unsupported_command_markdown,
     render_wait_markdown,
 )
 from repobrain.retrieve_pro import retrieve_topk_pro
@@ -121,6 +129,8 @@ HELP_TEXT = """RepoBrain command examples:
 - /repobrain ask --profile balanced How does provider selection work?
 - /repobrain audit
 - /repobrain audit Focus on repository readiness for a Microsoft/GitHub-facing demo.
+- /repobrain doctor
+- /repobrain status
 - /repobrain locate TKYProvider
 - /repobrain explain retrieve_topk
 - /repobrain review --profile balanced
@@ -129,8 +139,12 @@ HELP_TEXT = """RepoBrain command examples:
 
 Supported today:
 - `/repobrain audit` is a repository-level, no-mutation audit MVP.
-- `/repobrain score`, `/repobrain doctor`, and `/repobrain status` are roadmap commands, not supported command spellings today.
+- `/repobrain doctor` is a report-only installation/runtime diagnostic.
+- `/repobrain status` is a lightweight report-only runtime status snapshot.
+- `/repobrain score` is roadmap-only. Use `/repobrain audit` for the current 100-point repository score.
 - `/repobrain fix-lite` is unsupported; use `/repobrain fix`.
+- `/repobrain fix` stays no-patch/no-mutation.
+- `/repobrain verify` stays informational only.
 
 Execution profile:
 - Use `--profile cheap|balanced|premium` with ask/review/fix.
@@ -590,15 +604,26 @@ def _build_github_context_seed(
     head_sha = ""
     base_ref = ""
     head_ref = ""
+    base_repo_full_name = ""
+    head_repo_full_name = ""
+    pr_same_repo: bool | None = None
     if isinstance(pull, dict):
         base = pull.get("base", {})
         head = pull.get("head", {})
         if isinstance(base, dict):
             base_sha = str(base.get("sha", "") or "")
             base_ref = str(base.get("ref", "") or "")
+            base_repo_raw = base.get("repo", {})
+            if isinstance(base_repo_raw, dict):
+                base_repo_full_name = str(base_repo_raw.get("full_name", "") or "").strip()
         if isinstance(head, dict):
             head_sha = str(head.get("sha", "") or "")
             head_ref = str(head.get("ref", "") or "")
+            head_repo_raw = head.get("repo", {})
+            if isinstance(head_repo_raw, dict):
+                head_repo_full_name = str(head_repo_raw.get("full_name", "") or "").strip()
+    if head_repo_full_name and repository:
+        pr_same_repo = head_repo_full_name.lower() == repository.lower()
 
     file_entries = _extract_changed_file_entries(payload)
     return {
@@ -615,6 +640,9 @@ def _build_github_context_seed(
         "head_sha": head_sha,
         "base_ref": base_ref,
         "head_ref": head_ref,
+        "base_repo_full_name": base_repo_full_name,
+        "head_repo_full_name": head_repo_full_name,
+        "pr_same_repo": pr_same_repo,
         "files": file_entries,
         "changed_files": _extract_changed_files(payload),
         "diff_hunks": _extract_diff_hunks(payload),
@@ -5517,6 +5545,19 @@ def _enrich_github_context_with_pr_metadata(
             context["head_ref"] = str(head.get("ref", "") or "")
         if not str(context.get("base_ref", "") or "").strip():
             context["base_ref"] = str(base.get("ref", "") or "")
+        if not str(context.get("head_repo_full_name", "") or "").strip():
+            head_repo_raw = head.get("repo", {})
+            head_repo = head_repo_raw if isinstance(head_repo_raw, dict) else {}
+            context["head_repo_full_name"] = str(head_repo.get("full_name", "") or "").strip()
+        if not str(context.get("base_repo_full_name", "") or "").strip():
+            base_repo_raw = base.get("repo", {})
+            base_repo = base_repo_raw if isinstance(base_repo_raw, dict) else {}
+            context["base_repo_full_name"] = str(base_repo.get("full_name", "") or "").strip()
+        if context.get("pr_same_repo") is None:
+            head_repo_name = str(context.get("head_repo_full_name", "") or "").strip().lower()
+            repo_name = extract_repo_from_env().lower()
+            if head_repo_name and repo_name:
+                context["pr_same_repo"] = head_repo_name == repo_name
 
     return context
 
@@ -6384,6 +6425,161 @@ def _build_audit_markdown(
         if audit is not None:
             audit["audit_result_artifact"] = artifact_path.as_posix()
     return body
+
+
+def _build_status_markdown(
+    *,
+    repo_root: Path,
+    query: str,
+    tky_mode: str,
+    github_context_seed: dict[str, Any] | None,
+    audit: dict[str, Any] | None = None,
+) -> str:
+    resolved_repo_root = Path(repo_root).resolve()
+    requested_backend = "auto"
+    effective_tky_mode = str(tky_mode or "auto").strip() or "auto"
+    try:
+        requested_backend = resolve_backend().requested_backend
+    except TopoCoreBackendError:
+        requested_backend = "invalid_policy"
+
+    github_context = _enrich_github_context_with_pr_metadata(
+        github_context_seed=github_context_seed,
+    )
+    report = build_status_report(
+        repo_root=resolved_repo_root,
+        query=query,
+        github_context=github_context,
+    )
+    audit_summary: dict[str, Any] = {
+        "command": "status",
+        "route_final": "STATUS",
+        "pass_count": 1,
+        "retrieved": 0,
+        "selected": 0,
+        "repobrain_version": REPOBRAIN_VERSION,
+        "tky_mode_requested": effective_tky_mode,
+        "tky_mode_used": effective_tky_mode,
+        "tkya_mode": "status_report_only",
+        "tkya_backend": "status_report_only",
+        "requested_backend": requested_backend,
+        "resolved_backend": "not_applicable",
+        "backend_mode": "status_report_only",
+        "fallback_used": "not_applicable",
+        "fallback_reason": "status_report_only",
+        "scope_status": "status_snapshot",
+        "patch_authorized": False,
+        "patch_applied": False,
+        "files_modified": False,
+        "branch_created": False,
+        "commit_created": False,
+        "pr_created": False,
+        "llm_used": False,
+        "llm_skip_reason": "status_report_only",
+    }
+    if audit is not None:
+        audit.update(audit_summary)
+    return render_status_markdown(report=report, audit_summary=audit_summary)
+
+
+def _build_doctor_markdown(
+    *,
+    repo_root: Path,
+    query: str,
+    tky_mode: str,
+    github_context_seed: dict[str, Any] | None,
+    audit: dict[str, Any] | None = None,
+) -> str:
+    resolved_repo_root = Path(repo_root).resolve()
+    requested_backend = "auto"
+    effective_tky_mode = str(tky_mode or "auto").strip() or "auto"
+    try:
+        requested_backend = resolve_backend().requested_backend
+    except TopoCoreBackendError:
+        requested_backend = "invalid_policy"
+
+    github_context = _enrich_github_context_with_pr_metadata(
+        github_context_seed=github_context_seed,
+    )
+    report = build_doctor_report(
+        repo_root=resolved_repo_root,
+        query=query,
+        github_context=github_context,
+    )
+    audit_summary: dict[str, Any] = {
+        "command": "doctor",
+        "route_final": "DOCTOR",
+        "pass_count": 1,
+        "retrieved": 0,
+        "selected": 0,
+        "repobrain_version": REPOBRAIN_VERSION,
+        "tky_mode_requested": effective_tky_mode,
+        "tky_mode_used": effective_tky_mode,
+        "tkya_mode": "doctor_diagnostic_report",
+        "tkya_backend": "doctor_diagnostic_report",
+        "requested_backend": requested_backend,
+        "resolved_backend": "not_applicable",
+        "backend_mode": "doctor_diagnostic_report",
+        "fallback_used": "not_applicable",
+        "fallback_reason": "doctor_diagnostic_report",
+        "scope_status": "diagnostic_report",
+        "patch_authorized": False,
+        "patch_applied": False,
+        "files_modified": False,
+        "branch_created": False,
+        "commit_created": False,
+        "pr_created": False,
+        "llm_used": False,
+        "llm_skip_reason": "doctor_diagnostic_report",
+    }
+    if audit is not None:
+        audit.update(audit_summary)
+    return render_doctor_markdown(report=report, audit_summary=audit_summary)
+
+
+def _build_unsupported_command_markdown(
+    *,
+    cmd: str,
+    tky_mode: str,
+    message: str,
+    next_steps: list[str],
+    audit: dict[str, Any] | None = None,
+) -> str:
+    effective_tky_mode = str(tky_mode or "auto").strip() or "auto"
+    audit_summary: dict[str, Any] = {
+        "command": cmd,
+        "route_final": "UNSUPPORTED",
+        "pass_count": 1,
+        "retrieved": 0,
+        "selected": 0,
+        "repobrain_version": REPOBRAIN_VERSION,
+        "tky_mode_requested": effective_tky_mode,
+        "tky_mode_used": effective_tky_mode,
+        "tkya_mode": "unsupported_command",
+        "tkya_backend": "unsupported_command",
+        "requested_backend": "not_applicable",
+        "resolved_backend": "not_applicable",
+        "backend_mode": "unsupported_command",
+        "fallback_used": "not_applicable",
+        "fallback_reason": "unsupported_command",
+        "scope_status": "unsupported_command",
+        "patch_authorized": False,
+        "patch_applied": False,
+        "files_modified": False,
+        "branch_created": False,
+        "commit_created": False,
+        "pr_created": False,
+        "llm_used": False,
+        "llm_skip_reason": "unsupported_command",
+    }
+    if audit is not None:
+        audit.update(audit_summary)
+    return render_unsupported_command_markdown(
+        command=cmd,
+        message=message,
+        next_steps=next_steps,
+        audit_summary=audit_summary,
+    )
 
 
 def _review_candidates_from_files(files: list[dict[str, Any]]) -> list[CandidateChunk]:
@@ -9166,6 +9362,48 @@ def run_github_flow(
             query=query,
             tky_mode=tky_mode,
             github_context_seed=github_context_seed,
+            audit=audit,
+        )
+        audit["index_source"] = "n/a"
+    elif cmd == "doctor":
+        body_markdown = _build_doctor_markdown(
+            repo_root=repo_root,
+            query=query,
+            tky_mode=tky_mode,
+            github_context_seed=github_context_seed,
+            audit=audit,
+        )
+        audit["index_source"] = "n/a"
+    elif cmd == "status":
+        body_markdown = _build_status_markdown(
+            repo_root=repo_root,
+            query=query,
+            tky_mode=tky_mode,
+            github_context_seed=github_context_seed,
+            audit=audit,
+        )
+        audit["index_source"] = "n/a"
+    elif cmd == "score":
+        body_markdown = _build_unsupported_command_markdown(
+            cmd=cmd,
+            tky_mode=tky_mode,
+            message="Score is planned as a compact audit summary. Use /repobrain audit for the current 100-point repository score.",
+            next_steps=[
+                "Use `/repobrain audit` for the current repository score and improvement roadmap.",
+                "Use `/repobrain help` to review the supported command surface.",
+            ],
+            audit=audit,
+        )
+        audit["index_source"] = "n/a"
+    elif cmd == "fix-lite":
+        body_markdown = _build_unsupported_command_markdown(
+            cmd=cmd,
+            tky_mode=tky_mode,
+            message=FIX_LITE_GUIDANCE,
+            next_steps=[
+                "Use `/repobrain fix` for the current proposal/governance path.",
+                "Use `/repobrain help` to review supported commands.",
+            ],
             audit=audit,
         )
         audit["index_source"] = "n/a"

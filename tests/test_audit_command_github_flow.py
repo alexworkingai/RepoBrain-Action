@@ -107,26 +107,34 @@ def test_help_output_includes_audit_but_not_unsupported_commands_as_supported(ca
 
     assert status == "DRY_RUN_OK"
     assert "/repobrain audit" in output
-    assert "roadmap commands, not supported command spellings today" in output
+    assert "/repobrain doctor" in output
+    assert "/repobrain status" in output
+    assert "/repobrain score" in output
+    assert "roadmap-only" in output.lower()
 
 
 def test_unsupported_score_doctor_status_and_fix_lite_remain_honest(capsys) -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    for command in (
-        "/repobrain score",
-        "/repobrain doctor",
-        "/repobrain status",
-        "/repobrain fix-lite",
-    ):
-        status = run_github_flow(
-            repo_root=repo_root,
-            dry_run=True,
-            comment_text=command,
-            issue_number=None,
-        )
-        output = capsys.readouterr().out
-        assert status == "DRY_RUN_OK"
-        assert "/repobrain audit" in output or "/repobrain fix" in output
+    status = run_github_flow(
+        repo_root=repo_root,
+        dry_run=True,
+        comment_text="/repobrain score",
+        issue_number=None,
+    )
+    output = capsys.readouterr().out
+    assert status == "DRY_RUN_OK"
+    assert "compact audit summary" in output
+    assert "/repobrain audit" in output
+
+    status = run_github_flow(
+        repo_root=repo_root,
+        dry_run=True,
+        comment_text="/repobrain fix-lite",
+        issue_number=None,
+    )
+    output = capsys.readouterr().out
+    assert status == "DRY_RUN_OK"
+    assert "/repobrain fix" in output
 
 
 def test_run_github_flow_audit_dry_run_records_no_mutation_audit_fields() -> None:

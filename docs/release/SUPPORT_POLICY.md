@@ -19,11 +19,13 @@ Supported installation path is the documented external pilot baseline:
 Supported command surface today:
 
 - `/repobrain audit`
+- `/repobrain doctor`
 - `/repobrain help`
 - `/repobrain ask <query>`
 - `/repobrain locate <query>`
 - `/repobrain explain <query>`
 - `/repobrain review`
+- `/repobrain status`
 - `/repobrain verify`
 - `/repobrain fix`
 
@@ -36,7 +38,7 @@ Current unsupported or not-approved surfaces:
 - patch/autofix
 - RepoBrain-created branch, commit, or PR behavior
 - Marketplace install until approved
-- `/repobrain score`, `/repobrain doctor`, and `/repobrain status` as live product commands in the current release candidate
+- `/repobrain score` as a live product command in the current release candidate
 
 ## Security Issue Reporting
 
@@ -59,7 +61,8 @@ Current unsupported or not-approved surfaces:
 - fork restrictions
 - verify may report `NOT_RUN` when no checks exist
 - audit is implemented as a repository-level MVP
-- score, doctor, and status roadmap commands are documented but not implemented yet
+- doctor and status are implemented as report-only diagnostics
+- score remains roadmap-only
 
 ## Support Boundaries
 

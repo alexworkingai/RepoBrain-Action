@@ -136,7 +136,26 @@ Why this matters:
 - verify needs read access to PR metadata, checks, statuses, and workflow runs
 - current product mode does not mutate repository content
 
-## Step 6: Run The First Issue Ask
+## Step 6: Run The First Doctor Check
+
+This is the recommended first setup check after setup.
+
+Open a safe issue comment and run:
+
+```text
+/repobrain doctor
+```
+
+Expected healthy doctor behavior:
+
+- overall diagnostic status shown as `PASS`, `WARN`, or `UNKNOWN`
+- workflow/action context shown
+- `TOPOCORE_V6_REPO_TOKEN` discussed by name without exposing any value
+- v6-only / no-v5 policy shown
+- no patch/autofix
+- no mutation
+
+## Step 7: Run The First Issue Ask
 
 Open a safe issue comment and run:
 
@@ -151,7 +170,7 @@ Expected healthy backend evidence:
 - fallback used: `no`
 - fallback reason: `none`
 
-## Step 7: Run The First PR Ask
+## Step 8: Run The First PR Ask
 
 Open a safe PR comment and run:
 
@@ -166,7 +185,7 @@ Expected healthy backend evidence:
 - fallback used: `no`
 - fallback reason: `none`
 
-## Step 8: Run The First Repository Audit
+## Step 9: Run The First Repository Audit
 
 Open a safe issue comment and run:
 
@@ -235,8 +254,9 @@ Current supported commands are documented in:
 Important current limitations:
 
 - `/repobrain audit` is implemented as an MVP repository-level audit
-- `/repobrain status` is unsupported today
-- `/repobrain doctor` is unsupported today
+- `/repobrain doctor` is implemented as a report-only installation/runtime diagnostic
+- `/repobrain status` is implemented as a lightweight runtime snapshot
+- `/repobrain score` is still roadmap-only
 - `/repobrain fix-lite` is unsupported as a user-facing command spelling
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
 - there is no patch/autofix mode in the current external product path

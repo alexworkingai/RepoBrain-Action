@@ -39,6 +39,10 @@ Private TopoCore checkout fails before RepoBrain runtime execution.
 The secret name can appear in setup guidance.
 The secret value must never appear.
 
+If setup is unclear after you fix the secret, run:
+
+- `/repobrain doctor`
+
 ## 3. Private checkout failed
 
 ### Likely causes
@@ -125,6 +129,11 @@ Do not add by default:
 - `checks: write`
 - `pull_request_target`
 
+If you need a quick setup snapshot after changing permissions, run:
+
+- `/repobrain doctor`
+- `/repobrain status`
+
 ## 8. Fork PR Restrictions
 
 ### Current policy
@@ -142,25 +151,24 @@ This preserves the current private dependency boundary and avoids widening trust
 Supported commands:
 
 - `/repobrain audit`
+- `/repobrain doctor`
 - `/repobrain help`
 - `/repobrain ask <query>`
 - `/repobrain locate <query>`
 - `/repobrain explain <query>`
 - `/repobrain review`
+- `/repobrain status`
 - `/repobrain verify`
 - `/repobrain fix`
 
 Unsupported command spellings today:
 
 - `/repobrain score`
-- `/repobrain status`
-- `/repobrain doctor`
 - `/repobrain fix-lite`
 
 Roadmap note:
 
 - `/repobrain score` is a planned compact audit view and is not implemented yet
-- `/repobrain status` and `/repobrain doctor` are planned but not implemented yet
 - `/repobrain fix-lite` is not a product command; use `/repobrain fix`
 
 ## 10. Support Boundary

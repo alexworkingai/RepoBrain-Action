@@ -74,10 +74,12 @@ A full audit output should include:
 ### `/repobrain doctor`
 
 - installation and runtime diagnostic
+- implemented as a report-only diagnostic in Sprint 79
 
 ### `/repobrain status`
 
 - runtime status snapshot
+- implemented as a report-only status snapshot in Sprint 79
 
 ### `/repobrain fix-lite`
 
@@ -90,6 +92,7 @@ Implementation status:
 
 - Sprint 77 documented the model and roadmap.
 - Sprint 78 implements the `/repobrain audit` MVP.
+- Sprint 79 calibrates exclusion boundaries and output compaction for the audit MVP.
 - Current audit scoring is deterministic, repository-static, and evidence-grounded.
 - `/repobrain score` remains roadmap-only.
-- `/repobrain doctor` and `/repobrain status` are planned for Sprint 79 unless priorities change.
+- `/repobrain doctor` and `/repobrain status` are implemented as report-only diagnostics.

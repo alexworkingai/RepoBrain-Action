@@ -24,6 +24,7 @@ Current truth:
 - Sprint 76 records RC, public-readiness, and Marketplace-readiness assessment
 - Sprint 77 adds public scrub, source-available licensing, TopoCore security policy, and scoring-positioning gates
 - Sprint 78 implements the `/repobrain audit` MVP with 100-point repository scoring
+- Sprint 79 calibrates the audit MVP and adds doctor/status diagnostics
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 

@@ -38,6 +38,8 @@ _IGNORE_DIR_NAMES = {
     ".git",
     ".hg",
     ".svn",
+    ".topocore-v6",
+    ".codex-skill-install-tmp",
     ".venv",
     "venv",
     "__pycache__",
@@ -45,6 +47,10 @@ _IGNORE_DIR_NAMES = {
     "dist",
     "build",
     "artifacts",
+    "reports",
+    "coverage",
+    "htmlcov",
+    ".cache",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
@@ -52,6 +58,34 @@ _IGNORE_DIR_NAMES = {
     ".idea",
     ".vscode",
     ".next",
+}
+_IGNORE_FILE_EXTENSIONS = {
+    ".pyc",
+    ".pyo",
+    ".zip",
+    ".tar",
+    ".gz",
+    ".bz2",
+    ".xz",
+    ".7z",
+    ".jar",
+    ".dll",
+    ".so",
+    ".dylib",
+    ".exe",
+    ".bin",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".ico",
+    ".pdf",
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".wav",
+    ".mp3",
 }
 _CODE_EXTENSIONS = {
     ".py",
@@ -205,6 +239,8 @@ def _scan_inventory(repo_root: Path) -> dict[str, Any]:
         ]
         for file_name in file_names:
             absolute = Path(current_root) / file_name
+            if _should_ignore_file(absolute):
+                continue
             relative = absolute.relative_to(repo_root).as_posix()
             files.append(relative)
             if len(files) >= _MAX_TRACKED_FILES:
@@ -298,9 +334,22 @@ def _scan_inventory(repo_root: Path) -> dict[str, Any]:
         if path in file_set
     ]
     docs_text = "\n".join(_read_text_limited(repo_root / path) for path in docs_text_paths).lower()
+    manifest_text = "\n".join(_read_text_limited(repo_root / path) for path in manifest_paths[:3]).lower()
     has_install_docs = "install" in docs_text or any("onboarding" in path.lower() for path in docs_paths)
     has_troubleshooting_docs = "troubleshooting" in docs_text or any("troubleshooting" in path.lower() for path in docs_paths)
     has_command_docs = "/repobrain" in docs_text or any("commands" in path.lower() for path in docs_paths)
+    has_embedded_lint_config = any(
+        token in manifest_text
+        for token in ("[tool.ruff", "[tool.black", "[tool.flake8", "\"eslintconfig\"", "\"prettier\"")
+    )
+    has_embedded_type_config = any(
+        token in manifest_text
+        for token in ("[tool.mypy", "\"typescript\"", "\"tsconfig\"", "\"pyright\"")
+    )
+    has_embedded_format_config = any(
+        token in manifest_text
+        for token in ("[tool.black", "[tool.ruff", "\"prettier\"", ".editorconfig")
+    )
     return {
         "repo_root": repo_root,
         "files": files,
@@ -319,6 +368,9 @@ def _scan_inventory(repo_root: Path) -> dict[str, Any]:
         "lint_paths": lint_paths,
         "type_paths": type_paths,
         "format_paths": format_paths,
+        "has_embedded_lint_config": has_embedded_lint_config,
+        "has_embedded_type_config": has_embedded_type_config,
+        "has_embedded_format_config": has_embedded_format_config,
         "entrypoint_paths": entrypoint_paths,
         "architecture_paths": architecture_paths,
         "security_paths": security_paths,
@@ -339,7 +391,7 @@ def _scan_inventory(repo_root: Path) -> dict[str, Any]:
         "has_codeowners": "CODEOWNERS" in file_set or ".github/CODEOWNERS" in file_set,
         "has_issue_templates": any("ISSUE_TEMPLATE" in path for path in file_set),
         "has_pr_template": any("pull_request_template" in path.lower() for path in file_set),
-    }
+}
 
 
 def _read_text_limited(path: Path) -> str:
@@ -348,6 +400,20 @@ def _read_text_limited(path: Path) -> str:
     except OSError:
         return ""
     return raw[:_MAX_TEXT_BYTES].decode("utf-8", errors="ignore")
+
+
+def _should_ignore_file(path: Path) -> bool:
+    suffix = path.suffix.lower()
+    if suffix in _IGNORE_FILE_EXTENSIONS:
+        return True
+    if path.name.lower().endswith((".min.js", ".min.css")):
+        return True
+    try:
+        if path.stat().st_size > _MAX_TEXT_BYTES * 2:
+            return True
+    except OSError:
+        return True
+    return False
 
 
 def _build_category_results(inventory: dict[str, Any]) -> list[dict[str, Any]]:
@@ -446,18 +512,34 @@ def _code_quality_result(inventory: dict[str, Any]) -> dict[str, Any]:
     if inventory["lint_paths"]:
         score += 4
         evidence.extend(inventory["lint_paths"][:2])
+    elif inventory["has_embedded_lint_config"]:
+        score += 3
+        evidence.extend(inventory["manifest_paths"][:1])
     if inventory["type_paths"]:
         score += 3
         evidence.extend(inventory["type_paths"][:2])
+    elif inventory["has_embedded_type_config"]:
+        score += 2
+        evidence.extend(inventory["manifest_paths"][:1])
     if inventory["format_paths"]:
         score += 2
         evidence.extend(inventory["format_paths"][:2])
+    elif inventory["has_embedded_format_config"]:
+        score += 2
+        evidence.extend(inventory["manifest_paths"][:1])
     if inventory["code_roots"]:
         score += 3
         evidence.extend(inventory["code_roots"][:2])
     assessable = bool(inventory["code_paths"] or inventory["manifest_paths"])
     rationale_parts = []
-    if inventory["lint_paths"] or inventory["type_paths"] or inventory["format_paths"]:
+    if (
+        inventory["lint_paths"]
+        or inventory["type_paths"]
+        or inventory["format_paths"]
+        or inventory["has_embedded_lint_config"]
+        or inventory["has_embedded_type_config"]
+        or inventory["has_embedded_format_config"]
+    ):
         rationale_parts.append("Static quality signals such as linting, typing, or formatting configs are present.")
     else:
         rationale_parts.append("No obvious lint/type/formatting configuration was detected.")
@@ -1070,8 +1152,6 @@ def _build_executive_summary(
     changed_files = _changed_files(github_context)
     if github_context and bool(github_context.get("is_pr", False)) and changed_files:
         parts.append(f"Current PR context contributed {len(changed_files)} changed files as supplemental evidence.")
-    if str(query or "").strip():
-        parts.append(f"Requested focus: {str(query).strip()}")
     return " ".join(parts)
 
 

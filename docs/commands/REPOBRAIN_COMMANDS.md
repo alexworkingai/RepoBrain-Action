@@ -9,13 +9,14 @@ Current external GitHub command surface is intentionally bounded.
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
 | `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` | primary repo/PR question flow |
 | `/repobrain audit` | supported | supported as repository audit with PR context | none | repository-static MVP; backend diagnostics stay explicit | 100-point repository quality/readiness scoring |
+| `/repobrain doctor` | supported | supported | none | report-only diagnostics; backend remains explicit | installation/runtime diagnostic command |
 | `/repobrain locate <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | returns likely files and evidence |
 | `/repobrain explain <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | explains setup or changed context |
 | `/repobrain review` | scoped unsupported or safe guidance | supported | none | issue: not applicable; PR: `v6` | review is not approval |
+| `/repobrain status` | supported | supported | none | report-only status snapshot; backend remains explicit | runtime/product policy snapshot |
 | `/repobrain verify` | scoped unsupported or issue-safe guidance | supported | none | usually report-only / informational | verify is informational only |
 | `/repobrain fix` | scoped unsupported or safe no-patch guidance | supported | no patch, no mutation | issue: not applicable; PR: `v6` | proposal/governance only |
-| `/repobrain status` | unsupported | unsupported | none | not applicable | roadmap command spelling, not implemented |
-| `/repobrain doctor` | unsupported | unsupported | none | not applicable | roadmap command spelling, not implemented |
+| `/repobrain score` | unsupported | unsupported | none | not applicable | roadmap compact audit view; use `/repobrain audit` |
 | `/repobrain fix-lite` | unsupported | unsupported | none | not applicable | internal terminology, use `/repobrain fix` |
 
 ## Scope Rules
@@ -27,8 +28,10 @@ Supported in issues:
 - `/repobrain help`
 - `/repobrain ask <query>`
 - `/repobrain audit`
+- `/repobrain doctor`
 - `/repobrain locate <query>`
 - `/repobrain explain <query>`
+- `/repobrain status`
 
 Conservative in issues:
 
@@ -45,7 +48,9 @@ Supported in PRs:
 - `/repobrain help`
 - `/repobrain ask <query>`
 - `/repobrain audit`
+- `/repobrain doctor`
 - `/repobrain review`
+- `/repobrain status`
 - `/repobrain verify`
 - `/repobrain fix`
 
@@ -90,6 +95,38 @@ It provides:
 
 `/repobrain audit` is informational only.
 It does not certify merge safety, security approval, or production readiness.
+It is the current informational 100-point repository scoring MVP.
+
+## Doctor Policy
+
+`/repobrain doctor` is a report-only installation and runtime diagnostic.
+
+It reports:
+
+- workflow/action context
+- permission baseline signals
+- TopoCore v6 setup hints without exposing secret values
+- v6-only/no-v5 policy
+- fork/private-boundary policy
+- recommended fixes
+
+`/repobrain doctor` does not rerun private checkout, does not dump the environment, and does not mutate the repository.
+
+## Status Policy
+
+`/repobrain status` is a lightweight runtime and product-policy snapshot.
+
+It reports:
+
+- RepoBrain version
+- supported commands
+- roadmap-only commands
+- v6-only backend policy
+- audit static-scoring MVP truth
+- no-patch/no-mutation policy
+- install hints for `/repobrain doctor` and `/repobrain audit`
+
+`/repobrain status` is informational only and does not require expensive TopoCore import or repository mutation.
 
 ## Fix Policy
 
@@ -120,7 +157,5 @@ Visible no-mutation expectations:
 These command names are part of the documented roadmap, not the current supported external command surface:
 
 - `/repobrain score`: planned compact score summary
-- `/repobrain doctor`: planned installation/runtime diagnostic command
-- `/repobrain status`: planned runtime status snapshot
 
 `/repobrain fix-lite` is not a product command and should redirect users to `/repobrain fix`.
