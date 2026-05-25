@@ -96,8 +96,9 @@ The current audit is credible as an MVP for demo use because it is:
 - explicit about limitations
 - safe and no-mutation by design
 
-Sprint 81 adds a safe RepoBrain-side `topocore.audit_score.v1` contract boundary so deeper private `v6` scoring can enrich the audit later without exposing TopoCore source.
-Until a real private `run_audit_score_v1` capability is present and accepted at runtime, the live audit remains static and reports that honestly.
+Sprint 81 adds a safe RepoBrain-side `topocore.audit_score.v1` contract boundary.
+Sprint 82 adds a real private `run_audit_score_v1` provider behind that contract without exposing TopoCore source.
+The benchmark still validates the static scorer independently, and RepoBrain keeps the static baseline as fallback truth whenever private `v6` enrichment is unavailable or rejected.
 
 ## 8. Safety
 

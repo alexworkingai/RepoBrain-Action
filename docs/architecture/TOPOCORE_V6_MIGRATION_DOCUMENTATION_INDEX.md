@@ -27,6 +27,7 @@ Current truth:
 - Sprint 79 calibrates the audit MVP and adds doctor/status diagnostics
 - Sprint 80 benchmarks audit scoring and produces a Microsoft/GitHub-facing demo report
 - Sprint 81 adds the safe RepoBrain-side `topocore.audit_score.v1` contract for optional deep v6 audit enrichment
+- Sprint 82 connects a real private `run_audit_score_v1` capability behind the same contract without exposing TopoCore source
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -156,6 +157,7 @@ Phase 7:
 - `docs/architecture/SPRINT_80_AUDIT_BENCHMARK_DEMO_REPORT.md`
 - `docs/architecture/TOPOCORE_V6_AUDIT_SCORING_CONTRACT.md`
 - `docs/architecture/SPRINT_81_DEEP_V6_AUDIT_SCORING_CONTRACT.md`
+- `docs/architecture/SPRINT_82_PRIVATE_V6_AUDIT_CAPABILITY.md`
 
 ## 5. Recommended Reading Paths
 

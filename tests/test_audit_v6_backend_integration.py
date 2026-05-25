@@ -4,8 +4,11 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 from repobrain.audit_scoring import CATEGORY_SPECS
 from repobrain.github_flow import _build_audit_markdown
+from repobrain.topocore_v6_adapter import RepoBrainV6AdapterRuntimeError
 
 
 def _make_repo(root: Path) -> None:
@@ -205,3 +208,49 @@ def test_invalid_v6_response_is_rejected_and_static_baseline_retained(tmp_path: 
     assert audit["fallback_reason"] == "audit_v6_contract_rejected_static_scoring"
     assert audit["audit_mode"] == "static_contract_rejected"
 
+
+def test_audit_v6_uses_local_path_from_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _make_repo(tmp_path)
+
+    capability_calls: list[str | None] = []
+    run_calls: list[str | None] = []
+
+    class _SpyAdapter:
+        def audit_score_v1_capability_local(
+            self,
+            *,
+            local_path: str | None = None,
+            topocore_public_api: object | None = None,
+        ) -> dict[str, str]:
+            capability_calls.append(local_path)
+            return {"status": "capability_unavailable", "capability_version": ""}
+
+        def run_audit_score_v1_local(
+            self,
+            request: dict[str, object],
+            *,
+            local_path: str | None = None,
+            topocore_public_api: object | None = None,
+        ) -> dict[str, object]:
+            run_calls.append(local_path)
+            raise RepoBrainV6AdapterRuntimeError("TopoCore v6 audit scoring capability is unavailable.")
+
+    monkeypatch.setenv("RB_TOPOCORE_V6_LOCAL_PATH", "hidden/private/src")
+    monkeypatch.setattr("repobrain.audit_v6.RepoBrainTopoCoreV6Adapter", _SpyAdapter)
+
+    audit: dict[str, object] = {}
+    markdown = _build_audit_markdown(
+        repo_root=tmp_path,
+        query="",
+        tky_mode="local",
+        github_context_seed={"repository": "owner/repo"},
+        audit=audit,
+    )
+
+    assert capability_calls == ["hidden/private/src"]
+    assert run_calls == ["hidden/private/src"]
+    assert "Audit mode: `static scoring with v6 contract-ready guard`" in markdown
+    assert audit["fallback_reason"] == "audit_v6_capability_unavailable_static_scoring"

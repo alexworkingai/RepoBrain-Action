@@ -49,7 +49,7 @@ Current external product behavior remains intentionally conservative:
 - no `repobrain-community` dependency
 - no patch/autofix
 - no RepoBrain-created branch/commit/PR behavior
-- `/repobrain audit` is informational repository scoring only
+- `/repobrain audit` is informational repository scoring only and may show contract-validated private `v6` enrichment when available
 - `/repobrain doctor` is report-only setup/runtime diagnostics
 - `/repobrain verify` is informational only
 - `/repobrain status` is report-only runtime status

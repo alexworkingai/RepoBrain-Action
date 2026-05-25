@@ -70,7 +70,8 @@ Current proof points:
 - no v5
 - no `repobrain-community`
 - private TopoCore v6 boundary preserved
-- Sprint 81 adds a safe RepoBrain-side `topocore.audit_score.v1` contract so deeper private v6 scoring can be adopted later without exposing TopoCore source
+- Sprint 81 adds a safe RepoBrain-side `topocore.audit_score.v1` contract
+- Sprint 82 adds a real private `run_audit_score_v1` capability behind that contract without exposing TopoCore source
 
 ## 7. Strategic Roadmap
 
@@ -78,7 +79,7 @@ Near-term roadmap:
 
 - benchmark calibration
 - safe v6 audit scoring contract adoption
-- deeper v6-backed scoring implementation after the private capability exists
+- live v6-backed scoring rollout through the private capability when runtime packaging and contract acceptance succeed
 - `/repobrain score` compact summary later if justified
 - private non-source TopoCore distribution strategy
 - public visibility approval
@@ -103,5 +104,5 @@ This report does not claim Microsoft approval, GitHub approval, or an official p
 - no merge approval claim
 - no security approval claim
 - current audit is an MVP deterministic scorer, not formal certification
-- the Sprint 81 contract does not imply live `v6` enrichment unless a real private capability is actually invoked
+- the Sprint 81 and Sprint 82 contract path does not imply live `v6` enrichment unless a real private capability is actually invoked and accepted
 - TopoCore v6 remains private and is not distributed through this report

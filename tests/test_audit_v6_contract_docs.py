@@ -29,15 +29,25 @@ def test_sprint_81_architecture_note_exists_and_records_contract_ready_truth() -
     assert "NOT_TESTED_LIVE" in text or "REAL_V6_AUDIT_CAPABILITY_NOT_AVAILABLE" in text
 
 
+def test_sprint_82_architecture_note_exists_and_records_private_capability_truth() -> None:
+    text = _read("docs/architecture/SPRINT_82_PRIVATE_V6_AUDIT_CAPABILITY.md")
+
+    assert "run_audit_score_v1" in text
+    assert "topocore.audit_score.v1" in text
+    assert "V6_AUDIT_CAPABILITY_IMPLEMENTED_LOCAL_ONLY" in text or "V6_AUDIT_LIVE_V6_ENRICHED_PASSED" in text
+    assert "No private source code is reproduced" in text
+
+
 def test_release_and_demo_docs_reflect_static_vs_v6_contract_truth() -> None:
     scoring = _read("docs/release/REPOBRAIN_V6_SCORING_MODEL.md")
     benchmark = _read("docs/release/AUDIT_BENCHMARK_REPORT.md")
     demo = _read("docs/release/MICROSOFT_GITHUB_DEMO_REPORT.md")
-    combined = "\n".join((scoring, benchmark, demo))
+    sprint82 = _read("docs/architecture/SPRINT_82_PRIVATE_V6_AUDIT_CAPABILITY.md")
+    combined = "\n".join((scoring, benchmark, demo, sprint82))
 
     assert "topocore.audit_score.v1" in combined
     assert "run_audit_score_v1" in combined
-    assert "does not claim `v6` enrichment unless" in combined
+    assert "does not claim `v6` enrichment unless" in combined or "only when a real private capability is actually invoked and accepted" in combined
     assert "TopoCore v6 remains private" in combined
     assert "no patch/autofix" in combined.lower()
 
@@ -47,6 +57,7 @@ def test_contract_docs_do_not_claim_live_v6_without_evidence_or_unsafe_approval(
         [
             _read("docs/architecture/TOPOCORE_V6_AUDIT_SCORING_CONTRACT.md"),
             _read("docs/architecture/SPRINT_81_DEEP_V6_AUDIT_SCORING_CONTRACT.md"),
+            _read("docs/architecture/SPRINT_82_PRIVATE_V6_AUDIT_CAPABILITY.md"),
             _read("docs/release/MICROSOFT_GITHUB_DEMO_REPORT.md"),
         ]
     ).lower()
@@ -64,3 +75,6 @@ def test_test_coverage_index_links_sprint_81_contract_tests() -> None:
     assert "tests/test_audit_v6_contract_guard.py" in text
     assert "tests/test_audit_v6_backend_integration.py" in text
     assert "tests/test_audit_v6_contract_docs.py" in text
+    assert "SPRINT_82_PRIVATE_V6_AUDIT_CAPABILITY.md" in _read(
+        "docs/architecture/TOPOCORE_V6_MIGRATION_DOCUMENTATION_INDEX.md"
+    )

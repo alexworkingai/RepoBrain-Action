@@ -177,5 +177,6 @@ RepoBrain never reports `v6` unless the runtime actually invoked and accepted a 
 ## 10. Implementation Status
 
 - Sprint 81 implements the RepoBrain-side contract, request builder, response validator, optional capability seam, and output-mode handling.
-- Real private `TopoCore v6` audit scoring capability may still be future work unless the runtime already exposes `run_audit_score_v1`.
+- Sprint 82 adds a real private `run_audit_score_v1` provider behind the same contract without exposing TopoCore source through RepoBrain-Action.
+- RepoBrain still treats static scoring as the fallback truth whenever the private capability is missing, invalid, or rejected by the contract guard.
 - Public distribution remains blocked by the separate TopoCore distribution strategy.

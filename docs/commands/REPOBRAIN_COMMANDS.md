@@ -8,7 +8,7 @@ Current external GitHub command surface is intentionally bounded.
 |---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
 | `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` | primary repo/PR question flow |
-| `/repobrain audit` | supported | supported as repository audit with PR context | none | static MVP plus Sprint 81 v6 contract-ready guard; backend diagnostics stay explicit | benchmarked 100-point repository quality/readiness scoring |
+| `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; backend diagnostics stay explicit | benchmarked 100-point repository quality/readiness scoring |
 | `/repobrain doctor` | supported | supported | none | report-only diagnostics; backend remains explicit | installation/runtime diagnostic command |
 | `/repobrain locate <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | returns likely files and evidence |
 | `/repobrain explain <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | explains setup or changed context |
@@ -81,7 +81,8 @@ It does not mean:
 ## Audit Policy
 
 `/repobrain audit` is a repository-level, no-mutation audit MVP.
-Sprint 81 adds a safe `topocore.audit_score.v1` contract boundary so the audit can remain static, run with a contract-ready guard, or show `v6` enrichment only when a real private capability is actually invoked.
+Sprint 81 adds a safe `topocore.audit_score.v1` contract boundary.
+Sprint 82 adds a real private `run_audit_score_v1` provider behind that boundary so the audit can remain static, run with a contract-ready guard, or show `v6` enrichment only when a real private capability is actually invoked and accepted.
 
 It provides:
 

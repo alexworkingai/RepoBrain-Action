@@ -59,6 +59,7 @@ A full audit output should include:
 - flagship full repository audit and score
 - implemented as an MVP in Sprint 78
 - Sprint 81 adds a safe RepoBrain-side `topocore.audit_score.v1` contract for optional deep v6 enrichment
+- Sprint 82 connects a real private `run_audit_score_v1` provider behind that contract
 - current output includes:
   - executive summary
   - overall score
@@ -96,9 +97,10 @@ Implementation status:
 - Sprint 79 calibrates exclusion boundaries and output compaction for the audit MVP.
 - Sprint 80 benchmarks the scorer across sparse, risky, and mature repository shapes to validate ranking credibility.
 - Sprint 81 implements the RepoBrain-side `topocore.audit_score.v1` request builder, response validator, optional capability seam, and honest static-versus-v6 backend evidence modes.
+- Sprint 82 implements a real private `run_audit_score_v1` provider and wires the audit seam to pass the private checkout path explicitly for contract-validated enrichment.
 - Current audit scoring is deterministic, repository-static, and evidence-grounded.
 - Current benchmark evidence shows mature fixtures rank above sparse and risky fixtures without claiming formal certification.
-- Current runtime may remain static even when the contract is present; RepoBrain does not claim `v6` enrichment unless a real private `run_audit_score_v1` capability is actually invoked and accepted.
+- RepoBrain does not claim `v6` enrichment unless a real private `run_audit_score_v1` capability is actually invoked and accepted.
 - Sprint 81 live Elen-MCP smoke remained in static contract-ready mode with `resolved_backend=not_applicable` and `fallback_reason=audit_v6_capability_unavailable_static_scoring`, which is the expected honest result when the private capability is absent.
 - `/repobrain score` remains roadmap-only.
 - `/repobrain doctor` and `/repobrain status` are implemented as report-only diagnostics.

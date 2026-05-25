@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,8 @@ def enrich_audit_report_with_optional_v6(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     static_report = copy.deepcopy(dict(report))
     adapter = RepoBrainTopoCoreV6Adapter()
-    capability = adapter.audit_score_v1_capability_local()
+    local_path = str(os.environ.get("RB_TOPOCORE_V6_LOCAL_PATH", "") or "").strip() or None
+    capability = adapter.audit_score_v1_capability_local(local_path=local_path)
 
     base_summary = {
         "tky_mode_requested": tky_mode,
@@ -76,7 +78,7 @@ def enrich_audit_report_with_optional_v6(
         return degraded, summary
 
     try:
-        raw_response = adapter.run_audit_score_v1_local(request)
+        raw_response = adapter.run_audit_score_v1_local(request, local_path=local_path)
     except RepoBrainV6AdapterRuntimeError:
         degraded = append_static_contract_limitation(
             static_report,
@@ -139,4 +141,3 @@ def enrich_audit_report_with_optional_v6(
         }
     )
     return merged, summary
-
