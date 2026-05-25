@@ -78,7 +78,8 @@ Limitations:
 ## 6. Real Repo Observations
 
 - `RepoBrain-Action` local repository: `80 / 100` `GOOD` in current local measurement
-- `alexworkingai/Elen-MCP-v.2.2.0` latest live audit after Sprint 80 permission hygiene: `78 / 100` `GOOD`
+- `alexworkingai/Elen-MCP-v.2.2.0` latest live static baseline at Sprint 82 runtime: `78 / 100` `GOOD`
+- `alexworkingai/Elen-MCP-v.2.2.0` latest live accepted `v6`-enriched result at Sprint 82 runtime: `77 / 100` `GOOD`
 
 Latest Elen-MCP audit still surfaced a repository-level security improvement around other workflow files that retain `pull-requests: write`.
 That finding is useful demo evidence and is separate from the Sprint 80 RepoBrain workflow permission hygiene fix.

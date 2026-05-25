@@ -73,34 +73,47 @@ The RepoBrain guard was not weakened.
 
 ## 6. Live Elen-MCP Result
 
-Pending live recording after RepoBrain-Action and the private provider are available on the runtime paths consumed by `alexworkingai/Elen-MCP-v.2.2.0`.
-
-This section is updated after the live smoke run with:
-
-- issue URL
-- audit run URL
-- audit mode
-- static baseline
-- v6-enriched score if available
-- backend requested/resolved
-- fallback used/reason
-- contract guard result
-- doctor and status runs
-- safety result
+- issue URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/29`
+- audit run URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26406509937`
+- audit conclusion:
+  - `success`
+- audit mode:
+  - `v6-enriched scoring`
+- static baseline:
+  - `78 / 100 GOOD`
+- v6-enriched score:
+  - `77 / 100 GOOD`
+- backend requested/resolved:
+  - requested: `auto`
+  - resolved: `v6`
+- fallback used/reason:
+  - used: `no`
+  - reason: `none`
+- contract guard result:
+  - accepted
+- doctor rerun:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26406646595`
+  - result: `PASS`
+- status rerun:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26406650269`
+  - result: `success`
+- safety result:
+  - no private checkout evidence
+  - no secret exposure
+  - no patch/autofix
+  - no mutation
+  - no `v5`
+  - no `repobrain-community`
 
 ## 7. Product Status
 
-- `V6_AUDIT_CAPABILITY_IMPLEMENTED_LOCAL_ONLY`
+- `V6_AUDIT_LIVE_V6_ENRICHED_PASSED`
 
 ## 8. Next Step
 
-If live `v6` enrichment passes:
-
 - Sprint 83 - v6 Audit UX Hardening and `/repobrain score` Decision
-
-If runtime packaging or live wiring still blocks the provider:
-
-- Sprint 83 - Live Wiring and Runtime Packaging for v6 Audit Capability
 
 ## 9. Non-Goals
 

@@ -179,4 +179,5 @@ RepoBrain never reports `v6` unless the runtime actually invoked and accepted a 
 - Sprint 81 implements the RepoBrain-side contract, request builder, response validator, optional capability seam, and output-mode handling.
 - Sprint 82 adds a real private `run_audit_score_v1` provider behind the same contract without exposing TopoCore source through RepoBrain-Action.
 - RepoBrain still treats static scoring as the fallback truth whenever the private capability is missing, invalid, or rejected by the contract guard.
+- Sprint 82 live Elen-MCP smoke accepted the private response and rendered `v6-enriched scoring` with `resolved_backend=v6` and `fallback_reason=none`.
 - Public distribution remains blocked by the separate TopoCore distribution strategy.

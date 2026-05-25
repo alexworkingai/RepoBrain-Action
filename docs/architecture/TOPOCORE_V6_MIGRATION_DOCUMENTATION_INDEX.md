@@ -28,6 +28,7 @@ Current truth:
 - Sprint 80 benchmarks audit scoring and produces a Microsoft/GitHub-facing demo report
 - Sprint 81 adds the safe RepoBrain-side `topocore.audit_score.v1` contract for optional deep v6 audit enrichment
 - Sprint 82 connects a real private `run_audit_score_v1` capability behind the same contract without exposing TopoCore source
+- Sprint 82 live smoke proves `v6-enriched scoring` on Elen-MCP while preserving fallback truth and no-mutation behavior
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 

@@ -63,15 +63,19 @@ Current proof points:
 
 - external Elen-MCP pilot is live
 - command matrix passed
-- `/repobrain audit` live result after Sprint 80 hygiene: `78 / 100` `GOOD`
-- `/repobrain doctor` live result after Sprint 80 hygiene: `PASS`
-- `/repobrain status` live result after Sprint 80 hygiene: `success`
+- `/repobrain audit` live result after Sprint 82 private capability wiring:
+  - static baseline: `78 / 100` `GOOD`
+  - accepted `v6`-enriched result: `77 / 100` `GOOD`
+  - backend resolved: `v6`
+  - fallback used: `no`
+- `/repobrain doctor` live result after Sprint 82 follow-up truth fix: `PASS`
+- `/repobrain status` live result after Sprint 82 follow-up truth fix: `success`
 - no patch/autofix
 - no v5
 - no `repobrain-community`
 - private TopoCore v6 boundary preserved
 - Sprint 81 adds a safe RepoBrain-side `topocore.audit_score.v1` contract
-- Sprint 82 adds a real private `run_audit_score_v1` capability behind that contract without exposing TopoCore source
+- Sprint 82 adds and proves a real private `run_audit_score_v1` capability behind that contract without exposing TopoCore source
 
 ## 7. Strategic Roadmap
 

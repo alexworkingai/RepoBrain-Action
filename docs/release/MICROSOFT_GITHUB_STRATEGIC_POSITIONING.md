@@ -51,3 +51,7 @@ It is proving the value of full repository audit and scoring on real repositorie
 ## Sprint 80 Proof Layer
 
 Sprint 80 adds a bounded benchmark suite and a Microsoft/GitHub-facing demo report so the positioning story is backed by concrete scoring evidence instead of product-only narrative.
+
+## Sprint 82 Proof Layer
+
+Sprint 82 adds a real private `v6` audit enrichment path behind the safe `topocore.audit_score.v1` contract and proves it live on Elen-MCP without exposing TopoCore source or weakening no-mutation guardrails.
