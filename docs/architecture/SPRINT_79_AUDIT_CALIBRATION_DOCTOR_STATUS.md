@@ -148,37 +148,91 @@ It does not change runtime policy or enable mutation.
 
 Issue audit:
 
-- pending live evidence after merge to `main`
+- issue URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/25`
+- run URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26382074657`
+- conclusion:
+  - `success`
+- score:
+  - `77 / 100`
+- readiness band:
+  - `GOOD`
+- backend evidence:
+  - requested `auto`
+  - resolved `not_applicable`
+  - fallback used `not_applicable`
+  - fallback reason `audit_static_scoring`
+- safety:
+  - no patch
+  - no mutation
+  - no private checkout evidence surfaced
 
 Issue doctor:
 
-- pending live evidence after merge to `main`
+- issue URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/25`
+- run URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26382101983`
+- conclusion:
+  - `success`
+- diagnostic status:
+  - `WARN`
+- backend evidence:
+  - requested `auto`
+  - resolved `not_applicable`
+  - fallback used `not_applicable`
+  - fallback reason `doctor_diagnostic_report`
+- safety:
+  - no patch
+  - no mutation
+  - no secret exposure
+- note:
+  - `WARN` came from consumer-workflow permissions still including `checks: write` and `pull-requests: write`
 
 Issue status:
 
-- pending live evidence after merge to `main`
+- issue URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/25`
+- run URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26382124929`
+- conclusion:
+  - `success`
+- backend evidence:
+  - requested `auto`
+  - resolved `not_applicable`
+  - fallback used `not_applicable`
+  - fallback reason `status_report_only`
+- safety:
+  - no patch
+  - no mutation
+  - no secret exposure
 
 Optional PR results:
 
-- pending / not yet run
+- not run
+- reason:
+  - issue-path live validation was sufficient for Sprint 79 acceptance and PR diagnostics were optional
 
 ## 9. Defects / Gaps
 
 - fixed now:
   - audit duplicate focus/runtime presentation
   - narrow exclusion boundary list
+  - hidden/generated artifact directories were broadened beyond `.topocore-v6`
   - missing doctor command
   - missing status command
+  - code-quality calibration now detects embedded manifest configs instead of requiring only standalone config files
 - deferred:
   - `/repobrain score`
   - deeper v6-backed scoring
   - benchmark-grade calibration suite
 - blockers:
-  - none yet recorded before live validation
+  - none
 
 ## 10. Product Status
 
-- pending final live validation
+- `AUDIT_CALIBRATION_DIAGNOSTICS_PASSED`
 
 ## 11. Next Step
 
