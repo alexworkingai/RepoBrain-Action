@@ -63,8 +63,9 @@ Current proof points:
 
 - external Elen-MCP pilot is live
 - command matrix passed
-- `/repobrain audit` live result: `77 / 100` `GOOD`
-- `/repobrain doctor` and `/repobrain status` live results exist
+- `/repobrain audit` live result after Sprint 80 hygiene: `78 / 100` `GOOD`
+- `/repobrain doctor` live result after Sprint 80 hygiene: `PASS`
+- `/repobrain status` live result after Sprint 80 hygiene: `success`
 - no patch/autofix
 - no v5
 - no `repobrain-community`

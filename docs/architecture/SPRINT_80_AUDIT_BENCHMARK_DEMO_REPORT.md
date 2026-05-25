@@ -74,11 +74,16 @@ No overfitting statement:
   - `checks: write`
   - `pull-requests: write`
 - change made or deferred:
-  - pending live-fix section update after the external workflow patch
+  - changed in `.github/workflows/repobrain.yml`
+  - `checks: write` -> `checks: read`
+  - `pull-requests: write` -> `pull-requests: read`
 - after doctor result:
-  - pending live rerun
+  - `PASS`
 - PR/commit if any in Elen-MCP:
-  - pending live-fix section update
+  - PR: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/pull/26`
+  - branch: `codex/sprint-80-repobrain-permission-hygiene`
+  - commit: `9efea2e Tighten RepoBrain workflow permissions`
+  - main after merge: `b51974a Tighten RepoBrain workflow permissions (#26)`
 
 ## 7. Microsoft/GitHub Demo Report
 
@@ -97,21 +102,33 @@ No overfitting statement:
 ## 8. Live Demo Results
 
 - audit issue/run:
-  - pending live rerun
+  - issue: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/27`
+  - run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26386272902`
+  - conclusion: `success`
+  - score: `78 / 100`
+  - band: `GOOD`
+  - backend requested/resolved: `auto` / `not_applicable`
+  - fallback reason: `audit_static_scoring`
+  - note: audit still surfaced unrelated repository workflow permissions using `pull-requests: write`
 - doctor issue/run:
-  - pending live rerun
+  - issue: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/27`
+  - run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26386295316`
+  - conclusion: `success`
+  - diagnostic status: `PASS`
+  - backend requested/resolved: `auto` / `not_applicable`
+  - fallback reason: `doctor_diagnostic_report`
 - status issue/run:
-  - pending live rerun
+  - issue: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/27`
+  - run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26386316884`
+  - conclusion: `success`
+  - backend requested/resolved: `auto` / `not_applicable`
+  - fallback reason: `status_report_only`
 - optional PR runs:
   - not planned unless needed
 
 ## 9. Product Status
 
-Pre-live status target:
-
-- `AUDIT_BENCHMARK_PARTIAL`
-
-Final status will be updated after live audit/doctor/status reruns and Elen-MCP permission hygiene outcome.
+- `AUDIT_BENCHMARK_DEMO_READY`
 
 ## 10. Next Step
 
