@@ -77,29 +77,39 @@ Sprint 81 adds coverage for:
 ## 6. External Live Result
 
 - issue URL:
-  - recorded after merge in the live evidence update
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/28`
 - run URL:
-  - recorded after merge in the live evidence update
+  - audit: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26392391412`
+  - doctor: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26392392231`
+  - status: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26392393618`
 - conclusion:
-  - recorded after merge in the live evidence update
+  - audit: `success`
+  - doctor: `success`
+  - status: `success`
 - audit mode:
-  - `static scoring with v6 contract-ready guard` unless a real private `run_audit_score_v1` capability is present
+  - `static scoring with v6 contract-ready guard`
 - score:
-  - bounded `0-100`
+  - `78 / 100`
 - backend evidence:
-  - honest static or v6-enriched mode only
+  - requested backend: `auto`
+  - resolved backend: `not_applicable`
+  - fallback used: `not_applicable`
+  - fallback reason: `audit_v6_capability_unavailable_static_scoring`
 - safety result:
   - no mutation
   - no patch/autofix
   - no secret exposure
+  - no private checkout evidence surfaced
+  - doctor result: `PASS`
+  - status result: `success`
 
 ## 7. TopoCore v6 Capability Status
 
-- `NOT_TESTED_LIVE` until the post-merge Elen-MCP smoke confirms whether a real private `run_audit_score_v1` capability is present
+- `REAL_V6_AUDIT_CAPABILITY_NOT_AVAILABLE`
 
 ## 8. Product Status
 
-- `V6_AUDIT_CONTRACT_READY_STATIC_RUNTIME` unless live evidence proves real `v6` enrichment
+- `V6_AUDIT_CONTRACT_READY_STATIC_RUNTIME`
 
 ## 9. Next Step
 

@@ -99,5 +99,6 @@ Implementation status:
 - Current audit scoring is deterministic, repository-static, and evidence-grounded.
 - Current benchmark evidence shows mature fixtures rank above sparse and risky fixtures without claiming formal certification.
 - Current runtime may remain static even when the contract is present; RepoBrain does not claim `v6` enrichment unless a real private `run_audit_score_v1` capability is actually invoked and accepted.
+- Sprint 81 live Elen-MCP smoke remained in static contract-ready mode with `resolved_backend=not_applicable` and `fallback_reason=audit_v6_capability_unavailable_static_scoring`, which is the expected honest result when the private capability is absent.
 - `/repobrain score` remains roadmap-only.
 - `/repobrain doctor` and `/repobrain status` are implemented as report-only diagnostics.
