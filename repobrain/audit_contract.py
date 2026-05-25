@@ -22,6 +22,9 @@ _CATEGORY_LABELS = {"STRONG", "GOOD", "NEEDS_ATTENTION", "WEAK", "UNKNOWN"}
 _PATH_TOKEN_RE = re.compile(
     r"([A-Za-z]:\\[^\\\s]+(?:\\[^\\\s]+)*)|(/[^/\s]+(?:/[^/\s]+)*)"
 )
+_PATH_CANDIDATE_RE = re.compile(
+    r"(?P<path>(?:[A-Za-z]:[\\/][^\s`\"'<>|]+)|(?:/[^\s`\"'<>|]+)|(?:\.?[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+))"
+)
 _TOKEN_PATTERNS = (
     re.compile(r"\bghp_[A-Za-z0-9_]+\b"),
     re.compile(r"\bgithub_pat_[A-Za-z0-9_]+\b"),
@@ -43,6 +46,34 @@ _PRIVATE_PATH_PATTERNS = (
     re.compile(r"(?i)ariadna_minsk"),
     re.compile(r"(?i)c:\\users"),
     re.compile(r"(?i)/mnt/data"),
+)
+_REPO_RELATIVE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+_FORBIDDEN_PATH_SEGMENTS = {
+    ".git",
+    ".ssh",
+    ".topocore-v6",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "node_modules",
+    "dist",
+    "build",
+    "artifacts",
+    "reports",
+}
+_SENSITIVE_PATH_MARKERS = (
+    "secret",
+    "token",
+    "credential",
+    "private-key",
+    "private_key",
+    "id_rsa",
+    ".pem",
+    ".p12",
+    ".pfx",
+    ".key",
+    ".env",
 )
 
 
@@ -504,7 +535,7 @@ def _sanitize_evidence_paths(value: Any, *, limit: int) -> list[str]:
 
 
 def _sanitize_repo_path(value: Any) -> str:
-    text = _sanitize_text(value, max_length=160)
+    text = _normalize_repo_relative_path(value)
     if not text:
         return ""
     lowered = text.lower()
@@ -512,7 +543,10 @@ def _sanitize_repo_path(value: Any) -> str:
         return ""
     if any(token in lowered for token in ("/artifacts/", "artifacts/", "/reports/", "reports/")):
         return ""
-    if any(token in lowered for token in ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "node_modules", "dist/", "build/")):
+    if any(
+        token in lowered
+        for token in ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "node_modules", "dist/", "build/")
+    ):
         return ""
     return text
 
@@ -554,10 +588,10 @@ def _safe_optional_int(value: Any) -> int | None:
 
 def _sanitize_text(value: Any, *, max_length: int = AUDIT_V6_MAX_TEXT_LENGTH) -> str:
     text = " ".join(str(value or "").split())
-    text = _PATH_TOKEN_RE.sub("[redacted-path]", text)
     text = text.replace("`", "'")
     for pattern in _TOKEN_PATTERNS:
         text = pattern.sub("[redacted-secret]", text)
+    text = _PATH_CANDIDATE_RE.sub(_sanitize_path_match, text)
     return text[:max_length].strip()
 
 
@@ -620,3 +654,43 @@ def _unique_text(items: Sequence[str]) -> list[str]:
         seen.add(text)
         ordered.append(text)
     return ordered
+
+
+def _sanitize_path_match(match: re.Match[str]) -> str:
+    candidate = str(match.group("path") or "").strip()
+    safe_path = _normalize_repo_relative_path(candidate)
+    if safe_path:
+        return safe_path
+    return "[redacted-path]"
+
+
+def _normalize_repo_relative_path(value: Any) -> str:
+    raw = " ".join(str(value or "").split()).strip().replace("\\", "/").replace("`", "")
+    if not raw:
+        return ""
+    while raw.startswith("./"):
+        raw = raw[2:]
+    raw = re.sub(r"/{2,}", "/", raw)
+    lowered = raw.lower()
+    if raw.startswith("/") or re.match(r"^[A-Za-z]:/", raw):
+        return ""
+    if raw.startswith("../") or "/../" in raw or lowered.startswith("~/"):
+        return ""
+    if any(pattern.search(raw) for pattern in _TOKEN_PATTERNS):
+        return ""
+    if any(pattern.search(raw) for pattern in _PRIVATE_PATH_PATTERNS):
+        return ""
+    segments = [segment for segment in raw.split("/") if segment]
+    if not segments:
+        return ""
+    if any(segment in {".", ".."} for segment in segments):
+        return ""
+    if any(not _REPO_RELATIVE_SEGMENT_RE.match(segment) for segment in segments):
+        return ""
+    if any(segment.lower() in _FORBIDDEN_PATH_SEGMENTS for segment in segments):
+        return ""
+    normalized = "/".join(segments)
+    lowered = normalized.lower()
+    if any(marker in lowered for marker in _SENSITIVE_PATH_MARKERS):
+        return ""
+    return normalized[:160]

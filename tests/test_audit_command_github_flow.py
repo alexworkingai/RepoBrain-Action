@@ -111,10 +111,9 @@ def test_help_output_includes_audit_but_not_unsupported_commands_as_supported(ca
     assert "/repobrain doctor" in output
     assert "/repobrain status" in output
     assert "/repobrain score" in output
-    assert "roadmap-only" in output.lower()
+    assert "compact score summary" in output.lower()
 
-
-def test_unsupported_score_doctor_status_and_fix_lite_remain_honest(capsys) -> None:
+def test_score_and_fix_lite_command_surface_remains_honest(capsys) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     status = run_github_flow(
         repo_root=repo_root,
@@ -124,7 +123,8 @@ def test_unsupported_score_doctor_status_and_fix_lite_remain_honest(capsys) -> N
     )
     output = capsys.readouterr().out
     assert status == "DRY_RUN_OK"
-    assert "compact audit summary" in output
+    assert "# RepoBrain Repository Score" in output
+    assert "Use `/repobrain audit` for the full evidence report." in output
     assert "/repobrain audit" in output
 
     status = run_github_flow(

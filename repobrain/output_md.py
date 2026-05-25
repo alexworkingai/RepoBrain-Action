@@ -4,6 +4,7 @@ import os
 import re
 from typing import Any
 
+from repobrain.audit_contract import AUDIT_V6_CONTRACT_VERSION
 from repobrain.evidence import EvidenceItem
 from repobrain.links import make_line_link
 from repobrain.patch_governance import build_patch_governance_contract
@@ -2989,11 +2990,25 @@ def _audit_category_table_lines(categories: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _audit_blocker_lines(blockers: list[dict[str, Any]]) -> list[str]:
+def _audit_category_mini_table_lines(categories: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "| Category | Score | Label |",
+        "| --- | ---: | --- |",
+    ]
+    for item in categories:
+        title = str(item.get("title", "Category") or "Category").strip()
+        score = _int(item.get("score", 0))
+        max_score = _int(item.get("max_score", 0))
+        label = str(item.get("label", "UNKNOWN") or "UNKNOWN").strip().upper()
+        lines.append(f"| {title} | {score}/{max_score} | `{label}` |")
+    return lines
+
+
+def _audit_blocker_lines(blockers: list[dict[str, Any]], *, limit: int = 5) -> list[str]:
     if not blockers:
         return ["- No critical blockers observed from the available evidence."]
     lines: list[str] = []
-    for item in blockers[:5]:
+    for item in blockers[:limit]:
         title = str(item.get("title", "Critical blocker") or "Critical blocker").strip()
         category = str(item.get("category", "n/a") or "n/a").strip()
         rationale = str(item.get("rationale", "") or "").strip()
@@ -3008,11 +3023,11 @@ def _audit_blocker_lines(blockers: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _audit_improvement_lines(improvements: list[dict[str, Any]]) -> list[str]:
+def _audit_improvement_lines(improvements: list[dict[str, Any]], *, limit: int = 8) -> list[str]:
     if not improvements:
         return ["- No improvement plan was generated from the current evidence sample."]
     lines: list[str] = []
-    for item in improvements[:8]:
+    for item in improvements[:limit]:
         category = str(item.get("category", "Repository health") or "Repository health").strip()
         title = str(item.get("title", "Improve repository quality") or "Improve repository quality").strip()
         rationale = str(item.get("rationale", "") or "").strip()
@@ -3139,6 +3154,71 @@ def _audit_mode_lines(report: dict[str, Any], audit_summary: dict[str, Any]) -> 
     return lines
 
 
+def _audit_delta(report: dict[str, Any]) -> int:
+    static_baseline = report.get("static_baseline", {})
+    if not isinstance(static_baseline, dict):
+        return 0
+    return _int(report.get("overall_score", 0)) - _int(static_baseline.get("overall_score", 0))
+
+
+def _audit_scorecard_lines(report: dict[str, Any], audit_summary: dict[str, Any]) -> list[str]:
+    overall_score = _int(report.get("overall_score", 0))
+    readiness_band = str(report.get("readiness_band", "WEAK") or "WEAK").strip().upper()
+    confidence = str(report.get("confidence", "medium") or "medium").strip().lower()
+    requested_backend = str(audit_summary.get("requested_backend", "auto") or "auto").strip()
+    resolved_backend = str(audit_summary.get("resolved_backend", "not_applicable") or "not_applicable").strip()
+    audit_mode = str(audit_summary.get("audit_mode", "static_mvp") or "static_mvp").strip().lower()
+    contract_status = str(audit_summary.get("audit_contract_status", "not_requested") or "not_requested").strip()
+    lines = [
+        f"- Final score: **{overall_score} / 100** (`{readiness_band}`)",
+        f"- Confidence: `{confidence}`",
+        f"- Backend: `{requested_backend}` -> `{resolved_backend}`",
+    ]
+    static_baseline = report.get("static_baseline", {})
+    if isinstance(static_baseline, dict) and static_baseline:
+        baseline_score = _int(static_baseline.get("overall_score", 0))
+        baseline_band = str(static_baseline.get("readiness_band", "WEAK") or "WEAK").strip().upper()
+        delta = _audit_delta(report)
+        delta_text = f"+{delta}" if delta > 0 else str(delta)
+        lines.insert(1, f"- Static baseline: `{baseline_score} / 100` (`{baseline_band}`)")
+        lines.insert(2, f"- v6 enriched score: `{overall_score} / 100` (`{readiness_band}`)")
+        lines.insert(3, f"- Delta: `{delta_text}`")
+    if audit_mode == "v6_enriched":
+        lines.insert(0, "- Audit mode: `v6-enriched scoring`")
+        lines.append(f"- Contract: `{AUDIT_V6_CONTRACT_VERSION}` accepted (`{contract_status}`)")
+    elif audit_mode == "static_contract_ready":
+        lines.insert(0, "- Audit mode: `static scoring with v6 contract-ready guard`")
+        lines.append("- Contract: `topocore.audit_score.v1` ready, capability unavailable in this runtime.")
+    elif audit_mode == "static_contract_rejected":
+        lines.insert(0, "- Audit mode: `static scoring with rejected v6 response`")
+        lines.append("- Contract: `topocore.audit_score.v1` rejected; static baseline retained.")
+    else:
+        lines.insert(0, "- Audit mode: `static scoring MVP`")
+    return lines
+
+
+def _audit_adjustment_lines(report: dict[str, Any]) -> list[str]:
+    adjustments_raw = report.get("v6_score_adjustments", [])
+    adjustments = [item for item in adjustments_raw if isinstance(item, dict)] if isinstance(adjustments_raw, list) else []
+    if not adjustments:
+        return ["- v6 enrichment accepted; no score delta was required from available evidence."]
+    lines: list[str] = []
+    for item in adjustments[:6]:
+        category = str(item.get("category", "category") or "category").strip()
+        delta = _int(item.get("delta", 0))
+        reason = str(item.get("reason", "No reason recorded.") or "No reason recorded.").strip()
+        evidence_paths_raw = item.get("evidence_paths", [])
+        evidence_paths = (
+            [str(path).strip() for path in evidence_paths_raw if str(path).strip()]
+            if isinstance(evidence_paths_raw, list)
+            else []
+        )
+        delta_text = f"+{delta}" if delta > 0 else str(delta)
+        evidence_suffix = f" Evidence: {_compact_anchor_list(evidence_paths)}." if evidence_paths else ""
+        lines.append(f"- **{category}** (`{delta_text}`): {reason}{evidence_suffix}")
+    return lines
+
+
 def _audit_safety_statement_lines(audit_summary: dict[str, Any]) -> list[str]:
     return [
         "- Audit is informational only.",
@@ -3188,22 +3268,28 @@ def render_audit_markdown(
     sections = [
         "# RepoBrain Repository Audit",
         "",
-        "## Executive summary",
-        executive_summary or "No executive summary generated.",
-        "",
-        f"Overall score: **{overall_score} / 100**",
-        f"Readiness band: **{readiness_band}**",
+        "## Executive score card",
+        *_audit_scorecard_lines(report, audit_summary),
     ]
     if query:
         sections.extend(["", f"Requested focus: {query}"])
     sections.extend(
         [
             "",
+            "## Executive summary",
+            executive_summary or "No executive summary generated.",
+            "",
+            f"Overall score: **{overall_score} / 100**",
+            f"Readiness band: **{readiness_band}**",
+            "",
             "## Audit mode",
             *_audit_mode_lines(report, audit_summary),
             "",
             "## Category scores",
             *_audit_category_table_lines(categories),
+            "",
+            "## v6 adjustments",
+            *_audit_adjustment_lines(report),
             "",
             "## Critical blockers",
             *_audit_blocker_lines(blockers),
@@ -3231,6 +3317,54 @@ def render_audit_markdown(
             "",
             "### 🧾 Audit anchors",
             *_audit_anchor_lines(audit_summary),
+            "",
+            _audit_note(),
+        ]
+    )
+    return "\n".join(sections)
+
+
+def render_score_markdown(
+    *,
+    report: dict[str, Any],
+    audit_summary: dict[str, Any],
+) -> str:
+    categories_raw = report.get("categories", [])
+    categories = [item for item in categories_raw if isinstance(item, dict)] if isinstance(categories_raw, list) else []
+    blockers_raw = report.get("critical_blockers", [])
+    blockers = [item for item in blockers_raw if isinstance(item, dict)] if isinstance(blockers_raw, list) else []
+    improvements_raw = report.get("top_improvements", [])
+    improvements = [item for item in improvements_raw if isinstance(item, dict)] if isinstance(improvements_raw, list) else []
+    query = str(report.get("query", "") or "").strip()
+
+    sections = [
+        "# RepoBrain Repository Score",
+        "",
+        "## Score card",
+        *_audit_scorecard_lines(report, audit_summary),
+    ]
+    if query:
+        sections.extend(["", f"Requested focus: {query}"])
+    sections.extend(
+        [
+            "",
+            "## Category snapshot",
+            *_audit_category_mini_table_lines(categories),
+            "",
+            "## Top blockers",
+            *_audit_blocker_lines(blockers, limit=3),
+            "",
+            "## Top improvements",
+            *_audit_improvement_lines(improvements, limit=3),
+            "",
+            "## Runtime and safety",
+            f"- Backend resolved: `{str(audit_summary.get('resolved_backend', 'not_applicable') or 'not_applicable').strip()}`",
+            f"- Backend mode: `{str(audit_summary.get('backend_mode', 'n/a') or 'n/a').strip()}`",
+            f"- Fallback: `{str(audit_summary.get('fallback_used', 'not_applicable') or 'not_applicable').strip()}` / `{str(audit_summary.get('fallback_reason', 'n/a') or 'n/a').strip()}`",
+            "- No patch/mutation: `yes`",
+            "- Informational only: `yes`",
+            "",
+            "Use `/repobrain audit` for the full evidence report.",
             "",
             _audit_note(),
         ]

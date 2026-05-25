@@ -17,10 +17,11 @@ SUPPORTED_COMMANDS: tuple[str, ...] = (
     "/repobrain verify",
     "/repobrain fix",
     "/repobrain audit",
+    "/repobrain score",
     "/repobrain doctor",
     "/repobrain status",
 )
-ROADMAP_COMMANDS: tuple[str, ...] = ("/repobrain score",)
+ROADMAP_COMMANDS: tuple[str, ...] = ()
 FIX_LITE_GUIDANCE = "fix-lite is not a product command. Use /repobrain fix."
 
 _DANGEROUS_PERMISSION_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -56,6 +57,7 @@ def build_status_report(
             "no v5 fallback",
             "private_checkout beta-only",
             "audit keeps a static baseline and may apply contract-validated private v6 enrichment when available",
+            "score is a compact summary view of the same guarded audit engine",
         ],
         "safety_policy": [
             "no patch/autofix",
@@ -63,11 +65,13 @@ def build_status_report(
             "verify is informational",
             "fix is proposal/governance only",
             "audit is informational only",
+            "score is informational only",
         ],
         "workflow": workflow,
         "install_hints": [
             "Use /repobrain doctor for setup diagnostics.",
             "Use /repobrain audit for the 100-point repository score.",
+            "Use /repobrain score for a compact score summary from the same audit engine.",
         ],
     }
 
@@ -122,7 +126,8 @@ def build_doctor_report(
             status="PASS",
             detail=(
                 "Supported commands: help, ask, locate, explain, review, verify, fix, audit, doctor, status. "
-                "Roadmap-only: score. fix-lite is unsupported and redirects to /repobrain fix."
+                "Supported commands also include score as a compact summary of the same guarded audit engine. "
+                "fix-lite is unsupported and redirects to /repobrain fix."
             ),
         )
     )

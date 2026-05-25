@@ -1,9 +1,9 @@
-﻿# RepoBrain Action
+# RepoBrain Action
 
 Current release candidate: `0.5.0-rc.1`
 
 RepoBrain is a GitHub-native Repository Intelligence and Quality Scoring Platform.
-It operates as a governed GitHub workflow action for repository questions, review guidance, informational verify reporting, and safe no-patch fix proposals.
+It operates as a governed GitHub workflow action for repository questions, review guidance, informational verify reporting, repository scoring, and safe no-patch fix proposals.
 
 Current product runtime is v6-only:
 
@@ -26,6 +26,7 @@ For a new external repository install, start here:
 Current supported external GitHub commands:
 
 - `/repobrain audit`
+- `/repobrain score`
 - `/repobrain doctor`
 - `/repobrain help`
 - `/repobrain ask <query>`
@@ -38,7 +39,6 @@ Current supported external GitHub commands:
 
 Current unsupported command spellings:
 
-- `/repobrain score`
 - `/repobrain fix-lite`
 
 ## Safety Guarantees
@@ -49,11 +49,12 @@ Current external product behavior remains intentionally conservative:
 - no `repobrain-community` dependency
 - no patch/autofix
 - no RepoBrain-created branch/commit/PR behavior
-- `/repobrain audit` is informational repository scoring only and may show contract-validated private `v6` enrichment when available
+- `/repobrain audit` is an informational 100-point repository scoring MVP and may show contract-validated private `v6` enrichment when available
+- `/repobrain score` is a compact summary of the same guarded audit engine
 - `/repobrain doctor` is report-only setup/runtime diagnostics
 - `/repobrain verify` is informational only
 - `/repobrain status` is report-only runtime status
-- `/repobrain review` is not merge approval
+- `/repobrain review` is not merge approval and not safe to merge guidance
 - `/repobrain fix` is no-patch proposal/governance only
 
 ## Current Pilot Model

@@ -156,6 +156,7 @@ This preserves the current private dependency boundary and avoids widening trust
 Supported commands:
 
 - `/repobrain audit`
+- `/repobrain score`
 - `/repobrain doctor`
 - `/repobrain help`
 - `/repobrain ask <query>`
@@ -166,14 +167,10 @@ Supported commands:
 - `/repobrain verify`
 - `/repobrain fix`
 
-Unsupported command spellings today:
+Supported score summary today:
 
-- `/repobrain score`
-- `/repobrain fix-lite`
-
-Roadmap note:
-
-- `/repobrain score` is a planned compact audit view and is not implemented yet
+- `/repobrain score` is a compact summary of the same guarded audit engine
+- use `/repobrain audit` if the score summary is too compact and you need the full evidence report
 - `/repobrain fix-lite` is not a product command; use `/repobrain fix`
 
 ## 10. Support Boundary

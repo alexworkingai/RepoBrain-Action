@@ -29,6 +29,7 @@ RepoBrain provides:
 - critical blockers
 - top improvements
 - a 30/60/90-day roadmap
+- `/repobrain score` compact score summary
 - `/repobrain doctor` and `/repobrain status` diagnostics
 - `/repobrain verify` informational checks
 - `/repobrain fix` safe proposal and governance guidance
@@ -84,7 +85,7 @@ Near-term roadmap:
 - benchmark calibration
 - safe v6 audit scoring contract adoption
 - live v6-backed scoring rollout through the private capability when runtime packaging and contract acceptance succeed
-- `/repobrain score` compact summary later if justified
+- `/repobrain score` is now implemented as a compact summary of the same guarded audit engine
 - private non-source TopoCore distribution strategy
 - public visibility approval
 - Marketplace preparation later
@@ -110,3 +111,5 @@ This report does not claim Microsoft approval, GitHub approval, or an official p
 - current audit is an MVP deterministic scorer, not formal certification
 - the Sprint 81 and Sprint 82 contract path does not imply live `v6` enrichment unless a real private capability is actually invoked and accepted
 - TopoCore v6 remains private and is not distributed through this report
+
+Sprint 83 makes the audit demo more partner-ready by reducing `[redacted-path]` noise and shipping `/repobrain score` as a compact view of the same guarded engine.

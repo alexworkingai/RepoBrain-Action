@@ -12,6 +12,7 @@ This release-candidate draft reflects the current external RepoBrain product pat
   - help
   - ask
   - audit
+  - score
   - locate
   - explain
   - review
@@ -55,7 +56,7 @@ The strategic differentiator is full repository intelligence, quality scoring, e
 - RepoBrain-Action remains private in the current pilot stage
 - `/repobrain audit` is implemented as an MVP repository-level audit
 - benchmark evidence now supports the current audit MVP demo narrative
-- `/repobrain score` is still roadmap-only
+- `/repobrain score` is now implemented as a compact summary of the same guarded audit engine
 - `/repobrain fix-lite` is unsupported as a user-facing command spelling
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
 - this RC does not enable Marketplace or public release
@@ -65,3 +66,6 @@ The strategic differentiator is full repository intelligence, quality scoring, e
 This RC draft supports private beta decision-making.
 It does not itself publish RepoBrain-Action publicly or to GitHub Marketplace.
 TopoCore v6 source rights are not granted through this RC.
+
+- score now ships as a compact summary of the same guarded audit engine
+- v6-enriched audit UX now keeps safe repo-relative evidence visible while preserving private-path redaction

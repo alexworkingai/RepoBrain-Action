@@ -72,6 +72,7 @@ A full audit output should include:
 ### `/repobrain score`
 
 - short score summary or compact audit view
+- implemented in Sprint 83 as a compact summary of the same guarded audit engine
 
 ### `/repobrain doctor`
 
@@ -103,5 +104,8 @@ Implementation status:
 - RepoBrain does not claim `v6` enrichment unless a real private `run_audit_score_v1` capability is actually invoked and accepted.
 - Sprint 81 live Elen-MCP smoke remained in static contract-ready mode with `resolved_backend=not_applicable` and `fallback_reason=audit_v6_capability_unavailable_static_scoring`, which is the expected honest result when the private capability is absent.
 - Sprint 82 live Elen-MCP smoke accepted private `v6` enrichment and rendered a static baseline of `78 / 100 GOOD` plus a bounded enriched result of `77 / 100 GOOD`.
-- `/repobrain score` remains roadmap-only.
+- current live audit path can render `v6-enriched` scoring when the private capability is available and accepted by the contract guard.
+- `/repobrain score` is implemented as a compact summary of the same guarded audit engine.
 - `/repobrain doctor` and `/repobrain status` are implemented as report-only diagnostics.
+
+- Sprint 83 hardens safe repo-relative evidence rendering and ships `/repobrain score` as a compact summary of the same guarded audit engine.

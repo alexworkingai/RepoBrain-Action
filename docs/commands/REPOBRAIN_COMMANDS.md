@@ -1,4 +1,4 @@
-﻿# RepoBrain Commands
+# RepoBrain Commands
 
 ## Product Command Matrix
 
@@ -8,15 +8,15 @@ Current external GitHub command surface is intentionally bounded.
 |---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
 | `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` | primary repo/PR question flow |
-| `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; backend diagnostics stay explicit | benchmarked 100-point repository quality/readiness scoring |
+| `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; backend diagnostics stay explicit | full repository-level 100-point audit with evidence and roadmap |
+| `/repobrain score` | supported | supported as compact repository score with PR context | none | same guarded audit engine as `/repobrain audit`; backend diagnostics stay explicit | compact summary view of the same audit engine |
 | `/repobrain doctor` | supported | supported | none | report-only diagnostics; backend remains explicit | installation/runtime diagnostic command |
 | `/repobrain locate <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | returns likely files and evidence |
 | `/repobrain explain <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | explains setup or changed context |
-| `/repobrain review` | scoped unsupported or safe guidance | supported | none | issue: not applicable; PR: `v6` | review is not approval |
+| `/repobrain review` | scoped unsupported or safe guidance | supported | none | issue: not applicable; PR: `v6` | review is informational only and not approval |
 | `/repobrain status` | supported | supported | none | report-only status snapshot; backend remains explicit | runtime/product policy snapshot |
 | `/repobrain verify` | scoped unsupported or issue-safe guidance | supported | none | usually report-only / informational | verify is informational only |
-| `/repobrain fix` | scoped unsupported or safe no-patch guidance | supported | no patch, no mutation | issue: not applicable; PR: `v6` | proposal/governance only |
-| `/repobrain score` | unsupported | unsupported | none | not applicable | roadmap compact audit view; use `/repobrain audit` |
+| `/repobrain fix` | scoped unsupported or safe no-patch guidance | supported | no patch, no mutation | issue: not applicable; PR: `v6` | proposal/governance only; does not apply patches |
 | `/repobrain fix-lite` | unsupported | unsupported | none | not applicable | internal terminology, use `/repobrain fix` |
 
 ## Scope Rules
@@ -28,6 +28,7 @@ Supported in issues:
 - `/repobrain help`
 - `/repobrain ask <query>`
 - `/repobrain audit`
+- `/repobrain score`
 - `/repobrain doctor`
 - `/repobrain locate <query>`
 - `/repobrain explain <query>`
@@ -48,6 +49,7 @@ Supported in PRs:
 - `/repobrain help`
 - `/repobrain ask <query>`
 - `/repobrain audit`
+- `/repobrain score`
 - `/repobrain doctor`
 - `/repobrain review`
 - `/repobrain status`
@@ -82,7 +84,8 @@ It does not mean:
 
 `/repobrain audit` is a repository-level, no-mutation audit MVP.
 Sprint 81 adds a safe `topocore.audit_score.v1` contract boundary.
-Sprint 82 adds a real private `run_audit_score_v1` provider behind that boundary so the audit can remain static, run with a contract-ready guard, or show `v6` enrichment only when a real private capability is actually invoked and accepted.
+Sprint 82 adds a real private `run_audit_score_v1` provider behind that boundary.
+Sprint 83 hardens v6-enriched UX so safe repo-relative evidence paths remain visible while private/local/token-like paths stay redacted.
 
 It provides:
 
@@ -100,6 +103,27 @@ It does not certify merge safety, security approval, or production readiness.
 It is the current informational 100-point repository scoring MVP.
 Sprint 80 benchmark work validated that the scorer ranks sparse, risky, and mature repository shapes in a credible deterministic order.
 
+## Score Policy
+
+`/repobrain score` is a compact summary view of the same guarded audit engine.
+It is not a separate scoring system.
+
+It reuses:
+
+- the same static baseline
+- the same optional contract-validated private `v6` enrichment
+- the same contract guard
+- the same static fallback behavior
+- the same no-mutation safety constraints
+
+It provides:
+
+- final score and readiness band
+- static baseline and live mode truth
+- all 10 categories in compact form
+- top blockers and top improvements
+- a pointer to `/repobrain audit` for the full evidence report
+
 ## Doctor Policy
 
 `/repobrain doctor` is a report-only installation and runtime diagnostic.
@@ -110,6 +134,7 @@ It reports:
 - permission baseline signals
 - TopoCore v6 setup hints without exposing secret values
 - v6-only/no-v5 policy
+- score support and audit capability truth
 - fork/private-boundary policy
 - recommended fixes
 
@@ -123,11 +148,11 @@ It reports:
 
 - RepoBrain version
 - supported commands
-- roadmap-only commands
 - v6-only backend policy
 - audit static baseline truth with optional contract-validated private `v6` enrichment
+- score as a compact summary of the same guarded audit engine
 - no-patch/no-mutation policy
-- install hints for `/repobrain doctor` and `/repobrain audit`
+- install hints for `/repobrain doctor`, `/repobrain score`, and `/repobrain audit`
 
 `/repobrain status` is informational only and does not require expensive TopoCore import or repository mutation.
 
@@ -155,10 +180,6 @@ Visible no-mutation expectations:
 
 `/repobrain fix` does not apply patches and does not mutate the repository.
 
-## Roadmap Commands (Not Implemented Yet)
+## Unsupported Command Spellings
 
-These command names are part of the documented roadmap, not the current supported external command surface:
-
-- `/repobrain score`: planned compact score summary
-
-`/repobrain fix-lite` is not a product command and should redirect users to `/repobrain fix`.
+- `/repobrain fix-lite`: `fix-lite is not a product command. Use /repobrain fix.`

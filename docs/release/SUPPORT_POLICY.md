@@ -26,6 +26,7 @@ Supported command surface today:
 - `/repobrain explain <query>`
 - `/repobrain review`
 - `/repobrain status`
+- `/repobrain score`
 - `/repobrain verify`
 - `/repobrain fix`
 
@@ -38,7 +39,6 @@ Current unsupported or not-approved surfaces:
 - patch/autofix
 - RepoBrain-created branch, commit, or PR behavior
 - Marketplace install until approved
-- `/repobrain score` as a live product command in the current release candidate
 
 ## Security Issue Reporting
 
@@ -62,7 +62,7 @@ Current unsupported or not-approved surfaces:
 - verify may report `NOT_RUN` when no checks exist
 - audit is implemented as a repository-level MVP
 - doctor and status are implemented as report-only diagnostics
-- score remains roadmap-only
+- score is implemented as a compact summary of the same guarded audit engine
 
 ## Support Boundaries
 

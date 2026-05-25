@@ -23,6 +23,7 @@ It does not publish the repository, change visibility, create a release tag, or 
 - Status: `READY`
 - supported commands:
   - `/repobrain audit`
+  - `/repobrain score`
   - `/repobrain doctor`
   - `/repobrain help`
   - `/repobrain ask <query>`
@@ -32,11 +33,8 @@ It does not publish the repository, change visibility, create a release tag, or 
   - `/repobrain status`
   - `/repobrain verify`
   - `/repobrain fix`
-- unsupported commands documented honestly:
-  - `/repobrain score`
+- unsupported command spellings documented honestly:
   - `/repobrain fix-lite`
-- roadmap commands documented without claiming implementation:
-  - none beyond `/repobrain score`
 - benchmark evidence now exists for the current `/repobrain audit` MVP and supports demo use with stated limitations
 
 ## External Install Readiness
@@ -100,7 +98,7 @@ It does not publish the repository, change visibility, create a release tag, or 
 - audit MVP is implemented
 - audit benchmark evidence is documented for demo-facing use
 - doctor and status are implemented as report-only diagnostics
-- score remains roadmap-only
+- score is implemented as a compact summary of the same guarded audit engine
 
 ## Approval Gates
 

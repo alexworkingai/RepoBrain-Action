@@ -196,12 +196,30 @@ Open a safe issue comment and run:
 Expected healthy audit behavior:
 
 - overall score between `0` and `100`
+- static baseline plus live mode truth shown
 - all 10 categories shown
-- evidence summary shown
+- evidence summary shown with safe repo-relative paths
 - critical blockers, top improvements, and 30/60/90-day roadmap shown
 - no patch/autofix
 - no mutation
 - repository-level informational output
+
+## Step 10: Run The Compact Score Summary
+
+Open a safe issue comment and run:
+
+```text
+/repobrain score Focus on partner-demo readiness.
+```
+
+Expected healthy score behavior:
+
+- compact score summary
+- same guarded audit engine as `/repobrain audit`
+- static baseline shown
+- `v6`-enriched mode shown when private capability is available
+- all 10 categories shown compactly
+- points back to `/repobrain audit` for the full evidence report
 
 ## Expected Backend Evidence
 
@@ -256,7 +274,7 @@ Important current limitations:
 - `/repobrain audit` is implemented as an MVP repository-level audit
 - `/repobrain doctor` is implemented as a report-only installation/runtime diagnostic
 - `/repobrain status` is implemented as a lightweight runtime snapshot
-- `/repobrain score` is still roadmap-only
+- `/repobrain score` is implemented as a compact summary of the same guarded audit engine
 - `/repobrain fix-lite` is unsupported as a user-facing command spelling
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
 - there is no patch/autofix mode in the current external product path

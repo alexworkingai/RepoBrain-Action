@@ -53,6 +53,7 @@ def test_issue_status_is_supported_and_includes_version_policy_and_commands() ->
     assert "/repobrain doctor" in markdown
     assert "/repobrain status" in markdown
     assert "/repobrain score" in markdown
+    assert "compact summary view of the same guarded audit engine" in markdown
     assert "no v5 fallback" in markdown.lower()
     assert "no patch/autofix" in markdown.lower()
     assert audit["route_final"] == "STATUS"

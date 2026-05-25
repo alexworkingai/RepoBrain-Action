@@ -62,6 +62,7 @@ from repobrain.output_md import (
     render_patch_markdown,
     render_refuse_markdown,
     render_review_markdown,
+    render_score_markdown,
     render_scoped_command_markdown,
     render_status_markdown,
     render_unsupported_command_markdown,
@@ -130,6 +131,8 @@ HELP_TEXT = """RepoBrain command examples:
 - /repobrain ask --profile balanced How does provider selection work?
 - /repobrain audit
 - /repobrain audit Focus on repository readiness for a Microsoft/GitHub-facing demo.
+- /repobrain score
+- /repobrain score Focus on partner-demo readiness.
 - /repobrain doctor
 - /repobrain status
 - /repobrain locate TKYProvider
@@ -140,9 +143,9 @@ HELP_TEXT = """RepoBrain command examples:
 
 Supported today:
 - `/repobrain audit` is a repository-level, no-mutation audit MVP.
+- `/repobrain score` is a compact score summary that reuses the same guarded audit engine.
 - `/repobrain doctor` is a report-only installation/runtime diagnostic.
 - `/repobrain status` is a lightweight report-only runtime status snapshot.
-- `/repobrain score` is roadmap-only. Use `/repobrain audit` for the current 100-point repository score.
 - `/repobrain fix-lite` is unsupported; use `/repobrain fix`.
 - `/repobrain fix` stays no-patch/no-mutation.
 - `/repobrain verify` stays informational only.
@@ -6313,6 +6316,86 @@ def _build_audit_markdown(
     github_context_seed: dict[str, Any] | None = None,
     audit: dict[str, Any] | None = None,
 ) -> str:
+    report, audit_summary, error_body, resolved_repo_root = _build_repository_audit_payload(
+        repo_root=repo_root,
+        query=query,
+        tky_mode=tky_mode,
+        github_context_seed=github_context_seed,
+        command_name="audit",
+        scope_status_override=None,
+        audit=audit,
+    )
+    if error_body:
+        return error_body
+
+    diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
+    diagnostic_path = _write_diagnostic_summary_markdown(resolved_repo_root, diagnostic_markdown)
+    audit_summary["diagnostic_summary_artifact"] = "artifacts/diagnostic_summary.md"
+
+    t0 = time.perf_counter()
+    full_body = render_audit_markdown(report=report, audit_summary=audit_summary)
+    body, was_truncated = enforce_comment_limit(full_body)
+    if audit is not None:
+        audit.update(audit_summary)
+        audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
+        audit["comment_truncated"] = bool(was_truncated)
+        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+    if was_truncated:
+        artifact_path = _write_audit_result_markdown(resolved_repo_root, full_body)
+        if audit is not None:
+            audit["audit_result_artifact"] = artifact_path.as_posix()
+    return body
+
+
+def _build_score_markdown(
+    *,
+    repo_root: Path,
+    query: str,
+    tky_mode: str,
+    github_context_seed: dict[str, Any] | None = None,
+    audit: dict[str, Any] | None = None,
+) -> str:
+    report, audit_summary, error_body, resolved_repo_root = _build_repository_audit_payload(
+        repo_root=repo_root,
+        query=query,
+        tky_mode=tky_mode,
+        github_context_seed=github_context_seed,
+        command_name="score",
+        scope_status_override="repository_score_summary",
+        audit=audit,
+    )
+    if error_body:
+        return error_body
+
+    diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
+    diagnostic_path = _write_diagnostic_summary_markdown(resolved_repo_root, diagnostic_markdown)
+    audit_summary["diagnostic_summary_artifact"] = "artifacts/diagnostic_summary.md"
+
+    t0 = time.perf_counter()
+    full_body = render_score_markdown(report=report, audit_summary=audit_summary)
+    body, was_truncated = enforce_comment_limit(full_body)
+    if audit is not None:
+        audit.update(audit_summary)
+        audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
+        audit["comment_truncated"] = bool(was_truncated)
+        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
+    if was_truncated:
+        artifact_path = _write_audit_result_markdown(resolved_repo_root, full_body)
+        if audit is not None:
+            audit["audit_result_artifact"] = artifact_path.as_posix()
+    return body
+
+
+def _build_repository_audit_payload(
+    *,
+    repo_root: Path,
+    query: str,
+    tky_mode: str,
+    github_context_seed: dict[str, Any] | None,
+    command_name: str,
+    scope_status_override: str | None,
+    audit: dict[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, Any], str | None, Path]:
     resolved_repo_root = resolve_repo_root(repo_root)
     effective_tky_mode = str(tky_mode or "local").strip().lower() or "local"
     github_context = _enrich_github_context_with_pr_metadata(
@@ -6352,13 +6435,13 @@ def _build_audit_markdown(
         if audit is not None:
             audit.update(audit_summary)
             audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
-        return render_error_markdown(
+        return {}, audit_summary, render_error_markdown(
             message=(
                 "RepoBrain audit could not start because legacy TopoCore runtime selection is unsupported. "
                 "Use RB_TOPOCORE_BACKEND=auto or RB_TOPOCORE_BACKEND=v6."
             ),
             audit_summary=audit_summary,
-        )
+        ), resolved_repo_root
 
     report = score_repository_audit(
         repo_root=resolved_repo_root,
@@ -6381,10 +6464,15 @@ def _build_audit_markdown(
         report.get("inventory_summary", {}) if isinstance(report.get("inventory_summary", {}), dict) else {}
     )
     pr_context_used = bool(pr_context.get("is_pr", False))
-    scope_status = "repository_audit_with_pr_context" if pr_context_used else "repository_audit"
+    if scope_status_override:
+        scope_status = (
+            f"{scope_status_override}_with_pr_context" if pr_context_used else scope_status_override
+        )
+    else:
+        scope_status = "repository_audit_with_pr_context" if pr_context_used else "repository_audit"
     audit_summary: dict[str, Any] = {
-        "command": "audit",
-        "route_final": "AUDIT",
+        "command": command_name,
+        "route_final": str(command_name or "audit").strip().upper(),
         "pass_count": 1,
         "retrieved": int(inventory_summary.get("file_count", 0) or 0),
         "selected": int(evidence_summary.get("evidence_count", 0) or 0),
@@ -6421,24 +6509,16 @@ def _build_audit_markdown(
         "audit_contract_capability": str(v6_summary.get("audit_contract_capability", "") or ""),
         "topocore_capability_version": str(v6_summary.get("topocore_capability_version", "") or ""),
     }
-
-    diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
-    diagnostic_path = _write_diagnostic_summary_markdown(resolved_repo_root, diagnostic_markdown)
-    audit_summary["diagnostic_summary_artifact"] = "artifacts/diagnostic_summary.md"
-
-    t0 = time.perf_counter()
-    full_body = render_audit_markdown(report=report, audit_summary=audit_summary)
-    body, was_truncated = enforce_comment_limit(full_body)
-    if audit is not None:
-        audit.update(audit_summary)
-        audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
-        audit["comment_truncated"] = bool(was_truncated)
-        add_timing(audit, "format", (time.perf_counter() - t0) * 1000.0)
-    if was_truncated:
-        artifact_path = _write_audit_result_markdown(resolved_repo_root, full_body)
-        if audit is not None:
-            audit["audit_result_artifact"] = artifact_path.as_posix()
-    return body
+    if command_name == "score":
+        if audit_summary["resolved_backend"] == "v6":
+            audit_summary["backend_mode"] = "audit_v6_enriched_score_summary"
+        elif audit_summary["audit_mode"] == "static_contract_ready":
+            audit_summary["backend_mode"] = "audit_v6_contract_ready_score_summary"
+        elif audit_summary["audit_mode"] == "static_contract_rejected":
+            audit_summary["backend_mode"] = "audit_v6_contract_rejected_score_summary"
+        else:
+            audit_summary["backend_mode"] = "audit_static_score_summary"
+    return report, audit_summary, None, resolved_repo_root
 
 
 def _build_status_markdown(
@@ -9398,14 +9478,11 @@ def run_github_flow(
         )
         audit["index_source"] = "n/a"
     elif cmd == "score":
-        body_markdown = _build_unsupported_command_markdown(
-            cmd=cmd,
+        body_markdown = _build_score_markdown(
+            repo_root=repo_root,
+            query=query,
             tky_mode=tky_mode,
-            message="Score is planned as a compact audit summary. Use /repobrain audit for the current 100-point repository score.",
-            next_steps=[
-                "Use `/repobrain audit` for the current repository score and improvement roadmap.",
-                "Use `/repobrain help` to review the supported command surface.",
-            ],
+            github_context_seed=github_context_seed,
             audit=audit,
         )
         audit["index_source"] = "n/a"

@@ -61,6 +61,7 @@ def test_issue_doctor_is_supported_and_includes_required_sections(monkeypatch, t
     assert "secret value" in markdown.lower()
     assert "no v5 fallback" in markdown.lower()
     assert "private_checkout is beta-only" in markdown.lower()
+    assert "compact summary of the same guarded audit engine" in markdown
     assert "pull_request_target" in markdown
     assert audit["route_final"] == "DOCTOR"
     assert audit["resolved_backend"] == "not_applicable"
