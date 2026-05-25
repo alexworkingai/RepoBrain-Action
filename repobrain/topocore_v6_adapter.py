@@ -815,6 +815,87 @@ class RepoBrainTopoCoreV6Adapter:
             ),
         )
 
+    def audit_score_v1_capability_local(
+        self,
+        *,
+        local_path: str | None = None,
+        topocore_public_api: Any | None = None,
+    ) -> dict[str, str]:
+        """Return sanitized capability status for optional audit-score enrichment."""
+
+        try:
+            public_api = topocore_public_api or load_topocore_v6_public_api(local_path=local_path)
+            facade = public_api.create_topocore()
+        except Exception:
+            return {"status": "capability_unavailable", "capability_version": ""}
+
+        method = getattr(facade, "run_audit_score_v1", None)
+        if callable(method):
+            return {
+                "status": "capability_present",
+                "capability_version": _extract_safe_decision_text(
+                    getattr(facade, "audit_score_contract_version", "topocore.audit_score.v1")
+                )
+                or "topocore.audit_score.v1",
+            }
+
+        supports = getattr(facade, "supports", None)
+        if callable(supports):
+            try:
+                supported = bool(supports("topocore.audit_score.v1"))
+            except Exception:
+                supported = False
+            if supported and callable(method):
+                return {
+                    "status": "capability_present",
+                    "capability_version": "topocore.audit_score.v1",
+                }
+
+        capabilities = getattr(facade, "capabilities", None)
+        if isinstance(capabilities, Mapping):
+            capability_version = _extract_safe_decision_text(capabilities.get("audit_score_v1", ""))
+            if capability_version:
+                return {"status": "capability_declared_without_method", "capability_version": capability_version}
+
+        return {"status": "capability_unavailable", "capability_version": ""}
+
+    def run_audit_score_v1_local(
+        self,
+        request: Mapping[str, Any],
+        *,
+        local_path: str | None = None,
+        topocore_public_api: Any | None = None,
+    ) -> dict[str, Any]:
+        """Call optional ``run_audit_score_v1`` when the facade exposes it."""
+
+        if not isinstance(request, Mapping):
+            raise RepoBrainV6AdapterError("Audit score v1 request must be a mapping.")
+
+        public_api = topocore_public_api or load_topocore_v6_public_api(local_path=local_path)
+        try:
+            facade = public_api.create_topocore()
+        except Exception as exc:  # pragma: no cover - exercised through tests
+            raise RepoBrainV6AdapterRuntimeError("TopoCore v6 facade creation failed.") from exc
+
+        method = getattr(facade, "run_audit_score_v1", None)
+        if not callable(method):
+            raise RepoBrainV6AdapterRuntimeError(
+                "TopoCore v6 audit scoring capability is unavailable."
+            )
+
+        try:
+            response = method(_sanitize_preview_mapping(request))
+        except Exception as exc:  # pragma: no cover - exercised through tests
+            raise RepoBrainV6AdapterRuntimeError(
+                "TopoCore v6 audit scoring call failed."
+            ) from exc
+
+        if not _is_mapping(response):
+            raise RepoBrainV6AdapterRuntimeError(
+                "TopoCore v6 audit scoring returned an invalid response shape."
+            )
+        return _sanitize_preview_mapping(response)
+
 
 __all__ = [
     "RepoBrainTopoCoreV6Adapter",

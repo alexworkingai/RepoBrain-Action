@@ -51,6 +51,7 @@ def test_issue_scope_audit_is_supported_and_includes_required_sections() -> None
 
     assert "# RepoBrain Repository Audit" in markdown
     assert "Overall score:" in markdown
+    assert "## Audit mode" in markdown
     assert "## Category scores" in markdown
     assert "## Critical blockers" in markdown
     assert "## Top improvements" in markdown
@@ -157,6 +158,7 @@ def test_run_github_flow_audit_dry_run_records_no_mutation_audit_fields() -> Non
     assert audit["commit_created"] is False
     assert audit["pr_created"] is False
     assert audit["resolved_backend"] == "not_applicable"
+    assert audit["fallback_reason"] == "audit_v6_capability_unavailable_static_scoring"
 
 
 def test_run_github_flow_pr_audit_dry_run_records_pr_metadata(tmp_path: Path) -> None:

@@ -3108,6 +3108,37 @@ def _audit_confidence_and_limitations_lines(report: dict[str, Any]) -> list[str]
     return lines
 
 
+def _audit_mode_lines(report: dict[str, Any], audit_summary: dict[str, Any]) -> list[str]:
+    audit_mode = str(audit_summary.get("audit_mode", "static_mvp") or "static_mvp").strip().lower()
+    fallback_reason = str(audit_summary.get("fallback_reason", "audit_static_scoring") or "audit_static_scoring").strip()
+    capability = str(audit_summary.get("audit_contract_capability", "") or "").strip()
+    warning = str(audit_summary.get("audit_contract_warning", "") or "").strip()
+    lines: list[str] = []
+    if audit_mode == "v6_enriched":
+        lines.append("- Audit mode: `v6-enriched scoring`")
+        static_baseline = report.get("static_baseline", {})
+        if isinstance(static_baseline, dict):
+            baseline_score = _int(static_baseline.get("overall_score", 0))
+            baseline_band = str(static_baseline.get("readiness_band", "WEAK") or "WEAK").strip().upper()
+            lines.append(f"- Static baseline: `{baseline_score} / 100` (`{baseline_band}`)")
+        adjustments_raw = report.get("v6_score_adjustments", [])
+        if isinstance(adjustments_raw, list) and adjustments_raw:
+            lines.append(f"- v6 bounded adjustments: `{len(adjustments_raw)}`")
+    elif audit_mode == "static_contract_ready":
+        lines.append("- Audit mode: `static scoring with v6 contract-ready guard`")
+        lines.append("- TopoCore v6 deep scoring capability was not available in this runtime.")
+    elif audit_mode == "static_contract_rejected":
+        lines.append("- Audit mode: `static scoring with rejected v6 response`")
+        if warning:
+            lines.append(f"- Contract guard: `{warning}`")
+    else:
+        lines.append("- Audit mode: `static scoring MVP`")
+    if capability:
+        lines.append(f"- Audit contract capability: `{capability}`")
+    lines.append(f"- Audit fallback reason: `{fallback_reason}`")
+    return lines
+
+
 def _audit_safety_statement_lines(audit_summary: dict[str, Any]) -> list[str]:
     return [
         "- Audit is informational only.",
@@ -3167,6 +3198,9 @@ def render_audit_markdown(
         sections.extend(["", f"Requested focus: {query}"])
     sections.extend(
         [
+            "",
+            "## Audit mode",
+            *_audit_mode_lines(report, audit_summary),
             "",
             "## Category scores",
             *_audit_category_table_lines(categories),

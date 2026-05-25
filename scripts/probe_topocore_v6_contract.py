@@ -148,6 +148,10 @@ def _run_probe(module: Any) -> tuple[int, list[str], str]:
     request = _build_minimal_request(module)
     health = facade.health()
     external = facade.decide_external(request)
+    audit_score_capability = hasattr(facade, "run_audit_score_v1")
+    audit_score_contract_version = _sanitize_output(
+        str(getattr(facade, "audit_score_contract_version", ""))
+    )
 
     health_version = _sanitize_output(str(health.get("version", "")))
     release_stage = _sanitize_output(str(health.get("release_stage", "")))
@@ -170,6 +174,8 @@ def _run_probe(module: Any) -> tuple[int, list[str], str]:
         f"external_action={ext_action or 'unknown'}",
         f"external_confidence={ext_confidence or 'unknown'}",
         f"external_message_code={ext_message or 'unknown'}",
+        f"audit_score_v1_present={'yes' if audit_score_capability else 'no'}",
+        f"audit_score_contract_version={audit_score_contract_version or 'unknown'}",
         "compatibility_status=compatible_with_adapter_changes",
     ]
     return 0, summary, "compatible_with_adapter_changes"

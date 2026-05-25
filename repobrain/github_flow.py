@@ -20,6 +20,7 @@ from repobrain.ai_budget_governor import (
 )
 from repobrain.audit import add_timing, build_audit_base, finalize_audit
 from repobrain.audit_scoring import score_repository_audit
+from repobrain.audit_v6 import enrich_audit_report_with_optional_v6
 from repobrain.ask import AnswerResult, answer_question, make_provider
 from repobrain.commands import parse_command
 from repobrain.checks_md import (
@@ -6314,6 +6315,9 @@ def _build_audit_markdown(
 ) -> str:
     resolved_repo_root = resolve_repo_root(repo_root)
     effective_tky_mode = str(tky_mode or "local").strip().lower() or "local"
+    github_context = _enrich_github_context_with_pr_metadata(
+        github_context_seed=github_context_seed,
+    )
     try:
         backend_resolution = resolve_backend()
         requested_backend = str(backend_resolution.requested_backend or "auto").strip().lower() or "auto"
@@ -6356,13 +6360,18 @@ def _build_audit_markdown(
             audit_summary=audit_summary,
         )
 
-    github_context = _enrich_github_context_with_pr_metadata(
-        github_context_seed=github_context_seed,
-    )
     report = score_repository_audit(
         repo_root=resolved_repo_root,
         query=query,
         github_context=github_context,
+    )
+    report, v6_summary = enrich_audit_report_with_optional_v6(
+        repo_root=resolved_repo_root,
+        report=report,
+        github_context=github_context,
+        query=query,
+        tky_mode=effective_tky_mode,
+        requested_backend=requested_backend,
     )
     pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
     evidence_summary = (
@@ -6380,15 +6389,15 @@ def _build_audit_markdown(
         "retrieved": int(inventory_summary.get("file_count", 0) or 0),
         "selected": int(evidence_summary.get("evidence_count", 0) or 0),
         "repobrain_version": REPOBRAIN_VERSION,
-        "tky_mode_requested": effective_tky_mode,
-        "tky_mode_used": effective_tky_mode,
-        "tkya_mode": "audit_mvp_static",
-        "tkya_backend": "audit_mvp_static",
-        "requested_backend": requested_backend,
-        "resolved_backend": "not_applicable",
-        "backend_mode": "audit_mvp_static_scoring",
-        "fallback_used": "not_applicable",
-        "fallback_reason": "audit_static_scoring",
+        "tky_mode_requested": str(v6_summary.get("tky_mode_requested", effective_tky_mode) or effective_tky_mode),
+        "tky_mode_used": str(v6_summary.get("tky_mode_used", effective_tky_mode) or effective_tky_mode),
+        "tkya_mode": str(v6_summary.get("tkya_mode", "audit_mvp_static") or "audit_mvp_static"),
+        "tkya_backend": str(v6_summary.get("tkya_backend", "audit_mvp_static") or "audit_mvp_static"),
+        "requested_backend": str(v6_summary.get("requested_backend", requested_backend) or requested_backend),
+        "resolved_backend": str(v6_summary.get("resolved_backend", "not_applicable") or "not_applicable"),
+        "backend_mode": str(v6_summary.get("backend_mode", "audit_mvp_static_scoring") or "audit_mvp_static_scoring"),
+        "fallback_used": str(v6_summary.get("fallback_used", "not_applicable") or "not_applicable"),
+        "fallback_reason": str(v6_summary.get("fallback_reason", "audit_static_scoring") or "audit_static_scoring"),
         "scope_status": scope_status,
         "patch_authorized": False,
         "patch_applied": False,
@@ -6397,7 +6406,7 @@ def _build_audit_markdown(
         "commit_created": False,
         "pr_created": False,
         "llm_used": False,
-        "llm_skip_reason": "audit_mvp_static_scoring",
+        "llm_skip_reason": str(v6_summary.get("llm_skip_reason", "audit_mvp_static_scoring") or "audit_mvp_static_scoring"),
         "execution_mode": "repository_audit",
         "pr_metadata_used": pr_context_used,
         "pr_changed_files_count": int(pr_context.get("changed_files_count", 0) or 0),
@@ -6406,6 +6415,11 @@ def _build_audit_markdown(
         "audit_confidence": str(report.get("confidence", "medium") or "medium").strip().lower(),
         "evidence_count": int(evidence_summary.get("evidence_count", 0) or 0),
         "inventory_truncated": bool(inventory_summary.get("inventory_truncated", False)),
+        "audit_mode": str(v6_summary.get("audit_mode", "static_mvp") or "static_mvp"),
+        "audit_contract_status": str(v6_summary.get("audit_contract_status", "not_requested") or "not_requested"),
+        "audit_contract_warning": str(v6_summary.get("audit_contract_warning", "") or ""),
+        "audit_contract_capability": str(v6_summary.get("audit_contract_capability", "") or ""),
+        "topocore_capability_version": str(v6_summary.get("topocore_capability_version", "") or ""),
     }
 
     diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
