@@ -37,6 +37,7 @@ It does not publish the repository, change visibility, create a release tag, or 
   - `/repobrain fix-lite`
 - roadmap commands documented without claiming implementation:
   - none beyond `/repobrain score`
+- benchmark evidence now exists for the current `/repobrain audit` MVP and supports demo use with stated limitations
 
 ## External Install Readiness
 
@@ -97,6 +98,7 @@ It does not publish the repository, change visibility, create a release tag, or 
 - no patch/autofix
 - no RepoBrain-created branch, commit, or PR behavior
 - audit MVP is implemented
+- audit benchmark evidence is documented for demo-facing use
 - doctor and status are implemented as report-only diagnostics
 - score remains roadmap-only
 

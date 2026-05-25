@@ -93,6 +93,8 @@ Implementation status:
 - Sprint 77 documented the model and roadmap.
 - Sprint 78 implements the `/repobrain audit` MVP.
 - Sprint 79 calibrates exclusion boundaries and output compaction for the audit MVP.
+- Sprint 80 benchmarks the scorer across sparse, risky, and mature repository shapes to validate ranking credibility.
 - Current audit scoring is deterministic, repository-static, and evidence-grounded.
+- Current benchmark evidence shows mature fixtures rank above sparse and risky fixtures without claiming formal certification.
 - `/repobrain score` remains roadmap-only.
 - `/repobrain doctor` and `/repobrain status` are implemented as report-only diagnostics.

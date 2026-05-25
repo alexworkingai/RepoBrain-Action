@@ -1,0 +1,103 @@
+# Microsoft/GitHub Demo Report
+
+## 1. Executive Positioning
+
+RepoBrain is a GitHub-native Repository Intelligence and Quality Scoring Platform.
+It is not merely an AI PR reviewer.
+It is not an IDE coding assistant.
+It is not an LLM reseller.
+It uses a BYO-LLM and user-paid LLM model with a private TopoCore v6-powered product strategy.
+
+## 2. Problem
+
+Repositories lack a consistent, evidence-grounded, GitHub-native quality and readiness scoring layer.
+
+Typical gaps:
+
+- repository health is fragmented across CI, docs, security tooling, code review, and tribal knowledge
+- PR review surfaces do not provide whole-repository maturity scoring
+- generic LLM coding tools do not produce a stable governance or audit score
+
+## 3. RepoBrain Solution
+
+RepoBrain provides:
+
+- `/repobrain audit`
+- a 100-point score
+- category breakdown
+- evidence references
+- critical blockers
+- top improvements
+- a 30/60/90-day roadmap
+- `/repobrain doctor` and `/repobrain status` diagnostics
+- `/repobrain verify` informational checks
+- `/repobrain fix` safe proposal and governance guidance
+
+## 4. Differentiation
+
+Compared with Copilot or Cursor:
+
+- RepoBrain is repository governance and scoring, not IDE autocomplete
+
+Compared with CodeRabbit-style PR review:
+
+- RepoBrain covers whole-repository audit and readiness, not only PR commentary
+
+Compared with autonomous agents:
+
+- RepoBrain prioritizes safe, evidence-bound governance and no-mutation behavior over uncontrolled action-taking
+
+## 5. GitHub/Microsoft Fit
+
+- GitHub Actions-native workflow surface
+- GitHub Models-compatible direction
+- GitHub Enterprise-compatible direction
+- permission-minimal workflow posture
+- auditability and evidence-grounded output
+- BYO-LLM and user-paid provider model
+- private high-value TopoCore engine boundary
+
+## 6. Current Product Proof
+
+Current proof points:
+
+- external Elen-MCP pilot is live
+- command matrix passed
+- `/repobrain audit` live result: `77 / 100` `GOOD`
+- `/repobrain doctor` and `/repobrain status` live results exist
+- no patch/autofix
+- no v5
+- no `repobrain-community`
+- private TopoCore v6 boundary preserved
+
+## 7. Strategic Roadmap
+
+Near-term roadmap:
+
+- benchmark calibration
+- deeper v6-backed scoring design
+- `/repobrain score` compact summary later if justified
+- private non-source TopoCore distribution strategy
+- public visibility approval
+- Marketplace preparation later
+
+## 8. What We Want From Microsoft/GitHub Attention
+
+We are looking for:
+
+- technical feedback
+- ecosystem fit validation
+- GitHub Models and Actions alignment feedback
+- partner or incubation discussion if the fit is strong
+- security and distribution guidance
+
+This report does not claim Microsoft approval, GitHub approval, or an official partnership.
+
+## 9. Safety And Limitations
+
+- no patch/autofix
+- no repository mutation
+- no merge approval claim
+- no security approval claim
+- current audit is an MVP deterministic scorer, not formal certification
+- TopoCore v6 remains private and is not distributed through this report

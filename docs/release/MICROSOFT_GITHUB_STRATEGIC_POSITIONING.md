@@ -47,3 +47,7 @@ RepoBrain aligns with:
 
 The near-term success metric is not maximum short-term revenue.
 It is proving the value of full repository audit and scoring on real repositories in a way that gets strategic attention and adoption proof.
+
+## Sprint 80 Proof Layer
+
+Sprint 80 adds a bounded benchmark suite and a Microsoft/GitHub-facing demo report so the positioning story is backed by concrete scoring evidence instead of product-only narrative.

@@ -25,6 +25,7 @@ Current truth:
 - Sprint 77 adds public scrub, source-available licensing, TopoCore security policy, and scoring-positioning gates
 - Sprint 78 implements the `/repobrain audit` MVP with 100-point repository scoring
 - Sprint 79 calibrates the audit MVP and adds doctor/status diagnostics
+- Sprint 80 benchmarks audit scoring and produces a Microsoft/GitHub-facing demo report
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -150,6 +151,8 @@ Phase 7:
 - `docs/architecture/SPRINT_76_RELEASE_CANDIDATE_READINESS.md`
 - `docs/architecture/SPRINT_77_PUBLIC_SCRUB_LICENSE_TOPOCORE_SECURITY_POSITIONING.md`
 - `docs/architecture/SPRINT_78_AUDIT_MVP_100_POINT_SCORING.md`
+- `docs/architecture/SPRINT_79_AUDIT_CALIBRATION_DOCTOR_STATUS.md`
+- `docs/architecture/SPRINT_80_AUDIT_BENCHMARK_DEMO_REPORT.md`
 
 ## 5. Recommended Reading Paths
 

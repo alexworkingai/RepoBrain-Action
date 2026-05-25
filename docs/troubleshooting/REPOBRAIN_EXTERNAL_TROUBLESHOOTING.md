@@ -134,6 +134,11 @@ If you need a quick setup snapshot after changing permissions, run:
 - `/repobrain doctor`
 - `/repobrain status`
 
+Current doctor guidance should warn if the workflow still uses:
+
+- `checks: write`
+- `pull-requests: write`
+
 ## 8. Fork PR Restrictions
 
 ### Current policy

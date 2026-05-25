@@ -77,6 +77,8 @@ TopoCore v6 remains private.
 - Service/commercial model: `docs/release/SERVICE_AND_COMMERCIAL_MODEL.md`
 - Support policy: `docs/release/SUPPORT_POLICY.md`
 - Versioning and pinning: `docs/release/VERSIONING_AND_PINNING_STRATEGY.md`
+- Audit benchmark report: `docs/release/AUDIT_BENCHMARK_REPORT.md`
+- Microsoft/GitHub demo report: `docs/release/MICROSOFT_GITHUB_DEMO_REPORT.md`
 - Public readiness assessment: `docs/release/PUBLIC_READINESS_ASSESSMENT.md`
 - Marketplace readiness assessment: `docs/release/MARKETPLACE_READINESS_ASSESSMENT.md`
 

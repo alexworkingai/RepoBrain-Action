@@ -8,7 +8,7 @@ Current external GitHub command surface is intentionally bounded.
 |---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
 | `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` | primary repo/PR question flow |
-| `/repobrain audit` | supported | supported as repository audit with PR context | none | repository-static MVP; backend diagnostics stay explicit | 100-point repository quality/readiness scoring |
+| `/repobrain audit` | supported | supported as repository audit with PR context | none | repository-static MVP; backend diagnostics stay explicit | benchmarked 100-point repository quality/readiness scoring |
 | `/repobrain doctor` | supported | supported | none | report-only diagnostics; backend remains explicit | installation/runtime diagnostic command |
 | `/repobrain locate <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | returns likely files and evidence |
 | `/repobrain explain <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | explains setup or changed context |
@@ -96,6 +96,7 @@ It provides:
 `/repobrain audit` is informational only.
 It does not certify merge safety, security approval, or production readiness.
 It is the current informational 100-point repository scoring MVP.
+Sprint 80 benchmark work validated that the scorer ranks sparse, risky, and mature repository shapes in a credible deterministic order.
 
 ## Doctor Policy
 
