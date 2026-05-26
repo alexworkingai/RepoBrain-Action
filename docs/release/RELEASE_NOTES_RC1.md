@@ -62,6 +62,13 @@ Sprint 84 public-ready gate update:
   - status: `success`
   - explicit runtime mode truth for controlled `private_checkout`
 
+Sprint 85 approval-pack update:
+
+- public visibility approval checklist is prepared
+- selected partner setup pack is prepared
+- RC tag and pinning plan is prepared
+- public visibility remains approval-gated and is not executed in Sprint 85
+
 ## Current Limitations
 
 - TopoCore v6 remains private permanently

@@ -21,6 +21,8 @@ For a new external repository install, start here:
 - Troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
 - Example workflow: `docs/examples/repobrain_external_pilot_workflow.yml`
 - Partner readiness: `docs/release/PARTNER_TESTING_READINESS.md`
+- Public approval checklist: `docs/release/PUBLIC_VISIBILITY_APPROVAL_CHECKLIST.md`
+- Partner setup pack: `docs/partner/PARTNER_TESTING_SETUP.md`
 
 ## Product Surface
 
@@ -72,6 +74,13 @@ Sprint 84 public-ready gate truth:
 - `private_checkout` remains beta-only
 - selected partner testing should prefer installed private package mode when authorized
 - plain Python package artifacts still need honest handling because they can contain readable implementation files
+
+Sprint 85 approval-pack truth:
+
+- RepoBrain-Action still remains private
+- public visibility still requires explicit owner approval
+- selected partner testing pack is now documented for controlled rollout
+- RC tag creation remains approval-gated and is not executed automatically
 
 RepoBrain is not an LLM reseller.
 RepoBrain-Action remains private during the current pilot phase.

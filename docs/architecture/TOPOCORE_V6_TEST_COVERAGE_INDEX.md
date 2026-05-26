@@ -74,6 +74,11 @@ Current test baseline:
 | `tests/test_partner_testing_readiness_docs.py` | Sprint 84 partner-testing readiness docs | Phase 7 | Partner-testing prerequisites, runtime-mode truth, per-partner token expectations, rotation and revocation guidance, and no source-license drift | No |
 | `tests/test_public_ready_distribution_gate_docs.py` | Sprint 84 public-readiness and private-distribution docs | Phase 7 | Explicit distribution decision, public-ready owner-approval gate, readable-package caveat, and no false public/Marketplace/source-exposure claims | No |
 | `tests/test_node_runtime_hygiene_docs.py` | action metadata and external workflow example | Phase 7 | Updated GitHub Action major versions, preserved read-mostly permissions, and explicit private-checkout runtime-mode wiring in the example workflow | No |
+| `tests/test_public_visibility_approval_checklist.py` | Sprint 85 approval checklist docs | Phase 7 | Public-visibility checklist truth, explicit owner approval gate, technical/security/legal sections, and Marketplace-not-started status | No |
+| `tests/test_partner_test_pack_docs.py` | Sprint 85 partner pack docs | Phase 7 | Partner setup pack, runtime access runbook, feedback template, security notes, installed-package preference, and scoped credential policy | No |
+| `tests/test_rc_tag_and_pinning_plan_docs.py` | Sprint 85 RC tag docs | Phase 7 | Recommended RC tag, owner-approval gate, no false created-tag claim, and immutable pinning guidance | No |
+| `tests/test_final_command_surface_matrix_docs.py` | Sprint 85 command surface docs | Phase 7 | Final supported/unsupported command matrix, audit/score truth, and no-mutation guidance | No |
+| `tests/test_public_switch_runbook_docs.py` | Sprint 85 public-switch docs | Phase 7 | Public-switch runbook exists, Sprint 85 non-execution truth, pre/post checks, and rollback caveat | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -215,6 +220,10 @@ Current tests prove that:
   - explicit runtime-mode selection is covered for installed package, private checkout, local path, disabled, and invalid modes
   - validation scripts now surface sanitized runtime-mode and capability diagnostics without printing private paths
   - partner-testing readiness and public-ready distribution decisions are documented and guarded against false public or Marketplace claims
+- Sprint 85 adds approval-pack and partner-rollout coverage:
+  - public visibility remains approval-gated
+  - partner docs point to installed private package mode as the preferred selected-partner path
+  - RC tag creation remains documentation-only until explicit approval
 
 ## 6. What Tests Do Not Prove
 

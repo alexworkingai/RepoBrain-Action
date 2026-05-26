@@ -94,9 +94,11 @@ It does not publish the repository, change visibility, create a release tag, or 
 - `VERSION` exists and is `0.5.0-rc.1`
 - `CHANGELOG.md` exists
 - release notes exist
+- RC tag and pinning plan exists
 - notes:
   - no current Git tags are present
   - immutable pinned-ref guidance for public consumers is documented but not yet executed
+  - tag creation remains pending explicit owner approval
 
 ## Known Limitations
 
@@ -118,6 +120,7 @@ It does not publish the repository, change visibility, create a release tag, or 
 - `TOPOCORE_SECURITY_POLICY_ADOPTED`: yes
 - `PUBLIC_READY_PENDING_APPROVAL`: no
 - `PUBLIC_READY_PENDING_OWNER_APPROVAL`: yes
+- `PUBLIC_VISIBILITY_APPROVAL_PACK_READY`: pending Sprint 85 closeout
 - `PUBLIC_BLOCKED_BY_DISTRIBUTION_STRATEGY`: no
 - `MARKETPLACE_READY_FOR_PREP_PENDING_APPROVAL`: no
 - `MARKETPLACE_NOT_READY`: yes

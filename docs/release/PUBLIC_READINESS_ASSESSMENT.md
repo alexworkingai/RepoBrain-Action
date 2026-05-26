@@ -58,6 +58,7 @@ Public visibility still requires all of the following:
 2. selected-partner runtime/token process in place
 3. no accidental source-repo access grants beyond the chosen distribution model
 4. no Marketplace publication in this phase
+5. final approval checklist and partner pack review completed
 
 ## User Support Implication
 
@@ -73,3 +74,8 @@ If RepoBrain-Action becomes public after approval:
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`
 - Marketplace decision: `MARKETPLACE_NOT_READY`
+
+Sprint 85 packaging note:
+
+- the public visibility approval checklist and selected partner pack are prepared
+- tag creation remains approval-gated and is not performed automatically

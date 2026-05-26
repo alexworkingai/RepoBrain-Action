@@ -6,9 +6,10 @@ This document prepares RepoBrain for selected partner testing after explicit own
 
 ## 2. Current Status
 
-- RepoBrain-Action remains private in Sprint 84.
+- RepoBrain-Action remains private in Sprint 85.
 - Public visibility has not been switched.
 - Marketplace work has not started.
+- final public visibility still requires explicit owner approval.
 
 ## 3. Partner Prerequisites
 
@@ -84,3 +85,4 @@ Honest limitation:
 - no patch/autofix
 - static fallback remains available when authorized `v6` runtime is absent
 - `v6` enrichment requires authorized runtime access
+- RC tag creation remains pending owner approval
