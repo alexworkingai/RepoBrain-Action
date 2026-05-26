@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import sys
@@ -11,6 +10,8 @@ from repobrain.topocore_v6_adapter import (
     RepoBrainTopoCoreV6Adapter,
     RepoBrainV6CandidateRef,
     RepoBrainV6SummaryBundle,
+    load_topocore_v6_public_api,
+    resolve_topocore_v6_runtime_mode,
 )
 from repobrain.topocore_v6_advisory_artifact import build_advisory_artifact
 from repobrain.topocore_v6_decision_diff import build_decision_diff_report
@@ -55,14 +56,24 @@ def _json_mode(env: Mapping[str, str] | None = None) -> bool:
     return _env_flag("RB_TOPOCORE_V6_LOCAL_ARTIFACT_JSON", env=env) == "1"
 
 
+def _runtime_mode(env: Mapping[str, str] | None = None) -> str:
+    return _env_flag("RB_TOPOCORE_V6_RUNTIME_MODE", default="auto", env=env)
+
+
+def _local_path(env: Mapping[str, str] | None = None) -> str:
+    return _env_flag("RB_TOPOCORE_V6_LOCAL_PATH", default="", env=env)
+
+
 def _print_line(message: str, stdout: TextIO | None = None) -> None:
     stream = stdout if stdout is not None else sys.stdout
     stream.write(f"{message}\n")
 
 
-def _load_topocore_v6_module() -> tuple[Any | None, Exception | None]:
+def _load_topocore_v6_module(env: Mapping[str, str] | None = None) -> tuple[Any | None, Exception | None]:
+    local_path = _local_path(env) or None
+    runtime_mode = _runtime_mode(env)
     try:
-        return importlib.import_module("topocore_v6"), None
+        return load_topocore_v6_public_api(local_path=local_path, runtime_mode=runtime_mode), None
     except Exception as exc:  # pragma: no cover - exercised through tests
         return None, exc
 
@@ -382,14 +393,24 @@ def main(
         return 0
 
     json_mode = _json_mode(env)
+    runtime_details = resolve_topocore_v6_runtime_mode(env)
     if _allow_decide_raw(env):
         _print_line(
             "Warning: raw decision validation is intentionally unsupported in this harness.",
             stdout,
         )
 
-    module, _import_error = _load_topocore_v6_module()
+    try:
+        module, _import_error = _load_topocore_v6_module(env)
+    except TypeError:
+        module, _import_error = _load_topocore_v6_module()
     if module is None:
+        if runtime_details["disabled"]:
+            _print_line(
+                "TopoCore v6 local validation skipped: runtime mode disabled.",
+                stdout,
+            )
+            return 0
         if _requires_local(env):
             _print_line(
                 "TopoCore v6 local validation failed: private_dependency_install_issue.",
@@ -397,7 +418,7 @@ def main(
             )
             return 1
         _print_line(
-            "TopoCore v6 local validation skipped: topocore_v6 is not installed locally.",
+            "TopoCore v6 local validation skipped: topocore_v6 is not available in the requested runtime mode.",
             stdout,
         )
         return 0
@@ -426,6 +447,18 @@ def main(
     adapter = RepoBrainTopoCoreV6Adapter()
     if not json_mode:
         _print_line("TopoCore v6 local validation starting.", stdout)
+        _print_line(
+            _sanitize_output_line(
+                " ".join(
+                    [
+                        f"runtime_mode_requested={runtime_details['requested_mode']}",
+                        f"local_path_configured={'yes' if runtime_details['local_path_configured'] else 'no'}",
+                        f"local_path_kind={runtime_details['local_path_kind']}",
+                    ]
+                )
+            ),
+            stdout,
+        )
 
     for fixture in _build_fixture_definitions():
         label = fixture["label"]
@@ -433,7 +466,11 @@ def main(
         v5_snapshot = fixture["v5_snapshot"]
         try:
             preview = adapter.build_request_preview(bundle).to_dict()
-            request = _build_engine_objects(module, preview)
+            request_bundle = adapter.build_real_engine_request(
+                bundle,
+                topocore_public_api=module,
+            )
+            request = request_bundle.engine_request
             decide_result = core.decide(request)
             external_result = core.decide_external(request)
             v6_snapshot = _build_v6_advisory_snapshot(

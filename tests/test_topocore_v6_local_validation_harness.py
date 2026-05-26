@@ -29,29 +29,42 @@ def _run_main(env: dict[str, str]) -> tuple[int, str]:
 
 def _build_fake_topocore_v6_module() -> types.ModuleType:
     class FakeEngineQuery:
-        def __init__(self, *, text: str, task_type: str) -> None:
+        def __init__(self, *, text: str, task_type: str | None = None, signature: list[int] | None = None) -> None:
             self.text = text
             self.task_type = task_type
+            self.signature = signature
 
     class FakeEngineCandidate:
-        def __init__(self, *, chunk_id: str, score_local: float, metadata: dict[str, object]) -> None:
+        def __init__(
+            self,
+            *,
+            chunk_id: str,
+            score_local: float,
+            metadata: dict[str, object] | None = None,
+            **_: object,
+        ) -> None:
             self.chunk_id = chunk_id
             self.score_local = score_local
-            self.metadata = metadata
+            self.metadata = metadata or {}
 
     class FakeEngineRequest:
         def __init__(
             self,
             *,
+            task_type: str | None = None,
             query: FakeEngineQuery,
             candidates: list[FakeEngineCandidate],
             limits: dict[str, object],
             policy: dict[str, object],
         ) -> None:
+            self.task_type = task_type
             self.query = query
             self.candidates = candidates
             self.limits = limits
             self.policy = policy
+
+    class ExternalDecisionView:
+        pass
 
     class FakeCore:
         @property
@@ -59,7 +72,7 @@ def _build_fake_topocore_v6_module() -> types.ModuleType:
             raise AssertionError("raw decision access should never be attempted")
 
         def decide(self, request: FakeEngineRequest) -> dict[str, str]:
-            task_type = request.query.task_type
+            task_type = request.task_type or request.query.task_type
             if task_type == "fix":
                 return {"status": "ready", "route": "proceed"}
             if "missing context" in request.query.text.lower():
@@ -69,7 +82,7 @@ def _build_fake_topocore_v6_module() -> types.ModuleType:
             return {"status": "ready", "route": "proceed"}
 
         def decide_external(self, request: FakeEngineRequest) -> dict[str, str]:
-            task_type = request.query.task_type
+            task_type = request.task_type or request.query.task_type
             if task_type == "fix":
                 return {
                     "status": "ready",
@@ -102,6 +115,7 @@ def _build_fake_topocore_v6_module() -> types.ModuleType:
     fake_module.EngineQuery = FakeEngineQuery
     fake_module.EngineCandidate = FakeEngineCandidate
     fake_module.EngineRequest = FakeEngineRequest
+    fake_module.ExternalDecisionView = ExternalDecisionView
     fake_module.create_topocore = lambda: FakeCore()
     return fake_module
 
@@ -129,6 +143,7 @@ def test_fake_topocore_v6_produces_decision_diff_artifacts_in_manual_mode(
 
     assert code == 0
     assert "TopoCore v6 local validation starting." in output
+    assert "runtime_mode_requested=auto" in output
     assert "fixture=minimal_ask" in output
     assert "diff_severity=" in output
     assert "go_no_go=" in output
@@ -274,7 +289,7 @@ def test_missing_dependency_behavior_remains_unchanged(
 
     assert code == 0
     assert "skipped" in output.lower()
-    assert "topocore_v6 is not installed locally" in output
+    assert "topocore_v6 is not available in the requested runtime mode" in output
 
 
 def test_missing_dependency_strict_mode_still_fails_cleanly(

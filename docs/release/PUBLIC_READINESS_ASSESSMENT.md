@@ -6,46 +6,65 @@
 - TopoCore v6: `PRIVATE`
 - `Elen-MCP-v.2.2.0`: `PRIVATE`
 
-## Recommended Visibility Target
+## Current Product Truth
 
-- current target:
-  - `RepoBrain-Action` stays private while the TopoCore public-distribution decision remains unresolved
-- future possible target:
-  - public `RepoBrain-Action` after explicit approval and an approved TopoCore dependency strategy
+- audit and score now run live in real `v6`-enriched mode when the authorized private runtime is available
+- doctor and status are report-only and truthful about runtime state
+- no patch/autofix
+- no RepoBrain-created branch, commit, or PR behavior
+- no `v5`
+- no `repobrain-community`
 
 ## What Must Stay Private
 
 - TopoCore v6 repository
-- TopoCore v6 source and internal decision logic
+- TopoCore v6 source and internal implementation details
 - any real token or private key material
 - consumer repository secrets such as `TOPOCORE_V6_REPO_TOKEN`
 
 ## Public Scrub Status
 
-Public scrub improvements completed by Sprint 77:
+Public scrub improvements completed before Sprint 84:
 
-- top-level `LICENSE` added
-- local machine paths sanitized from tracked docs
-- legacy release docs relabeled as historical/internal
-- support and pinning policy documented
-- no real secret or private key values found in tracked docs
-- no private TopoCore source copied into RepoBrain-Action
+- top-level `LICENSE` exists
+- local machine paths have been sanitized from tracked docs
+- no private TopoCore source is present in RepoBrain-Action
+- no real secret or private key values are present in tracked docs
+- command/docs/support surface is aligned with current product behavior
 
-## Remaining Public Blockers
+## Runtime Distribution Status
 
-1. Public visibility still requires an approved TopoCore dependency and distribution strategy beyond private beta `private_checkout`.
-2. Repository visibility change requires explicit owner approval.
+Sprint 84 selected a near-term partner-testing runtime model:
 
-## User Support Implications
+- decision: `INSTALLED_PRIVATE_PACKAGE_SELECTED`
+- `private_checkout` remains controlled beta only
+- selected partner testing should prefer installed private package mode
 
-If `RepoBrain-Action` becomes public before the TopoCore distribution model is approved:
+Important caveat:
+- a standard private Python wheel can still contain readable implementation files
+- this is acceptable for selected partner testing only under explicit approval and scoped access
+- it is not the same as strong source secrecy or broad public distribution hardening
 
-- users will see a public action that still depends on a private proprietary runtime boundary
-- users may assume turnkey public install support that does not yet exist
-- users may misunderstand the difference between public RepoBrain-Action visibility and private TopoCore access rights
+## Remaining Conditions Before Visibility Change
+
+Public visibility still requires all of the following:
+
+1. explicit owner approval
+2. selected-partner runtime/token process in place
+3. no accidental source-repo access grants beyond the chosen distribution model
+4. no Marketplace publication in this phase
+
+## User Support Implication
+
+If RepoBrain-Action becomes public after approval:
+
+- the public repo still fronts a private TopoCore boundary
+- selected partners may receive runtime access without source-repo access
+- broader turnkey public install and Marketplace support are still future work
 
 ## Decision
 
-- public readiness decision: `PUBLIC_BLOCKED_BY_DISTRIBUTION_STRATEGY`
+- public readiness decision: `PUBLIC_READY_PENDING_OWNER_APPROVAL`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`
+- Marketplace decision: `MARKETPLACE_NOT_READY`

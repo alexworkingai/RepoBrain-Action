@@ -50,6 +50,12 @@ The strategic differentiator is full repository intelligence, quality scoring, e
 - current external workflow baseline is read-mostly
 - users bring and pay for their own LLM or provider usage
 
+Sprint 84 public-ready gate update:
+
+- selected partner testing should prefer installed private package mode
+- `private_checkout` remains beta-only
+- plain Python package artifacts can still contain readable implementation files and are documented honestly
+
 ## Current Limitations
 
 - TopoCore v6 remains private permanently

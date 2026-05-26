@@ -86,3 +86,11 @@ Access control, token discipline, workstation discipline, and distribution disci
 - no source license is granted
 - `private_checkout` remains private beta only
 - non-source distribution is a public-readiness blocker and next-stage task
+
+## 11. Sprint 84 Distribution Gate Update
+
+- near-term selected partner mode: `installed_private_package`
+- `private_checkout` remains beta-only
+- package/artifact scope is preferred over source-repo scope where feasible
+- a normal Python wheel may still contain readable implementation files, so partner testing stays controlled and approval-based
+- stronger managed-runtime or hardened-artifact protection remains future work

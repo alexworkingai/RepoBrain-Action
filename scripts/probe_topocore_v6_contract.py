@@ -9,6 +9,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TextIO
 
+from repobrain.topocore_v6_adapter import (
+    normalize_topocore_v6_runtime_mode,
+    resolve_topocore_v6_runtime_mode,
+)
+
 
 _SKIP_MESSAGE = "TopoCore v6 contract probe skipped: set RB_TOPOCORE_V6_CONTRACT_PROBE=1 to run."
 _MISSING_DEP_MESSAGE = (
@@ -52,6 +57,10 @@ def _require_local(env: Mapping[str, str] | None = None) -> bool:
 
 def _local_path(env: Mapping[str, str] | None = None) -> str:
     return _env_flag("RB_TOPOCORE_V6_LOCAL_PATH", default="", env=env)
+
+
+def _runtime_mode(env: Mapping[str, str] | None = None) -> str:
+    return _env_flag("RB_TOPOCORE_V6_RUNTIME_MODE", default="auto", env=env)
 
 
 def _print_line(message: str, stdout: TextIO | None = None) -> None:
@@ -98,6 +107,35 @@ def _load_topocore_v6(local_path: str) -> tuple[Any | None, Exception | None]:
             return importlib.import_module("topocore_v6"), None
         except Exception as exc:  # pragma: no cover - exercised via tests
             return None, exc
+
+
+def _package_import_available() -> bool:
+    try:
+        importlib.import_module("topocore_v6")
+        return True
+    except Exception:
+        return False
+
+
+def _load_topocore_v6_for_mode(*, runtime_mode: str, local_path: str) -> tuple[Any | None, Exception | None]:
+    normalized_mode = normalize_topocore_v6_runtime_mode(runtime_mode)
+    if normalized_mode == "disabled":
+        return None, RuntimeError("TopoCore v6 runtime mode is disabled.")
+    if normalized_mode == "installed_package":
+        try:
+            return importlib.import_module("topocore_v6"), None
+        except Exception as exc:  # pragma: no cover - exercised via tests
+            return None, exc
+    if normalized_mode in {"private_checkout", "local_path"}:
+        if not local_path:
+            return None, RuntimeError("TopoCore v6 local path is not available.")
+        return _load_topocore_v6(local_path)
+    module, err = _load_topocore_v6("")
+    if err is None:
+        return module, None
+    if local_path:
+        return _load_topocore_v6(local_path)
+    return None, err
 
 
 def _module_symbol_status(module: Any) -> dict[str, bool]:
@@ -191,19 +229,46 @@ def main(
         return 0
 
     local_path = _local_path(env)
+    runtime_mode = _runtime_mode(env)
+    runtime_details = resolve_topocore_v6_runtime_mode(env)
+    package_import_available = _package_import_available()
     if local_path and not Path(local_path).exists():
         _print_line(_CONFIG_ERROR_MESSAGE, stdout)
+        _print_line(f"runtime_mode_requested={runtime_details['requested_mode']}", stdout)
+        _print_line("runtime_mode_used=not_available", stdout)
+        _print_line(f"package_import_available={'yes' if package_import_available else 'no'}", stdout)
+        _print_line(f"local_path_configured={'yes' if runtime_details['local_path_configured'] else 'no'}", stdout)
+        _print_line(f"local_path_kind={runtime_details['local_path_kind']}", stdout)
         _print_line("error_category=invalid_local_path", stdout)
         return 2
 
-    module, load_error = _load_topocore_v6(local_path)
+    module, load_error = _load_topocore_v6_for_mode(runtime_mode=runtime_mode, local_path=local_path)
     if load_error is not None:
+        if "runtime mode is disabled" in _sanitize_output(str(load_error)).lower():
+            _print_line("TopoCore v6 contract probe skipped: runtime mode disabled.", stdout)
+            _print_line(f"runtime_mode_requested={runtime_details['requested_mode']}", stdout)
+            _print_line("runtime_mode_used=disabled", stdout)
+            _print_line(f"package_import_available={'yes' if package_import_available else 'no'}", stdout)
+            _print_line(f"local_path_configured={'yes' if runtime_details['local_path_configured'] else 'no'}", stdout)
+            _print_line(f"local_path_kind={runtime_details['local_path_kind']}", stdout)
+            _print_line("error_category=runtime_disabled", stdout)
+            return 0
         category = _classify_import_error(load_error)
         if _require_local(env):
             _print_line(_STRICT_MISSING_DEP_MESSAGE, stdout)
+            _print_line(f"runtime_mode_requested={runtime_details['requested_mode']}", stdout)
+            _print_line("runtime_mode_used=not_available", stdout)
+            _print_line(f"package_import_available={'yes' if package_import_available else 'no'}", stdout)
+            _print_line(f"local_path_configured={'yes' if runtime_details['local_path_configured'] else 'no'}", stdout)
+            _print_line(f"local_path_kind={runtime_details['local_path_kind']}", stdout)
             _print_line(f"error_category={category}", stdout)
             return 1
         _print_line(_MISSING_DEP_MESSAGE, stdout)
+        _print_line(f"runtime_mode_requested={runtime_details['requested_mode']}", stdout)
+        _print_line("runtime_mode_used=not_available", stdout)
+        _print_line(f"package_import_available={'yes' if package_import_available else 'no'}", stdout)
+        _print_line(f"local_path_configured={'yes' if runtime_details['local_path_configured'] else 'no'}", stdout)
+        _print_line(f"local_path_kind={runtime_details['local_path_kind']}", stdout)
         _print_line(f"error_category={category}", stdout)
         return 0
 
@@ -215,8 +280,20 @@ def main(
         _print_line(f"error_category={category}", stdout)
         return 1
 
+    used_mode = "installed_package" if package_import_available and not local_path else (
+        "private_checkout" if runtime_details["local_path_kind"] == "private_checkout" else "local_path"
+    )
+    if runtime_details["requested_mode"] == "installed_package":
+        used_mode = "installed_package"
+    elif runtime_details["requested_mode"] in {"private_checkout", "local_path"}:
+        used_mode = runtime_details["requested_mode"]
     for line in summary_lines:
         _print_line(_sanitize_output(line), stdout)
+    _print_line(f"runtime_mode_requested={runtime_details['requested_mode']}", stdout)
+    _print_line(f"runtime_mode_used={used_mode}", stdout)
+    _print_line(f"package_import_available={'yes' if package_import_available else 'no'}", stdout)
+    _print_line(f"local_path_configured={'yes' if runtime_details['local_path_configured'] else 'no'}", stdout)
+    _print_line(f"local_path_kind={runtime_details['local_path_kind']}", stdout)
     return exit_code
 
 

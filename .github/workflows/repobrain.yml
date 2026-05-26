@@ -1,4 +1,4 @@
-name: RepoBrain
+﻿name: RepoBrain
 
 on:
   issue_comment:
@@ -155,7 +155,7 @@ jobs:
       RB_EMBED_ENABLED: "0"
       RB_CHECK_RUN_PUBLISH_MODE: "deferred"
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         id: ack
         if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain')
         with:
@@ -167,7 +167,7 @@ jobs:
               owner, repo, comment_id, content: "eyes"
             });
             core.setOutput("reaction_id", String(res.data.id));
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         id: checkout_ref
         with:
           script: |
@@ -199,7 +199,7 @@ jobs:
             core.info(`RepoBrain checkout ref resolution: ${reason} -> ${ref}`);
             core.setOutput("ref", ref);
             core.setOutput("reason", reason);
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ steps.checkout_ref.outputs.ref }}
       - name: Restore RepoBrain index cache
@@ -235,7 +235,7 @@ jobs:
           echo "RB_E2E_REF=${{ inputs.e2e_ref }}" >> $GITHUB_ENV
       - name: Checkout private TopoCore v6 for manual lab run
         if: github.event_name == 'workflow_dispatch' && inputs.topocore_v6_dependency_mode == 'private_checkout' && (inputs.topocore_backend == 'v6' || inputs.topocore_backend == 'auto')
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ inputs.topocore_v6_repository }}
           ref: ${{ inputs.topocore_v6_ref }}
@@ -245,7 +245,7 @@ jobs:
         id: issue_comment_topocore_checkout
         if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1'
         continue-on-error: true
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ vars.RB_ISSUE_COMMENT_TOPOCORE_V6_REPOSITORY || 'alexworkingai/topocore' }}
           ref: ${{ vars.RB_ISSUE_COMMENT_TOPOCORE_V6_REF || 'main' }}
@@ -265,6 +265,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.topocore_v6_dependency_mode == 'private_checkout' && (inputs.topocore_backend == 'v6' || inputs.topocore_backend == 'auto')
         shell: bash
         run: |
+          echo "RB_TOPOCORE_V6_RUNTIME_MODE=private_checkout" >> "$GITHUB_ENV"
           if [ -d ".topocore-v6/src" ]; then
             echo "RB_TOPOCORE_V6_LOCAL_PATH=${GITHUB_WORKSPACE}/.topocore-v6/src" >> "$GITHUB_ENV"
             echo "PYTHONPATH=${GITHUB_WORKSPACE}/.topocore-v6/src:${PYTHONPATH}" >> "$GITHUB_ENV"
@@ -278,6 +279,7 @@ jobs:
         if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain') && vars.RB_ENABLE_ISSUE_COMMENT_V6_LAB == '1' && steps.issue_comment_topocore_checkout.outcome == 'success'
         shell: bash
         run: |
+          echo "RB_TOPOCORE_V6_RUNTIME_MODE=private_checkout" >> "$GITHUB_ENV"
           if [ -d ".topocore-v6/src" ]; then
             echo "RB_TOPOCORE_V6_LOCAL_PATH=${GITHUB_WORKSPACE}/.topocore-v6/src" >> "$GITHUB_ENV"
             echo "PYTHONPATH=${GITHUB_WORKSPACE}/.topocore-v6/src:${PYTHONPATH}" >> "$GITHUB_ENV"
@@ -347,7 +349,7 @@ jobs:
         with:
           path: artifacts/.repobrain_cache
           key: ${{ steps.snapshot_cache_restore.outputs.cache-primary-key }}
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         if: always() && github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/repobrain')
         env:
           REACTION_ID: ${{ steps.ack.outputs.reaction_id }}

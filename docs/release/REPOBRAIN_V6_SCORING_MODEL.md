@@ -99,6 +99,7 @@ Implementation status:
 - Sprint 80 benchmarks the scorer across sparse, risky, and mature repository shapes to validate ranking credibility.
 - Sprint 81 implements the RepoBrain-side `topocore.audit_score.v1` request builder, response validator, optional capability seam, and honest static-versus-v6 backend evidence modes.
 - Sprint 82 implements a real private `run_audit_score_v1` provider and wires the audit seam to pass the private checkout path explicitly for contract-validated enrichment.
+- Sprint 84 adds explicit runtime-mode diagnostics and selects installed private package mode as the near-term partner-testing distribution shape.
 - Current audit scoring is deterministic, repository-static, and evidence-grounded.
 - Current benchmark evidence shows mature fixtures rank above sparse and risky fixtures without claiming formal certification.
 - RepoBrain does not claim `v6` enrichment unless a real private `run_audit_score_v1` capability is actually invoked and accepted.

@@ -57,6 +57,7 @@ Compared with autonomous agents:
 - auditability and evidence-grounded output
 - BYO-LLM and user-paid provider model
 - private high-value TopoCore engine boundary
+- selected partner path can now prefer installed private package mode instead of source checkout
 
 ## 6. Current Product Proof
 
@@ -91,6 +92,7 @@ Near-term roadmap:
 - live v6-backed scoring rollout through the private capability when runtime packaging and contract acceptance succeed
 - `/repobrain score` is now implemented as a compact summary of the same guarded audit engine
 - private non-source TopoCore distribution strategy
+- selected partner testing distribution gate now prefers installed private package mode with explicit readable-wheel caveat
 - public visibility approval
 - Marketplace preparation later
 

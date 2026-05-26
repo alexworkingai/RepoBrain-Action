@@ -56,3 +56,4 @@ Sprint 80 adds a bounded benchmark suite and a Microsoft/GitHub-facing demo repo
 ## Sprint 82 Proof Layer
 
 Sprint 82 adds a real private `v6` audit enrichment path behind the safe `topocore.audit_score.v1` contract and proves it live on Elen-MCP without exposing TopoCore source or weakening no-mutation guardrails.
+Sprint 84 moves the public-ready gate forward by selecting installed private package mode as the near-term partner distribution shape while keeping `private_checkout` beta-only.

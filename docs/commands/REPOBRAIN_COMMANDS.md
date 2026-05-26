@@ -133,6 +133,7 @@ It reports:
 - workflow/action context
 - permission baseline signals
 - TopoCore v6 setup hints without exposing secret values
+- runtime mode truth (`installed_package`, `private_checkout`, `local_path`, or `disabled`) without printing private paths
 - v6-only/no-v5 policy
 - score support and audit capability truth
 - fork/private-boundary policy
@@ -149,6 +150,7 @@ It reports:
 - RepoBrain version
 - supported commands
 - v6-only backend policy
+- runtime mode truth without exposing private paths
 - audit static baseline truth with optional contract-validated private `v6` enrichment
 - score as a compact summary of the same guarded audit engine
 - no-patch/no-mutation policy

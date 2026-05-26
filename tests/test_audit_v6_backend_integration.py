@@ -223,6 +223,7 @@ def test_audit_v6_uses_local_path_from_env(
             self,
             *,
             local_path: str | None = None,
+            runtime_mode: str | None = None,
             topocore_public_api: object | None = None,
         ) -> dict[str, str]:
             capability_calls.append(local_path)
@@ -233,6 +234,7 @@ def test_audit_v6_uses_local_path_from_env(
             request: dict[str, object],
             *,
             local_path: str | None = None,
+            runtime_mode: str | None = None,
             topocore_public_api: object | None = None,
         ) -> dict[str, object]:
             run_calls.append(local_path)

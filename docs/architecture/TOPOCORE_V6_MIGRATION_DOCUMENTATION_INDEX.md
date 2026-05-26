@@ -30,6 +30,7 @@ Current truth:
 - Sprint 82 connects a real private `run_audit_score_v1` capability behind the same contract without exposing TopoCore source
 - Sprint 82 live smoke proves `v6-enriched scoring` on Elen-MCP while preserving fallback truth and no-mutation behavior
 - Sprint 83 hardens audit UX, preserves safe repo-relative evidence rendering, and adds `/repobrain score` as a compact summary view of the same guarded audit engine
+- Sprint 84 resolves the private TopoCore runtime distribution gate for public-ready partner testing by selecting installed private package mode, preserving `private_checkout` as beta-only, and hardening runtime-mode diagnostics
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -161,6 +162,7 @@ Phase 7:
 - `docs/architecture/SPRINT_81_DEEP_V6_AUDIT_SCORING_CONTRACT.md`
 - `docs/architecture/SPRINT_82_PRIVATE_V6_AUDIT_CAPABILITY.md`
 - `docs/architecture/SPRINT_83_V6_AUDIT_UX_SCORE_SUMMARY.md`
+- `docs/architecture/SPRINT_84_TOPOCORE_RUNTIME_DISTRIBUTION_GATE.md`
 
 ## 5. Recommended Reading Paths
 
@@ -300,6 +302,7 @@ Current decision state:
 - fix migration remains conservative
 - patch behavior expansion is not approved
 - production and Marketplace switch are not approved
+- public visibility still requires explicit owner approval even after the Sprint 84 distribution gate decision
 
 ## 7. Repository Boundary Summary
 

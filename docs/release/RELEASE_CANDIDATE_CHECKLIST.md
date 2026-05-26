@@ -45,8 +45,10 @@ It does not publish the repository, change visibility, create a release tag, or 
 - canonical troubleshooting guide exists
 - external workflow example is usable and read-mostly
 - private action access and `TOPOCORE_V6_REPO_TOKEN` requirements are documented
+- selected partner testing now has a preferred `installed_private_package` runtime path
 - note:
-  - current install path still depends on a private TopoCore v6 repository and a repo secret
+  - controlled beta example workflow still uses `private_checkout`
+  - normal Python package artifacts can still contain readable implementation files
 
 ## Security Readiness
 
@@ -65,6 +67,16 @@ It does not publish the repository, change visibility, create a release tag, or 
 - local machine paths have been sanitized from tracked docs
 - legacy release docs are relabeled as historical/internal
 - support and pinning strategy are documented
+
+## Public-Ready Distribution Gate
+
+- Status: `READY_WITH_NOTES`
+- decision:
+  - `INSTALLED_PRIVATE_PACKAGE_SELECTED`
+- notes:
+  - `private_checkout` remains beta-only
+  - public visibility still requires explicit owner approval
+  - Marketplace remains blocked
 
 ## Marketplace Readiness
 
@@ -105,6 +117,7 @@ It does not publish the repository, change visibility, create a release tag, or 
 - `PRIVATE_BETA_RC_CONFIRMED`: yes
 - `TOPOCORE_SECURITY_POLICY_ADOPTED`: yes
 - `PUBLIC_READY_PENDING_APPROVAL`: no
-- `PUBLIC_BLOCKED_BY_DISTRIBUTION_STRATEGY`: yes
+- `PUBLIC_READY_PENDING_OWNER_APPROVAL`: yes
+- `PUBLIC_BLOCKED_BY_DISTRIBUTION_STRATEGY`: no
 - `MARKETPLACE_READY_FOR_PREP_PENDING_APPROVAL`: no
 - `MARKETPLACE_NOT_READY`: yes

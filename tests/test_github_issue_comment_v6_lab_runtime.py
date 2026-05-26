@@ -70,6 +70,7 @@ def test_issue_comment_path_propagation_exists() -> None:
     assert "github.event_name == 'issue_comment'" in path_step["if"]
     assert "steps.issue_comment_topocore_checkout.outcome == 'success'" in path_step["if"]
     assert "RB_TOPOCORE_V6_LOCAL_PATH" in workflow_text
+    assert "RB_TOPOCORE_V6_RUNTIME_MODE=private_checkout" in workflow_text
     assert "PYTHONPATH=" in workflow_text
 
 

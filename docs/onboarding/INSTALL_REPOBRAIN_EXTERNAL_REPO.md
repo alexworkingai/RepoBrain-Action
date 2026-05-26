@@ -17,14 +17,26 @@ Current distribution stage:
 - private beta RC / pilot path
 - not a public Marketplace install flow yet
 - public visibility is not changed by this guide
+- selected partner testing should prefer installed private package mode when authorized
 
 ## Repository Model
 
 Current external pilot shape:
 
 - `RepoBrain-Action`: product action and user-facing workflow surface
-- private TopoCore v6: private dependency checked out separately
+- private TopoCore v6: private runtime dependency
 - external consumer repository: owns `.github/workflows/repobrain.yml`, secrets, and command entry
+
+Preferred near-term partner-testing shape:
+
+- `RepoBrain-Action`: public later only after owner approval
+- private TopoCore v6 runtime: installed private package or approved runtime artifact
+- consumer repository: no TopoCore source checkout in the normal partner path
+
+Current beta-only fallback shape:
+
+- `private_checkout`
+- controlled pilot repositories only
 
 Do not use:
 
@@ -42,6 +54,9 @@ Before installation, confirm all of the following:
 - the consumer repository Actions policy allows external action resolution
 - you have a token with read access to the private TopoCore v6 repository
 - you can store that token as `TOPOCORE_V6_REPO_TOKEN`
+- you understand which runtime mode you are using:
+  - `installed_private_package` preferred for selected partner testing
+  - `private_checkout` beta-only
 - you understand that model/API costs are paid through your own provider accounts
 
 Reference docs:
@@ -68,7 +83,26 @@ If this is wrong, GitHub may fail during setup with:
 
 That message can mean private-action access or Actions policy trouble, not only a typo.
 
-## Step 2: Create Or Configure The TopoCore v6 Token
+## Step 2: Choose The Runtime Distribution Mode
+
+Preferred near-term partner mode:
+
+- install a private TopoCore runtime package or approved runtime artifact
+- set `RB_TOPOCORE_V6_RUNTIME_MODE=installed_package`
+- avoid source checkout in the consumer workspace
+
+Controlled beta-only mode:
+
+- use private source checkout
+- set `RB_TOPOCORE_V6_RUNTIME_MODE=private_checkout`
+- keep this mode to owner-controlled or explicitly approved pilots
+
+Honest caveat:
+
+- a standard Python wheel can still contain readable implementation files
+- this is safer than source checkout, but it is not the same as strong source secrecy
+
+## Step 3: Create Or Configure The TopoCore v6 Token
 
 Create a token that can read the private TopoCore v6 repository.
 
@@ -79,7 +113,7 @@ Required property:
 Do not print, commit, or paste the token into docs, comments, or workflow logs.
 Private runtime access does not grant any TopoCore v6 source rights.
 
-## Step 3: Add The Repository Secret
+## Step 4: Add The Repository Secret
 
 In the consumer repository, add:
 
@@ -90,9 +124,10 @@ Expected behavior:
 - the secret name may appear in setup guidance
 - the secret value must not appear
 
-## Step 4: Add The Workflow
+## Step 5: Add The Workflow
 
-Copy the workflow example into the consumer repository:
+Copy the workflow example into the consumer repository.
+That example remains the controlled-pilot `private_checkout` shape and is not the preferred partner-testing path:
 
 - source: `docs/examples/repobrain_external_pilot_workflow.yml`
 - destination: `.github/workflows/repobrain.yml`
@@ -110,7 +145,7 @@ Optional repository guidance file:
 - source: `docs/examples/repobrain.instructions.md`
 - destination: `.github/repobrain.instructions.md`
 
-## Step 5: Verify Permissions
+## Step 6: Verify Permissions
 
 Current external pilot baseline is read-mostly:
 
@@ -136,7 +171,7 @@ Why this matters:
 - verify needs read access to PR metadata, checks, statuses, and workflow runs
 - current product mode does not mutate repository content
 
-## Step 6: Run The First Doctor Check
+## Step 7: Run The First Doctor Check
 
 This is the recommended first setup check after setup.
 
@@ -155,7 +190,7 @@ Expected healthy doctor behavior:
 - no patch/autofix
 - no mutation
 
-## Step 7: Run The First Issue Ask
+## Step 8: Run The First Issue Ask
 
 Open a safe issue comment and run:
 
@@ -170,7 +205,7 @@ Expected healthy backend evidence:
 - fallback used: `no`
 - fallback reason: `none`
 
-## Step 8: Run The First PR Ask
+## Step 9: Run The First PR Ask
 
 Open a safe PR comment and run:
 
@@ -185,7 +220,7 @@ Expected healthy backend evidence:
 - fallback used: `no`
 - fallback reason: `none`
 
-## Step 9: Run The First Repository Audit
+## Step 10: Run The First Repository Audit
 
 Open a safe issue comment and run:
 
@@ -204,7 +239,7 @@ Expected healthy audit behavior:
 - no mutation
 - repository-level informational output
 
-## Step 10: Run The Compact Score Summary
+## Step 11: Run The Compact Score Summary
 
 Open a safe issue comment and run:
 

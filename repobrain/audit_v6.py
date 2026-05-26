@@ -32,7 +32,11 @@ def enrich_audit_report_with_optional_v6(
     static_report = copy.deepcopy(dict(report))
     adapter = RepoBrainTopoCoreV6Adapter()
     local_path = str(os.environ.get("RB_TOPOCORE_V6_LOCAL_PATH", "") or "").strip() or None
-    capability = adapter.audit_score_v1_capability_local(local_path=local_path)
+    runtime_mode = str(os.environ.get("RB_TOPOCORE_V6_RUNTIME_MODE", "") or "").strip() or "auto"
+    capability = adapter.audit_score_v1_capability_local(
+        local_path=local_path,
+        runtime_mode=runtime_mode,
+    )
 
     base_summary = {
         "tky_mode_requested": tky_mode,
@@ -78,7 +82,11 @@ def enrich_audit_report_with_optional_v6(
         return degraded, summary
 
     try:
-        raw_response = adapter.run_audit_score_v1_local(request, local_path=local_path)
+        raw_response = adapter.run_audit_score_v1_local(
+            request,
+            local_path=local_path,
+            runtime_mode=runtime_mode,
+        )
     except RepoBrainV6AdapterRuntimeError:
         degraded = append_static_contract_limitation(
             static_report,

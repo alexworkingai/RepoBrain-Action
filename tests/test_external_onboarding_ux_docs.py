@@ -33,6 +33,7 @@ def test_install_doc_covers_product_model_and_expected_backend_truth() -> None:
     assert "repobrain-community" in text
     assert "resolved backend: `v6`" in text
     assert "no patch/autofix" in text
+    assert "installed private package" in text.lower()
 
 
 def test_command_guide_documents_supported_and_unsupported_commands_honestly() -> None:
@@ -76,6 +77,7 @@ def test_troubleshooting_guide_covers_real_external_failures() -> None:
     assert "Review, Verify, Or Fix Unsupported In Issue Scope" in text
     assert "Workflow Permissions Too Strict" in text
     assert "Fork PR Restrictions" in text
+    assert "Runtime mode confusion" in text
 
 
 def test_active_external_docs_do_not_reintroduce_old_or_unsafe_truth() -> None:

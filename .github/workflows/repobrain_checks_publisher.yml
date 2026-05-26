@@ -1,4 +1,4 @@
-name: RepoBrain Checks Publisher
+﻿name: RepoBrain Checks Publisher
 
 on:
   workflow_run:
@@ -28,7 +28,7 @@ jobs:
 
       - name: Publish check-run from sanitized payload
         if: steps.download.outcome == 'success'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require("fs");

@@ -7,6 +7,7 @@ from typing import Any
 
 from repobrain import __version__ as REPOBRAIN_VERSION
 from repobrain.topocore_backend import TopoCoreBackendError, resolve_backend
+from repobrain.topocore_v6_adapter import resolve_topocore_v6_runtime_mode
 
 SUPPORTED_COMMANDS: tuple[str, ...] = (
     "/repobrain help",
@@ -41,7 +42,7 @@ def build_status_report(
     workflow = _workflow_snapshot(repo_root)
     event_context = _event_context_label(github_context)
     repo_name = str((github_context or {}).get("repository", "") or "").strip() or "unknown"
-    topocore_mode = _topocore_dependency_mode(workflow=workflow)
+    runtime = _topocore_runtime_snapshot(workflow=workflow)
     return {
         "version": REPOBRAIN_VERSION,
         "repo_name": repo_name,
@@ -51,11 +52,14 @@ def build_status_report(
         "roadmap_commands": list(ROADMAP_COMMANDS),
         "fix_lite_guidance": FIX_LITE_GUIDANCE,
         "action_runtime_mode": _action_runtime_mode(),
-        "topocore_dependency_mode": topocore_mode,
+        "topocore_dependency_mode": runtime["dependency_mode"],
+        "topocore_runtime_mode_requested": runtime["requested_mode"],
+        "topocore_runtime_mode_effective": runtime["effective_mode"],
         "topocore_policy": [
             "v6-only runtime policy",
             "no v5 fallback",
             "private_checkout beta-only",
+            "preferred near-term partner path is installed_private_package when available",
             "audit keeps a static baseline and may apply contract-validated private v6 enrichment when available",
             "score is a compact summary view of the same guarded audit engine",
         ],
@@ -85,6 +89,7 @@ def build_doctor_report(
     workflow = _workflow_snapshot(repo_root)
     event_context = _event_context_label(github_context)
     repo_name = str((github_context or {}).get("repository", "") or "").strip() or "unknown"
+    runtime = _topocore_runtime_snapshot(workflow=workflow)
     checks: list[dict[str, str]] = []
 
     checks.append(
@@ -112,8 +117,8 @@ def build_doctor_report(
     checks.append(
         _doctor_check(
             name="TopoCore v6 setup",
-            status=_topocore_setup_status(workflow),
-            detail=_topocore_setup_detail(workflow),
+            status=_topocore_setup_status(workflow, runtime=runtime),
+            detail=_topocore_setup_detail(workflow, runtime=runtime),
         )
     )
 
@@ -161,6 +166,9 @@ def build_doctor_report(
         "limitations": limitations[:4],
         "workflow": workflow,
         "supported_commands": list(SUPPORTED_COMMANDS),
+        "topocore_runtime_mode_requested": runtime["requested_mode"],
+        "topocore_runtime_mode_effective": runtime["effective_mode"],
+        "topocore_dependency_mode": runtime["dependency_mode"],
     }
 
 
@@ -207,37 +215,53 @@ def _permissions_detail(workflow: dict[str, Any]) -> str:
     return "Workflow permissions are not explicit in the detected RepoBrain workflow."
 
 
-def _topocore_setup_status(workflow: dict[str, Any]) -> str:
-    if _local_path_present():
+def _topocore_setup_status(workflow: dict[str, Any], *, runtime: dict[str, Any]) -> str:
+    if runtime["requested_mode"] == "disabled":
+        return "WARN"
+    if _local_path_present() or runtime["effective_mode"] == "installed_package":
         return "PASS"
     if workflow["topocore_secret_referenced"]:
         return "WARN"
     return "UNKNOWN"
 
 
-def _topocore_setup_detail(workflow: dict[str, Any]) -> str:
+def _topocore_setup_detail(workflow: dict[str, Any], *, runtime: dict[str, Any]) -> str:
     local_path_present = _local_path_present()
     secret_env_visible = _env_key_present("TOPOCORE_V6_REPO_TOKEN")
     expected_secret = "Expected secret name: `TOPOCORE_V6_REPO_TOKEN`."
+    runtime_line = (
+        f"Requested runtime mode: `{runtime['requested_mode']}`. "
+        f"Effective runtime hint: `{runtime['effective_mode']}`."
+    )
+    if runtime["requested_mode"] == "disabled":
+        return (
+            f"{runtime_line} TopoCore v6 runtime is explicitly disabled, so audit/score stay on static fallback unless the mode changes. "
+            f"{expected_secret}"
+        )
+    if runtime["effective_mode"] == "installed_package" and not local_path_present:
+        return (
+            f"{runtime_line} Installed private package mode appears available without exposing a checkout path. "
+            f"{expected_secret} Secret value remains hidden."
+        )
     if local_path_present:
         return (
             "TopoCore v6 private runtime path is present for this run. "
-            f"{expected_secret} Secret value remains hidden, and TopoCore source stays private."
+            f"{runtime_line} {expected_secret} Secret value remains hidden, and TopoCore source stays private."
         )
     if workflow["topocore_secret_referenced"]:
         return (
             "Workflow references `TOPOCORE_V6_REPO_TOKEN`, but the secret value is not directly inspectable "
             f"and local runtime path visibility is `{_yes_no(local_path_present)}`. "
-            f"Verify token access and private checkout if setup fails. {expected_secret}"
+            f"{runtime_line} Verify token access and selected runtime distribution mode if setup fails. {expected_secret}"
         )
     if secret_env_visible:
         return (
             "`TOPOCORE_V6_REPO_TOKEN` is visible as an environment key for this run, but runtime path propagation "
-            f"was not detected. {expected_secret}"
+            f"was not detected. {runtime_line} {expected_secret}"
         )
     return (
         "TopoCore v6 setup could not be directly verified from runtime-safe signals. "
-        f"{expected_secret}"
+        f"{runtime_line} {expected_secret}"
     )
 
 
@@ -302,8 +326,13 @@ def _doctor_recommended_fixes(*, workflow: dict[str, Any], checks: list[dict[str
         fixes.append("Reduce RepoBrain workflow permissions to the read-mostly external baseline.")
     if not workflow["topocore_secret_referenced"]:
         fixes.append("Wire `TOPOCORE_V6_REPO_TOKEN` into the TopoCore private checkout step.")
-    if not _local_path_present():
-        fixes.append("Confirm private checkout path propagation so `RB_TOPOCORE_V6_LOCAL_PATH` is available during the run.")
+    runtime = _topocore_runtime_snapshot(workflow=workflow)
+    if runtime["requested_mode"] == "installed_package":
+        fixes.append("Verify the private TopoCore package is installed in the runner environment before RepoBrain executes.")
+    elif runtime["requested_mode"] in {"private_checkout", "local_path"} and not _local_path_present():
+        fixes.append("Confirm selected local/private runtime path propagation so `RB_TOPOCORE_V6_LOCAL_PATH` is available during the run.")
+    elif runtime["requested_mode"] == "disabled":
+        fixes.append("Set `RB_TOPOCORE_V6_RUNTIME_MODE` to `auto`, `installed_package`, `private_checkout`, or `local_path` when v6 enrichment is desired.")
     if any(item["status"] == "FAIL" and item["name"] == "Fork/private boundary" for item in checks):
         fixes.append("Remove `pull_request_target` and keep private tokens away from untrusted fork code.")
     if not fixes:
@@ -368,11 +397,50 @@ def _action_runtime_mode() -> str:
 
 
 def _topocore_dependency_mode(*, workflow: dict[str, Any]) -> str:
-    if _local_path_present():
-        return "private_checkout_path_present"
-    if workflow["topocore_secret_referenced"]:
-        return "private_checkout_configured"
-    return "not_detected"
+    return _topocore_runtime_snapshot(workflow=workflow)["dependency_mode"]
+
+
+def _topocore_runtime_snapshot(*, workflow: dict[str, Any]) -> dict[str, str]:
+    runtime = resolve_topocore_v6_runtime_mode()
+    requested_mode = str(runtime["requested_mode"])
+    local_path_kind = str(runtime["local_path_kind"])
+    if requested_mode == "invalid":
+        effective_mode = "invalid"
+    elif requested_mode == "disabled":
+        effective_mode = "disabled"
+    elif requested_mode == "installed_package":
+        effective_mode = "installed_package"
+    elif requested_mode in {"private_checkout", "local_path"}:
+        effective_mode = requested_mode
+    elif local_path_kind == "private_checkout":
+        effective_mode = "private_checkout"
+    elif local_path_kind == "local_path":
+        effective_mode = "local_path"
+    elif workflow["topocore_secret_referenced"]:
+        effective_mode = "private_checkout_configured"
+    else:
+        effective_mode = "auto"
+
+    if effective_mode == "installed_package":
+        dependency_mode = "installed_private_package"
+    elif effective_mode == "private_checkout":
+        dependency_mode = "private_checkout_beta_only"
+    elif effective_mode == "local_path":
+        dependency_mode = "local_path_dev_only"
+    elif effective_mode == "disabled":
+        dependency_mode = "runtime_disabled"
+    elif effective_mode == "private_checkout_configured":
+        dependency_mode = "private_checkout_configured"
+    elif effective_mode == "invalid":
+        dependency_mode = "invalid_runtime_mode"
+    else:
+        dependency_mode = "auto_not_detected"
+
+    return {
+        "requested_mode": requested_mode,
+        "effective_mode": effective_mode,
+        "dependency_mode": dependency_mode,
+    }
 
 
 def _running_in_actions() -> bool:

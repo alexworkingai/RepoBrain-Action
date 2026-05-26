@@ -38,7 +38,7 @@ def test_release_readiness_docs_preserve_private_topocore_and_no_publication_cla
     assert "no v5" in combined
     assert "no repobrain-community" in combined
     assert "no patch/autofix" in combined
-    assert "public_blocked_by_distribution_strategy" in combined
+    assert "public_ready_pending_owner_approval" in combined
     assert "marketplace_not_ready" in combined
 
 
@@ -96,3 +96,4 @@ def test_active_docs_do_not_reintroduce_old_or_unsafe_release_truth() -> None:
     assert "contents: write" in active
     assert "checks: write" in active
     assert "pull-requests: write" in active
+    assert "installed private package" in active

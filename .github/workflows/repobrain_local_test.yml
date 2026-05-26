@@ -24,7 +24,7 @@ jobs:
   dry-run:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ./. 
         env:
           RB_TOPOCORE_BACKEND: ${{ github.event.inputs.topocore_backend || 'auto' }}

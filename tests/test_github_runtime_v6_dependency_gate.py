@@ -77,6 +77,7 @@ def test_private_install_is_conditional() -> None:
 
     assert install_step["if"] == checkout_step["if"]
     assert "python -m pip install -e ./.topocore-v6" in workflow_text
+    assert "RB_TOPOCORE_V6_RUNTIME_MODE=private_checkout" in workflow_text
     assert "pip install topocore_v6" not in workflow_text
     assert "pip install git+" not in workflow_text
 

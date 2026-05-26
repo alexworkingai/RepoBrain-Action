@@ -69,6 +69,11 @@ Current test baseline:
 | `tests/test_score_command.py` | `repobrain/commands.py`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | `/repobrain score` parser and route support, same guarded audit engine reuse, honest v6/static/rejected backend evidence, and no-mutation compact output | No |
 | `tests/test_score_command_docs.py` | Sprint 83 command, onboarding, troubleshooting, release, and architecture docs | Phase 7 | Score command truth is documented, Sprint 83 architecture note exists, release docs reflect score support, and coverage indexes link the new tests | No |
 | `tests/test_v6_audit_ux_hardening.py` | `repobrain/output_md.py`, `repobrain/github_flow.py`, `repobrain/audit_contract.py` | Phase 7 | v6-enriched audit score card, delta, contract acceptance, safe path rendering, static fallback, and rejected-response UX remain bounded and safe | No |
+| `tests/test_topocore_runtime_distribution_mode.py` | `repobrain/topocore_v6_adapter.py`, `repobrain/doctor_status.py`, `repobrain/output_md.py` | Phase 7 | Explicit runtime mode selection, installed-package vs local-path behavior, beta-only private-checkout diagnostics, disabled-mode truth, and invalid-mode safe failure | No |
+| `tests/test_topocore_runtime_validation_scripts.py` | `scripts/check_topocore_v6_runtime_import.py`, `scripts/probe_topocore_v6_contract.py`, `scripts/validate_topocore_v6_local.py` | Phase 7 | Sanitized runtime-mode diagnostics, local-path capability detection, disabled-mode skip behavior, and no private-path leakage in validation scripts | No |
+| `tests/test_partner_testing_readiness_docs.py` | Sprint 84 partner-testing readiness docs | Phase 7 | Partner-testing prerequisites, runtime-mode truth, per-partner token expectations, rotation and revocation guidance, and no source-license drift | No |
+| `tests/test_public_ready_distribution_gate_docs.py` | Sprint 84 public-readiness and private-distribution docs | Phase 7 | Explicit distribution decision, public-ready owner-approval gate, readable-package caveat, and no false public/Marketplace/source-exposure claims | No |
+| `tests/test_node_runtime_hygiene_docs.py` | action metadata and external workflow example | Phase 7 | Updated GitHub Action major versions, preserved read-mostly permissions, and explicit private-checkout runtime-mode wiring in the example workflow | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -206,6 +211,10 @@ Current tests prove that:
   - consumer workflow permissions are statically constrained to a read-mostly baseline
   - private action access and missing-token failure modes are documented and guarded
   - fork-safety policy is recorded without widening runtime trust
+- Sprint 84 adds runtime-distribution gate coverage:
+  - explicit runtime-mode selection is covered for installed package, private checkout, local path, disabled, and invalid modes
+  - validation scripts now surface sanitized runtime-mode and capability diagnostics without printing private paths
+  - partner-testing readiness and public-ready distribution decisions are documented and guarded against false public or Marketplace claims
 
 ## 6. What Tests Do Not Prove
 

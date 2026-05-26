@@ -30,11 +30,13 @@ def test_troubleshooting_and_install_guides_reference_doctor() -> None:
     assert "pull-requests: write" in troubleshooting
     assert "/repobrain doctor" in install
     assert "after setup" in install.lower() or "first setup check" in install.lower()
+    assert "installed private package" in install.lower()
 
 
-def test_sprint_79_and_sprint_83_architecture_notes_and_coverage_index_entries_exist() -> None:
+def test_sprint_79_sprint_83_and_sprint_84_architecture_notes_and_coverage_index_entries_exist() -> None:
     assert (ROOT / "docs/architecture/SPRINT_79_AUDIT_CALIBRATION_DOCTOR_STATUS.md").exists()
     assert (ROOT / "docs/architecture/SPRINT_83_V6_AUDIT_UX_SCORE_SUMMARY.md").exists()
+    assert (ROOT / "docs/architecture/SPRINT_84_TOPOCORE_RUNTIME_DISTRIBUTION_GATE.md").exists()
     coverage = _read("docs/architecture/TOPOCORE_V6_TEST_COVERAGE_INDEX.md")
 
     assert "tests/test_audit_calibration.py" in coverage
@@ -42,3 +44,4 @@ def test_sprint_79_and_sprint_83_architecture_notes_and_coverage_index_entries_e
     assert "tests/test_status_command.py" in coverage
     assert "tests/test_doctor_status_docs.py" in coverage
     assert "tests/test_score_command.py" in coverage
+    assert "tests/test_topocore_runtime_distribution_mode.py" in coverage

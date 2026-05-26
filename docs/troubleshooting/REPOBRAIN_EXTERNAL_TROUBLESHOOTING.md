@@ -61,6 +61,24 @@ If setup is unclear after you fix the secret, run:
 
 Treat this as a sanitized setup failure, not as a `v5` fallback case.
 
+## 3A. Runtime mode confusion
+
+### Symptom
+
+Doctor or status reports an unexpected TopoCore runtime mode, or audit stays static when you expected `v6` enrichment.
+
+### What to check
+
+- `RB_TOPOCORE_V6_RUNTIME_MODE`
+- whether the private package is actually installed
+- whether `RB_TOPOCORE_V6_LOCAL_PATH` is set only for approved local or beta checkout paths
+
+### Safe guidance
+
+- use `installed_package` as the preferred selected-partner mode
+- keep `private_checkout` beta-only
+- use `/repobrain audit` if `/repobrain score` is too compact and you need the full evidence path
+
 ## 4. Verify returns `NOT_RUN`
 
 ### Meaning

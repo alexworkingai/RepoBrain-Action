@@ -48,6 +48,7 @@ def test_issue_status_is_supported_and_includes_version_policy_and_commands() ->
     assert "RepoBrain version:" in markdown
     assert "## Command surface" in markdown
     assert "## Backend policy" in markdown
+    assert "TopoCore runtime mode requested:" in markdown
     assert "## Safety policy" in markdown
     assert "/repobrain audit" in markdown
     assert "/repobrain doctor" in markdown
@@ -116,6 +117,7 @@ def test_status_does_not_require_topocore_import_or_expose_secrets(monkeypatch: 
     assert "TOPOCORE_V6_REPO_TOKEN" not in markdown
     assert "github_pat_" not in markdown
     assert "ghp_" not in markdown
+    assert "TopoCore runtime mode requested:" in markdown
 
 
 def test_pr_status_dry_run_supported_from_event_payload(tmp_path: Path) -> None:

@@ -176,6 +176,7 @@ def test_diagnostic_script_passes_with_fake_module_via_local_path(tmp_path: Path
     fake_parent = _write_fake_topocore_package(tmp_path)
     env = dict(os.environ)
     env["RB_TOPOCORE_V6_LOCAL_PATH"] = str(fake_parent)
+    env["RB_TOPOCORE_V6_RUNTIME_MODE"] = "local_path"
 
     result = _run_runtime_import_script(env=env)
 
@@ -191,6 +192,7 @@ def test_diagnostic_script_fails_safely_when_module_missing(tmp_path: Path) -> N
     isolated.mkdir()
     env = dict(os.environ)
     env["RB_TOPOCORE_V6_LOCAL_PATH"] = str(isolated)
+    env["RB_TOPOCORE_V6_RUNTIME_MODE"] = "local_path"
 
     result = _run_runtime_import_script(env=env)
 
@@ -206,6 +208,7 @@ def test_diagnostic_script_reports_missing_symbols_safely(tmp_path: Path) -> Non
     fake_parent = _write_fake_topocore_package(tmp_path, missing_engine_candidate=True)
     env = dict(os.environ)
     env["RB_TOPOCORE_V6_LOCAL_PATH"] = str(fake_parent)
+    env["RB_TOPOCORE_V6_RUNTIME_MODE"] = "local_path"
 
     result = _run_runtime_import_script(env=env)
 
@@ -218,6 +221,7 @@ def test_diagnostic_script_never_calls_decide_raw(tmp_path: Path) -> None:
     fake_parent = _write_fake_topocore_package(tmp_path)
     env = dict(os.environ)
     env["RB_TOPOCORE_V6_LOCAL_PATH"] = str(fake_parent)
+    env["RB_TOPOCORE_V6_RUNTIME_MODE"] = "local_path"
 
     result = _run_runtime_import_script(env=env)
 

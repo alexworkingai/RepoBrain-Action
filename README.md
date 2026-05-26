@@ -20,6 +20,7 @@ For a new external repository install, start here:
 - Command guide: `docs/commands/REPOBRAIN_COMMANDS.md`
 - Troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
 - Example workflow: `docs/examples/repobrain_external_pilot_workflow.yml`
+- Partner readiness: `docs/release/PARTNER_TESTING_READINESS.md`
 
 ## Product Surface
 
@@ -65,6 +66,12 @@ The current external pilot uses:
 - private TopoCore v6 checked out separately with `TOPOCORE_V6_REPO_TOKEN`
 - a caller-owned workflow in the consumer repository
 - a bring-your-own-LLM or user-paid model provider model
+
+Sprint 84 public-ready gate truth:
+
+- `private_checkout` remains beta-only
+- selected partner testing should prefer installed private package mode when authorized
+- plain Python package artifacts still need honest handling because they can contain readable implementation files
 
 RepoBrain is not an LLM reseller.
 RepoBrain-Action remains private during the current pilot phase.

@@ -3444,6 +3444,8 @@ def render_status_markdown(
             "## Backend policy",
             *_policy_lines(topocore_policy if isinstance(topocore_policy, list) else [], fallback="No backend policy notes recorded."),
             f"- TopoCore dependency mode: `{str(report.get('topocore_dependency_mode', 'not_detected') or 'not_detected').strip()}`",
+            f"- TopoCore runtime mode requested: `{str(report.get('topocore_runtime_mode_requested', 'auto') or 'auto').strip()}`",
+            f"- TopoCore runtime mode effective: `{str(report.get('topocore_runtime_mode_effective', 'auto') or 'auto').strip()}`",
             "",
             "## Workflow snapshot",
             f"- RepoBrain workflow detected: `{_bool_label(bool(workflow.get('exists', False)))}`",
@@ -3513,6 +3515,11 @@ def render_doctor_markdown(
         sections.extend(["", f"Requested focus: {query}"])
     sections.extend(
         [
+            "",
+            "## Runtime mode",
+            f"- TopoCore runtime mode requested: `{str(report.get('topocore_runtime_mode_requested', 'auto') or 'auto').strip()}`",
+            f"- TopoCore runtime mode effective: `{str(report.get('topocore_runtime_mode_effective', 'auto') or 'auto').strip()}`",
+            f"- TopoCore dependency mode: `{str(report.get('topocore_dependency_mode', 'not_detected') or 'not_detected').strip()}`",
             "",
             "## Diagnostic checks",
             *_doctor_check_table_lines(checks),

@@ -8,6 +8,7 @@ dynamic and opt-in through explicit adapter methods only.
 from __future__ import annotations
 
 import importlib
+import os
 import re
 import sys
 from collections.abc import Iterator, Mapping, Sequence
@@ -81,6 +82,18 @@ _CATEGORY_WRONG_PYTHON_CONTEXT = "topocore_v6_wrong_python_context"
 _CATEGORY_HEALTH_FAILED = "topocore_v6_health_failed"
 _CATEGORY_ADAPTER_CONTRACT_FAILED = "topocore_v6_adapter_contract_failed"
 _CATEGORY_RUNTIME_UNKNOWN = "topocore_v6_runtime_unknown"
+_CATEGORY_RUNTIME_DISABLED = "topocore_v6_runtime_disabled"
+_CATEGORY_INVALID_RUNTIME_MODE = "topocore_v6_invalid_runtime_mode"
+
+_ALLOWED_RUNTIME_MODES = frozenset(
+    {
+        "auto",
+        "installed_package",
+        "private_checkout",
+        "local_path",
+        "disabled",
+    }
+)
 
 _PATH_TOKEN_RE = re.compile(
     r"([A-Za-z]:\\[^\\\s]+(?:\\[^\\\s]+)*)|(/[^/\s]+(?:/[^/\s]+)*)"
@@ -109,6 +122,13 @@ class TopoCoreV6RuntimeImportDiagnostics:
     health_api_stability: str = ""
     failure_category: str = ""
     error_message_sanitized: str = ""
+    requested_mode: str = "auto"
+    used_mode: str = "not_available"
+    local_path_configured: bool = False
+    local_path_kind: str = "not_configured"
+    package_import_available: bool = False
+    audit_score_v1_present: bool = False
+    audit_score_contract_version: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -122,6 +142,13 @@ class TopoCoreV6RuntimeImportDiagnostics:
             "health_api_stability": self.health_api_stability,
             "failure_category": self.failure_category,
             "error_message_sanitized": self.error_message_sanitized,
+            "requested_mode": self.requested_mode,
+            "used_mode": self.used_mode,
+            "local_path_configured": self.local_path_configured,
+            "local_path_kind": self.local_path_kind,
+            "package_import_available": self.package_import_available,
+            "audit_score_v1_present": self.audit_score_v1_present,
+            "audit_score_contract_version": self.audit_score_contract_version,
         }
 
 
@@ -270,6 +297,111 @@ def _is_existing_local_path(local_path: str | None) -> bool:
         return False
 
 
+def normalize_topocore_v6_runtime_mode(value: Any) -> str:
+    normalized = _normalize_text(value).lower() or "auto"
+    if normalized not in _ALLOWED_RUNTIME_MODES:
+        raise RepoBrainV6AdapterRuntimeError(
+            "TopoCore v6 runtime mode is invalid."
+        )
+    return normalized
+
+
+def classify_topocore_v6_local_path(local_path: str | None) -> str:
+    normalized = _normalize_text(local_path)
+    if not normalized:
+        return "not_configured"
+    lowered = normalized.replace("\\", "/").lower()
+    if "/.topocore-v6" in lowered or lowered.endswith(".topocore-v6") or "/topocore/.git" in lowered:
+        return "private_checkout"
+    if "/.git/" in lowered or lowered.endswith("/.git"):
+        return "redacted_local_path"
+    return "local_path"
+
+
+def resolve_topocore_v6_runtime_mode(
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    source = env if env is not None else os.environ
+    requested_raw = str(source.get("RB_TOPOCORE_V6_RUNTIME_MODE", "") or "").strip()
+    local_path = str(source.get("RB_TOPOCORE_V6_LOCAL_PATH", "") or "").strip()
+    try:
+        requested_mode = normalize_topocore_v6_runtime_mode(requested_raw or "auto")
+        invalid = False
+    except RepoBrainV6AdapterRuntimeError:
+        requested_mode = "invalid"
+        invalid = True
+    local_path_kind = classify_topocore_v6_local_path(local_path)
+    local_path_configured = bool(local_path)
+    return {
+        "requested_mode": requested_mode,
+        "local_path_configured": local_path_configured,
+        "local_path_kind": local_path_kind,
+        "invalid_mode": invalid,
+        "beta_only_private_checkout": requested_mode == "private_checkout" or local_path_kind == "private_checkout",
+        "disabled": requested_mode == "disabled",
+    }
+
+
+def _package_import_available() -> bool:
+    if "topocore_v6" in sys.modules:
+        return True
+    try:
+        return importlib.util.find_spec("topocore_v6") is not None
+    except Exception:
+        return False
+
+
+def _import_topocore_v6_module_without_local_path() -> Any:
+    return importlib.import_module("topocore_v6")
+
+
+def _import_topocore_v6_module_from_local_path(local_path: str) -> Any:
+    existing = sys.modules.pop("topocore_v6", None)
+    try:
+        with _temporary_sys_path(local_path):
+            return importlib.import_module("topocore_v6")
+    finally:
+        if existing is not None and "topocore_v6" not in sys.modules:
+            sys.modules["topocore_v6"] = existing
+
+
+def _load_topocore_v6_public_api_runtime(
+    *,
+    local_path: str | None = None,
+    runtime_mode: str | None = None,
+) -> tuple[Any, str, bool]:
+    normalized_mode = normalize_topocore_v6_runtime_mode(runtime_mode or "auto")
+    package_import_available = _package_import_available()
+
+    if normalized_mode == "disabled":
+        raise RepoBrainV6AdapterRuntimeError("TopoCore v6 runtime mode is disabled.")
+
+    if normalized_mode == "installed_package":
+        if not package_import_available:
+            raise RepoBrainV6AdapterRuntimeError(
+                "TopoCore v6 installed package runtime is unavailable."
+            )
+        return _import_topocore_v6_module_without_local_path(), "installed_package", True
+
+    if normalized_mode in {"private_checkout", "local_path"}:
+        if not local_path:
+            raise RepoBrainV6AdapterRuntimeError(
+                "TopoCore v6 local path is not available."
+            )
+        return _import_topocore_v6_module_from_local_path(local_path), normalized_mode, package_import_available
+
+    if package_import_available:
+        return _import_topocore_v6_module_without_local_path(), "installed_package", True
+    if local_path:
+        local_mode = classify_topocore_v6_local_path(local_path)
+        effective_mode = "private_checkout" if local_mode == "private_checkout" else "local_path"
+        return _import_topocore_v6_module_from_local_path(local_path), effective_mode, False
+
+    raise RepoBrainV6AdapterRuntimeError(
+        "TopoCore v6 public API is unavailable."
+    )
+
+
 def classify_topocore_v6_runtime_error(
     exc: Exception,
     *,
@@ -279,6 +411,10 @@ def classify_topocore_v6_runtime_error(
 
     message = _sanitize_error_text(str(exc))
     lowered = message.lower()
+    if "runtime mode is invalid" in lowered:
+        return _CATEGORY_INVALID_RUNTIME_MODE, message
+    if "runtime mode is disabled" in lowered:
+        return _CATEGORY_RUNTIME_DISABLED, message
     if "missing required symbols" in lowered:
         return _CATEGORY_MISSING_SYMBOL, message
     if "local path is not available" in lowered:
@@ -463,7 +599,11 @@ def _temporary_sys_path(local_path: str | None = None) -> Iterator[None]:
                 pass
 
 
-def load_topocore_v6_public_api(*, local_path: str | None = None) -> Any:
+def load_topocore_v6_public_api(
+    *,
+    local_path: str | None = None,
+    runtime_mode: str | None = None,
+) -> Any:
     """Dynamically load the public ``topocore_v6`` module.
 
     The load happens only on explicit adapter calls and never at module import
@@ -471,8 +611,12 @@ def load_topocore_v6_public_api(*, local_path: str | None = None) -> Any:
     """
 
     try:
-        with _temporary_sys_path(local_path):
-            module = importlib.import_module("topocore_v6")
+        module, _used_mode, _package_import_available = _load_topocore_v6_public_api_runtime(
+            local_path=local_path,
+            runtime_mode=runtime_mode
+            or str(os.environ.get("RB_TOPOCORE_V6_RUNTIME_MODE", "") or "").strip()
+            or "auto",
+        )
     except RepoBrainV6AdapterRuntimeError:
         raise
     except Exception as exc:  # pragma: no cover - exercised via tests
@@ -499,6 +643,7 @@ def _extract_safe_decision_text(value: Any) -> str:
 def inspect_topocore_v6_runtime_import(
     *,
     local_path: str | None = None,
+    runtime_mode: str | None = None,
 ) -> TopoCoreV6RuntimeImportDiagnostics:
     """Inspect the public TopoCore v6 runtime import surface safely.
 
@@ -506,7 +651,29 @@ def inspect_topocore_v6_runtime_import(
     """
 
     python_executable = _runtime_python_label()
-    if local_path:
+    requested_mode = runtime_mode or str(os.environ.get("RB_TOPOCORE_V6_RUNTIME_MODE", "") or "").strip() or "auto"
+    try:
+        normalized_mode = normalize_topocore_v6_runtime_mode(requested_mode)
+    except RepoBrainV6AdapterRuntimeError as exc:
+        category, sanitized = classify_topocore_v6_runtime_error(exc, local_path=local_path)
+        return TopoCoreV6RuntimeImportDiagnostics(
+            ok=False,
+            python_executable=python_executable,
+            import_ok=False,
+            failure_category=category,
+            error_message_sanitized=sanitized,
+            requested_mode="invalid",
+            used_mode="not_available",
+            local_path_configured=bool(local_path),
+            local_path_kind=classify_topocore_v6_local_path(local_path),
+            package_import_available=_package_import_available(),
+        )
+    local_path_kind = classify_topocore_v6_local_path(local_path)
+    package_import_available = _package_import_available()
+    requires_existing_local_path = normalized_mode in {"private_checkout", "local_path"} or (
+        normalized_mode == "auto" and not package_import_available
+    )
+    if local_path and requires_existing_local_path:
         try:
             path_obj = Path(local_path)
         except OSError as exc:
@@ -517,6 +684,11 @@ def inspect_topocore_v6_runtime_import(
                 import_ok=False,
                 failure_category=category,
                 error_message_sanitized=sanitized,
+                requested_mode=normalized_mode,
+                used_mode="not_available",
+                local_path_configured=True,
+                local_path_kind=local_path_kind,
+                package_import_available=package_import_available,
             )
         if not path_obj.exists():
             return TopoCoreV6RuntimeImportDiagnostics(
@@ -525,10 +697,18 @@ def inspect_topocore_v6_runtime_import(
                 import_ok=False,
                 failure_category=_CATEGORY_WRONG_PYTHON_CONTEXT,
                 error_message_sanitized="TopoCore v6 local path is not available.",
+                requested_mode=normalized_mode,
+                used_mode="not_available",
+                local_path_configured=True,
+                local_path_kind=local_path_kind,
+                package_import_available=package_import_available,
             )
 
     try:
-        public_api = load_topocore_v6_public_api(local_path=local_path)
+        public_api, used_mode, package_import_available = _load_topocore_v6_public_api_runtime(
+            local_path=local_path,
+            runtime_mode=normalized_mode,
+        )
     except Exception as exc:  # pragma: no cover - exercised via tests
         category, sanitized = classify_topocore_v6_runtime_error(exc, local_path=local_path)
         return TopoCoreV6RuntimeImportDiagnostics(
@@ -537,6 +717,30 @@ def inspect_topocore_v6_runtime_import(
             import_ok=False,
             failure_category=category,
             error_message_sanitized=sanitized,
+            requested_mode=normalized_mode,
+            used_mode="disabled" if category == _CATEGORY_RUNTIME_DISABLED else "not_available",
+            local_path_configured=bool(local_path),
+            local_path_kind=local_path_kind,
+            package_import_available=package_import_available,
+        )
+
+    missing_symbols = [
+        symbol for symbol in _REQUIRED_PUBLIC_SYMBOLS if not hasattr(public_api, symbol)
+    ]
+    if missing_symbols:
+        joined = ",".join(sorted(missing_symbols))
+        return TopoCoreV6RuntimeImportDiagnostics(
+            ok=False,
+            python_executable=python_executable,
+            import_ok=False,
+            version=_sanitize_error_text(_normalize_text(getattr(public_api, "__version__", ""))),
+            failure_category=_CATEGORY_MISSING_SYMBOL,
+            error_message_sanitized=f"TopoCore v6 public API is missing required symbols: {joined}",
+            requested_mode=normalized_mode,
+            used_mode=used_mode,
+            local_path_configured=bool(local_path),
+            local_path_kind=local_path_kind,
+            package_import_available=package_import_available,
         )
 
     version = _sanitize_error_text(_normalize_text(getattr(public_api, "__version__", "")))
@@ -555,6 +759,11 @@ def inspect_topocore_v6_runtime_import(
             public_api_ok=True,
             failure_category=category,
             error_message_sanitized=sanitized,
+            requested_mode=normalized_mode,
+            used_mode=used_mode,
+            local_path_configured=bool(local_path),
+            local_path_kind=local_path_kind,
+            package_import_available=package_import_available,
         )
 
     if not hasattr(facade, "health"):
@@ -566,6 +775,11 @@ def inspect_topocore_v6_runtime_import(
             public_api_ok=True,
             failure_category=_CATEGORY_HEALTH_FAILED,
             error_message_sanitized="TopoCore v6 facade health method is unavailable.",
+            requested_mode=normalized_mode,
+            used_mode=used_mode,
+            local_path_configured=bool(local_path),
+            local_path_kind=local_path_kind,
+            package_import_available=package_import_available,
         )
 
     try:
@@ -583,8 +797,17 @@ def inspect_topocore_v6_runtime_import(
             public_api_ok=True,
             failure_category=category,
             error_message_sanitized=sanitized,
+            requested_mode=normalized_mode,
+            used_mode=used_mode,
+            local_path_configured=bool(local_path),
+            local_path_kind=local_path_kind,
+            package_import_available=package_import_available,
         )
 
+    audit_capability = RepoBrainTopoCoreV6Adapter().audit_score_v1_capability_local(
+        local_path=local_path,
+        topocore_public_api=public_api,
+    )
     health = dict(health_raw) if isinstance(health_raw, Mapping) else {}
     return TopoCoreV6RuntimeImportDiagnostics(
         ok=True,
@@ -595,6 +818,13 @@ def inspect_topocore_v6_runtime_import(
         health_ok=True,
         health_release_stage=_sanitize_error_text(_normalize_text(health.get("release_stage", ""))),
         health_api_stability=_sanitize_error_text(_normalize_text(health.get("api_stability", ""))),
+        requested_mode=normalized_mode,
+        used_mode=used_mode,
+        local_path_configured=bool(local_path),
+        local_path_kind=local_path_kind,
+        package_import_available=package_import_available,
+        audit_score_v1_present=audit_capability.get("status") == "capability_present",
+        audit_score_contract_version=_sanitize_error_text(audit_capability.get("capability_version", "")),
     )
 
 
@@ -819,12 +1049,16 @@ class RepoBrainTopoCoreV6Adapter:
         self,
         *,
         local_path: str | None = None,
+        runtime_mode: str | None = None,
         topocore_public_api: Any | None = None,
     ) -> dict[str, str]:
         """Return sanitized capability status for optional audit-score enrichment."""
 
         try:
-            public_api = topocore_public_api or load_topocore_v6_public_api(local_path=local_path)
+            public_api = topocore_public_api or load_topocore_v6_public_api(
+                local_path=local_path,
+                runtime_mode=runtime_mode,
+            )
             facade = public_api.create_topocore()
         except Exception:
             return {"status": "capability_unavailable", "capability_version": ""}
@@ -864,6 +1098,7 @@ class RepoBrainTopoCoreV6Adapter:
         request: Mapping[str, Any],
         *,
         local_path: str | None = None,
+        runtime_mode: str | None = None,
         topocore_public_api: Any | None = None,
     ) -> dict[str, Any]:
         """Call optional ``run_audit_score_v1`` when the facade exposes it."""
@@ -871,7 +1106,10 @@ class RepoBrainTopoCoreV6Adapter:
         if not isinstance(request, Mapping):
             raise RepoBrainV6AdapterError("Audit score v1 request must be a mapping.")
 
-        public_api = topocore_public_api or load_topocore_v6_public_api(local_path=local_path)
+        public_api = topocore_public_api or load_topocore_v6_public_api(
+            local_path=local_path,
+            runtime_mode=runtime_mode,
+        )
         try:
             facade = public_api.create_topocore()
         except Exception as exc:  # pragma: no cover - exercised through tests
@@ -898,6 +1136,7 @@ class RepoBrainTopoCoreV6Adapter:
 
 
 __all__ = [
+    "classify_topocore_v6_local_path",
     "RepoBrainTopoCoreV6Adapter",
     "RepoBrainTopoCoreV6AdapterConfig",
     "RepoBrainV6AdapterError",
@@ -911,4 +1150,6 @@ __all__ = [
     "classify_topocore_v6_runtime_error",
     "inspect_topocore_v6_runtime_import",
     "load_topocore_v6_public_api",
+    "normalize_topocore_v6_runtime_mode",
+    "resolve_topocore_v6_runtime_mode",
 ]

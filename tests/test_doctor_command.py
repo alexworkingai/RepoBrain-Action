@@ -54,6 +54,7 @@ def test_issue_doctor_is_supported_and_includes_required_sections(monkeypatch, t
 
     assert "# RepoBrain Doctor" in markdown
     assert "Overall diagnostic status:" in markdown
+    assert "## Runtime mode" in markdown
     assert "## Diagnostic checks" in markdown
     assert "## Recommended fixes" in markdown
     assert "## Runtime and safety" in markdown
@@ -61,6 +62,7 @@ def test_issue_doctor_is_supported_and_includes_required_sections(monkeypatch, t
     assert "secret value" in markdown.lower()
     assert "no v5 fallback" in markdown.lower()
     assert "private_checkout is beta-only" in markdown.lower()
+    assert "TopoCore runtime mode requested" in markdown
     assert "compact summary of the same guarded audit engine" in markdown
     assert "pull_request_target" in markdown
     assert audit["route_final"] == "DOCTOR"
@@ -105,6 +107,7 @@ def test_doctor_does_not_dump_env_or_expose_secret_values(monkeypatch, tmp_path:
     assert "super-secret-value" not in markdown
     assert "GITHUB_TOKEN=" not in markdown
     assert "TOPOCORE_V6_REPO_TOKEN" in markdown
+    assert "TopoCore runtime mode requested" in markdown
 
 
 def test_run_github_flow_doctor_dry_run_records_report_only_backend() -> None:
