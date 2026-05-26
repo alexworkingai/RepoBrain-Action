@@ -45,6 +45,11 @@ Important caveat:
 - this is acceptable for selected partner testing only under explicit approval and scoped access
 - it is not the same as strong source secrecy or broad public distribution hardening
 
+Sprint 84 live proof:
+- Elen-MCP still ran successfully in controlled `private_checkout` beta mode after runtime-mode hygiene
+- `/repobrain audit` remained real `v6`-enriched scoring
+- `/repobrain score`, `/repobrain doctor`, and `/repobrain status` all passed with truthful runtime-mode reporting
+
 ## Remaining Conditions Before Visibility Change
 
 Public visibility still requires all of the following:

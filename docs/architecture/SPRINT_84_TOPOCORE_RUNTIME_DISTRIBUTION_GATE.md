@@ -66,6 +66,7 @@ Implemented in Sprint 84:
 
 - warning source: older `actions/*` major refs in workflows and example workflow
 - Sprint 84 action-ref hygiene: updated to newer majors in RepoBrain workflows and example workflow
+- Elen-MCP consumer workflow hygiene was also tightened with explicit `RB_TOPOCORE_V6_RUNTIME_MODE=private_checkout` plus newer `actions/*` majors
 - no permission broadening was introduced
 
 ## 9. Public Readiness Decision
@@ -79,15 +80,17 @@ Meaning:
 
 ## 10. Live Elen-MCP Result
 
-Record live Sprint 84 evidence here after run:
-
-- audit run: pending
-- score run: pending
-- doctor run: pending
-- status run: pending
-- mode: pending
-- backend: pending
-- safety: pending
+- issue: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/32`
+- audit run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26435516490`
+- score run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26435550107`
+- doctor run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26435572886`
+- status run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26435594464`
+- audit mode: `v6-enriched scoring`
+- audit score: static baseline `78 / 100 GOOD`; v6 enriched `77 / 100 GOOD`
+- score command: `77 / 100 GOOD` in compact `v6-enriched scoring` mode
+- backend: audit and score resolved `v6`; doctor and status stayed report-only `not_applicable`
+- runtime mode truth: doctor and status now report requested/effective `private_checkout` without printing private paths
+- safety: no patch, no mutation, no private checkout evidence, no secret exposure
 
 ## 11. Product Status
 

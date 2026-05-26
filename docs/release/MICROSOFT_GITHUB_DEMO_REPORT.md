@@ -76,6 +76,7 @@ Current proof points:
   - compact summary uses the same guarded audit engine
 - `/repobrain doctor` live result after Sprint 82 follow-up truth fix: `PASS`
 - `/repobrain status` live result after Sprint 82 follow-up truth fix: `success`
+- Sprint 84 live public-ready smoke on Elen-MCP kept `audit` and `score` in real `v6`-enriched mode while `doctor` and `status` truthfully reported controlled `private_checkout` runtime mode
 - no patch/autofix
 - no v5
 - no `repobrain-community`

@@ -85,6 +85,11 @@ Implication:
 - RepoBrain-Action can become public later without exposing the TopoCore source repository itself
 - stronger secrecy than a plain wheel remains future work, not Sprint 84 work
 
+Live pilot truth after Sprint 84:
+- Elen-MCP still uses controlled `private_checkout`
+- doctor and status now report that mode explicitly as beta-only without printing private paths
+- this keeps the current owner-controlled pilot stable while public-ready partner docs pivot to installed private package mode
+
 ## Token And Access Model
 
 Minimum policy:

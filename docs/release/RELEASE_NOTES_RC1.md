@@ -55,6 +55,12 @@ Sprint 84 public-ready gate update:
 - selected partner testing should prefer installed private package mode
 - `private_checkout` remains beta-only
 - plain Python package artifacts can still contain readable implementation files and are documented honestly
+- live Elen-MCP smoke after Sprint 84 still passed with:
+  - audit: `v6-enriched scoring`
+  - score: compact `v6-enriched scoring`
+  - doctor: `PASS`
+  - status: `success`
+  - explicit runtime mode truth for controlled `private_checkout`
 
 ## Current Limitations
 
