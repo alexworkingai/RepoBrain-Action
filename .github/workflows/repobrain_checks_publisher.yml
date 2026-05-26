@@ -1,4 +1,4 @@
-﻿name: RepoBrain Checks Publisher
+name: RepoBrain Checks Publisher
 
 on:
   workflow_run:
@@ -493,7 +493,7 @@ jobs:
 
       - name: Upload RepoBrain check visibility diagnostic artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-check-visibility-diagnostic
           path: artifacts/check-visibility/repobrain_check_visibility_diagnostic.json

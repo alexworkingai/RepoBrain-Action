@@ -1,4 +1,4 @@
-﻿name: RepoBrain
+name: RepoBrain
 
 on:
   issue_comment:
@@ -374,35 +374,35 @@ jobs:
             await github.rest.reactions.createForIssueComment({ owner, repo, comment_id, content });
       - name: Upload RepoBrain audit artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-audit
           path: artifacts/audit/*.json
           if-no-files-found: ignore
       - name: Upload RepoBrain index package artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-index-package
           path: artifacts/index-package.zip
           if-no-files-found: ignore
       - name: Upload RepoBrain ask markdown artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-ask-result
           path: artifacts/ask_result.md
           if-no-files-found: ignore
       - name: Upload RepoBrain diagnostic summary artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-diagnostic-summary
           path: artifacts/diagnostic_summary.md
           if-no-files-found: ignore
       - name: Upload RepoBrain lab backend evidence artifact
         if: always() && github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-lab-backend-evidence
           path: artifacts/lab_backend_evidence/repobrain_lab_backend_evidence.json
@@ -416,7 +416,7 @@ jobs:
             --output-dir artifacts/evidence_pack
       - name: Upload RepoBrain TKYA evidence pack artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-tkya-evidence-pack
           path: |
@@ -434,7 +434,7 @@ jobs:
             --output-md artifacts/benchmarks/repobrain_stability_benchmark.md
       - name: Upload RepoBrain stability benchmark artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-stability-benchmark
           path: |
@@ -470,7 +470,7 @@ jobs:
             --output-md artifacts/onboarding/repobrain_install_readiness.md
       - name: Upload RepoBrain install readiness artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-install-readiness
           path: |
@@ -479,84 +479,84 @@ jobs:
           if-no-files-found: ignore
       - name: Upload RepoBrain patch artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-patch
           path: artifacts/patch.diff
           if-no-files-found: ignore
       - name: Upload RepoBrain patch parts artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-patch-parts
           path: artifacts/patch_parts/*
           if-no-files-found: ignore
       - name: Upload RepoBrain patch generation debug artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-patch-generation-debug
           path: artifacts/patch_generation_debug.json
           if-no-files-found: ignore
       - name: Upload RepoBrain LLM HTTP debug artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-llm-http-debug
           path: artifacts/llm_http_debug.json
           if-no-files-found: ignore
       - name: Upload RepoBrain verification artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-verification
           path: artifacts/verification_report.json
           if-no-files-found: ignore
       - name: Upload RepoBrain batch summaries artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-batch-summaries
           path: artifacts/batch_summaries.json
           if-no-files-found: ignore
       - name: Upload RepoBrain check-run payload artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-check-run-payload
           path: artifacts/check_run_payload.json
           if-no-files-found: ignore
       - name: Upload RepoBrain LLM usage artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-llm-usage
           path: artifacts/llm_usage.json
           if-no-files-found: ignore
       - name: Upload RepoBrain embeddings usage artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-embeddings-usage
           path: artifacts/embeddings_usage.json
           if-no-files-found: ignore
       - name: Upload RepoBrain embeddings evidence artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-index-embeddings-evidence
           path: artifacts/index_embeddings_evidence.json
           if-no-files-found: ignore
       - name: Upload RepoBrain AI quota snapshot artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-ai-quota-snapshot
           path: artifacts/ai_quota_snapshot.json
           if-no-files-found: ignore
       - name: Upload RepoBrain config snapshot artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-config-snapshot
           path: artifacts/config_snapshot.json

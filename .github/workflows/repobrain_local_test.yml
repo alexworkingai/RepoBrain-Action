@@ -1,4 +1,4 @@
-﻿name: RepoBrain Local Test
+name: RepoBrain Local Test
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
           comment_text: "/repobrain ask Где реализована логика TKYProvider?"
       - name: Upload RepoBrain audit artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-audit
           path: artifacts/audit/*.json

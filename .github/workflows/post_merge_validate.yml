@@ -1,4 +1,4 @@
-﻿name: Post Merge Validate
+name: Post Merge Validate
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
       - name: Generate release notes
         run: python scripts/release/gen_release_notes.py
       - name: Upload release notes artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-release-notes
           path: artifacts/release_notes.md

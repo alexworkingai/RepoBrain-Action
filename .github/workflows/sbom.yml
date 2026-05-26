@@ -28,7 +28,7 @@ jobs:
           mkdir -p artifacts/sbom
           cyclonedx-py environment --output-format JSON --output-file artifacts/sbom/repobrain-sbom.json
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repobrain-sbom
           path: artifacts/sbom/repobrain-sbom.json
