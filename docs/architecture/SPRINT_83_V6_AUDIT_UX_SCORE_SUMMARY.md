@@ -75,22 +75,45 @@ Sprint 83 updates doctor and status so they now report:
 
 ## 7. Live Results
 
-Live Elen-MCP smoke is recorded after Sprint 83 merge on `main`:
+Live Elen-MCP smoke after Sprint 83 merge on `main`:
 
-- audit issue/run: pending Sprint 83 live evidence at doc creation time
-- score issue/run: pending Sprint 83 live evidence at doc creation time
-- doctor issue/run: pending Sprint 83 live evidence at doc creation time
-- status issue/run: pending Sprint 83 live evidence at doc creation time
-- backend evidence must remain honest
-- safety must remain no-patch/no-mutation
+- issue:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/30`
+- audit:
+  - run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26408575224`
+  - mode: `v6-enriched scoring`
+  - static baseline: `78 / 100 GOOD`
+  - v6 enriched score: `77 / 100 GOOD`
+  - backend: `auto -> v6`
+  - fallback: `no / none`
+  - contract: `topocore.audit_score.v1 accepted`
+  - safe repo-relative evidence paths were visible and `[redacted-path]` noise did not appear
+- score:
+  - run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26408632493`
+  - mode: `v6-enriched scoring`
+  - final score: `77 / 100 GOOD`
+  - backend mode: `audit_v6_enriched_score_summary`
+  - fallback: `no / none`
+  - compact summary remained tied to the same guarded audit engine
+- doctor:
+  - run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26408670815`
+  - result: `PASS`
+  - score command listed as supported
+  - audit capability truth remained accurate
+- status:
+  - run: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26408702699`
+  - result: `success`
+  - supported commands include score
+  - score is described as a compact summary of the same guarded audit engine
+- safety:
+  - no secret exposure
+  - no TopoCore source exposure
+  - no patch/autofix
+  - no mutation
 
 ## 8. Product Status
 
-- `V6_AUDIT_UX_SCORE_READY` if audit, score, doctor, and status all pass live after merge
-- `V6_AUDIT_UX_READY_SCORE_DEFERRED` only if score must stay out for a documented blocker
-- `BLOCKED_ON_PATH_REDACTION` if safe path rendering cannot be fixed without exposure risk
-- `BLOCKED_ON_SCORE_COMMAND` if score cannot reuse the same guarded audit engine
-- `BLOCKED_ON_EXTERNAL_LIVE_RUN` if post-merge live validation cannot complete
+- `V6_AUDIT_UX_SCORE_READY`
 
 ## 9. Next Step
 

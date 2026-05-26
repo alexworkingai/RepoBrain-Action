@@ -106,6 +106,7 @@ Implementation status:
 - Sprint 82 live Elen-MCP smoke accepted private `v6` enrichment and rendered a static baseline of `78 / 100 GOOD` plus a bounded enriched result of `77 / 100 GOOD`.
 - current live audit path can render `v6-enriched` scoring when the private capability is available and accepted by the contract guard.
 - `/repobrain score` is implemented as a compact summary of the same guarded audit engine.
+- Sprint 83 live Elen-MCP smoke shows `/repobrain score` returning `77 / 100 GOOD` with `resolved_backend=v6` and `fallback_reason=none`.
 - `/repobrain doctor` and `/repobrain status` are implemented as report-only diagnostics.
 
 - Sprint 83 hardens safe repo-relative evidence rendering and ships `/repobrain score` as a compact summary of the same guarded audit engine.

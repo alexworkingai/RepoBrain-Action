@@ -69,6 +69,10 @@ Current proof points:
   - accepted `v6`-enriched result: `77 / 100` `GOOD`
   - backend resolved: `v6`
   - fallback used: `no`
+- `/repobrain score` live result after Sprint 83 UX hardening:
+  - final score: `77 / 100` `GOOD`
+  - backend resolved: `v6`
+  - compact summary uses the same guarded audit engine
 - `/repobrain doctor` live result after Sprint 82 follow-up truth fix: `PASS`
 - `/repobrain status` live result after Sprint 82 follow-up truth fix: `success`
 - no patch/autofix
@@ -112,4 +116,4 @@ This report does not claim Microsoft approval, GitHub approval, or an official p
 - the Sprint 81 and Sprint 82 contract path does not imply live `v6` enrichment unless a real private capability is actually invoked and accepted
 - TopoCore v6 remains private and is not distributed through this report
 
-Sprint 83 makes the audit demo more partner-ready by reducing `[redacted-path]` noise and shipping `/repobrain score` as a compact view of the same guarded engine.
+Sprint 83 makes the audit demo more partner-ready by reducing `[redacted-path]` noise, preserving safe repo-relative evidence paths, and shipping `/repobrain score` as a compact view of the same guarded engine.
