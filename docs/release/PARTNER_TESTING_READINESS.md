@@ -10,6 +10,7 @@ This document prepares RepoBrain for selected partner testing after explicit own
 - Public visibility has not been switched.
 - Marketplace work has not started.
 - final public visibility still requires explicit owner approval.
+- final pre-public smoke passed on Elen-MCP with doctor, status, audit, score, and ask all succeeding.
 
 ## 3. Partner Prerequisites
 

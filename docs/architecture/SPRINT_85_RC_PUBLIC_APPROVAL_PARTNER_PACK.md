@@ -63,16 +63,34 @@ Feedback plan:
 
 ## 8. Live Pre-Public Smoke
 
-- issue URL: pending live run
+- issue URL: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/33`
 - PR URL: not required by default
-- run URLs: pending live run
-- command results: pending live run
-- backend evidence: pending live run
-- safety result: pending live run
+- run URLs:
+  - doctor: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26445218190`
+  - status: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26445264385`
+  - audit: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26445303229`
+  - score: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26445399874`
+  - ask: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26445435073`
+- command results:
+  - doctor: `PASS`
+  - status: `success`
+  - audit: `v6-enriched scoring`, `77 / 100 GOOD`, static baseline `78 / 100 GOOD`
+  - score: `v6-enriched scoring`, `77 / 100 GOOD`, static baseline `78 / 100 GOOD`
+  - ask: `success`
+- backend evidence:
+  - audit: requested `auto`, resolved `v6`, fallback `no / none`
+  - score: requested `auto`, resolved `v6`, fallback `no / none`
+  - doctor/status: report-only diagnostics with `resolved_backend=not_applicable`
+- safety result:
+  - no patch/autofix
+  - no mutation
+  - no TopoCore source exposure
+  - no private checkout evidence in user-facing output
+  - no secret exposure
 
 ## 9. Product Status
 
-- `RC_TAG_READY_PENDING_OWNER_APPROVAL`
+- `PUBLIC_VISIBILITY_APPROVAL_PACK_READY`
 
 Possible final Sprint 85 outcomes:
 

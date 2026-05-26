@@ -59,6 +59,7 @@ Public visibility still requires all of the following:
 3. no accidental source-repo access grants beyond the chosen distribution model
 4. no Marketplace publication in this phase
 5. final approval checklist and partner pack review completed
+6. final pre-public smoke remains green on a controlled external repository
 
 ## User Support Implication
 
@@ -78,4 +79,6 @@ If RepoBrain-Action becomes public after approval:
 Sprint 85 packaging note:
 
 - the public visibility approval checklist and selected partner pack are prepared
+- the final pre-public smoke passed on Elen-MCP with doctor, status, audit, score, and ask all succeeding
+- the approval pack is now ready for owner review
 - tag creation remains approval-gated and is not performed automatically

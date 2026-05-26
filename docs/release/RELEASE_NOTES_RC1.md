@@ -67,6 +67,8 @@ Sprint 85 approval-pack update:
 - public visibility approval checklist is prepared
 - selected partner setup pack is prepared
 - RC tag and pinning plan is prepared
+- final pre-public live smoke passed on Elen-MCP for doctor, status, audit, score, and ask
+- audit and score remained real `v6`-enriched scoring with truthful backend evidence
 - public visibility remains approval-gated and is not executed in Sprint 85
 
 ## Current Limitations
