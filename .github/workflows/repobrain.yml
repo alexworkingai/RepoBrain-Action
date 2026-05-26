@@ -1,4 +1,4 @@
-﻿name: RepoBrain
+name: RepoBrain
 
 on:
   issue_comment:
@@ -204,7 +204,7 @@ jobs:
           ref: ${{ steps.checkout_ref.outputs.ref }}
       - name: Restore RepoBrain index cache
         id: index_cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: artifacts/index-package.zip
           key: repobrain-index-main-${{ github.sha }}
@@ -212,7 +212,7 @@ jobs:
             repobrain-index-main-
       - name: Restore RepoBrain retrieval snapshot cache
         id: snapshot_cache_restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: artifacts/.repobrain_cache
           key: repobrain-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
@@ -345,7 +345,7 @@ jobs:
           topocore_backend: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.topocore_backend || 'auto' }}
       - name: Save RepoBrain retrieval snapshot cache
         if: always() && hashFiles('artifacts/.repobrain_cache/*') != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: artifacts/.repobrain_cache
           key: ${{ steps.snapshot_cache_restore.outputs.cache-primary-key }}
