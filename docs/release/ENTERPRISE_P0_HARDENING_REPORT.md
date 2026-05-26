@@ -32,18 +32,25 @@ Targeted gaps:
 
 ## What Was Verified Live
 
-- pending Sprint 86 live smoke
-- pending installed-package proof attempt
+- issue-comment live smoke on `alexworkingai/Elen-MCP-v.2.2.0` passed for:
+  - doctor
+  - status
+  - audit
+  - score
+- ask completed without leakage, but the answer quality remained weaker than the command-specific smoke responses
+- installed-package proof was attempted on a workflow-only branch without `private_checkout`
+- local private packaging truth was also verified from an installed wheel in a clean environment
 
 ## What Remains
 
-- installed-package live proof may still block public switch if not operationally proven
-- governance API visibility may remain partially unknown under `403`
-- provenance/attestation may remain prepared but not fully exercised
+- installed-package external delivery remains the blocking gate
+- governance API visibility remains partially unknown under `403`
+- provenance/attestation is prepared but not yet exercised as a real release
+- structural hotspots remain contained, not eliminated
 
 ## Public Switch Decision
 
-- pending final Sprint 86 result
+- `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`
 
 Allowed final states:
 
@@ -70,3 +77,4 @@ Allowed final states:
 - no mutation
 - no secret exposure
 - no unsafe approval claims
+- no public switch executed

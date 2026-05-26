@@ -13,7 +13,7 @@ Selected partners are testing:
 - setup diagnostics
 - runtime/status diagnostics
 - ask-style repository guidance
-- the selected `installed_private_package` runtime path when operationally approved
+- the selected `installed_private_package` runtime path only after it is operationally proven
 
 ## What RepoBrain Does Not Do
 
@@ -62,6 +62,11 @@ Preferred selected-partner mode:
 
 This is preferred because it avoids source checkout into the consumer repository workspace.
 Current live-proof status is tracked in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`.
+Sprint 86 truth:
+
+- local packaging truth passed
+- external installed-package delivery proof is still blocked
+- partner onboarding on this mode must wait until that blocker is cleared
 
 ## `private_checkout`
 
@@ -98,6 +103,7 @@ Partners are expected to use their own model/provider access according to the do
 - audit should produce a full repository report
 - score should produce a compact summary of the same guarded audit engine
 - ask should answer a bounded repository question
+- if installed-package mode is requested before the runtime package/artifact is really deliverable, doctor and status should warn truthfully and audit/score should stay on static fallback rather than falsely claiming `v6`
 
 ## Troubleshooting
 

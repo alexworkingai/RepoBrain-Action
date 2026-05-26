@@ -10,8 +10,10 @@ This document prepares RepoBrain for selected partner testing after explicit own
 - Public visibility has not been switched.
 - Marketplace work has not started.
 - final public visibility still requires explicit owner approval.
-- final pre-public smoke passed on Elen-MCP with doctor, status, audit, score, and ask all succeeding.
-- enterprise P0 hardening is being completed before any public switch approval is requested.
+- final issue-comment smoke on Elen-MCP passed for doctor, status, audit, and score.
+- ask completed without leakage, but its answer quality was weaker than the command-specific smoke outputs.
+- enterprise P0 hardening is complete enough to isolate the remaining blocker.
+- current public-switch blocker: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
 
 ## 3. Partner Prerequisites
 
@@ -44,6 +46,10 @@ Current truth:
 - `private_checkout` remains beta-only for owner-controlled or tightly managed pilots
 - selected partner testing should prefer installed private package mode
 - stronger managed-runtime or compiled-artifact protection is future work
+- Sprint 86 live-proof result:
+  - local packaging/install proof: passed
+  - external installed-package delivery proof: blocked
+  - partner rollout must not start on installed-package mode until that delivery path is operationally proven
 
 Honest limitation:
 - a normal Python package artifact can still contain readable implementation files

@@ -51,6 +51,10 @@ This runbook defines the selected partner runtime access model for RepoBrain.
 - deliver a private runtime package or approved runtime artifact
 - keep consumer repositories free of private source checkout by default
 - operational live-proof status is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
+- Sprint 86 result:
+  - local package/install proof passed
+  - external delivery/install proof is still blocked
+  - do not issue partner rollout approval for this mode until the delivery path is operationally proven
 
 ## Package Caveat
 

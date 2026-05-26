@@ -19,6 +19,7 @@ def test_public_ready_docs_have_explicit_distribution_and_public_readiness_decis
     strategy = _read('docs/release/PRIVATE_TOPOCORE_DISTRIBUTION_STRATEGY.md').lower()
     checklist = _read('docs/release/RELEASE_CANDIDATE_CHECKLIST.md').lower()
 
+    assert 'public_blocked_by_runtime_proof' in readiness
     assert 'public_ready_pending_owner_approval' in readiness
     assert 'installed_private_package_selected' in strategy
     assert 'readable' in strategy

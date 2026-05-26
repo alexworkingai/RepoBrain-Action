@@ -9,7 +9,8 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - RepoBrain-Action is still private.
 - Public visibility is not switched in Sprint 86.
 - Marketplace work is not started.
-- Product status before final Sprint 86 decision: `PUBLIC_VISIBILITY_APPROVAL_PACK_READY`.
+- Current product status: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
+- Sprint 85 approval-pack state remains recorded as: `PUBLIC_VISIBILITY_APPROVAL_PACK_READY`.
 
 ## 3. Approval Decision
 
@@ -31,6 +32,7 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - validation is green
 - enterprise P0 hardening adds SECURITY / CONTRIBUTING / CODEOWNERS, supply-chain workflows, governance documentation, and mutation-surface cleanup
 - release, onboarding, command, and troubleshooting docs are updated
+- external installed-package delivery is not yet live-proven, so this checklist cannot move to approval while that blocker remains
 
 ## 5. Security Readiness
 
@@ -92,11 +94,12 @@ Rollback note:
 
 ## 9. Final Decision
 
-- `APPROVAL_PENDING`
+- `BLOCKED_BY_RUNTIME`
 
 Other allowed outcomes:
 
 - `APPROVED_FOR_PUBLIC_PARTNER_TESTING`
+- `APPROVAL_PENDING`
 - `BLOCKED_BY_SECURITY`
 - `BLOCKED_BY_DOCS`
 - `BLOCKED_BY_RUNTIME`

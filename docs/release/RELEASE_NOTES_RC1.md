@@ -78,7 +78,8 @@ Sprint 86 enterprise P0 hardening update:
 - governance verification model documented with `403 => UNKNOWN`, not false PASS
 - dormant production mutation helpers were removed from `repobrain/github_flow.py`
 - main RepoBrain execution workflow no longer requests `checks: write` or `pull-requests: write`
-- installed-package live proof remains tracked as a hard gate until it is passed or blocked with exact evidence
+- installed-package live proof was attempted and is now blocked with exact evidence rather than left ambiguous
+- issue-comment live smoke remains green for doctor, status, audit, and score after the hardening pass
 
 ## Current Limitations
 

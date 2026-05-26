@@ -73,10 +73,14 @@ If RepoBrain-Action becomes public after approval:
 
 ## Decision
 
-- public readiness decision: `PUBLIC_READY_PENDING_OWNER_APPROVAL`
+- current public readiness decision: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`
 - Marketplace decision: `MARKETPLACE_NOT_READY`
+
+Historical state retained for traceability:
+
+- Sprint 84 / Sprint 85 decision: `PUBLIC_READY_PENDING_OWNER_APPROVAL`
 
 Sprint 85 packaging note:
 
@@ -91,3 +95,6 @@ Sprint 86 enterprise hardening note:
 - dependency review, CodeQL, SBOM, and provenance-prep workflows are prepared with least-privilege gates
 - governance verification is documented with `403 => UNKNOWN`, not false PASS
 - installed-package live proof remains a hard gate and is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
+- installed-package live proof was attempted on `alexworkingai/Elen-MCP-v.2.2.0` without `private_checkout`
+- the proof path stayed safe and truthful, but external package delivery was not operationally available
+- because of that, Sprint 86 blocks the public switch on runtime proof rather than on supply-chain or mutation-surface readiness

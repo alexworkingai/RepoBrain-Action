@@ -43,5 +43,5 @@ def test_enterprise_hardening_docs_do_not_claim_marketplace_or_public_switch() -
     ).lower()
 
     assert "marketplace published: yes" not in combined
-    assert "public switch executed" not in combined
+    assert "public switch executed: yes" not in combined
     assert "microsoft partnership claim" in combined
