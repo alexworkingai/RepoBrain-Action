@@ -79,6 +79,14 @@ Current test baseline:
 | `tests/test_rc_tag_and_pinning_plan_docs.py` | Sprint 85 RC tag docs | Phase 7 | Recommended RC tag, owner-approval gate, no false created-tag claim, and immutable pinning guidance | No |
 | `tests/test_final_command_surface_matrix_docs.py` | Sprint 85 command surface docs | Phase 7 | Final supported/unsupported command matrix, audit/score truth, and no-mutation guidance | No |
 | `tests/test_public_switch_runbook_docs.py` | Sprint 85 public-switch docs | Phase 7 | Public-switch runbook exists, Sprint 85 non-execution truth, pre/post checks, and rollback caveat | No |
+| `tests/test_supply_chain_security_baseline.py` | Sprint 86 supply-chain baseline | Phase 7 | SECURITY / CONTRIBUTING / CODEOWNERS presence, Dependabot, dependency review, CodeQL, SBOM, provenance-prep workflows, and no `pull_request_target` drift | No |
+| `tests/test_release_integrity_provenance_docs.py` | Sprint 86 release-integrity docs | Phase 7 | Owner-approved tag gate, immutable tag policy, pinning guidance, and no false created-tag claim | No |
+| `tests/test_repo_governance_model.py` | Sprint 86 governance docs and script | Phase 7 | Governance model exists, CODEOWNERS and ruleset expectations are documented, governance script exists, and `403 => UNKNOWN` is preserved | No |
+| `tests/test_installed_package_live_proof_docs.py` | Sprint 86 installed-package proof docs | Phase 7 | Installed-package proof state is explicit, source-checkout avoidance truth is documented, and partner docs stay aligned with installed-package preference | No |
+| `tests/test_no_dormant_mutation_surface.py` | `repobrain/github_flow.py` and active command/security docs | Phase 7 | Dormant mutation helpers removed, no production call sites remain, and no-mutation product truth stays explicit | No |
+| `tests/test_github_actions_permission_model.py` | Sprint 86 permission model docs and workflow surfaces | Phase 7 | External read-mostly baseline, isolated internal publisher writes, no `pull_request_target`, and documented write-permission justification | No |
+| `tests/test_structural_maintainability_plan.py` | Sprint 86 maintainability docs and hotspot script | Phase 7 | Hotspot inventory, safe decomposition order, no-risky-rewrite stance, and machine-readable hotspot reporting | No |
+| `tests/test_enterprise_p0_hardening_docs.py` | Sprint 86 hardening report and architecture note | Phase 7 | Enterprise P0 hardening report exists, pre-public truth stays explicit, and no false public/Marketplace claims are introduced | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -224,6 +232,12 @@ Current tests prove that:
   - public visibility remains approval-gated
   - partner docs point to installed private package mode as the preferred selected-partner path
   - RC tag creation remains documentation-only until explicit approval
+- Sprint 86 adds enterprise P0 hardening coverage:
+  - supply-chain baseline files and workflows are now tested explicitly
+  - governance docs and UNKNOWN-on-403 verification behavior are covered
+  - dormant mutation helper removal is enforced
+  - least-privilege internal/external workflow posture is covered
+  - maintainability hotspot visibility is documented without claiming a risky rewrite
 
 ## 6. What Tests Do Not Prove
 

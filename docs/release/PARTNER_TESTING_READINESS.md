@@ -6,11 +6,12 @@ This document prepares RepoBrain for selected partner testing after explicit own
 
 ## 2. Current Status
 
-- RepoBrain-Action remains private in Sprint 85.
+- RepoBrain-Action remains private in Sprint 86.
 - Public visibility has not been switched.
 - Marketplace work has not started.
 - final public visibility still requires explicit owner approval.
 - final pre-public smoke passed on Elen-MCP with doctor, status, audit, score, and ask all succeeding.
+- enterprise P0 hardening is being completed before any public switch approval is requested.
 
 ## 3. Partner Prerequisites
 

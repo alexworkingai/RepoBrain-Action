@@ -71,6 +71,15 @@ Sprint 85 approval-pack update:
 - audit and score remained real `v6`-enriched scoring with truthful backend evidence
 - public visibility remains approval-gated and is not executed in Sprint 85
 
+Sprint 86 enterprise P0 hardening update:
+
+- SECURITY / CONTRIBUTING / CODEOWNERS baseline added
+- dependency review, CodeQL, SBOM, and provenance-prep workflows prepared
+- governance verification model documented with `403 => UNKNOWN`, not false PASS
+- dormant production mutation helpers were removed from `repobrain/github_flow.py`
+- main RepoBrain execution workflow no longer requests `checks: write` or `pull-requests: write`
+- installed-package live proof remains tracked as a hard gate until it is passed or blocked with exact evidence
+
 ## Current Limitations
 
 - TopoCore v6 remains private permanently

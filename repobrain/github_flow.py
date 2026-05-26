@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import re
-import subprocess
 import time
 from typing import Any
 import zipfile
@@ -47,7 +46,6 @@ from repobrain.fix.patch_guard import evaluate_patch_payload
 from repobrain.formatting import format_refusal_comment, format_verify_comment
 from repobrain.github_publisher import (
     build_check_run_payload,
-    create_pull_request,
     publish_check_run,
     publish_comment,
 )
@@ -4169,104 +4167,6 @@ def _run_batch_llm_review_fix(
         github_context=github_context,
         allowed=True,
     )
-
-
-def _maybe_apply_patch(
-    *,
-    repo_root: Path,
-    patch_path: Path,
-) -> dict[str, Any]:
-    if not _env_true("RB_APPLY_PATCH", default=False):
-        return {
-            "applied": False,
-            "pushed": False,
-            "branch": "",
-            "message": "auto-apply disabled (RB_APPLY_PATCH=0)",
-        }
-    if not _env_true("RB_TRUSTED_CONTEXT", default=False):
-        return {
-            "applied": False,
-            "pushed": False,
-            "branch": "",
-            "message": "auto-apply blocked in untrusted context",
-        }
-
-    run_id = os.getenv("GITHUB_RUN_ID", "").strip() or str(int(time.time()))
-    branch = f"repobrain/patch/{run_id}"
-
-    commands = [
-        ["git", "checkout", "-b", branch],
-        ["git", "apply", str(patch_path)],
-        ["git", "add", "-A"],
-        ["git", "commit", "-m", "RepoBrain: apply suggested patch"],
-        ["git", "push", "-u", "origin", branch],
-    ]
-    for cmd in commands:
-        try:
-            completed = subprocess.run(
-                cmd,
-                cwd=repo_root,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=60,
-            )
-        except OSError:
-            return {
-                "applied": False,
-                "pushed": False,
-                "branch": branch,
-                "message": "cannot apply patch in this context",
-            }
-        if completed.returncode != 0:
-            return {
-                "applied": False,
-                "pushed": False,
-                "branch": branch,
-                "message": "cannot push from this context",
-            }
-    return {
-        "applied": True,
-        "pushed": True,
-        "branch": branch,
-        "message": f"patch applied and pushed to `{branch}`",
-    }
-
-
-def _maybe_create_patch_pr(
-    *,
-    repo_name: str,
-    token: str,
-    patch_branch: str,
-    base_branch: str,
-    body_markdown: str,
-) -> str:
-    if not _env_true("RB_CREATE_PR", default=False):
-        return "auto-pr disabled (RB_CREATE_PR=0)"
-    if not _env_true("RB_APPLY_PATCH", default=False):
-        return "auto-pr skipped (patch was not auto-applied)"
-    if not _env_true("RB_TRUSTED_CONTEXT", default=False):
-        return "auto-pr blocked in untrusted context"
-    if not patch_branch:
-        return "auto-pr skipped (no patch branch)"
-
-    result = create_pull_request(
-        repo=repo_name,
-        token=token,
-        head_branch=patch_branch,
-        base_branch=base_branch,
-        title="RepoBrain: suggested patch",
-        body_md=body_markdown,
-    )
-    if bool(result.get("ok", False)):
-        data = result.get("data", {})
-        url = data.get("html_url") if isinstance(data, dict) else None
-        return f"auto-pr created: {url}" if isinstance(url, str) and url else "auto-pr created"
-
-    status = int(result.get("status_code", 0) or 0)
-    if status in {403, 404}:
-        return f"cannot create PR from this context. Create PR manually from `{patch_branch}`."
-    return f"auto-pr failed (status={status}). Create PR manually from `{patch_branch}`."
 
 
 def _is_bot_login(login: str) -> bool:

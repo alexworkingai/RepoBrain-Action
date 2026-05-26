@@ -59,6 +59,8 @@ It does not publish the repository, change visibility, create a release tag, or 
 - no patch/autofix
 - no `contents: write` in the external pilot baseline
 - high-security TopoCore policy is documented
+- SECURITY.md, CONTRIBUTING.md, and CODEOWNERS now exist
+- supply-chain and release-integrity docs/workflows are prepared before public visibility
 
 ## Public Scrub Readiness
 
@@ -99,6 +101,7 @@ It does not publish the repository, change visibility, create a release tag, or 
   - no current Git tags are present
   - immutable pinned-ref guidance for public consumers is documented but not yet executed
   - tag creation remains pending explicit owner approval
+  - SBOM and provenance-prep workflows are now prepared but not yet treated as a public release execution claim
 
 ## Known Limitations
 
@@ -121,6 +124,7 @@ It does not publish the repository, change visibility, create a release tag, or 
 - `PUBLIC_READY_PENDING_APPROVAL`: no
 - `PUBLIC_READY_PENDING_OWNER_APPROVAL`: yes
 - `PUBLIC_VISIBILITY_APPROVAL_PACK_READY`: yes
+- `PUBLIC_SWITCH_READY_AFTER_P0_HARDENING`: pending Sprint 86
 - `PUBLIC_BLOCKED_BY_DISTRIBUTION_STRATEGY`: no
 - `MARKETPLACE_READY_FOR_PREP_PENDING_APPROVAL`: no
 - `MARKETPLACE_NOT_READY`: yes

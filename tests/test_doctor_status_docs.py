@@ -26,6 +26,9 @@ def test_troubleshooting_and_install_guides_reference_doctor() -> None:
     install = _read("docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md")
 
     assert "/repobrain doctor" in troubleshooting
+    assert "checks: read" in troubleshooting
+    assert "pull-requests: read" in troubleshooting
+    assert "do not add by default" in troubleshooting.lower()
     assert "checks: write" in troubleshooting
     assert "pull-requests: write" in troubleshooting
     assert "/repobrain doctor" in install

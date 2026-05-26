@@ -50,6 +50,7 @@ This runbook defines the selected partner runtime access model for RepoBrain.
 - preferred selected-partner path
 - deliver a private runtime package or approved runtime artifact
 - keep consumer repositories free of private source checkout by default
+- operational live-proof status is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
 
 ## Package Caveat
 

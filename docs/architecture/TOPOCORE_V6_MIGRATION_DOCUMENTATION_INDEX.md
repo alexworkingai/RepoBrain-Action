@@ -32,6 +32,7 @@ Current truth:
 - Sprint 83 hardens audit UX, preserves safe repo-relative evidence rendering, and adds `/repobrain score` as a compact summary view of the same guarded audit engine
 - Sprint 84 resolves the private TopoCore runtime distribution gate for public-ready partner testing by selecting installed private package mode, preserving `private_checkout` as beta-only, and hardening runtime-mode diagnostics
 - Sprint 85 prepares the public visibility approval checklist, partner testing pack, RC tag plan, and pre-public smoke/runbook surface without switching visibility
+- Sprint 86 adds enterprise P0 hardening before any public switch by strengthening supply-chain baselines, release-integrity docs/workflows, governance evidence, mutation-surface cleanup, workflow least privilege, and maintainability controls
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -165,6 +166,8 @@ Phase 7:
 - `docs/architecture/SPRINT_83_V6_AUDIT_UX_SCORE_SUMMARY.md`
 - `docs/architecture/SPRINT_84_TOPOCORE_RUNTIME_DISTRIBUTION_GATE.md`
 - `docs/architecture/SPRINT_85_RC_PUBLIC_APPROVAL_PARTNER_PACK.md`
+- `docs/architecture/SPRINT_86_ENTERPRISE_P0_HARDENING.md`
+- `docs/architecture/STRUCTURAL_MAINTAINABILITY_PLAN.md`
 
 ## 5. Recommended Reading Paths
 

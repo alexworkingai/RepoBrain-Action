@@ -18,10 +18,10 @@ def test_public_visibility_approval_checklist_states_private_owner_approval_and_
     text = _read('docs/release/PUBLIC_VISIBILITY_APPROVAL_CHECKLIST.md').lower()
 
     assert 'repobrain-action is still private' in text
-    assert 'not switched in sprint 85' in text
+    assert 'not switched in sprint 86' in text
     assert 'marketplace work is not started' in text
     assert 'explicit owner approval' in text
-    assert 'public_ready_pending_owner_approval' in text
+    assert 'public_visibility_approval_pack_ready' in text or 'public_ready_pending_owner_approval' in text
 
 
 def test_public_visibility_approval_checklist_covers_decisions_and_gates() -> None:

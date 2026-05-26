@@ -1,0 +1,35 @@
+name: SBOM
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install build and SBOM tooling
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+          pip install cyclonedx-bom build
+      - name: Build package
+        run: python -m build
+      - name: Generate SBOM
+        run: |
+          mkdir -p artifacts/sbom
+          cyclonedx-py environment --output-format JSON --output-file artifacts/sbom/repobrain-sbom.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-sbom
+          path: artifacts/sbom/repobrain-sbom.json
+          if-no-files-found: error

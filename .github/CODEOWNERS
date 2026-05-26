@@ -1,0 +1,19 @@
+# Repo-wide ownership
+* @alexworkingai
+
+# Core action and workflow surface
+action.yml @alexworkingai
+.github/workflows/ @alexworkingai
+.github/CODEOWNERS @alexworkingai
+
+# Product code
+repobrain/ @alexworkingai
+scripts/ @alexworkingai
+
+# Security and release posture
+docs/security/ @alexworkingai
+docs/release/ @alexworkingai
+docs/partner/ @alexworkingai
+
+# Tests
+tests/ @alexworkingai

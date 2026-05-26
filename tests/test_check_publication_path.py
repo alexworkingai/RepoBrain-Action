@@ -170,7 +170,9 @@ def test_publish_pr_check_run_records_permissions_header_on_failure(monkeypatch,
 
 def test_repobrain_workflow_allows_check_run_publication() -> None:
     workflow = Path(".github/workflows/repobrain.yml").read_text(encoding="utf-8")
-    assert "checks: write" in workflow
+    assert "checks: read" in workflow
+    assert "pull-requests: read" in workflow
+    assert "checks: write" not in workflow
     assert "RB_CHECK_RUN_PUBLISH_MODE: \"deferred\"" in workflow
 
 

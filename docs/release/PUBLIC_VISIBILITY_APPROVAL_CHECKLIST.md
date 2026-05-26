@@ -7,9 +7,9 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 ## 2. Current State
 
 - RepoBrain-Action is still private.
-- Public visibility is not switched in Sprint 85.
+- Public visibility is not switched in Sprint 86.
 - Marketplace work is not started.
-- Product status before approval: `PUBLIC_READY_PENDING_OWNER_APPROVAL`.
+- Product status before final Sprint 86 decision: `PUBLIC_VISIBILITY_APPROVAL_PACK_READY`.
 
 ## 3. Approval Decision
 
@@ -29,6 +29,7 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - `installed_private_package` is selected for selected partner testing
 - `private_checkout` remains beta-only fallback
 - validation is green
+- enterprise P0 hardening adds SECURITY / CONTRIBUTING / CODEOWNERS, supply-chain workflows, governance documentation, and mutation-surface cleanup
 - release, onboarding, command, and troubleshooting docs are updated
 
 ## 5. Security Readiness

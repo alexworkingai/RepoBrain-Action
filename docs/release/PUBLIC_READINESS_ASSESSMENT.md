@@ -14,6 +14,7 @@
 - no RepoBrain-created branch, commit, or PR behavior
 - no `v5`
 - no `repobrain-community`
+- enterprise P0 hardening in Sprint 86 adds supply-chain, governance, and release-integrity controls before any public switch
 
 ## What Must Stay Private
 
@@ -60,6 +61,7 @@ Public visibility still requires all of the following:
 4. no Marketplace publication in this phase
 5. final approval checklist and partner pack review completed
 6. final pre-public smoke remains green on a controlled external repository
+7. enterprise P0 hardening remains green, including supply-chain baseline, governance evidence, least-privilege workflow posture, and mutation-surface cleanup
 
 ## User Support Implication
 
@@ -82,3 +84,10 @@ Sprint 85 packaging note:
 - the final pre-public smoke passed on Elen-MCP with doctor, status, audit, score, and ask all succeeding
 - the approval pack is now ready for owner review
 - tag creation remains approval-gated and is not performed automatically
+
+Sprint 86 enterprise hardening note:
+
+- SECURITY.md, CONTRIBUTING.md, and CODEOWNERS are now part of the pre-public baseline
+- dependency review, CodeQL, SBOM, and provenance-prep workflows are prepared with least-privilege gates
+- governance verification is documented with `403 => UNKNOWN`, not false PASS
+- installed-package live proof remains a hard gate and is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`

@@ -13,6 +13,7 @@ Selected partners are testing:
 - setup diagnostics
 - runtime/status diagnostics
 - ask-style repository guidance
+- the selected `installed_private_package` runtime path when operationally approved
 
 ## What RepoBrain Does Not Do
 
@@ -60,6 +61,7 @@ Preferred selected-partner mode:
 - `installed_private_package`
 
 This is preferred because it avoids source checkout into the consumer repository workspace.
+Current live-proof status is tracked in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`.
 
 ## `private_checkout`
 

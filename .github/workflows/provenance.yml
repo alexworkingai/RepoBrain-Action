@@ -1,0 +1,35 @@
+name: Release Provenance Prep
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install build tooling
+        run: |
+          python -m pip install -U pip
+          pip install build
+      - name: Build wheel
+        run: python -m build
+      - name: Upload release candidate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repobrain-dist
+          path: dist/*
+          if-no-files-found: error
+      - name: Attest build provenance
+        if: vars.RB_ENABLE_PROVENANCE_ATTESTATION == '1' || github.event.repository.visibility == 'public'
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: 'dist/*'

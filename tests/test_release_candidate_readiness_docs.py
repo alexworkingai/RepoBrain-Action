@@ -94,6 +94,11 @@ def test_active_docs_do_not_reintroduce_old_or_unsafe_release_truth() -> None:
     assert "safe-to-merge claim" in active
     assert "security approval" in active
     assert "contents: write" in active
+    assert "not required for the current external product path" in active
     assert "checks: write" in active
     assert "pull-requests: write" in active
+    assert "dependency review" in active
+    assert "codeql" in active
+    assert "sbom" in active
+    assert "codeowners" in active
     assert "installed private package" in active
