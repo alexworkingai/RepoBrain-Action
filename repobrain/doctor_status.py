@@ -218,6 +218,8 @@ def _permissions_detail(workflow: dict[str, Any]) -> str:
 def _topocore_setup_status(workflow: dict[str, Any], *, runtime: dict[str, Any]) -> str:
     if runtime["requested_mode"] == "disabled":
         return "WARN"
+    if runtime["effective_mode"] == "installed_package_unavailable":
+        return "WARN"
     if _local_path_present() or runtime["effective_mode"] == "installed_package":
         return "PASS"
     if workflow["topocore_secret_referenced"]:
@@ -237,6 +239,12 @@ def _topocore_setup_detail(workflow: dict[str, Any], *, runtime: dict[str, Any])
         return (
             f"{runtime_line} TopoCore v6 runtime is explicitly disabled, so audit/score stay on static fallback unless the mode changes. "
             f"{expected_secret}"
+        )
+    if runtime["effective_mode"] == "installed_package_unavailable":
+        return (
+            f"{runtime_line} Installed private package mode was requested, but the runtime package is not importable in this run. "
+            "No checkout path was exposed, which is correct for this mode, but external v6 enrichment cannot be claimed until a real package or approved runtime artifact is installed. "
+            f"{expected_secret} Secret value remains hidden."
         )
     if runtime["effective_mode"] == "installed_package" and not local_path_present:
         return (
@@ -404,12 +412,13 @@ def _topocore_runtime_snapshot(*, workflow: dict[str, Any]) -> dict[str, str]:
     runtime = resolve_topocore_v6_runtime_mode()
     requested_mode = str(runtime["requested_mode"])
     local_path_kind = str(runtime["local_path_kind"])
+    package_import_available = bool(runtime.get("package_import_available", False))
     if requested_mode == "invalid":
         effective_mode = "invalid"
     elif requested_mode == "disabled":
         effective_mode = "disabled"
     elif requested_mode == "installed_package":
-        effective_mode = "installed_package"
+        effective_mode = "installed_package" if package_import_available else "installed_package_unavailable"
     elif requested_mode in {"private_checkout", "local_path"}:
         effective_mode = requested_mode
     elif local_path_kind == "private_checkout":
@@ -423,6 +432,8 @@ def _topocore_runtime_snapshot(*, workflow: dict[str, Any]) -> dict[str, str]:
 
     if effective_mode == "installed_package":
         dependency_mode = "installed_private_package"
+    elif effective_mode == "installed_package_unavailable":
+        dependency_mode = "installed_private_package_unavailable"
     elif effective_mode == "private_checkout":
         dependency_mode = "private_checkout_beta_only"
     elif effective_mode == "local_path":
@@ -440,6 +451,7 @@ def _topocore_runtime_snapshot(*, workflow: dict[str, Any]) -> dict[str, str]:
         "requested_mode": requested_mode,
         "effective_mode": effective_mode,
         "dependency_mode": dependency_mode,
+        "package_import_available": package_import_available,
     }
 
 

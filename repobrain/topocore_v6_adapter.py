@@ -336,6 +336,7 @@ def resolve_topocore_v6_runtime_mode(
         "requested_mode": requested_mode,
         "local_path_configured": local_path_configured,
         "local_path_kind": local_path_kind,
+        "package_import_available": _package_import_available(),
         "invalid_mode": invalid,
         "beta_only_private_checkout": requested_mode == "private_checkout" or local_path_kind == "private_checkout",
         "disabled": requested_mode == "disabled",

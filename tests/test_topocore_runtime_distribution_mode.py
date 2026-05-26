@@ -129,3 +129,40 @@ def test_invalid_runtime_mode_fails_safely() -> None:
 
     assert diagnostics.ok is False
     assert diagnostics.failure_category == 'topocore_v6_invalid_runtime_mode'
+
+
+def test_installed_package_mode_reports_unavailable_when_package_is_not_importable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workflow = tmp_path / '.github' / 'workflows' / 'repobrain.yml'
+    workflow.parent.mkdir(parents=True, exist_ok=True)
+    workflow.write_text(
+        'name: repobrain\npermissions:\n  contents: read\n  issues: write\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('RB_TOPOCORE_V6_RUNTIME_MODE', 'installed_package')
+
+    doctor_report = build_doctor_report(repo_root=tmp_path, query='', github_context={})
+    status_report = build_status_report(repo_root=tmp_path, query='', github_context={})
+    doctor_md = render_doctor_markdown(report=doctor_report, audit_summary={
+        'requested_backend': 'auto',
+        'resolved_backend': 'not_applicable',
+        'fallback_used': 'not_applicable',
+        'fallback_reason': 'doctor_diagnostic_report',
+    })
+    status_md = render_status_markdown(report=status_report, audit_summary={
+        'requested_backend': 'auto',
+        'resolved_backend': 'not_applicable',
+        'fallback_used': 'not_applicable',
+        'fallback_reason': 'status_report_only',
+    })
+
+    assert doctor_report['topocore_runtime_mode_requested'] == 'installed_package'
+    assert doctor_report['topocore_runtime_mode_effective'] == 'installed_package_unavailable'
+    assert doctor_report['topocore_dependency_mode'] == 'installed_private_package_unavailable'
+    assert doctor_report['overall_status'] == 'WARN'
+    assert status_report['topocore_runtime_mode_effective'] == 'installed_package_unavailable'
+    assert 'installed private package mode was requested, but the runtime package is not importable' in doctor_md.lower()
+    assert 'installed_package_unavailable' in status_md
+    assert 'appears available without exposing a checkout path' not in doctor_md.lower()
