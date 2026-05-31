@@ -5651,6 +5651,190 @@ def _resolve_answer_grounding_mode(*, pr_metadata_used: bool, evidence_count: in
     return "hybrid" if int(evidence_count) > 0 else "pr_metadata"
 
 
+_OPERATIONAL_ASK_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("runtime_status", ("runtime mode", "installed package", "installed-package", "private checkout", "private_checkout")),
+    ("workflow_status", ("workflow location", "workflow file", "workflow path", "where is the workflow")),
+    ("public_readiness", ("public readiness", "public-switch", "public switch", "owner approval", "partner readiness")),
+    ("release_status", ("release tag", "rc tag", "pinning", "release status")),
+    ("safety_status", ("no-mutation", "no mutation", "patch/autofix", "patch autofix", "safety status")),
+    ("permissions_status", ("permissions", "least privilege", "permission model")),
+)
+
+
+def _classify_operational_ask_intent(question: str) -> str | None:
+    normalized = " ".join(str(question or "").strip().lower().split())
+    if not normalized:
+        return None
+    matched_kinds: list[str] = []
+    for kind, patterns in _OPERATIONAL_ASK_PATTERNS:
+        if any(pattern in normalized for pattern in patterns):
+            matched_kinds.append(kind)
+    if not matched_kinds:
+        return None
+    if "public_readiness" in matched_kinds:
+        return "public_readiness"
+    if "runtime_status" in matched_kinds or "workflow_status" in matched_kinds:
+        return "runtime_status"
+    return matched_kinds[0]
+
+
+def _control_plane_root(repo_root: Path) -> Path:
+    action_path = str(os.environ.get("GITHUB_ACTION_PATH", "") or "").strip()
+    if action_path:
+        candidate = Path(action_path)
+        if candidate.exists():
+            return resolve_repo_root(candidate)
+    return resolve_repo_root(repo_root)
+
+
+def _safe_repo_relative_path(path: Path, repo_root: Path) -> str:
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return path.name or path.as_posix()
+
+
+def _read_markdown(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _read_public_readiness_status(control_plane_root: Path) -> str:
+    text = _read_markdown(control_plane_root / "docs" / "release" / "PUBLIC_READINESS_ASSESSMENT.md")
+    if not text:
+        return "UNKNOWN"
+    match = re.search(
+        r"current public readiness decision:\s*`([^`]+)`",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return str(match.group(1) or "UNKNOWN").strip().upper() or "UNKNOWN"
+    for token in (
+        "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF",
+        "PUBLIC_BLOCKED_BY_RUNTIME_PROOF",
+        "PUBLIC_BLOCKED_BY_PACKAGE_DELIVERY",
+        "PUBLIC_BLOCKED_BY_TOKEN_SCOPE",
+        "PUBLIC_BLOCKED_BY_ARTIFACT_SECURITY",
+        "PUBLIC_BLOCKED_BY_VALIDATION",
+        "PUBLIC_BLOCKED_BY_LIVE_SMOKE",
+        "PUBLIC_READY_PENDING_OWNER_APPROVAL",
+    ):
+        if token.lower() in text.lower():
+            return token
+    return "UNKNOWN"
+
+
+def _read_installed_package_proof_status(control_plane_root: Path) -> str:
+    text = _read_markdown(control_plane_root / "docs" / "release" / "INSTALLED_PACKAGE_LIVE_PROOF.md")
+    if not text:
+        return "UNKNOWN"
+    for token in (
+        "INSTALLED_PACKAGE_LIVE_PROOF_PASSED",
+        "INSTALLED_PACKAGE_LIVE_PROOF_FAILED",
+        "INSTALLED_PACKAGE_LIVE_PROOF_BLOCKED",
+    ):
+        if token.lower() in text.lower():
+            return token
+    return "UNKNOWN"
+
+
+def _public_readiness_next_step(status: str) -> str:
+    normalized = str(status or "UNKNOWN").strip().upper()
+    if normalized == "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF":
+        return "Seek explicit owner approval for the public visibility switch and selected partner pilot."
+    if normalized == "PUBLIC_READY_PENDING_OWNER_APPROVAL":
+        return "Seek explicit owner approval before switching RepoBrain-Action visibility."
+    if normalized == "PUBLIC_BLOCKED_BY_RUNTIME_PROOF":
+        return "Complete external installed-package live proof so audit/score resolve real `v6` without `private_checkout`."
+    if normalized == "PUBLIC_BLOCKED_BY_PACKAGE_DELIVERY":
+        return "Operationalize private artifact/package delivery for external workflows without source checkout."
+    if normalized == "PUBLIC_BLOCKED_BY_TOKEN_SCOPE":
+        return "Tighten partner/package credential scope so external install works without broad source-repo access."
+    if normalized == "PUBLIC_BLOCKED_BY_ARTIFACT_SECURITY":
+        return "Strengthen artifact integrity and delivery assurances before public-switch approval."
+    if normalized == "PUBLIC_BLOCKED_BY_VALIDATION":
+        return "Re-run the validation suite and close remaining red checks before asking for approval."
+    if normalized == "PUBLIC_BLOCKED_BY_LIVE_SMOKE":
+        return "Resolve the live smoke failure and re-run the final operational smoke before asking for approval."
+    return "Review `docs/release/PUBLIC_READINESS_ASSESSMENT.md` and rerun `/repobrain doctor` or `/repobrain status` if runtime truth looks stale."
+
+
+def _maybe_refine_operational_ask_answer(
+    *,
+    repo_root: Path,
+    cmd: str,
+    question: str,
+    answer_text: str,
+    next_steps: str,
+    audit_summary: dict[str, Any],
+    github_context: dict[str, Any] | None,
+) -> tuple[str, str, dict[str, Any]]:
+    if cmd != "ask":
+        return answer_text, next_steps, audit_summary
+    route = str(audit_summary.get("route_final", audit_summary.get("route", "FAST")) or "FAST").strip().upper()
+    if route in {"WAIT", "REFUSE", "BLOCK"}:
+        return answer_text, next_steps, audit_summary
+    operational_kind = _classify_operational_ask_intent(question)
+    if operational_kind is None:
+        return answer_text, next_steps, audit_summary
+
+    status_report = build_status_report(repo_root=repo_root, query=question, github_context=github_context)
+    workflow_path = Path(repo_root) / ".github" / "workflows" / "repobrain.yml"
+    workflow_location = (
+        _safe_repo_relative_path(workflow_path, repo_root)
+        if workflow_path.exists()
+        else ".github/workflows/repobrain.yml (not found)"
+    )
+    control_plane_root = _control_plane_root(repo_root)
+    public_readiness_status = _read_public_readiness_status(control_plane_root)
+    installed_package_proof_status = _read_installed_package_proof_status(control_plane_root)
+    requested_backend = str(audit_summary.get("requested_backend", "auto") or "auto")
+    resolved_backend = str(audit_summary.get("resolved_backend", "not_applicable") or "not_applicable")
+    fallback_used = str(audit_summary.get("fallback_used", "not_applicable") or "not_applicable")
+    fallback_reason = str(audit_summary.get("fallback_reason", "not_applicable") or "not_applicable")
+    dependency_mode = str(status_report.get("topocore_dependency_mode", "auto_not_detected") or "auto_not_detected")
+    runtime_requested = str(status_report.get("topocore_runtime_mode_requested", "auto") or "auto")
+    runtime_effective = str(status_report.get("topocore_runtime_mode_effective", "auto") or "auto")
+
+    if dependency_mode == "installed_private_package":
+        dependency_summary = "installed private package active; private TopoCore source checkout is not used."
+    elif dependency_mode == "installed_private_package_unavailable":
+        dependency_summary = "installed private package was requested, but no importable runtime package is available in this run."
+    elif dependency_mode == "private_checkout_beta_only":
+        dependency_summary = "private_checkout beta-only path is active for this run."
+    elif dependency_mode == "local_path_dev_only":
+        dependency_summary = "local_path development-only runtime is active for this run."
+    else:
+        dependency_summary = f"dependency mode is `{dependency_mode}`."
+
+    answer_lines = [
+        "Current RepoBrain operational status:",
+        f"- Workflow location: `{workflow_location}`",
+        f"- TopoCore runtime mode: requested `{runtime_requested}`, effective `{runtime_effective}`",
+        f"- TopoCore dependency mode: `{dependency_mode}`",
+        f"- Runtime delivery: {dependency_summary}",
+        f"- Public-switch readiness: `{public_readiness_status}`",
+        f"- Installed-package live proof: `{installed_package_proof_status}`",
+        f"- Backend evidence for this run: requested `{requested_backend}` -> resolved `{resolved_backend}`; fallback `{fallback_used}` / `{fallback_reason}`",
+        "- Safety: no patch/autofix, no RepoBrain-created branch/commit/PR, no TopoCore source exposure in user-facing output.",
+    ]
+    operational_next_step = _public_readiness_next_step(public_readiness_status)
+    answer_lines.append(f"- Next step: {operational_next_step}")
+
+    refined_summary = dict(audit_summary)
+    refined_summary["operational_ask_intent"] = True
+    refined_summary["operational_ask_kind"] = operational_kind
+    refined_summary["workflow_location"] = workflow_location
+    refined_summary["public_readiness_status"] = public_readiness_status
+    refined_summary["installed_package_proof_status"] = installed_package_proof_status
+    if route in {"REVIEW", "DEEP"}:
+        refined_summary["route_final"] = "FAST"
+    return "\n".join(answer_lines), operational_next_step, refined_summary
+
+
 def _build_qa_markdown(
     *,
     repo_root: Path,
@@ -5981,6 +6165,15 @@ def _build_qa_markdown(
         llm_meta=llm_meta,
         provider_hint=cfg.llm.provider,
     )
+    answer_text_out, next_steps_out, audit_summary = _maybe_refine_operational_ask_answer(
+        repo_root=resolved_repo_root,
+        cmd=cmd,
+        question=question,
+        answer_text=answer_text_out,
+        next_steps=result.next_steps,
+        audit_summary=audit_summary,
+        github_context=qa_github_context,
+    )
     audit_summary["command"] = cmd
     desired_llm = str(audit_summary.get("execution_mode", "retrieval_only")) == "retrieval_plus_llm"
     if desired_llm and not bool(llm_meta.get("llm_used", False)):
@@ -6190,7 +6383,7 @@ def _build_qa_markdown(
             answer_text=answer_text_out,
             evidence=evidence_out,
             audit_summary=audit_summary,
-            next_steps=result.next_steps,
+            next_steps=next_steps_out,
             command=cmd,
             repo=extract_repo_from_env() or None,
             sha=extract_sha_from_env() or None,
