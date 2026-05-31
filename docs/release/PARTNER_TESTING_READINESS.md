@@ -1,4 +1,4 @@
-﻿# Partner Testing Readiness
+# Partner Testing Readiness
 
 ## 1. Purpose
 
@@ -6,14 +6,15 @@ This document prepares RepoBrain for selected partner testing after explicit own
 
 ## 2. Current Status
 
-- RepoBrain-Action remains private in Sprint 86.
+- RepoBrain-Action remains private in Sprint 86 and Sprint 87.
 - Public visibility has not been switched.
 - Marketplace work has not started.
 - final public visibility still requires explicit owner approval.
-- final issue-comment smoke on Elen-MCP passed for doctor, status, audit, and score.
-- ask completed without leakage, but its answer quality was weaker than the command-specific smoke outputs.
+- final issue-comment smoke on Elen-MCP passed for doctor, status, audit, score, and ask.
+- operational ask quality is now materially improved for runtime/workflow/public-readiness questions.
 - enterprise P0 hardening is complete enough to isolate the remaining blocker.
-- current public-switch blocker: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
+- current public-switch blocker: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
+- historical Sprint 86 blocker remains recorded as: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
 
 ## 3. Partner Prerequisites
 
@@ -49,7 +50,10 @@ Current truth:
 - Sprint 86 live-proof result:
   - local packaging/install proof: passed
   - external installed-package delivery proof: blocked
-  - partner rollout must not start on installed-package mode until that delivery path is operationally proven
+- Sprint 87 live-proof result:
+  - private source checkout still avoided in the external proof branch
+  - exact blocker moved from generic runtime-proof uncertainty to `TOKEN_SCOPE_NOT_READY`
+  - partner rollout must not start on installed-package mode until artifact/package token scope is operationally proven
 
 Honest limitation:
 - a normal Python package artifact can still contain readable implementation files
@@ -94,3 +98,4 @@ Honest limitation:
 - static fallback remains available when authorized `v6` runtime is absent
 - `v6` enrichment requires authorized runtime access
 - RC tag creation remains pending owner approval
+- installed-package external delivery remains blocked until token scope is ready for private artifact or package retrieval without source checkout

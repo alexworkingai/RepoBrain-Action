@@ -29,6 +29,8 @@ def test_operational_ask_answer_includes_runtime_workflow_and_readiness(
         encoding="utf-8",
     )
     control_plane_root = tmp_path / "repobrain-control"
+    control_plane_root.mkdir(parents=True, exist_ok=True)
+    (control_plane_root / "pyproject.toml").write_text("[project]\nname = 'repobrain-control'\n", encoding="utf-8")
     release_dir = control_plane_root / "docs" / "release"
     release_dir.mkdir(parents=True, exist_ok=True)
     (release_dir / "PUBLIC_READINESS_ASSESSMENT.md").write_text(

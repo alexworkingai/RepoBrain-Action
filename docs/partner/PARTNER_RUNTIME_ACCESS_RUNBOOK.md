@@ -53,8 +53,11 @@ This runbook defines the selected partner runtime access model for RepoBrain.
 - operational live-proof status is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
 - Sprint 86 result:
   - local package/install proof passed
-  - external delivery/install proof is still blocked
-  - do not issue partner rollout approval for this mode until the delivery path is operationally proven
+  - external delivery/install proof was still blocked
+- Sprint 87 result:
+  - private workflow artifact proof path was built successfully
+  - external proof still blocked on `TOKEN_SCOPE_NOT_READY`
+  - do not issue partner rollout approval for this mode until artifact/package retrieval works with the intended scoped credential
 
 ## Package Caveat
 
@@ -74,3 +77,4 @@ This runbook defines the selected partner runtime access model for RepoBrain.
 4. confirm revocation owner
 5. confirm partner received setup instructions
 6. confirm no TopoCore source rights were granted
+7. confirm the credential can retrieve the approved private runtime artifact or package without source checkout

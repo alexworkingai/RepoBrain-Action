@@ -33,6 +33,7 @@ Current truth:
 - Sprint 84 resolves the private TopoCore runtime distribution gate for public-ready partner testing by selecting installed private package mode, preserving `private_checkout` as beta-only, and hardening runtime-mode diagnostics
 - Sprint 85 prepares the public visibility approval checklist, partner testing pack, RC tag plan, and pre-public smoke/runbook surface without switching visibility
 - Sprint 86 adds enterprise P0 hardening before any public switch by strengthening supply-chain baselines, release-integrity docs/workflows, governance evidence, mutation-surface cleanup, workflow least privilege, and maintainability controls
+- Sprint 87 proves or precisely blocks external installed-package runtime delivery and hardens operational ask quality without switching visibility
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -167,6 +168,7 @@ Phase 7:
 - `docs/architecture/SPRINT_84_TOPOCORE_RUNTIME_DISTRIBUTION_GATE.md`
 - `docs/architecture/SPRINT_85_RC_PUBLIC_APPROVAL_PARTNER_PACK.md`
 - `docs/architecture/SPRINT_86_ENTERPRISE_P0_HARDENING.md`
+- `docs/architecture/SPRINT_87_INSTALLED_PACKAGE_RUNTIME_PROOF.md`
 - `docs/architecture/STRUCTURAL_MAINTAINABILITY_PLAN.md`
 
 ## 5. Recommended Reading Paths
@@ -309,6 +311,7 @@ Current decision state:
 - production and Marketplace switch are not approved
 - public visibility still requires explicit owner approval even after the Sprint 84 distribution gate decision
 - Sprint 85 approval packaging does not itself switch visibility or create a release tag
+- Sprint 87 still does not switch visibility and keeps public readiness blocked until token-scoped installed-package delivery works externally
 
 ## 7. Repository Boundary Summary
 

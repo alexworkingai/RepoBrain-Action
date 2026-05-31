@@ -21,7 +21,12 @@ def test_public_visibility_approval_checklist_states_private_owner_approval_and_
     assert 'not switched in sprint 86' in text
     assert 'marketplace work is not started' in text
     assert 'explicit owner approval' in text
-    assert 'public_blocked_by_runtime_proof' in text or 'public_visibility_approval_pack_ready' in text or 'public_ready_pending_owner_approval' in text
+    assert (
+        'public_blocked_by_runtime_proof' in text
+        or 'public_blocked_by_token_scope' in text
+        or 'public_visibility_approval_pack_ready' in text
+        or 'public_ready_pending_owner_approval' in text
+    )
 
 
 def test_public_visibility_approval_checklist_covers_decisions_and_gates() -> None:

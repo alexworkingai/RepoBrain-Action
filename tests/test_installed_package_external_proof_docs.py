@@ -38,4 +38,8 @@ def test_public_readiness_alignment_matches_proof_outcome() -> None:
     if "installed_package_live_proof_passed" in proof:
         assert "public_switch_ready_after_runtime_proof" in readiness
     else:
-        assert "public_blocked_by_runtime_proof" in readiness or "public_blocked_by_package_delivery" in readiness
+        assert (
+            "public_blocked_by_runtime_proof" in readiness
+            or "public_blocked_by_package_delivery" in readiness
+            or "public_blocked_by_token_scope" in readiness
+        )

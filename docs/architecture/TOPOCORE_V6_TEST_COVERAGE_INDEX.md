@@ -87,6 +87,11 @@ Current test baseline:
 | `tests/test_github_actions_permission_model.py` | Sprint 86 permission model docs and workflow surfaces | Phase 7 | External read-mostly baseline, isolated internal publisher writes, no `pull_request_target`, and documented write-permission justification | No |
 | `tests/test_structural_maintainability_plan.py` | Sprint 86 maintainability docs and hotspot script | Phase 7 | Hotspot inventory, safe decomposition order, no-risky-rewrite stance, and machine-readable hotspot reporting | No |
 | `tests/test_enterprise_p0_hardening_docs.py` | Sprint 86 hardening report and architecture note | Phase 7 | Enterprise P0 hardening report exists, pre-public truth stays explicit, and no false public/Marketplace claims are introduced | No |
+| `tests/test_installed_package_delivery_design_docs.py` | Sprint 87 installed-package delivery design docs | Phase 7 | Selected delivery path, token model, artifact integrity, source-checkout avoidance, and wheel-readability caveat remain explicit | No |
+| `tests/test_installed_package_external_proof_docs.py` | Sprint 87 installed-package proof docs | Phase 7 | Live proof status is explicit, checkout avoidance truth is preserved, and public-readiness alignment follows the proof outcome honestly | No |
+| `tests/test_installed_package_runtime_mode_strict.py` | `repobrain/topocore_v6_adapter.py` | Phase 7 | Installed-package mode ignores local path/private checkout, fails safely when package import is unavailable, and sanitizes runtime failures | No |
+| `tests/test_operational_ask_quality.py` | `repobrain/github_flow.py` | Phase 7 | Operational ask intent is recognized and rendered as workflow/runtime/public-readiness status rather than a misleading review-style answer | No |
+| `tests/test_sprint87_public_readiness_decision.py` | Sprint 87 readiness docs | Phase 7 | Sprint 87 architecture note exists and public-readiness docs surface the post-proof decision truthfully | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -238,6 +243,10 @@ Current tests prove that:
   - dormant mutation helper removal is enforced
   - least-privilege internal/external workflow posture is covered
   - maintainability hotspot visibility is documented without claiming a risky rewrite
+- Sprint 87 adds installed-package proof and operational-ask coverage:
+  - installed-package delivery design and proof outcome are documented with explicit blocker taxonomy
+  - installed-package mode keeps ignoring local path/private checkout even in failure cases
+  - operational ask answers now surface workflow/runtime/public-readiness truth directly
 
 ## 6. What Tests Do Not Prove
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This report records the Sprint 86 enterprise P0 hardening pass before any public visibility approval.
+This report records the Sprint 86 enterprise P0 hardening pass before any public visibility approval and the Sprint 87 runtime-proof follow-through.
 
 ## Meta-Audit Baseline
 
@@ -29,6 +29,7 @@ Targeted gaps:
 - mutation-surface cleanup work recorded
 - internal workflow permission model documented and tightened where safe
 - hotspot visibility and containment plan added
+- Sprint 87 added an external installed-package delivery design, a private runtime artifact proof workflow, and operational ask quality hardening
 
 ## What Was Verified Live
 
@@ -37,20 +38,22 @@ Targeted gaps:
   - status
   - audit
   - score
-- ask completed without leakage, but the answer quality remained weaker than the command-specific smoke responses
-- installed-package proof was attempted on a workflow-only branch without `private_checkout`
+  - ask
+- ask now returned a precise operational status answer without secret or source leakage
+- installed-package proof was re-attempted on a workflow-only branch without `private_checkout`
 - local private packaging truth was also verified from an installed wheel in a clean environment
 
 ## What Remains
 
 - installed-package external delivery remains the blocking gate
+- exact runtime-proof blocker is now `TOKEN_SCOPE_NOT_READY`
 - governance API visibility remains partially unknown under `403`
 - provenance/attestation is prepared but not yet exercised as a real release
 - structural hotspots remain contained, not eliminated
 
 ## Public Switch Decision
 
-- `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`
+- `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`
 
 Allowed final states:
 
@@ -58,6 +61,7 @@ Allowed final states:
 - `PUBLIC_BLOCKED_BY_SUPPLY_CHAIN`
 - `PUBLIC_BLOCKED_BY_GOVERNANCE`
 - `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`
+- `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`
 - `PUBLIC_BLOCKED_BY_MUTATION_SURFACE`
 - `PUBLIC_BLOCKED_BY_RELEASE_INTEGRITY`
 - `PUBLIC_BLOCKED_BY_VALIDATION`

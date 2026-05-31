@@ -8,6 +8,7 @@ This document records the Sprint 87 delivery design for proving external `instal
 
 - selected delivery path: `temporary_controlled_artifact_proof`
 - Sprint 87 proof uses a private TopoCore workflow artifact consumed by an external workflow with `RB_TOPOCORE_V6_RUNTIME_MODE=installed_package`
+- the proof workflow downloads the approved wheel artifact plus SHA-256 sidecar, verifies the hash, and then installs the wheel in the external runner
 - this is acceptable as a runtime-proof path because it avoids private source checkout in the consumer repository while keeping delivery under owner-controlled scope
 
 ## Rejected Alternatives
@@ -25,6 +26,7 @@ This document records the Sprint 87 delivery design for proving external `instal
 - do not use a shared broad PAT
 - do not expose token values in workflow logs
 - keep per-partner or equally narrow runtime access as the long-term partner model
+- Sprint 87 finding: the currently available scoped credential could not read the private GitHub Actions artifact, so the exact blocker became `TOKEN_SCOPE_NOT_READY`
 
 ## Artifact/Package Integrity
 
@@ -47,8 +49,8 @@ This document records the Sprint 87 delivery design for proving external `instal
 
 ## Partner Rollout Implication
 
-- if the proof passes, selected partner rollout can proceed on an owner-approved, controlled installed-package path
-- if the proof blocks, public visibility remains blocked by runtime proof or package delivery readiness
+- if token-scoped artifact or package delivery becomes operational, selected partner rollout can proceed on an owner-approved, controlled installed-package path
+- until then, public visibility remains blocked by token-scoped runtime delivery proof
 
 ## Production Hardening Next Step
 

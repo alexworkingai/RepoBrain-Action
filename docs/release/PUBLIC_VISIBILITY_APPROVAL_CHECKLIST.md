@@ -7,9 +7,10 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 ## 2. Current State
 
 - RepoBrain-Action is still private.
-- Public visibility is not switched in Sprint 86.
+- Public visibility is not switched in Sprint 86 or Sprint 87.
 - Marketplace work is not started.
-- Current product status: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
+- Current product status: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
+- Historical Sprint 86 blocker remains recorded as: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
 - Sprint 85 approval-pack state remains recorded as: `PUBLIC_VISIBILITY_APPROVAL_PACK_READY`.
 
 ## 3. Approval Decision
@@ -23,16 +24,17 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 ## 4. Technical Readiness
 
 - command surface is complete
-- audit live `v6`-enriched scoring passed
-- score live `v6`-enriched scoring passed
+- audit live `v6`-enriched scoring passed on the normal controlled runtime path
+- score live `v6`-enriched scoring passed on the normal controlled runtime path
 - doctor and status live passed
+- operational ask quality now returns workflow/runtime/public-readiness status cleanly
 - runtime mode is explicit
 - `installed_private_package` is selected for selected partner testing
 - `private_checkout` remains beta-only fallback
 - validation is green
 - enterprise P0 hardening adds SECURITY / CONTRIBUTING / CODEOWNERS, supply-chain workflows, governance documentation, and mutation-surface cleanup
 - release, onboarding, command, and troubleshooting docs are updated
-- external installed-package delivery is not yet live-proven, so this checklist cannot move to approval while that blocker remains
+- external installed-package delivery is not yet live-proven because the current scoped credential cannot fetch the approved private runtime artifact
 
 ## 5. Security Readiness
 
@@ -61,6 +63,7 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - partner feedback template is complete
 - partner troubleshooting path is complete
 - runtime/token issuance runbook is complete
+- installed-package rollout remains blocked until token scope is ready for external artifact retrieval
 
 ## 8. Public Switch Procedure
 
@@ -71,6 +74,7 @@ Pre-switch checks:
 3. confirm no secret, token-like, or private-path residue remains in tracked files
 4. confirm partner runtime/token issuance process is ready for first testers
 5. confirm selected partner docs point to the correct runtime distribution mode
+6. confirm installed-package delivery credential scope works without source checkout
 
 Switch step:
 
@@ -95,6 +99,7 @@ Rollback note:
 ## 9. Final Decision
 
 - `BLOCKED_BY_RUNTIME`
+- exact blocker: `TOKEN_SCOPE_NOT_READY`
 
 Other allowed outcomes:
 
