@@ -11,6 +11,7 @@
 - audit and score run live in real `v6`-enriched mode when the authorized private runtime is available
 - doctor and status are report-only and truthful about runtime state
 - operational `/repobrain ask` answers runtime/workflow/public-readiness questions as a status/ops response rather than a generic review-style synthesis
+- Sprint 92A manual issue smoke hotfix removed private checkout evidence leakage, aligned issue-mode LLM diagnostics with actual execution, and corrected locate/explain issue UX
 - no patch/autofix
 - no RepoBrain-created branch, commit, or PR behavior
 - no `v5`
@@ -83,7 +84,8 @@ Now that RepoBrain-Action is public:
 
 ## Decision
 
-- current public readiness decision: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`
+- current public readiness decision: `PARTNER_PILOT_READY_AFTER_MANUAL_SMOKE_HOTFIX`
+- historical Sprint 91 post-switch decision: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`
 - Marketplace decision: `MARKETPLACE_NOT_READY`

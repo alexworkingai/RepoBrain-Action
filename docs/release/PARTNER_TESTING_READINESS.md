@@ -15,7 +15,9 @@ This document defines the selected-partner testing state after the Sprint 91 pub
 - operational ask quality is materially improved for runtime/workflow/public-readiness questions.
 - deterministic retrieval and TopoCore-backed synthesis remain valid when issue-mode LLM policy or provider availability prevents an LLM call.
 - enterprise P0 hardening remains in force after the switch.
-- current public readiness status: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
+- current public readiness status: `PARTNER_PILOT_READY_AFTER_MANUAL_SMOKE_HOTFIX`.
+- Sprint 92A manual issue smoke hotfix passed for help, doctor, status, ask, locate, explain, audit, score, and the deprecated lite-alias regression.
+- historical Sprint 91 post-switch status remains recorded as: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
 - historical Sprint 90 readiness remains recorded as: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
 - historical Sprint 88 / Sprint 89 gate remains recorded as: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
 - historical Sprint 87 blocker remains recorded as: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.

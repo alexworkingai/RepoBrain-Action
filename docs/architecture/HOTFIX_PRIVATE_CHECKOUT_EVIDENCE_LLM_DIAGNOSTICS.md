@@ -109,19 +109,38 @@ This preserves trust without overloading issue comments with low-value counters 
 
 ## 9. Live MCP Retest
 
-Live MCP retest is required only after local validation passes and the hotfix is merged to `main`.
+Live MCP retest completed after the hotfix was merged to `main`.
 
-The retest must confirm:
+Safe issue:
 
-- no `.topocore-v6` or private checkout evidence in user-facing output
-- clean supported command surface without the removed lite alias
-- consistent LLM diagnostics
-- `Route: LOCATE` for locate
-- `Route: EXPLAIN` plus a real explanation for explain
+- `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/40`
+
+Completed issue-command smoke:
+
+- help: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26761867497`
+- doctor: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26761912206`
+- status: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26761961307`
+- ask operational status: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26762001625`
+- locate: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26762049849`
+- explain: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26762105439`
+- ask partner-pilot risks: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26762147420`
+- audit: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26762183999`
+- score: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26762234301`
+- deprecated lite alias regression: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26762276927`
+
+Observed result:
+
+- no `.topocore-v6` or private checkout evidence appeared in user-facing output
+- help, doctor, and status no longer advertised the deprecated lite alias
+- operational ask reported deterministic retrieval truth when the issue-only LLM policy blocked a live LLM call
+- locate rendered `Route: LOCATE`
+- explain rendered `Route: EXPLAIN` and produced a real workflow/runtime explanation
+- audit and score stayed `v6-enriched scoring` with backend `auto -> v6`
+- the deprecated lite alias returned the generic unsupported-command response without special branding
 
 ## 10. Product Status
 
-Current hotfix target state:
+Current hotfix result:
 
 - `PARTNER_PILOT_READY_AFTER_MANUAL_SMOKE_HOTFIX`
 
