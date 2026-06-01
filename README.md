@@ -82,8 +82,15 @@ Sprint 85 approval-pack truth:
 - selected partner testing pack is now documented for controlled rollout
 - RC tag creation remains approval-gated and is not executed automatically
 
+Sprint 91 switch-planning truth:
+
+- owner approval for the RepoBrain-Action public visibility switch is now recorded
+- Sprint 91 is the controlled execution sprint for that switch
+- before the switch executes, RepoBrain-Action still remains private
+- Marketplace remains not started
+
 RepoBrain is not an LLM reseller.
-RepoBrain-Action remains private during the current pilot phase.
+RepoBrain-Action remains private until the Sprint 91 visibility switch is actually executed.
 TopoCore v6 remains private.
 `repobrain-community` is retired from the working product architecture and is not required.
 

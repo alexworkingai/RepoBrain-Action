@@ -7,13 +7,13 @@ This document prepares RepoBrain for selected partner testing after explicit own
 ## 2. Current Status
 
 - RepoBrain-Action remains private in Sprint 86, Sprint 87, Sprint 88, Sprint 89, and Sprint 90.
-- Public visibility has not been switched.
+- Public visibility has not been switched yet at Sprint 91 startup.
 - Marketplace work has not started.
-- final public visibility still requires explicit owner approval.
+- owner approval for the public visibility switch is now recorded.
 - final issue-comment smoke on Elen-MCP passed for doctor, status, audit, score, and ask.
 - operational ask quality is materially improved for runtime/workflow/public-readiness questions.
 - enterprise P0 hardening is complete enough to isolate the remaining gate.
-- current public-switch status: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
+- current pre-switch public-switch status: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
 - historical Sprint 88 / Sprint 89 gate remains recorded as: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
 - historical Sprint 87 blocker remains recorded as: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
 - historical Sprint 86 blocker remains recorded as: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
@@ -59,6 +59,7 @@ Current truth:
 Honest limitation:
 - a normal Python package artifact can still contain readable implementation files
 - selected partner testing therefore remains controlled and approval-based even when source checkout is avoided
+- Sprint 91 starts selected partner pilot kickoff preparation but does not start Marketplace work
 
 ## 6. Security Expectations
 
@@ -99,4 +100,4 @@ Honest limitation:
 - static fallback remains available when authorized `v6` runtime is absent
 - `v6` enrichment requires authorized runtime access
 - RC tag creation remains pending owner approval
-- public visibility still requires explicit owner approval even though the installed-package runtime proof gate is now closed
+- public visibility still requires controlled Sprint 91 execution even though approval is now recorded and the installed-package runtime proof gate is closed

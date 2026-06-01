@@ -4,9 +4,10 @@
 
 This runbook describes how to perform the RepoBrain public visibility switch after explicit owner approval.
 
-## Sprint 85 Boundary
+## Sprint 91 Boundary
 
-This runbook is not executed in Sprint 85.
+This runbook is executed in Sprint 91 only after pre-switch validation passes.
+It was not executed in Sprint 85.
 
 ## Prerequisites
 
@@ -14,6 +15,7 @@ This runbook is not executed in Sprint 85.
 - completed approval checklist
 - selected-partner runtime/token issuance ready
 - public-facing docs verified
+- RepoBrain-Action installed-package runtime proof already passed
 
 ## Pre-Switch Checks
 

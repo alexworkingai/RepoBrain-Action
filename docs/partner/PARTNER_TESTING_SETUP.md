@@ -43,7 +43,8 @@ RepoBrain is a guarded repository-intelligence action that reviews repository st
 - preferred mode: `installed_private_package`
 - `private_checkout` is beta-only fallback for owner-controlled environments
 - the supported authorization model is selected and live-proven
-- the remaining gate is explicit owner approval for the public visibility switch and selected partner pilot
+- owner approval for the Sprint 91 public visibility switch and selected partner pilot is now recorded
+- before the switch executes, RepoBrain-Action is still private
 
 ## Secret and Runtime Credential Setup
 

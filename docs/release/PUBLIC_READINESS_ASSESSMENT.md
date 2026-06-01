@@ -123,5 +123,6 @@ Sprint 86 enterprise hardening note:
 Sprint 90 readiness note:
 
 - the decisive installed-package proof gate is now closed with real external `v6` evidence
-- the final remaining gate is explicit owner approval for the public visibility switch and selected partner pilot
+- explicit owner approval for the public visibility switch and selected partner pilot is now recorded
+- Sprint 91 is the controlled execution sprint for the switch itself
 - public visibility must still not be switched automatically

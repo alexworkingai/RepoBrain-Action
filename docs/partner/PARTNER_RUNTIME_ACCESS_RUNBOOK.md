@@ -56,7 +56,8 @@ This runbook defines the selected partner runtime access model for RepoBrain.
   - artifact preflight passed
   - external installed-package proof reached real `v6`
   - private TopoCore source checkout remained avoided
-  - the remaining gate is explicit owner approval for the public switch and selected partner pilot
+  - owner approval for the public switch and selected partner pilot is now recorded
+  - Sprint 91 still treats the actual visibility change as a controlled manual step
 
 ## Package Caveat
 

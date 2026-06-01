@@ -8,6 +8,7 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 
 - RepoBrain-Action is still private.
 - Public visibility is not switched in Sprint 86, Sprint 87, Sprint 88, Sprint 89, or Sprint 90.
+- Public visibility is not switched yet at Sprint 91 startup.
 - Marketplace work is not started.
 - Current product status: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
 - Historical Sprint 88 / Sprint 89 gate remains recorded as: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
@@ -18,10 +19,10 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 ## 3. Approval Decision
 
 - explicit owner approval is required before any public visibility change, RC tag creation, or selected partner rollout
-- owner approves public visibility: `no` / pending explicit decision
-- owner approves selected partner testing: `no` / pending explicit decision
-- owner approves RC tag creation: `no` / pending explicit decision
-- owner approves partner runtime/token issuance: `no` / pending explicit decision
+- owner approves public visibility: `yes`
+- owner approves selected partner testing: `yes`
+- owner approves RC tag creation: `deferred` / not separately confirmed
+- owner approves partner runtime/token issuance: `yes`
 
 ## 4. Technical Readiness
 
@@ -103,7 +104,8 @@ Rollback note:
 
 - `APPROVAL_PENDING`
 - technical runtime gate is closed
-- remaining gate: explicit owner approval
+- owner approval is recorded
+- remaining step is executing the controlled public visibility switch and post-switch smoke
 
 Other allowed outcomes:
 

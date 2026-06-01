@@ -6,6 +6,8 @@
 - repository:
 - repository type:
 - date:
+- RepoBrain action ref used:
+- runtime mode used:
 
 ## Install Friction
 

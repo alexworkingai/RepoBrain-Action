@@ -82,12 +82,13 @@ Sprint 86 enterprise P0 hardening update:
 - Sprint 88 narrowed that blocker further:
   - selected authorization path is a minimum-scope artifact-read credential
 - Sprint 90 closed the installed-package runtime proof gate and moved current readiness to `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
+- Sprint 91 owner approval for the public visibility switch is now recorded, but the switch itself is not yet executed in this pre-switch package
 - issue-comment live smoke remains green for doctor, status, audit, and score after the hardening pass
 
 ## Current Limitations
 
 - TopoCore v6 remains private permanently
-- RepoBrain-Action remains private in the current pilot stage
+- RepoBrain-Action remains private at Sprint 91 startup and is scheduled for controlled visibility switch in Sprint 91
 - `/repobrain audit` is implemented as an MVP repository-level audit
 - benchmark evidence now supports the current audit MVP demo narrative
 - `/repobrain score` is now implemented as a compact summary of the same guarded audit engine
