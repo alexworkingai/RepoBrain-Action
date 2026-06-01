@@ -81,6 +81,8 @@ Sprint 90 result:
     - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749943941`
   - ask initial proof run:
     - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749945553`
+  - ask refreshed after RepoBrain `main` docs update:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26750529959`
 - runtime mode requested:
   - `installed_package`
 - runtime mode used:
@@ -102,8 +104,11 @@ Sprint 90 result:
   - fallback: `no / none`
   - final score: `77 / 100 GOOD`
 - ask result:
-  - success
-  - initial answer still surfaced the pre-merge blocked readiness docs snapshot and therefore required a post-merge refresh
+  - initial run succeeded but still surfaced the pre-merge blocked readiness docs snapshot
+  - refreshed run succeeded with:
+    - `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
+    - `INSTALLED_PACKAGE_LIVE_PROOF_PASSED`
+    - next step: explicit owner approval
 - private_checkout avoided:
   - yes
 - source checkout avoided:

@@ -61,6 +61,8 @@ This document records the Sprint 86 through Sprint 90 work to prove external `in
   - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749943941`
 - ask initial proof run:
   - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749945553`
+- ask refreshed after RepoBrain `main` docs update:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26750529959`
 
 ### Sprint 90 control smoke on main
 
@@ -129,8 +131,11 @@ This document records the Sprint 86 through Sprint 90 work to prove external `in
   - fallback: `no / none`
   - result: `v6-enriched scoring`, `77 / 100 GOOD`
 - ask:
-  - initial proof run succeeded
-  - release-doc truth lag remained visible until RepoBrain-side status docs were updated on `main`
+  - initial proof run succeeded but still reflected the pre-merge blocked docs snapshot
+  - refreshed proof run surfaced:
+    - `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
+    - `INSTALLED_PACKAGE_LIVE_PROOF_PASSED`
+    - next step: explicit owner approval
 
 ## Safety Result
 
