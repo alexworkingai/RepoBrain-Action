@@ -91,7 +91,7 @@ Live public-action smoke after the switch:
   - score: `77 / 100 GOOD`
   - backend: `auto -> v6`
 - ask refresh after docs convergence:
-  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26751660595`
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26751908673`
   - result: `success`
   - operational answer reflected public visibility, workflow location, runtime mode, and post-switch readiness truth
 
