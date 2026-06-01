@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the exact owner-side action required to unblock Sprint 88 installed-package runtime proof.
+This document records the exact owner-side action required to unblock Sprint 88 and Sprint 89 installed-package runtime proof.
 
 ## Required Credential
 
@@ -50,7 +50,7 @@ For the GitHub App path:
 ## How To Verify
 
 1. create the secret `TOPOCORE_V6_ARTIFACT_TOKEN` in `alexworkingai/Elen-MCP-v.2.2.0`
-2. run the Sprint 88 installed-package proof workflow branch
+2. rerun the installed-package proof workflow branch after the secret exists
 3. confirm private TopoCore source checkout is still avoided
 4. confirm artifact digest verification passes
 5. confirm `/repobrain doctor` and `/repobrain status` report `installed_package`
@@ -64,8 +64,10 @@ For the GitHub App path:
 - no write scopes
 - no TopoCore source rights
 
-## Current Sprint 88 State
+## Current Sprint 89 State
 
 - owner action required: `yes`
 - exact blocker state: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- Sprint 89 startup verification rechecked `alexworkingai/Elen-MCP-v.2.2.0` and the secret was still missing
+- decisive installed-package proof must not be rerun until the owner-issued credential exists
 - public visibility remains blocked until the minimum-scope credential exists and the external installed-package proof passes.

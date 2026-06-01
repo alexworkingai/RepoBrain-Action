@@ -61,6 +61,10 @@ This runbook defines the selected partner runtime access model for RepoBrain.
   - selected authorization path is `fine_grained_pat_actions_read_artifact_download`
   - exact remaining gate is `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
   - do not issue partner rollout approval for this mode until `TOPOCORE_V6_ARTIFACT_TOKEN` exists and the external proof reaches real `v6` without source checkout
+- Sprint 89 result:
+  - the owner-token gate was rechecked before any new proof attempt
+  - `TOPOCORE_V6_ARTIFACT_TOKEN` was still missing in the external consumer repository
+  - no decisive installed-package rerun is claimed until the owner-side secret exists
 
 ## Package Caveat
 

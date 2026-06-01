@@ -60,6 +60,12 @@ Sprint 88 authorization update:
 - current remaining blocker is no longer conceptual runtime uncertainty
 - current remaining blocker is owner-side issuance of the minimum-scope artifact credential into the external workflow
 
+Sprint 89 owner-token verification update:
+- the owner-action gate was rechecked before any new proof attempt
+- `TOPOCORE_V6_ARTIFACT_TOKEN` was still not present in `alexworkingai/Elen-MCP-v.2.2.0`
+- Sprint 89 therefore did not rerun the installed-package proof workflow
+- no new external installed-package runtime evidence can be claimed until the required secret exists and passes real artifact access preflight
+
 Sprint 87 normal control smoke:
 - Elen-MCP still ran successfully in controlled `private_checkout` beta mode on main
 - `/repobrain audit` remained real `v6`-enriched scoring
@@ -125,3 +131,9 @@ Sprint 88 authorization note:
 - the supported cross-repo artifact access model is now selected and documented in `docs/release/ARTIFACT_ACCESS_AUTHORIZATION_MODEL.md`
 - the remaining gap is credential issuance, not RepoBrain runtime ambiguity
 - owner action is required before the external workflow can fetch the approved private runtime artifact with the intended minimum scope
+
+Sprint 89 blocked-state note:
+
+- the decisive proof gate remained blocked because the required owner-issued secret was still absent at startup
+- the product status therefore remains `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- public visibility must not be reconsidered until the owner issues the minimum-scope artifact credential and the external installed-package proof reaches real `v6`

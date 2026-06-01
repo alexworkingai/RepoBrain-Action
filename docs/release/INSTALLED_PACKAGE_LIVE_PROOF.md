@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the Sprint 86 through Sprint 88 work to prove external `installed_package` runtime mode in a partner-like external workflow without `private_checkout` source checkout.
+This document records the Sprint 86 through Sprint 89 work to prove external `installed_package` runtime mode in a partner-like external workflow without `private_checkout` source checkout.
 
 ## Proof Target
 
@@ -79,6 +79,19 @@ This document records the Sprint 86 through Sprint 88 work to prove external `in
 - the workflow-only proof branch now reaches a dedicated installed-package credential preflight seam
 - no new external installed-package runtime start can be honestly claimed until `TOPOCORE_V6_ARTIFACT_TOKEN` exists with the selected minimum scope
 
+### Sprint 89 owner-token verification result
+
+- startup recheck:
+  - `gh secret list --repo alexworkingai/Elen-MCP-v.2.2.0`
+- expected secret:
+  - `TOPOCORE_V6_ARTIFACT_TOKEN`
+- observed result:
+  - secret still absent
+- proof rerun:
+  - not attempted
+- reason:
+  - Sprint 89 hard stop requires stopping before proof when the owner-issued artifact credential is still missing
+
 ## Results
 
 ### Installed-package proof branch
@@ -95,6 +108,9 @@ This document records the Sprint 86 through Sprint 88 work to prove external `in
 - historical exact blocker: `TOKEN_SCOPE_NOT_READY`
 - current Sprint 88 blocker: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 - observed trigger: the approved fine-grained artifact-read credential model is known, but the corresponding secret `TOPOCORE_V6_ARTIFACT_TOKEN` is not yet provisioned in `alexworkingai/Elen-MCP-v.2.2.0`
+- Sprint 89 verification result:
+  - blocker unchanged
+  - no new artifact access preflight result can be claimed because the required secret was still absent
 
 ## Backend Evidence
 
@@ -154,8 +170,11 @@ This document records the Sprint 86 through Sprint 88 work to prove external `in
 - current blocker category: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 - previous lower-level failure marker remains relevant: `TOKEN_SCOPE_NOT_READY`
 - the proof path remains blocked until an external workflow can fetch the approved private runtime artifact without source checkout and without widening access to TopoCore source
+- Sprint 89 confirms the blocker remains owner action, not a newly observed runtime or contract defect
 
 ## Conclusion
 
 - `INSTALLED_PACKAGE_LIVE_PROOF_BLOCKED`
-- Sprint 88 resolved the supported authorization model and narrowed the exact owner-side action required, but it does not claim live external installed-package success without new runtime evidence.
+- Sprint 88 resolved the supported authorization model and narrowed the exact owner-side action required.
+- Sprint 89 rechecked the decisive proof gate, found the required secret still missing, and correctly stopped without fabricating new installed-package runtime evidence.
+- This document does not claim live external installed-package success without new runtime evidence.

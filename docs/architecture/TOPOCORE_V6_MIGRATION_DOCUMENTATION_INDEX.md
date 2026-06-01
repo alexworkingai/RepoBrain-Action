@@ -35,6 +35,7 @@ Current truth:
 - Sprint 86 adds enterprise P0 hardening before any public switch by strengthening supply-chain baselines, release-integrity docs/workflows, governance evidence, mutation-surface cleanup, workflow least privilege, and maintainability controls
 - Sprint 87 proves or precisely blocks external installed-package runtime delivery and hardens operational ask quality without switching visibility
 - Sprint 88 selects the GitHub-supported artifact authorization model and narrows the remaining external installed-package gate to owner-issued minimum-scope credential provisioning
+- Sprint 89 rechecks the owner-token gate, confirms the decisive installed-package proof cannot be rerun honestly while the required secret is still absent, and records the exact blocked state without faking new runtime evidence
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -171,6 +172,7 @@ Phase 7:
 - `docs/architecture/SPRINT_86_ENTERPRISE_P0_HARDENING.md`
 - `docs/architecture/SPRINT_87_INSTALLED_PACKAGE_RUNTIME_PROOF.md`
 - `docs/architecture/SPRINT_88_ARTIFACT_ACCESS_FINAL_RUNTIME_PROOF.md`
+- `docs/architecture/SPRINT_89_OWNER_TOKEN_INSTALLED_PACKAGE_PROOF.md`
 - `docs/architecture/STRUCTURAL_MAINTAINABILITY_PLAN.md`
 
 ## 5. Recommended Reading Paths
@@ -315,6 +317,7 @@ Current decision state:
 - Sprint 85 approval packaging does not itself switch visibility or create a release tag
 - Sprint 87 still does not switch visibility and keeps public readiness blocked until token-scoped installed-package delivery works externally
 - Sprint 88 still does not switch visibility and keeps public readiness blocked until the owner issues the minimum-scope artifact credential for the external proof path
+- Sprint 89 still does not switch visibility and keeps public readiness blocked until the owner actually issues the required artifact secret and the decisive external installed-package proof reaches real `v6`
 
 ## 7. Repository Boundary Summary
 
