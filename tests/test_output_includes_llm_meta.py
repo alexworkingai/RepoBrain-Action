@@ -1,10 +1,15 @@
 ﻿from __future__ import annotations
 
+import pytest
+
 from repobrain.evidence import EvidenceItem
 from repobrain.output_md import render_answer_markdown
 
 
-def test_render_answer_markdown_includes_llm_metadata() -> None:
+def test_render_answer_markdown_includes_llm_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_answer_markdown(
         answer_text="Short answer",
         evidence=[

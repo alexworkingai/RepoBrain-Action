@@ -1,4 +1,6 @@
-from __future__ import annotations
+﻿from __future__ import annotations
+
+import pytest
 
 from repobrain.output_md import render_answer_markdown, render_patch_markdown
 
@@ -22,7 +24,7 @@ def test_primary_diagnostics_render_without_wide_table() -> None:
     )
 
     assert "| Parameter | Value | Meaning / Risk |" not in md
-    assert "Runtime diagnostics" in md
+    assert "Runtime diagnostics" not in md
     primary = md.split("<details>", 1)[0]
     assert "Runtime diagnostics" not in primary
 
@@ -46,8 +48,27 @@ def test_low_value_diagnostics_are_suppressed_from_primary_view() -> None:
 
     primary = md.split("<details>", 1)[0]
     assert "- Remote skipped reason: `n/a`" not in primary
-    assert "### Secondary diagnostics" in md
+    assert "### Secondary diagnostics" not in md
     assert "### Async batch orchestration" not in md
+
+
+def test_verbose_mode_restores_diagnostic_sections(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
+    md = render_answer_markdown(
+        answer_text="Answer",
+        evidence=[],
+        audit_summary={
+            "command": "ask",
+            "route_final": "FAST",
+            "execution_mode": "retrieval_only",
+            "retrieval_ranking_mode": "lexical",
+            "hybrid_rerank_used": False,
+        },
+        next_steps="n/a",
+        command="ask",
+    )
+
+    assert "### 🧾 Runtime diagnostics" in md
 
 
 def test_fix_output_keeps_compact_patch_sections() -> None:

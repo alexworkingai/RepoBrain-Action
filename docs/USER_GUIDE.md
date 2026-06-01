@@ -28,7 +28,6 @@ Unsupported user-facing spellings:
 
 - `/repobrain status`
 - `/repobrain doctor`
-- `/repobrain fix-lite`
 
 ## Scope Rules
 

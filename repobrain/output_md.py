@@ -4,7 +4,7 @@ import os
 import re
 from typing import Any
 
-from repobrain.audit_contract import AUDIT_V6_CONTRACT_VERSION
+from repobrain.audit_contract import AUDIT_V6_CONTRACT_VERSION, _sanitize_repo_path, _sanitize_text
 from repobrain.evidence import EvidenceItem
 from repobrain.links import make_line_link
 from repobrain.patch_governance import build_patch_governance_contract
@@ -22,6 +22,26 @@ def _route(audit_summary: dict[str, Any]) -> str:
     route = str(audit_summary.get("route_final", audit_summary.get("route", "FAST")) or "FAST")
     route = route.strip().upper()
     return route or "FAST"
+
+
+def _verbose_diagnostics_enabled() -> bool:
+    value = str(os.getenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "0") or "0").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _safe_visible_repo_path(path: Any) -> str:
+    return _sanitize_repo_path(path)
+
+
+def _safe_visible_text(text: Any) -> str:
+    return _sanitize_text(text, max_length=400)
+
+
+def _display_execution_mode(audit_summary: dict[str, Any]) -> str:
+    execution_mode = str(audit_summary.get("execution_mode", "retrieval_only") or "retrieval_only").strip()
+    if execution_mode == "retrieval_plus_llm" and not bool(audit_summary.get("llm_used", False)):
+        return "retrieval_only"
+    return execution_mode or "retrieval_only"
 
 
 _REVIEW_SCAFFOLD_ONLY_RE = re.compile(
@@ -171,7 +191,8 @@ def _render_confirmed_finding_with_evidence(
 
 
 def _compact_anchor_list(paths: list[str], *, max_items: int = 3) -> str:
-    anchors = [str(path).strip() for path in paths if str(path).strip()]
+    anchors = [_safe_visible_repo_path(path) for path in paths]
+    anchors = [path for path in anchors if path]
     if not anchors:
         return "none"
     unique = list(dict.fromkeys(anchors))
@@ -329,14 +350,19 @@ def _evidence_lines(
 ) -> list[str]:
     if not evidence:
         return ["- No source locators selected."]
-    return [
-        (
-            f"- [{_evidence_context_label_for_path(item.file_path, audit_summary)}] "
-            f"{make_line_link(repo, sha, item.file_path, item.line_start, item.line_end)} "
-            f"(score={item.score:.4f})"
+    lines: list[str] = []
+    for item in evidence:
+        safe_path = _safe_visible_repo_path(item.file_path)
+        if not safe_path:
+            continue
+        lines.append(
+            (
+                f"- [{_evidence_context_label_for_path(safe_path, audit_summary)}] "
+                f"{make_line_link(repo, sha, safe_path, item.line_start, item.line_end)} "
+                f"(score={item.score:.4f})"
+            )
         )
-        for item in evidence
-    ]
+    return lines or ["- No source locators selected."]
 
 
 def _changed_files_set(audit_summary: dict[str, Any] | None) -> set[str]:
@@ -345,7 +371,12 @@ def _changed_files_set(audit_summary: dict[str, Any] | None) -> set[str]:
     raw = audit_summary.get("touched_files", [])
     if not isinstance(raw, list):
         return set()
-    return {str(item).strip() for item in raw if str(item).strip()}
+    return {
+        safe
+        for item in raw
+        for safe in [_safe_visible_repo_path(item)]
+        if safe
+    }
 
 
 def _is_test_context_path(path: str) -> bool:
@@ -409,9 +440,14 @@ def _label_touched_file_lines(files_block: list[str], audit_summary: dict[str, A
             labeled.append(line)
             continue
         match = _TOUCHED_FILE_PATH_RE.search(line)
-        path = str(match.group(1)).strip() if match else ""
+        path = _safe_visible_repo_path(match.group(1)) if match else ""
+        if match and not path:
+            continue
         label = _evidence_context_label_for_path(path, audit_summary) if path else "Support context"
-        labeled.append(f"- [{label}] {line[2:].strip()}")
+        text = line[2:].strip()
+        if match:
+            text = text.replace(f"`{match.group(1)}`", f"`{path}`")
+        labeled.append(f"- [{label}] {text}")
     return labeled
 
 
@@ -583,8 +619,13 @@ def _normalized_budget_action(
 def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
     llm_used = bool(audit_summary.get("llm_used", False))
     skip_reason = str(audit_summary.get("llm_skip_reason", "n/a") or "n/a")
-    execution_mode = str(audit_summary.get("execution_mode", "retrieval_only") or "retrieval_only")
-    tkya_decision = "used" if execution_mode == "retrieval_plus_llm" else "not used"
+    planned_llm = str(audit_summary.get("execution_mode", "retrieval_only") or "retrieval_only") == "retrieval_plus_llm"
+    if llm_used:
+        tkya_decision = "used"
+    elif planned_llm:
+        tkya_decision = "not called"
+    else:
+        tkya_decision = "not used"
     decision_reason = str(
         audit_summary.get(
             "llm_decision_reason_short",
@@ -593,6 +634,10 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
         or "LLM not used: direct answer available from retrieved evidence."
     )
     runtime_override = str(audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a")
+    if not llm_used and planned_llm:
+        decision_reason = (
+            "LLM was not called; answer generated from deterministic retrieval/template path."
+        )
     model_id = str(audit_summary.get("llm_model_used", "not used") or "not used")
     preferred_model_id = str(audit_summary.get("llm_preferred_model_id", "n/a") or "n/a")
     final_synthesis_model_id = str(
@@ -1800,7 +1845,7 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                 ("Route", _route(audit_summary), "Final TKYA route used for this response."),
                 (
                     "Execution mode",
-                    audit_summary.get("execution_mode", "retrieval_only"),
+                    _display_execution_mode(audit_summary),
                     "Semantic decision: retrieval-only vs retrieval+LLM/verification/refuse.",
                 ),
                 ("LLM intent", audit_summary.get("llm_intent", "none"), "TKYA-selected LLM intent."),
@@ -1869,7 +1914,7 @@ def _diagnostic_groups(audit_summary: dict[str, Any]) -> list[tuple[str, list[tu
                 (
                     "Patch authorized",
                     audit_summary.get("patch_authorized", "n/a"),
-                    "Whether fix-lite governance authorized any patch action.",
+                    "Whether command governance authorized any patch action.",
                 ),
                 (
                     "Patch applied",
@@ -2131,6 +2176,8 @@ def _render_diagnostic_table(
     *,
     suppress_async_planner_rows: bool = False,
 ) -> list[str]:
+    if not _verbose_diagnostics_enabled():
+        return []
     suppressed_parameters = _ASYNC_PLANNER_DIAGNOSTIC_PARAMETERS if suppress_async_planner_rows else set()
     lines, secondary_rows = _render_compact_diagnostic_groups(
         audit_summary,
@@ -2298,6 +2345,10 @@ def render_answer_markdown(
     sha: str | None = None,
 ) -> str:
     route = _route(audit_summary)
+    if command == "locate":
+        route = "LOCATE"
+    elif command == "explain":
+        route = "EXPLAIN"
     evidence_block = _evidence_lines(evidence, repo=repo, sha=sha, audit_summary=audit_summary)
     route_header = "### ✅ Answer"
     if route == "WAIT":
@@ -2352,6 +2403,7 @@ def render_answer_markdown(
             *_render_diagnostic_table(audit_summary),
             "",
             "### 🧾 Audit anchors",
+            *_audit_anchor_lines({**audit_summary, "route_final": route}),
             *_version_backend_lines(audit_summary),
             "",
             _audit_note(),
@@ -2401,6 +2453,7 @@ def render_answer_markdown(
             *_render_diagnostic_table(audit_summary),
             "",
             "### 🧾 Audit anchors",
+            *_audit_anchor_lines({**audit_summary, "route_final": route}),
             *_version_backend_lines(audit_summary),
             "",
             _audit_note(),
@@ -2983,7 +3036,7 @@ def _audit_category_table_lines(categories: list[dict[str, Any]]) -> list[str]:
             if isinstance(evidence_paths_raw, list)
             else []
         )
-        evidence_text = ", ".join(f"`{path}`" for path in evidence_paths[:2]) if evidence_paths else "none"
+        evidence_text = _compact_anchor_list(evidence_paths) if evidence_paths else "none"
         lines.append(
             f"| {title} | {score}/{max_score} | `{label}` | {rationale} | {evidence_text} |"
         )
@@ -3385,13 +3438,10 @@ def _supported_command_lines(report: dict[str, Any]) -> list[str]:
         if isinstance(roadmap_raw, list)
         else []
     )
-    fix_lite_guidance = str(report.get("fix_lite_guidance", "") or "").strip()
     lines = [
         f"- Supported: {', '.join(f'`{item}`' for item in supported) if supported else '`n/a`'}",
         f"- Roadmap-only: {', '.join(f'`{item}`' for item in roadmap) if roadmap else '`none`'}",
     ]
-    if fix_lite_guidance:
-        lines.append(f"- fix-lite: {fix_lite_guidance}")
     return lines
 
 
@@ -3567,9 +3617,9 @@ def render_unsupported_command_markdown(
     step_lines = [f"- {item}" for item in steps] or ["- Use `/repobrain help` to review supported commands."]
     return "\n".join(
         [
-            f"# RepoBrain `{command}`",
+            "# RepoBrain command status",
             "",
-            message.strip() or "This command is not supported in the current product surface.",
+            message.strip() or "Unsupported RepoBrain command. Use /repobrain help to see supported commands.",
             "",
             "## Next steps",
             *step_lines,

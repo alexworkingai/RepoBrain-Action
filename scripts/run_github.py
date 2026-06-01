@@ -26,8 +26,8 @@ def _parse_bool(value: str) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-_LAB_COMMANDS = {"help", "ask", "review", "verify", "fix-lite"}
-_LAB_FIXTURES = {"minimal", "review", "verify", "fix_lite"}
+_LAB_COMMANDS = {"help", "ask", "review", "verify", "fix"}
+_LAB_FIXTURES = {"minimal", "review", "verify", "fix", "fix_lite"}
 
 
 def _env_str(name: str, default: str = "") -> str:
@@ -47,7 +47,7 @@ def _normalize_lab_command(value: str) -> str:
         return normalized
     raise ValueError(
         f"Invalid RepoBrain lab command: {normalized or 'empty'}. "
-        "Allowed values: help, ask, review, verify, fix-lite."
+        "Allowed values: help, ask, review, verify, fix."
     )
 
 
@@ -57,7 +57,7 @@ def _normalize_lab_fixture(value: str) -> str:
         return normalized
     raise ValueError(
         f"Invalid RepoBrain lab fixture: {normalized or 'empty'}. "
-        "Allowed values: minimal, review, verify, fix_lite."
+        "Allowed values: minimal, review, verify, fix."
     )
 
 
@@ -123,7 +123,7 @@ def _build_lab_candidates(lab_fixture: str) -> list[CandidateChunk]:
                 signature=[43, 53, 63],
             ),
         ]
-    if fixture == "fix_lite":
+    if fixture in {"fix", "fix_lite"}:
         return [
             CandidateChunk(
                 chunk_id="fix-1",
@@ -181,9 +181,9 @@ def _build_lab_candidates(lab_fixture: str) -> list[CandidateChunk]:
 def _build_lab_policy_seed(lab_command: str, lab_fixture: str) -> dict[str, Any]:
     common = {
         "github_context": {
-            "is_pr": lab_fixture in {"review", "fix_lite"},
+            "is_pr": lab_fixture in {"review", "fix", "fix_lite"},
             "issue_number": 49,
-            "pr_number": 49 if lab_fixture in {"review", "fix_lite"} else None,
+            "pr_number": 49 if lab_fixture in {"review", "fix", "fix_lite"} else None,
             "changed_files": [
                 "repobrain/topocore_backend.py",
                 "repobrain/tky_local.py",
@@ -211,7 +211,7 @@ def _build_lab_policy_seed(lab_command: str, lab_fixture: str) -> dict[str, Any]
             "verification_context": "workflow_dispatch_lab",
             "checks_considered": ["ruff", "pytest"],
         }
-    elif lab_command == "fix-lite":
+    elif lab_command == "fix":
         common["fix_draft_summary"] = {
             "no_patch_reason": "fix_lite_decision_only",
             "patch_safety_notes": [
@@ -223,7 +223,7 @@ def _build_lab_policy_seed(lab_command: str, lab_fixture: str) -> dict[str, Any]
 
 
 def _build_lab_limits(lab_command: str, lab_fixture: str) -> dict[str, Any]:
-    runtime_command = "fix" if lab_command == "fix-lite" else lab_command
+    runtime_command = lab_command
     return {
         "task_type": runtime_command,
         "requested_task_type": runtime_command,
@@ -274,7 +274,7 @@ def _sanitize_lab_evidence(
         "patch_application": False,
         "commit_branch_pr_creation": False,
     }
-    if lab_command == "fix-lite":
+    if lab_command == "fix":
         evidence.update(
             {
                 "patch_authorized": bool(compression_stats.get("patch_authorized", False)),
@@ -310,7 +310,7 @@ def _print_lab_backend_evidence(evidence: dict[str, Any]) -> None:
         "message_code",
         "confidence_band",
     ]
-    if evidence.get("lab_command") == "fix-lite":
+    if evidence.get("lab_command") == "fix":
         ordered_keys.extend(
             [
                 "patch_authorized",
@@ -350,7 +350,7 @@ def _build_lab_failure_evidence(
         "branch_created": False,
         "pr_created": False,
     }
-    if lab_command == "fix-lite":
+    if lab_command == "fix":
         evidence.update(
             {
                 "patch_authorized": False,
@@ -368,7 +368,7 @@ def run_workflow_dispatch_lab_command(*, repo_root: Path) -> dict[str, Any]:
         "RB_REPOBRAIN_LAB_QUERY",
         "Summarize current RepoBrain TopoCore backend status.",
     )
-    runtime_command = "fix" if lab_command == "fix-lite" else lab_command
+    runtime_command = lab_command
     question = question_from_command(runtime_command, lab_query)
     try:
         result = answer_question(

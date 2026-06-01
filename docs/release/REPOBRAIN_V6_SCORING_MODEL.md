@@ -84,10 +84,15 @@ A full audit output should include:
 - runtime status snapshot
 - implemented as a report-only status snapshot in Sprint 79
 
-### `/repobrain fix-lite`
+### `/repobrain fix`
 
-- unsupported
-- use `/repobrain fix`
+- safe no-patch proposal and governance path
+- remains intentionally no-mutation and does not apply patches, create commits, branches, or PRs
+- use `/repobrain fix` for proposal/governance output only
+
+### Unsupported Commands
+
+- Unsupported RepoBrain commands are outside the public scoring surface.
 
 ## 7. Implementation Status
 

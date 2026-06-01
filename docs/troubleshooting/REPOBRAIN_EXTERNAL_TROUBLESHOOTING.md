@@ -187,7 +187,6 @@ Supported score summary today:
 
 - `/repobrain score` is a compact summary of the same guarded audit engine
 - use `/repobrain audit` if the score summary is too compact and you need the full evidence report
-- `/repobrain fix-lite` is not a product command; use `/repobrain fix`
 
 ## 10. Support Boundary
 

@@ -312,7 +312,6 @@ Important current limitations:
 - `/repobrain doctor` is implemented as a report-only installation/runtime diagnostic
 - `/repobrain status` is implemented as a lightweight runtime snapshot
 - `/repobrain score` is implemented as a compact summary of the same guarded audit engine
-- `/repobrain fix-lite` is unsupported as a user-facing command spelling
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
 - there is no patch/autofix mode in the current external product path
 - public or Marketplace distribution requires separate approval and a finalized private TopoCore distribution strategy

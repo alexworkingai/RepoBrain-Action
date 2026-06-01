@@ -62,9 +62,10 @@ def test_release_readiness_docs_cover_supported_unsupported_commands_and_limitat
     for command in (
         "/repobrain status",
         "/repobrain doctor",
-        "/repobrain fix-lite",
     ):
         assert command in notes or command in sprint
+    assert "/repobrain fix-lite" not in checklist
+    assert "/repobrain fix-lite" not in notes
 
     assert "Known Limitations" in checklist
     assert "Decision" in _read("docs/release/PUBLIC_READINESS_ASSESSMENT.md")

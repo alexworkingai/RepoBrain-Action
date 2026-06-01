@@ -148,7 +148,7 @@ def test_workflow_dispatch_has_lab_command_input() -> None:
 
     assert lab_command["default"] == "help"
     assert lab_command["type"] == "choice"
-    assert lab_command["options"] == ["help", "ask", "review", "verify", "fix-lite"]
+    assert lab_command["options"] == ["help", "ask", "review", "verify", "fix"]
 
 
 def test_workflow_dispatch_has_lab_query_input() -> None:
@@ -166,7 +166,7 @@ def test_workflow_dispatch_has_lab_fixture_input() -> None:
 
     assert lab_fixture["default"] == "minimal"
     assert lab_fixture["type"] == "choice"
-    assert lab_fixture["options"] == ["minimal", "review", "verify", "fix_lite"]
+    assert lab_fixture["options"] == ["minimal", "review", "verify", "fix"]
 
 
 def test_issue_comment_is_not_affected() -> None:
@@ -288,17 +288,17 @@ def test_decide_raw_is_never_called(monkeypatch: pytest.MonkeyPatch) -> None:
     assert evidence["decide_raw_used"] is False
 
 
-def test_fix_lite_evidence_remains_conservative(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fix_lab_evidence_remains_conservative(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_run_github_module()
     monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
-    monkeypatch.setenv("RB_REPOBRAIN_LAB_COMMAND", "fix-lite")
-    monkeypatch.setenv("RB_REPOBRAIN_LAB_FIXTURE", "fix_lite")
+    monkeypatch.setenv("RB_REPOBRAIN_LAB_COMMAND", "fix")
+    monkeypatch.setenv("RB_REPOBRAIN_LAB_FIXTURE", "fix")
     monkeypatch.setenv("RB_TOPOCORE_BACKEND", "v6")
     sys.modules["topocore_v6"] = _build_fake_topocore_v6_module(decide_raw_raises=True)
 
     evidence = module.run_workflow_dispatch_lab_command(repo_root=_ROOT)
 
-    assert evidence["lab_command"] == "fix-lite"
+    assert evidence["lab_command"] == "fix"
     assert evidence["resolved_backend"] == "v6"
     assert evidence["patch_authorized"] is False
     assert evidence["patch_applied"] is False

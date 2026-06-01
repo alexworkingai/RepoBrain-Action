@@ -14,7 +14,7 @@ def test_final_command_surface_matrix_doc_exists() -> None:
     assert (ROOT / 'docs/release/FINAL_COMMAND_SURFACE_MATRIX.md').exists()
 
 
-def test_final_command_surface_matrix_lists_supported_commands_and_fix_lite_unsupported() -> None:
+def test_final_command_surface_matrix_lists_supported_commands_without_lite_alias() -> None:
     text = _read('docs/release/FINAL_COMMAND_SURFACE_MATRIX.md').lower()
 
     for command in (
@@ -29,12 +29,10 @@ def test_final_command_surface_matrix_lists_supported_commands_and_fix_lite_unsu
         '/repobrain score',
         '/repobrain doctor',
         '/repobrain status',
-        '/repobrain fix-lite',
     ):
         assert command in text
 
-    assert 'not a product command' in text
-    assert 'use `/repobrain fix`' in text
+    assert '/repobrain fix-lite' not in text
 
 
 def test_final_command_surface_matrix_keeps_audit_score_truth_and_no_mutation() -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from repobrain.audit_contract import _sanitize_repo_path
 from repobrain.evidence import EvidenceItem
 from repobrain.retrieve_pro import extract_query_terms
 from repobrain.tky_provider import CandidateChunk
@@ -30,6 +31,10 @@ def _is_docs_path(path: str) -> bool:
 def _is_low_value_path(path: str) -> bool:
     lower = str(path or "").strip().lower()
     return any(token in lower for token in _LOW_VALUE_PATH_TOKENS)
+
+
+def _is_unsafe_private_path(path: str) -> bool:
+    return not _sanitize_repo_path(path)
 
 
 def _region_key(path: str, line_start: int, line_end: int) -> tuple[str, int, int]:
@@ -68,6 +73,11 @@ def filter_candidate_evidence(
         if max_items is not None and len(filtered) >= max(1, int(max_items)):
             dropped += 1
             reason_codes.add("max_items")
+            continue
+
+        if _is_unsafe_private_path(item.file_path):
+            dropped += 1
+            reason_codes.add("unsafe_private_path")
             continue
 
         score = float(item.score)

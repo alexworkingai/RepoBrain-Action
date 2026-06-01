@@ -80,7 +80,6 @@ Sprint 91 public-switch update:
 - TopoCore v6 remains private permanently
 - `/repobrain audit` is implemented as an MVP repository-level audit
 - `/repobrain score` is implemented as a compact summary of the same guarded audit engine
-- `/repobrain fix-lite` is unsupported as a user-facing command spelling
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
 - this RC does not enable Marketplace or a public TopoCore runtime distribution
 

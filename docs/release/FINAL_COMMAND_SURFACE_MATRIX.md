@@ -13,7 +13,6 @@
 | `/repobrain score` | supported | supported with PR context | same guarded audit engine; `v6`-enriched when runtime is available | none | ready | compact summary of audit |
 | `/repobrain doctor` | supported | supported | report-only diagnostics | none | ready | install/runtime diagnostic |
 | `/repobrain status` | supported | supported | report-only runtime snapshot | none | ready | command/runtime status |
-| `/repobrain fix-lite` | unsupported | unsupported | not applicable | none | not a product command | use `/repobrain fix` |
 
 ## Notes
 

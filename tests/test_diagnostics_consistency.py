@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from repobrain.evidence import EvidenceItem
 from repobrain.output_md import (
     enforce_comment_limit,
@@ -7,6 +9,10 @@ from repobrain.output_md import (
     render_patch_markdown,
     render_review_markdown,
 )
+
+@pytest.fixture(autouse=True)
+def _enable_verbose_diagnostics(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
 
 
 def test_retained_preferred_model_does_not_render_downgrade_budget_action() -> None:

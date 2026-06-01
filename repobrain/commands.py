@@ -27,14 +27,13 @@ def parse_command(text: str) -> dict[str, str]:
         "doctor",
         "status",
         "score",
-        "fix-lite",
     }
     if cmd not in supported:
-        return {"cmd": "help", "query": ""}
+        return {"cmd": "unsupported", "query": ""}
 
     if cmd in {"help", "review", "verify"}:
         base: dict[str, str] = {"cmd": cmd, "query": ""}
-    elif cmd in {"fix", "audit", "doctor", "status", "score", "fix-lite"}:
+    elif cmd in {"fix", "audit", "doctor", "status", "score"}:
         if len(parts) >= 3:
             base = {"cmd": cmd, "query": parts[2].strip()}
         else:

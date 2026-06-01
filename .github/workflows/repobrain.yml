@@ -51,7 +51,7 @@ on:
           - ask
           - review
           - verify
-          - fix-lite
+          - fix
       repobrain_lab_query:
         description: "Manual RepoBrain lab query"
         required: false
@@ -66,7 +66,7 @@ on:
           - minimal
           - review
           - verify
-          - fix_lite
+          - fix
       topocore_v6_repository:
         description: "Manual lab TopoCore v6 repository slug"
         required: false

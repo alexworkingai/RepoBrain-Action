@@ -34,7 +34,6 @@ It does not publish the repository, change visibility, create a release tag, or 
   - `/repobrain verify`
   - `/repobrain fix`
 - unsupported command spellings documented honestly:
-  - `/repobrain fix-lite`
 - benchmark evidence now exists for the current `/repobrain audit` MVP and supports demo use with stated limitations
 
 ## External Install Readiness

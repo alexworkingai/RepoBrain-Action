@@ -17,7 +17,6 @@ Current external GitHub command surface is intentionally bounded.
 | `/repobrain status` | supported | supported | none | report-only status snapshot; backend remains explicit | runtime/product policy snapshot |
 | `/repobrain verify` | scoped unsupported or issue-safe guidance | supported | none | usually report-only / informational | verify is informational only |
 | `/repobrain fix` | scoped unsupported or safe no-patch guidance | supported | no patch, no mutation | issue: not applicable; PR: `v6` | proposal/governance only; does not apply patches |
-| `/repobrain fix-lite` | unsupported | unsupported | none | not applicable | internal terminology, use `/repobrain fix` |
 
 ## Scope Rules
 
@@ -182,6 +181,12 @@ Visible no-mutation expectations:
 
 `/repobrain fix` does not apply patches and does not mutate the repository.
 
-## Unsupported Command Spellings
+## Unsupported Commands
 
-- `/repobrain fix-lite`: `fix-lite is not a product command. Use /repobrain fix.`
+- Unsupported RepoBrain commands return a generic help-oriented response.
+
+## LLM Execution Notes
+
+- ask and explain do not require an LLM call to produce a bounded answer
+- when policy or provider availability blocks the LLM path, RepoBrain can still answer from deterministic retrieval, workflow/runtime inspection, evidence extraction, and TopoCore v6 signals
+- diagnostics must state whether the LLM was actually called

@@ -16,7 +16,7 @@ def test_command_guide_documents_doctor_status_and_score() -> None:
     assert "/repobrain doctor" in text
     assert "/repobrain status" in text
     assert "/repobrain score" in text
-    assert "/repobrain fix-lite" in text
+    assert "/repobrain fix-lite" not in text
     assert "informational 100-point repository scoring MVP" in text
     assert "compact summary view of the same audit engine" in text
 

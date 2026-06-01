@@ -13,6 +13,7 @@ This document defines the selected-partner testing state after the Sprint 91 pub
 - owner approval for the public visibility switch was recorded and executed.
 - post-switch public-action smoke on Elen-MCP passed for doctor, status, audit, score, and ask.
 - operational ask quality is materially improved for runtime/workflow/public-readiness questions.
+- deterministic retrieval and TopoCore-backed synthesis remain valid when issue-mode LLM policy or provider availability prevents an LLM call.
 - enterprise P0 hardening remains in force after the switch.
 - current public readiness status: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
 - historical Sprint 90 readiness remains recorded as: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
@@ -99,6 +100,7 @@ Honest limitation:
 
 ## 9. Known Limitations
 
+- ask and explain diagnostics must state whether the LLM was actually called; no-LLM answers can still come from deterministic retrieval, workflow inspection, and TopoCore v6 signals
 - no Marketplace
 - no public TopoCore distribution
 - no patch/autofix

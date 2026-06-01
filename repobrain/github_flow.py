@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import hashlib
@@ -30,7 +30,6 @@ from repobrain.checks_md import (
 from repobrain.config import RepoBrainConfig, env_bool, env_int, load_config
 from repobrain import __version__ as REPOBRAIN_VERSION
 from repobrain.doctor_status import (
-    FIX_LITE_GUIDANCE,
     build_doctor_report,
     build_status_report,
 )
@@ -144,7 +143,6 @@ Supported today:
 - `/repobrain score` is a compact score summary that reuses the same guarded audit engine.
 - `/repobrain doctor` is a report-only installation/runtime diagnostic.
 - `/repobrain status` is a lightweight report-only runtime status snapshot.
-- `/repobrain fix-lite` is unsupported; use `/repobrain fix`.
 - `/repobrain fix` stays no-patch/no-mutation.
 - `/repobrain verify` stays informational only.
 
@@ -321,7 +319,7 @@ class GitHubClient:
             raise RuntimeError(f"Failed to create issue comment (status={status})")
 
     def add_reaction_to_issue_comment(self, comment_id: int, content: str = "eyes") -> None:
-        """Add a reaction (default 👀) to an issue comment."""
+        """Add a reaction (default рџ‘Ђ) to an issue comment."""
         response = requests.post(
             build_reaction_url(self.repo, comment_id),
             json={"content": content},
@@ -5315,22 +5313,37 @@ def _module_reason(file_path: str) -> str:
     return "relevant to the requested behavior based on retrieval signals"
 
 
-def _build_explain_answer(evidence: list[EvidenceItem], question: str) -> str:
+def _build_explain_answer(
+    evidence: list[EvidenceItem],
+    question: str,
+    audit_summary: dict[str, Any] | None = None,
+) -> str:
     if not evidence:
         return (
             f"Question: {question}\n"
-            "Key modules likely involved:\n"
-            "- No strong module matches found."
+            "Explanation:\n"
+            "- No strong evidence-backed repository locations were selected for this explanation."
         )
 
-    modules = [item.file_path for item in evidence[:7]]
-    lines = [f"Question: {question}", "Key modules likely involved:"]
+    modules = [item.file_path for item in evidence[:5]]
+    grounding_mode = str((audit_summary or {}).get("answer_grounding_mode", "retrieval") or "retrieval")
+    lines = [
+        f"Question: {question}",
+        "Explanation:",
+        (
+            "The answer below was assembled from deterministic retrieval and repository evidence."
+            if grounding_mode == "retrieval"
+            else f"The answer below was assembled from `{grounding_mode}` grounding and repository evidence."
+        ),
+        "",
+        "Most relevant repository locations:",
+    ]
     for path in modules:
         lines.append(f"- `{path}`")
     lines.append("")
-    lines.append("Why:")
+    lines.append("How they connect:")
     for path in modules:
-        lines.append(f"- `{path}` — {_module_reason(path)}")
+        lines.append(f"- `{path}` - {_module_reason(path)}")
     return "\n".join(lines)
 
 
@@ -5498,9 +5511,9 @@ def _should_use_pr_metadata_grounding(
         "changed",
         "file",
         "files",
-        "измен",
-        "файл",
-        "пул",
+        "РёР·РјРµРЅ",
+        "С„Р°Р№Р»",
+        "РїСѓР»",
     )
     return any(marker in question_norm for marker in semantic_markers)
 
@@ -5701,6 +5714,23 @@ def _read_markdown(path: Path) -> str:
         return ""
 
 
+def _read_workflow_action_source(repo_root: Path) -> str:
+    workflow_path = repo_root / ".github" / "workflows" / "repobrain.yml"
+    text = _read_markdown(workflow_path)
+    if not text:
+        return "unknown"
+    match = re.search(
+        r"^\s*(?:-\s*)?uses:\s*([^\s#]*RepoBrain-Action[^\s#]*)",
+        text,
+        re.MULTILINE | re.IGNORECASE,
+    )
+    if not match:
+        match = re.search(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", text, re.MULTILINE)
+    if not match:
+        return "unknown"
+    return str(match.group(1) or "unknown").strip()
+
+
 def _read_public_readiness_status(control_plane_root: Path) -> str:
     text = _read_markdown(control_plane_root / "docs" / "release" / "PUBLIC_READINESS_ASSESSMENT.md")
     if not text:
@@ -5781,7 +5811,7 @@ def _maybe_refine_operational_ask_answer(
     audit_summary: dict[str, Any],
     github_context: dict[str, Any] | None,
 ) -> tuple[str, str, dict[str, Any]]:
-    if cmd != "ask":
+    if cmd not in {"ask", "explain"}:
         return answer_text, next_steps, audit_summary
     route = str(audit_summary.get("route_final", audit_summary.get("route", "FAST")) or "FAST").strip().upper()
     if route in {"WAIT", "REFUSE", "BLOCK"}:
@@ -5797,6 +5827,7 @@ def _maybe_refine_operational_ask_answer(
         if workflow_path.exists()
         else ".github/workflows/repobrain.yml (not found)"
     )
+    action_source = _read_workflow_action_source(repo_root)
     control_plane_root = _control_plane_root(repo_root)
     public_readiness_status = _read_public_readiness_status(control_plane_root)
     installed_package_proof_status = _read_installed_package_proof_status(control_plane_root)
@@ -5819,28 +5850,50 @@ def _maybe_refine_operational_ask_answer(
     else:
         dependency_summary = f"dependency mode is `{dependency_mode}`."
 
-    answer_lines = [
-        "Current RepoBrain operational status:",
-        f"- Workflow location: `{workflow_location}`",
-        f"- TopoCore runtime mode: requested `{runtime_requested}`, effective `{runtime_effective}`",
-        f"- TopoCore dependency mode: `{dependency_mode}`",
-        f"- Runtime delivery: {dependency_summary}",
-        f"- Public-switch readiness: `{public_readiness_status}`",
-        f"- Installed-package live proof: `{installed_package_proof_status}`",
-        f"- Backend evidence for this run: requested `{requested_backend}` -> resolved `{resolved_backend}`; fallback `{fallback_used}` / `{fallback_reason}`",
-        "- Safety: no patch/autofix, no RepoBrain-created branch/commit/PR, no TopoCore source exposure in user-facing output.",
-    ]
+    if cmd == "explain":
+        answer_lines = [
+            "RepoBrain is connected through the repository workflow.",
+            f"The workflow entrypoint is `{workflow_location}` and it currently references `{action_source}` as the action source.",
+            (
+                "In this issue context, the workflow runs RepoBrain in a report-only, no-mutation mode."
+            ),
+            f"For this run, the TopoCore runtime mode was requested as `{runtime_requested}` and resolved as `{runtime_effective}`.",
+            f"The dependency mode is `{dependency_mode}`, which means {dependency_summary}",
+            f"Installed-package live proof status is `{installed_package_proof_status}` and the current public-readiness state is `{public_readiness_status}`.",
+            (
+                f"Backend evidence for this run stayed at requested `{requested_backend}` -> resolved `{resolved_backend}` "
+                f"with fallback `{fallback_used}` / `{fallback_reason}`."
+            ),
+            "Safety remains unchanged: no patch/autofix, no RepoBrain-created branch/commit/PR, and no TopoCore source exposure in user-facing output.",
+        ]
+    else:
+        answer_lines = [
+            "Current RepoBrain operational status:",
+            f"- Workflow location: `{workflow_location}`",
+            f"- Action source: `{action_source}`",
+            f"- TopoCore runtime mode: requested `{runtime_requested}`, effective `{runtime_effective}`",
+            f"- TopoCore dependency mode: `{dependency_mode}`",
+            f"- Runtime delivery: {dependency_summary}",
+            f"- Public-switch readiness: `{public_readiness_status}`",
+            f"- Installed-package live proof: `{installed_package_proof_status}`",
+            f"- Backend evidence for this run: requested `{requested_backend}` -> resolved `{resolved_backend}`; fallback `{fallback_used}` / `{fallback_reason}`",
+            "- Safety: no patch/autofix, no RepoBrain-created branch/commit/PR, no TopoCore source exposure in user-facing output.",
+        ]
     operational_next_step = _public_readiness_next_step(public_readiness_status)
-    answer_lines.append(f"- Next step: {operational_next_step}")
+    if cmd == "explain":
+        answer_lines.append(f"Next step: {operational_next_step}")
+    else:
+        answer_lines.append(f"- Next step: {operational_next_step}")
 
     refined_summary = dict(audit_summary)
     refined_summary["operational_ask_intent"] = True
     refined_summary["operational_ask_kind"] = operational_kind
     refined_summary["workflow_location"] = workflow_location
+    refined_summary["action_source"] = action_source
     refined_summary["public_readiness_status"] = public_readiness_status
     refined_summary["installed_package_proof_status"] = installed_package_proof_status
     if route in {"REVIEW", "DEEP"}:
-        refined_summary["route_final"] = "FAST"
+        refined_summary["route_final"] = "EXPLAIN" if cmd == "explain" else "FAST"
     return "\n".join(answer_lines), operational_next_step, refined_summary
 
 
@@ -6100,7 +6153,7 @@ def _build_qa_markdown(
         evidence_out = _dedupe_evidence_by_file(result.evidence, max_files=5)
     elif cmd == "explain":
         evidence_out = _dedupe_evidence_by_file(result.evidence, max_files=7)
-        answer_text_out = _build_explain_answer(evidence_out, question)
+        answer_text_out = _build_explain_answer(evidence_out, question, audit_summary)
     evidence_filter_result = filter_evidence_items(
         evidence_out,
         command=cmd,
@@ -6184,6 +6237,10 @@ def _build_qa_markdown(
         github_context=qa_github_context,
     )
     audit_summary["command"] = cmd
+    if cmd == "locate":
+        audit_summary["route_final"] = "LOCATE"
+    elif cmd == "explain":
+        audit_summary["route_final"] = "EXPLAIN"
     desired_llm = str(audit_summary.get("execution_mode", "retrieval_only")) == "retrieval_plus_llm"
     if desired_llm and not bool(llm_meta.get("llm_used", False)):
         override_reason = _runtime_override_reason_from_skip(str(llm_meta.get("llm_skip_reason", "n/a")))
@@ -7047,7 +7104,7 @@ def _build_review_markdown(
         reason = (
             "Review is unsupported in issue-only context. No PR review claims or patch actions were attempted."
             if cmd == "review"
-            else "Fix-lite is unsupported in issue-only context. No patch, branch, commit, or PR action was attempted."
+            else "Fix proposals are pull-request scoped. No patch, branch, commit, or PR action was attempted from this issue context."
         )
         audit_summary = _build_scope_audit_summary(
             cmd=cmd,
@@ -7069,12 +7126,12 @@ def _build_review_markdown(
             _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
             _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
         return render_scoped_command_markdown(
-            title="### ⏳ Scoped command not available",
+            title="### вЏі Scoped command not available",
             message=reason,
             audit_summary=audit_summary,
             next_steps=[
                 "Use `/repobrain ask ...` in an issue discussion for repository-level analysis.",
-                "Run the same command in a pull request discussion for PR-scoped review or fix-lite governance.",
+                "Run the same command in a pull request discussion for PR-scoped review or fix proposal guidance.",
             ],
         )
 
@@ -7082,7 +7139,7 @@ def _build_review_markdown(
         reason = (
             "Review scope is pull-request only, but the pull request number was not detected."
             if cmd == "review"
-            else "Fix-lite scope is pull-request only, but the pull request number was not detected."
+            else "Fix proposal scope is pull-request only, but the pull request number was not detected."
         )
         audit_summary = _build_scope_audit_summary(
             cmd=cmd,
@@ -7104,7 +7161,7 @@ def _build_review_markdown(
             _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
             _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
         return render_scoped_command_markdown(
-            title="### ⏳ Pull request context missing",
+            title="### вЏі Pull request context missing",
             message=reason,
             audit_summary=audit_summary,
             next_steps=[
@@ -8992,7 +9049,7 @@ def _build_verify_markdown(
             _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
             _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
         return render_scoped_command_markdown(
-            title="### ⏳ Scoped command not available",
+            title="### вЏі Scoped command not available",
             message=reason,
             audit_summary=audit_summary,
             next_steps=[
@@ -9017,7 +9074,7 @@ def _build_verify_markdown(
             _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
             _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)
         return render_scoped_command_markdown(
-            title="### ⏳ Pull request context missing",
+            title="### вЏі Pull request context missing",
             message=reason,
             audit_summary=audit_summary,
             next_steps=[
@@ -9049,7 +9106,7 @@ def _build_verify_markdown(
             [
                 body,
                 render_scoped_command_markdown(
-                    title="### 🧭 TopoCore backend diagnostics",
+                    title="### рџ§­ TopoCore backend diagnostics",
                     message=(
                         "Verify reports PR checks directly. TopoCore backend evidence is recorded as a scoped observation "
                         "signal for this command family."
@@ -9118,7 +9175,7 @@ def _build_verify_markdown(
         [
             body,
             render_scoped_command_markdown(
-                title="### 🧭 TopoCore backend diagnostics",
+                title="### рџ§­ TopoCore backend diagnostics",
                 message=(
                     "Verify reports PR checks directly. TopoCore backend evidence is recorded as a scoped observation "
                     "signal for this command family."
@@ -9472,6 +9529,38 @@ def run_github_flow(
         _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
         return "POSTED_OK"
 
+    if cmd == "unsupported":
+        body_markdown = _build_unsupported_command_markdown(
+            cmd=cmd,
+            tky_mode=tky_mode,
+            message="Unsupported RepoBrain command. Use /repobrain help to see supported commands.",
+            next_steps=[
+                "Use `/repobrain help` to review the supported commands.",
+            ],
+            audit=audit,
+        )
+        audit["index_source"] = "n/a"
+        print(f"Mode={mode_label}")
+        print(f"Cmd={cmd}")
+        print(f"Query={query}")
+        if dry_run:
+            print(body_markdown)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "DRY_RUN_OK"
+        if resolved_issue_number is None:
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            raise ValueError("issue_number is required when dry_run=False")
+        client = _build_post_client()
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+            client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        t0 = time.perf_counter()
+        client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+        add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+        audit["posted"] = True
+        print(f"Posted comment to issue #{resolved_issue_number}")
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+        return "POSTED_OK"
+
     print(f"Mode={mode_label}")
     print(f"Cmd={cmd}")
     print(f"Query={query}")
@@ -9585,18 +9674,6 @@ def run_github_flow(
             query=query,
             tky_mode=tky_mode,
             github_context_seed=github_context_seed,
-            audit=audit,
-        )
-        audit["index_source"] = "n/a"
-    elif cmd == "fix-lite":
-        body_markdown = _build_unsupported_command_markdown(
-            cmd=cmd,
-            tky_mode=tky_mode,
-            message=FIX_LITE_GUIDANCE,
-            next_steps=[
-                "Use `/repobrain fix` for the current proposal/governance path.",
-                "Use `/repobrain help` to review supported commands.",
-            ],
             audit=audit,
         )
         audit["index_source"] = "n/a"

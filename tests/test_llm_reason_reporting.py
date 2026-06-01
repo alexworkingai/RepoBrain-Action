@@ -48,8 +48,8 @@ def test_runtime_override_is_rendered_when_tkya_wanted_llm_but_runtime_blocked()
         command="ask",
     )
 
-    assert "TKYA LLM decision: used" in md
-    assert "Reason: LLM used: multi-source synthesis required after retrieval." in md
+    assert "TKYA LLM decision: not called" in md
+    assert "Reason: LLM was not called; answer generated from deterministic retrieval/template path." in md
     assert "Runtime override: LLM blocked: disabled by runtime policy." in md
 
 

@@ -1,9 +1,12 @@
 ﻿from __future__ import annotations
 
+import pytest
+
 from repobrain.output_md import render_answer_markdown
 
 
-def test_diagnostic_group_order_is_stable() -> None:
+def test_diagnostic_group_order_is_stable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_answer_markdown(
         answer_text="Answer",
         evidence=[],

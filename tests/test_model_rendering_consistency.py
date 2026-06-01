@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from repobrain.output_md import render_answer_markdown
 
 
-def test_multi_model_rendering_shows_preferred_final_and_distribution() -> None:
+def test_multi_model_rendering_shows_preferred_final_and_distribution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_answer_markdown(
         answer_text="Summary",
         evidence=[],
@@ -34,7 +39,10 @@ def test_multi_model_rendering_shows_preferred_final_and_distribution() -> None:
     assert "Models used: openai/gpt-4.1 (3 calls), openai/gpt-4.1-mini (1 call)" in md
 
 
-def test_failed_llm_run_does_not_claim_final_model_used() -> None:
+def test_failed_llm_run_does_not_claim_final_model_used(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_answer_markdown(
         answer_text="Summary",
         evidence=[],
@@ -60,7 +68,10 @@ def test_failed_llm_run_does_not_claim_final_model_used() -> None:
     assert "Models used: n/a" in md
 
 
-def test_retained_preferred_model_hides_downgrade_only_budget_action() -> None:
+def test_retained_preferred_model_hides_downgrade_only_budget_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_answer_markdown(
         answer_text="Summary",
         evidence=[],
@@ -86,7 +97,10 @@ def test_retained_preferred_model_hides_downgrade_only_budget_action() -> None:
     assert "model_downgraded_to_mini_estimate_mode" not in md
 
 
-def test_intermediate_downgrade_does_not_imply_full_final_downgrade() -> None:
+def test_intermediate_downgrade_does_not_imply_full_final_downgrade(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_answer_markdown(
         answer_text="Summary",
         evidence=[],

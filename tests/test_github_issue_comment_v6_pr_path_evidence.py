@@ -140,7 +140,8 @@ def test_issue_only_review_is_explicitly_scoped(capsys) -> None:
     output = capsys.readouterr().out
 
     assert status == "DRY_RUN_OK"
-    assert "unsupported in issue-only context" in output
+    assert "Scoped command not available" in output
+    assert "unsupported in issue-only context" in output or "pull-request scoped" in output
     assert "Scope status" in output
     assert "unsupported_issue_context" in output
 
@@ -156,7 +157,8 @@ def test_issue_only_fix_is_explicitly_scoped_and_patch_safe(capsys) -> None:
     output = capsys.readouterr().out
 
     assert status == "DRY_RUN_OK"
-    assert "unsupported in issue-only context" in output
+    assert "Scoped command not available" in output
+    assert "pull-request scoped" in output
     assert "Patch authorized" in output
     assert "Patch applied" in output
     assert "`no`" in output

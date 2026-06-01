@@ -1,10 +1,15 @@
 ﻿from __future__ import annotations
 
+import pytest
+
 from repobrain.evidence import EvidenceItem
 from repobrain.output_md import render_answer_markdown
 
 
-def test_diagnostic_output_is_compact_and_groups_primary_before_secondary() -> None:
+def test_diagnostic_output_is_compact_and_groups_primary_before_secondary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_answer_markdown(
         answer_text="Short answer",
         evidence=[
@@ -60,7 +65,10 @@ def test_diagnostic_output_is_compact_and_groups_primary_before_secondary() -> N
     assert decision_idx < secondary_idx
 
 
-def test_secondary_diagnostics_and_audit_anchors_render_cleanly_inside_details() -> None:
+def test_secondary_diagnostics_and_audit_anchors_render_cleanly_inside_details(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_answer_markdown(
         answer_text="Short answer",
         evidence=[],

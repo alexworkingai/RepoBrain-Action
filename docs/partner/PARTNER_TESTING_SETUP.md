@@ -64,6 +64,7 @@ RepoBrain is a guarded repository-intelligence action that reviews repository st
 ## Expected Outputs
 
 - doctor and status report the active runtime mode truthfully
+- ask and explain may use an LLM when policy and provider access allow it, but they can also answer from deterministic retrieval and TopoCore-backed evidence when no LLM call occurs
 - audit and score are informational only
 - no mutation occurs
 - no secret or TopoCore source exposure occurs in user-facing output

@@ -54,9 +54,9 @@ def test_command_guide_documents_supported_and_unsupported_commands_honestly() -
     for command in (
         "/repobrain status",
         "/repobrain doctor",
-        "/repobrain fix-lite",
     ):
         assert command in text
+    assert "/repobrain fix-lite" not in text
 
     assert "does not apply patches" in text
     assert "informational only" in text

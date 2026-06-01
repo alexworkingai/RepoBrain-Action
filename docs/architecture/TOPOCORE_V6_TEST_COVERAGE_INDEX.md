@@ -107,6 +107,12 @@ Current test baseline:
 | `tests/test_sprint91_public_switch_docs.py` | Sprint 91 architecture and readiness docs | Phase 7 | Owner approval execution, public-switch state, private TopoCore boundary, and post-switch smoke truth remain explicit | No |
 | `tests/test_public_visibility_post_switch_docs.py` | Sprint 91 post-switch docs | Phase 7 | Public RepoBrain state, Marketplace-not-started status, and no TopoCore source distribution claim remain explicit after the switch | No |
 | `tests/test_partner_pilot_kickoff_docs.py` | Sprint 91 partner pilot kickoff docs | Phase 7 | Pilot kickoff plan, onboarding email, installed-package preference, scoped credential expectations, and no partnership/Marketplace drift | No |
+| `tests/test_private_checkout_evidence_sanitization.py` | `repobrain/evidence_filter.py`, `repobrain/output_md.py` | Phase 7 | Private checkout evidence filtering, renderer sanitization, and safe repo-relative evidence preservation across ask/locate/explain/audit/score output | No |
+| `tests/test_command_surface_no_lite_command.py` | `repobrain/commands.py`, `repobrain/github_flow.py`, active public docs | Phase 7 | Public command surface removes the deprecated lite alias, unsupported commands stay generic, and `/repobrain fix` remains the only supported fix entrypoint | No |
+| `tests/test_llm_issue_mode_diagnostics.py` | `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | Issue-mode LLM diagnostics stay internally consistent, blocked LLM paths explain deterministic retrieval fallback, and verbose diagnostics remain opt-in | No |
+| `tests/test_locate_route_label.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Locate output renders `Route: LOCATE`, keeps compact evidence, and avoids private checkout path leakage | No |
+| `tests/test_explain_issue_mode_fallback.py` | `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | Explain output renders `Route: EXPLAIN`, produces deterministic operational prose when LLM is blocked, and avoids private checkout path leakage | No |
+| `tests/test_partner_facing_diagnostics_compaction.py` | `repobrain/output_md.py` | Phase 7 | Default partner-facing diagnostics stay compact while verbose runtime diagnostics remain available behind `RB_REPOBRAIN_VERBOSE_DIAGNOSTICS=1` | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -274,6 +280,11 @@ Current tests prove that:
 - Sprint 90 extends decisive proof coverage:
   - the owner-token gate is rechecked again and documented without claiming a decisive proof rerun
 - readiness docs move to `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF` only after actual live installed-package evidence exists
+- Sprint 92A adds partner-facing hotfix coverage:
+  - private checkout evidence must not leak into user-facing output
+  - the deprecated lite alias is removed from the public command surface
+  - issue-mode LLM diagnostics must reflect whether an LLM call actually happened
+  - locate and explain issue output stays compact and truthful by default
 
 ## 6. What Tests Do Not Prove
 

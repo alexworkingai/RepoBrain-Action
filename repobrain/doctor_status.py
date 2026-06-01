@@ -23,7 +23,6 @@ SUPPORTED_COMMANDS: tuple[str, ...] = (
     "/repobrain status",
 )
 ROADMAP_COMMANDS: tuple[str, ...] = ()
-FIX_LITE_GUIDANCE = "fix-lite is not a product command. Use /repobrain fix."
 
 _DANGEROUS_PERMISSION_PATTERNS: tuple[tuple[str, str], ...] = (
     ("pull_request_target", r"\bpull_request_target\b"),
@@ -50,7 +49,6 @@ def build_status_report(
         "query": str(query or "").strip(),
         "supported_commands": list(SUPPORTED_COMMANDS),
         "roadmap_commands": list(ROADMAP_COMMANDS),
-        "fix_lite_guidance": FIX_LITE_GUIDANCE,
         "action_runtime_mode": _action_runtime_mode(),
         "topocore_dependency_mode": runtime["dependency_mode"],
         "topocore_runtime_mode_requested": runtime["requested_mode"],
@@ -131,8 +129,7 @@ def build_doctor_report(
             status="PASS",
             detail=(
                 "Supported commands: help, ask, locate, explain, review, verify, fix, audit, doctor, status. "
-                "Supported commands also include score as a compact summary of the same guarded audit engine. "
-                "fix-lite is unsupported and redirects to /repobrain fix."
+                "Supported commands also include score as a compact summary of the same guarded audit engine."
             ),
         )
     )

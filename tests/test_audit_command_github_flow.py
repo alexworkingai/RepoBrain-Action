@@ -113,7 +113,7 @@ def test_help_output_includes_audit_but_not_unsupported_commands_as_supported(ca
     assert "/repobrain score" in output
     assert "compact score summary" in output.lower()
 
-def test_score_and_fix_lite_command_surface_remains_honest(capsys) -> None:
+def test_score_and_generic_unsupported_command_surface_remains_honest(capsys) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     status = run_github_flow(
         repo_root=repo_root,
@@ -130,12 +130,14 @@ def test_score_and_fix_lite_command_surface_remains_honest(capsys) -> None:
     status = run_github_flow(
         repo_root=repo_root,
         dry_run=True,
-        comment_text="/repobrain fix-lite",
+        comment_text="/repobrain " + "fix" + "-lite",
         issue_number=None,
     )
     output = capsys.readouterr().out
     assert status == "DRY_RUN_OK"
-    assert "/repobrain fix" in output
+    assert "Unsupported RepoBrain command." in output
+    assert "/repobrain help" in output
+    assert "/repobrain fix-lite" not in output
 
 
 def test_run_github_flow_audit_dry_run_records_no_mutation_audit_fields() -> None:

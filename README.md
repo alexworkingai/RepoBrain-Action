@@ -10,6 +10,7 @@ Current product runtime is v6-only:
 - `RepoBrain-Action` is the external product entrypoint
 - private TopoCore v6 is a separate proprietary dependency
 - external users bring and pay for their own LLM or model provider access
+- ask and explain can still answer through deterministic retrieval and TopoCore-backed evidence when an LLM call is not used
 - current product behavior remains no-patch and no-mutation
 
 ## Quick Start
@@ -39,10 +40,6 @@ Current supported external GitHub commands:
 - `/repobrain status`
 - `/repobrain verify`
 - `/repobrain fix`
-
-Current unsupported command spellings:
-
-- `/repobrain fix-lite`
 
 ## Safety Guarantees
 

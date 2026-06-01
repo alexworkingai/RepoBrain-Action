@@ -9,6 +9,7 @@ from repobrain.tky_provider import CandidateChunk
 
 def test_remote_error_falls_back_to_baseline_and_records_audit(monkeypatch, capsys) -> None:
     repo_root = Path(__file__).resolve().parents[1]
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
 
     monkeypatch.setattr(
         github_flow,
