@@ -101,6 +101,9 @@ Current test baseline:
 | `tests/test_installed_package_decisive_proof_docs.py` | Sprint 89 installed-package proof docs | Phase 7 | Decisive proof preconditions, no fake rerun claims, and blocked-vs-ready alignment remain explicit | No |
 | `tests/test_artifact_token_preflight_docs.py` | Sprint 89 token/preflight docs | Phase 7 | Secret name, minimum scope, expiration, no-value handling, and preflight steps remain explicit | No |
 | `tests/test_public_switch_ready_after_runtime_proof_docs.py` | Sprint 89 public-readiness docs | Phase 7 | Ready-after-runtime-proof remains conditional, current blocked status stays explicit, and no false public-switch claim is introduced | No |
+| `tests/test_sprint90_decisive_installed_package_proof_docs.py` | Sprint 90 decisive-proof architecture and readiness docs | Phase 7 | Missing-secret blocked state remains explicit for Sprint 90 and no fake rerun claim is introduced | No |
+| `tests/test_decisive_artifact_token_preflight_docs.py` | Sprint 90 token/preflight docs | Phase 7 | Secret name, scope, expiration, no-value handling, and decisive preflight expectations remain explicit | No |
+| `tests/test_public_switch_ready_decision_after_sprint90.py` | Sprint 90 public-readiness docs | Phase 7 | Ready-after-runtime-proof stays conditional, current blocked status stays explicit, and no false switch claim is introduced | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -265,6 +268,9 @@ Current tests prove that:
   - the owner-token gate is rechecked and documented without claiming a rerun that did not happen
   - decisive installed-package proof remains blocked until the required secret exists
   - public-readiness docs stay on `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE` rather than drifting to a false ready state
+- Sprint 90 extends blocked-state verification coverage:
+  - the owner-token gate is rechecked again and documented without claiming a decisive proof rerun
+  - readiness docs remain on `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE` until actual live installed-package evidence exists
 
 ## 6. What Tests Do Not Prove
 

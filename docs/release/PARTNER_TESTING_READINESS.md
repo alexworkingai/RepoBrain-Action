@@ -6,7 +6,7 @@ This document prepares RepoBrain for selected partner testing after explicit own
 
 ## 2. Current Status
 
-- RepoBrain-Action remains private in Sprint 86, Sprint 87, Sprint 88, and Sprint 89.
+- RepoBrain-Action remains private in Sprint 86, Sprint 87, Sprint 88, Sprint 89, and Sprint 90.
 - Public visibility has not been switched.
 - Marketplace work has not started.
 - final public visibility still requires explicit owner approval.
@@ -59,6 +59,10 @@ Current truth:
   - partner rollout must not start on installed-package mode until the owner issues the minimum-scope artifact credential and external proof reaches real `v6`
 - Sprint 89 owner-token result:
   - the owner-token gate was rechecked
+  - `TOPOCORE_V6_ARTIFACT_TOKEN` was still absent in `alexworkingai/Elen-MCP-v.2.2.0`
+  - no decisive installed-package proof rerun is claimed
+- Sprint 90 owner-token result:
+  - the owner-token gate was rechecked again
   - `TOPOCORE_V6_ARTIFACT_TOKEN` was still absent in `alexworkingai/Elen-MCP-v.2.2.0`
   - no decisive installed-package proof rerun is claimed
 

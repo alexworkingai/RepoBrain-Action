@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the Sprint 86 through Sprint 89 work to prove external `installed_package` runtime mode in a partner-like external workflow without `private_checkout` source checkout.
+This document records the Sprint 86 through Sprint 90 work to prove external `installed_package` runtime mode in a partner-like external workflow without `private_checkout` source checkout.
 
 ## Proof Target
 
@@ -92,6 +92,19 @@ This document records the Sprint 86 through Sprint 89 work to prove external `in
 - reason:
   - Sprint 89 hard stop requires stopping before proof when the owner-issued artifact credential is still missing
 
+### Sprint 90 owner-token verification result
+
+- startup recheck:
+  - `gh secret list --repo alexworkingai/Elen-MCP-v.2.2.0`
+- expected secret:
+  - `TOPOCORE_V6_ARTIFACT_TOKEN`
+- observed result:
+  - secret still absent
+- decisive proof rerun:
+  - not attempted
+- reason:
+  - Sprint 90 hard stop requires stopping before proof when the owner-issued artifact credential is still missing
+
 ## Results
 
 ### Installed-package proof branch
@@ -111,6 +124,9 @@ This document records the Sprint 86 through Sprint 89 work to prove external `in
 - Sprint 89 verification result:
   - blocker unchanged
   - no new artifact access preflight result can be claimed because the required secret was still absent
+- Sprint 90 verification result:
+  - blocker still unchanged
+  - no new preflight or runtime evidence can be claimed because the required secret was still absent again
 
 ## Backend Evidence
 
@@ -171,10 +187,12 @@ This document records the Sprint 86 through Sprint 89 work to prove external `in
 - previous lower-level failure marker remains relevant: `TOKEN_SCOPE_NOT_READY`
 - the proof path remains blocked until an external workflow can fetch the approved private runtime artifact without source checkout and without widening access to TopoCore source
 - Sprint 89 confirms the blocker remains owner action, not a newly observed runtime or contract defect
+- Sprint 90 confirms the blocker still remains owner action, not a newly observed runtime or contract defect
 
 ## Conclusion
 
 - `INSTALLED_PACKAGE_LIVE_PROOF_BLOCKED`
 - Sprint 88 resolved the supported authorization model and narrowed the exact owner-side action required.
 - Sprint 89 rechecked the decisive proof gate, found the required secret still missing, and correctly stopped without fabricating new installed-package runtime evidence.
+- Sprint 90 rechecked the decisive proof gate again, found the required secret still missing, and correctly stopped without recreating the proof branch or fabricating new installed-package runtime evidence.
 - This document does not claim live external installed-package success without new runtime evidence.

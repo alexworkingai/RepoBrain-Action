@@ -66,6 +66,12 @@ Sprint 89 owner-token verification update:
 - Sprint 89 therefore did not rerun the installed-package proof workflow
 - no new external installed-package runtime evidence can be claimed until the required secret exists and passes real artifact access preflight
 
+Sprint 90 owner-token verification update:
+- the owner-action gate was rechecked again before any new proof attempt
+- `TOPOCORE_V6_ARTIFACT_TOKEN` was still not present in `alexworkingai/Elen-MCP-v.2.2.0`
+- Sprint 90 therefore did not recreate the proof branch and did not rerun the decisive installed-package proof
+- no new external installed-package runtime evidence can be claimed until the required secret exists and passes real artifact access preflight
+
 Sprint 87 normal control smoke:
 - Elen-MCP still ran successfully in controlled `private_checkout` beta mode on main
 - `/repobrain audit` remained real `v6`-enriched scoring
@@ -137,3 +143,9 @@ Sprint 89 blocked-state note:
 - the decisive proof gate remained blocked because the required owner-issued secret was still absent at startup
 - the product status therefore remains `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 - public visibility must not be reconsidered until the owner issues the minimum-scope artifact credential and the external installed-package proof reaches real `v6`
+
+Sprint 90 blocked-state note:
+
+- the decisive proof gate remained blocked for the same reason at Sprint 90 startup
+- no proof rerun was attempted because the required secret was still absent
+- public visibility must not be reconsidered until the owner issues the minimum-scope artifact credential and the decisive external installed-package proof reaches real `v6`

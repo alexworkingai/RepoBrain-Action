@@ -7,7 +7,7 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 ## 2. Current State
 
 - RepoBrain-Action is still private.
-- Public visibility is not switched in Sprint 86, Sprint 87, Sprint 88, or Sprint 89.
+- Public visibility is not switched in Sprint 86, Sprint 87, Sprint 88, Sprint 89, or Sprint 90.
 - Marketplace work is not started.
 - Current product status: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
 - Historical Sprint 87 blocker remains recorded as: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
@@ -66,6 +66,7 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - partner troubleshooting path is complete
 - runtime/token issuance runbook is complete
 - Sprint 89 rechecked the owner-token gate and confirmed the required secret is still absent
+- Sprint 90 rechecked the owner-token gate again and confirmed the required secret is still absent
 - installed-package rollout remains blocked until the owner issues the minimum-scope artifact credential and external proof passes
 
 ## 8. Public Switch Procedure

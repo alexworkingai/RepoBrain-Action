@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the exact owner-side action required to unblock Sprint 88 and Sprint 89 installed-package runtime proof.
+This document records the exact owner-side action required to unblock Sprint 88 through Sprint 90 installed-package runtime proof.
 
 ## Required Credential
 
@@ -64,10 +64,11 @@ For the GitHub App path:
 - no write scopes
 - no TopoCore source rights
 
-## Current Sprint 89 State
+## Current Sprint 90 State
 
 - owner action required: `yes`
 - exact blocker state: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 - Sprint 89 startup verification rechecked `alexworkingai/Elen-MCP-v.2.2.0` and the secret was still missing
+- Sprint 90 startup verification rechecked `alexworkingai/Elen-MCP-v.2.2.0` again and the secret was still missing
 - decisive installed-package proof must not be rerun until the owner-issued credential exists
 - public visibility remains blocked until the minimum-scope credential exists and the external installed-package proof passes.

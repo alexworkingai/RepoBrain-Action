@@ -65,6 +65,10 @@ This runbook defines the selected partner runtime access model for RepoBrain.
   - the owner-token gate was rechecked before any new proof attempt
   - `TOPOCORE_V6_ARTIFACT_TOKEN` was still missing in the external consumer repository
   - no decisive installed-package rerun is claimed until the owner-side secret exists
+- Sprint 90 result:
+  - the owner-token gate was rechecked again before any new proof attempt
+  - `TOPOCORE_V6_ARTIFACT_TOKEN` was still missing in the external consumer repository
+  - no decisive installed-package rerun is claimed until the owner-side secret exists
 
 ## Package Caveat
 
