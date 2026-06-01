@@ -43,6 +43,7 @@ Targeted gaps:
   - ask
 - ask returned a precise operational status answer without secret or source leakage
 - installed-package proof remains source-checkout-free by design
+- Sprint 88 ran a fresh installed-package proof workflow branch and stopped at the missing artifact credential boundary before runtime startup
 - local private packaging truth was verified from an installed wheel in a clean environment
 
 ## What Remains

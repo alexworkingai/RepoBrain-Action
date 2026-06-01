@@ -37,6 +37,19 @@ This document records the Sprint 86 through Sprint 88 work to prove external `in
 
 ## Commands Run
 
+### Sprint 88 installed-package authorization proof
+
+- proof issue:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/36`
+- workflow branch:
+  - `codex/sprint-88-installed-package-access-proof`
+- workflow mode:
+  - `workflow_dispatch`
+- doctor proof run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734273501`
+- comment payload used:
+  - `/repobrain doctor`
+
 ### Sprint 87 installed-package proof branch
 
 - doctor proof run:
@@ -63,7 +76,8 @@ This document records the Sprint 86 through Sprint 88 work to prove external `in
 
 - authorization model selected: `fine_grained_pat_actions_read_artifact_download`
 - owner-side credential issuance still pending
-- no new external installed-package run can be honestly claimed until `TOPOCORE_V6_ARTIFACT_TOKEN` exists with the selected minimum scope
+- the workflow-only proof branch now reaches a dedicated installed-package credential preflight seam
+- no new external installed-package runtime start can be honestly claimed until `TOPOCORE_V6_ARTIFACT_TOKEN` exists with the selected minimum scope
 
 ## Results
 
@@ -71,7 +85,8 @@ This document records the Sprint 86 through Sprint 88 work to prove external `in
 
 - the proof workflow path exists and stays source-checkout-free by design
 - the selected credential model is now explicit and GitHub-supported
-- live external installed-package proof is still blocked because the required minimum-scope artifact credential has not been issued into the external workflow
+- Sprint 88 ran a fresh external proof workflow on `codex/sprint-88-installed-package-access-proof`
+- the run stopped at the new installed-package credential preflight step before any private checkout or RepoBrain runtime startup
 - doctor/status/audit/score therefore cannot yet be claimed as executed in external installed-package mode during Sprint 88
 
 ### Failure class
@@ -79,7 +94,7 @@ This document records the Sprint 86 through Sprint 88 work to prove external `in
 - historical sanitized failure class: `PACKAGE_AUTH_FAILED`
 - historical exact blocker: `TOKEN_SCOPE_NOT_READY`
 - current Sprint 88 blocker: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
-- observed trigger: the approved fine-grained artifact-read credential model is known, but the corresponding secret is not yet provisioned in `alexworkingai/Elen-MCP-v.2.2.0`
+- observed trigger: the approved fine-grained artifact-read credential model is known, but the corresponding secret `TOPOCORE_V6_ARTIFACT_TOKEN` is not yet provisioned in `alexworkingai/Elen-MCP-v.2.2.0`
 
 ## Backend Evidence
 
@@ -92,24 +107,37 @@ This document records the Sprint 86 through Sprint 88 work to prove external `in
 
 ### Normal control smoke on main
 
+- issue:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/36`
 - doctor:
+  - run:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734288528`
   - backend resolved: `not_applicable`
   - result: `PASS`
 - status:
+  - run:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734289658`
   - backend resolved: `not_applicable`
   - result: `success`
 - audit:
+  - run:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734289953`
   - backend requested/resolved: `auto / v6`
   - fallback: `no / none`
   - result: `v6-enriched scoring`, `77 / 100 GOOD`
 - score:
+  - run:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734290692`
   - backend requested/resolved: `auto / v6`
   - fallback: `no / none`
   - result: `v6-enriched scoring`, `77 / 100 GOOD`
 - ask:
+  - run:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734291673`
   - backend requested/resolved: `auto / v6`
   - fallback: `not_applicable / none`
   - operational status answer quality: improved
+  - public readiness surfaced as: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 
 ## Safety Result
 

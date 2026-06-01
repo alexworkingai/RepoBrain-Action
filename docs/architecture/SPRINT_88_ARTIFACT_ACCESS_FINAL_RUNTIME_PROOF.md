@@ -78,9 +78,15 @@ Owner action if needed:
 ## 6. External Installed-Package Proof
 
 - attempted live proof in Sprint 88:
-  - not completed to runtime execution
+  - yes
 - repo used:
   - `alexworkingai/Elen-MCP-v.2.2.0`
+- issue URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/36`
+- workflow branch:
+  - `codex/sprint-88-installed-package-access-proof`
+- workflow run URL:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734273501`
 - mode:
   - `installed_package`
 - source checkout avoided:
@@ -91,12 +97,25 @@ Owner action if needed:
   - blocked
 - exact blocker:
   - `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- observed preflight failure:
+  - missing required secret `TOPOCORE_V6_ARTIFACT_TOKEN`
 - historical lower-level failure marker:
   - `PACKAGE_AUTH_FAILED / TOKEN_SCOPE_NOT_READY`
 
 ## 7. Control Smoke
 
 - normal private_checkout beta path remained the known-good control surface from Sprint 87
+- Sprint 88 reran the control smoke on issue `#36`
+- doctor run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734288528`
+- status run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734289658`
+- audit run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734289953`
+- score run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734290692`
+- ask run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26734291673`
 - result:
   - green
 
