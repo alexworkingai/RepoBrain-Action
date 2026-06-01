@@ -79,6 +79,9 @@ Sprint 86 enterprise P0 hardening update:
 - dormant production mutation helpers were removed from `repobrain/github_flow.py`
 - main RepoBrain execution workflow no longer requests `checks: write` or `pull-requests: write`
 - installed-package live proof was attempted and is now blocked with exact evidence rather than left ambiguous
+- Sprint 88 narrowed that blocker further:
+  - selected authorization path is a minimum-scope artifact-read credential
+  - current remaining gate is `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 - issue-comment live smoke remains green for doctor, status, audit, and score after the hardening pass
 
 ## Current Limitations

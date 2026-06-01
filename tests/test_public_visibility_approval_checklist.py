@@ -24,6 +24,7 @@ def test_public_visibility_approval_checklist_states_private_owner_approval_and_
     assert (
         'public_blocked_by_runtime_proof' in text
         or 'public_blocked_by_token_scope' in text
+        or 'owner_action_required_token_issuance' in text
         or 'public_visibility_approval_pack_ready' in text
         or 'public_ready_pending_owner_approval' in text
     )

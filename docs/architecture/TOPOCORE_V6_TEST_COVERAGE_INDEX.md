@@ -92,6 +92,11 @@ Current test baseline:
 | `tests/test_installed_package_runtime_mode_strict.py` | `repobrain/topocore_v6_adapter.py` | Phase 7 | Installed-package mode ignores local path/private checkout, fails safely when package import is unavailable, and sanitizes runtime failures | No |
 | `tests/test_operational_ask_quality.py` | `repobrain/github_flow.py` | Phase 7 | Operational ask intent is recognized and rendered as workflow/runtime/public-readiness status rather than a misleading review-style answer | No |
 | `tests/test_sprint87_public_readiness_decision.py` | Sprint 87 readiness docs | Phase 7 | Sprint 87 architecture note exists and public-readiness docs surface the post-proof decision truthfully | No |
+| `tests/test_artifact_access_authorization_model_docs.py` | Sprint 88 artifact authorization docs | Phase 7 | Selected artifact credential path, rejected options, scope/rotation truth, and no broad PAT default remain explicit | No |
+| `tests/test_owner_action_required_token_issuance_docs.py` | Sprint 88 owner-action runbook docs | Phase 7 | Exact secret name, minimum-scope credential requirements, no token values, and no broad source-rights grant remain explicit | No |
+| `tests/test_installed_package_artifact_proof_docs.py` | Sprint 88 installed-package proof docs | Phase 7 | Blocked-vs-passed truth, owner-action gating, checkout avoidance, and public-readiness alignment stay honest | No |
+| `tests/test_installed_package_preflight_failures.py` | `repobrain/installed_package_preflight.py` | Phase 7 | Installed-package proof failures classify to bounded categories and sanitize token/path leakage | No |
+| `tests/test_sprint88_public_readiness_decision.py` | Sprint 88 readiness docs and architecture note | Phase 7 | Sprint 88 approval state, owner-action blocker, and partner/runtime alignment remain explicit without false public-readiness claims | No |
 | `tests/test_github_issue_comment_v6_pr_path_evidence.py` | `.github/workflows/repobrain.yml`, `action.yml`, `repobrain/github_flow.py`, `repobrain/output_md.py` | Phase 7 | PR-path backend evidence propagation, explicit verify scoped diagnostics, non-PR review/fix scoped behavior, workflow-to-action backend env export, no patch side effects | No |
 | `tests/test_github_pr_output_backend_evidence.py` | `repobrain/output_md.py`, `repobrain/github_flow.py` | Phase 7 | Visible PR ask/review/verify backend evidence rendering, safe missing-field normalization, gate=`1` v6 evidence visibility, gate=`0` v5 evidence visibility, scoped unsupported patch-safety preservation | No |
 | `tests/test_topocore_v6_local_validation_harness.py` | `scripts/validate_topocore_v6_local.py` | Phase 1/2 | Disabled default, missing dependency behavior, fake local `topocore_v6` path, sanitized JSON artifact mode, `decide_raw` not called | No |
@@ -247,6 +252,11 @@ Current tests prove that:
   - installed-package delivery design and proof outcome are documented with explicit blocker taxonomy
   - installed-package mode keeps ignoring local path/private checkout even in failure cases
   - operational ask answers now surface workflow/runtime/public-readiness truth directly
+- Sprint 88 adds artifact-authorization and owner-action coverage:
+  - the GitHub-supported credential path for private artifact read is explicit
+  - owner-issued secret requirements are documented without printing token values
+  - installed-package proof docs stay blocked until live external `v6` evidence exists
+  - bounded preflight failure taxonomy is enforced in code and tests
 
 ## 6. What Tests Do Not Prove
 

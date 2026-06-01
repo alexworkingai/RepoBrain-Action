@@ -1,20 +1,20 @@
-# Installed Package Live Proof
+﻿# Installed Package Live Proof
 
 ## Purpose
 
-This document records the Sprint 86 and Sprint 87 work to prove external `installed_package` runtime mode in a partner-like external workflow without `private_checkout` source checkout.
+This document records the Sprint 86 through Sprint 88 work to prove external `installed_package` runtime mode in a partner-like external workflow without `private_checkout` source checkout.
 
 ## Proof Target
 
 - target repository: `alexworkingai/Elen-MCP-v.2.2.0`
-- proof issue: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/35`
-- target branch for proof workflow: `codex/sprint-87-installed-package-proof`
+- proof issue from Sprint 87: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/35`
+- Sprint 88 proof branch target: `codex/sprint-88-installed-package-access-proof`
 - goal: external workflow using `RB_TOPOCORE_V6_RUNTIME_MODE=installed_package`
 
 ## Workflow Mode
 
 - requested mode: `installed_package`
-- selected delivery path: `temporary_controlled_artifact_proof`
+- selected delivery path: `fine_grained_pat_actions_read_artifact_download`
 - private_checkout avoided: `yes`
 - source checkout avoided: `yes` for private TopoCore source checkout
 
@@ -25,7 +25,7 @@ This document records the Sprint 86 and Sprint 87 work to prove external `instal
 - artifact name: `topocore-v6-runtime-wheel`
 - artifact digest: `sha256:aa70729efa6bb229a7ad559ca1b5c893fa63e680df82e34884f87d366ac8f354`
 - package import name: `topocore_v6`
-- honest caveat: a normal wheel may still contain readable Python implementation files; Sprint 87 does not claim stronger secrecy than that
+- honest caveat: a normal wheel may still contain readable Python implementation files; Sprint 88 does not claim stronger secrecy than that
 
 ## Private Runtime Validation
 
@@ -59,28 +59,34 @@ This document records the Sprint 86 and Sprint 87 work to prove external `instal
 - ask control run:
   - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26720109327`
 
+### Sprint 88 authorization result
+
+- authorization model selected: `fine_grained_pat_actions_read_artifact_download`
+- owner-side credential issuance still pending
+- no new external installed-package run can be honestly claimed until `TOPOCORE_V6_ARTIFACT_TOKEN` exists with the selected minimum scope
+
 ## Results
 
 ### Installed-package proof branch
 
-- the proof workflow reached the artifact-download preflight step and failed before RepoBrain command execution
-- `private_checkout` steps were skipped
-- no private TopoCore source checkout occurred
-- no `.topocore-v6` source path was exposed to RepoBrain
-- doctor/status/audit/score did not execute in installed-package mode because the runtime artifact could not be fetched with the available scoped credential
+- the proof workflow path exists and stays source-checkout-free by design
+- the selected credential model is now explicit and GitHub-supported
+- live external installed-package proof is still blocked because the required minimum-scope artifact credential has not been issued into the external workflow
+- doctor/status/audit/score therefore cannot yet be claimed as executed in external installed-package mode during Sprint 88
 
 ### Failure class
 
-- sanitized failure class: `PACKAGE_AUTH_FAILED`
-- exact blocker: `TOKEN_SCOPE_NOT_READY`
-- observed trigger: the scoped credential could read the private source repo for controlled checkout scenarios, but it could not read GitHub Actions artifacts from the private TopoCore workflow run
+- historical sanitized failure class: `PACKAGE_AUTH_FAILED`
+- historical exact blocker: `TOKEN_SCOPE_NOT_READY`
+- current Sprint 88 blocker: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- observed trigger: the approved fine-grained artifact-read credential model is known, but the corresponding secret is not yet provisioned in `alexworkingai/Elen-MCP-v.2.2.0`
 
 ## Backend Evidence
 
 ### Installed-package proof branch
 
-- backend result: not reached
-- reason: package delivery failed before RepoBrain runtime startup
+- backend result: not reached in Sprint 88
+- reason: owner-side minimum-scope credential issuance is still pending
 - false `v6` enrichment claim: `no`
 - false installed-package success claim: `no`
 
@@ -107,7 +113,7 @@ This document records the Sprint 86 and Sprint 87 work to prove external `instal
 
 ## Safety Result
 
-- no private checkout source path exposed in the installed-package proof branch
+- no private checkout source path exposed in the installed-package proof design
 - no private TopoCore source exposed
 - no secret value exposed
 - no mutation
@@ -116,11 +122,12 @@ This document records the Sprint 86 and Sprint 87 work to prove external `instal
 
 ## Current Blockers
 
-- package artifact delivery is not yet accessible with the current scoped credential
-- exact blocker category: `TOKEN_SCOPE_NOT_READY`
-- the proof path remains blocked until an external workflow can fetch the approved private runtime artifact or package without widening access to TopoCore source
+- minimum-scope external artifact credential is not yet provisioned
+- current blocker category: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- previous lower-level failure marker remains relevant: `TOKEN_SCOPE_NOT_READY`
+- the proof path remains blocked until an external workflow can fetch the approved private runtime artifact without source checkout and without widening access to TopoCore source
 
 ## Conclusion
 
 - `INSTALLED_PACKAGE_LIVE_PROOF_BLOCKED`
-- Sprint 87 improved delivery design, operational ask quality, and proof plumbing, but public-switch readiness remains blocked until the package/artifact token scope is operationally ready for external installed-package delivery.
+- Sprint 88 resolved the supported authorization model and narrowed the exact owner-side action required, but it does not claim live external installed-package success without new runtime evidence.

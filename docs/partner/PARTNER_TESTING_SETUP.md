@@ -68,6 +68,12 @@ Sprint 86 truth:
 - external installed-package delivery proof is still blocked
 - partner onboarding on this mode must wait until that blocker is cleared
 
+Sprint 88 truth:
+
+- the supported authorization model is now selected
+- the remaining gate is `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- partner onboarding on this mode must wait until `TOPOCORE_V6_ARTIFACT_TOKEN` is issued with the minimum required scope and the external proof reaches real `v6`
+
 ## `private_checkout`
 
 - beta-only fallback

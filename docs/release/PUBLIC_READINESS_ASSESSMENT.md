@@ -1,4 +1,4 @@
-# Public Readiness Assessment
+﻿# Public Readiness Assessment
 
 ## Current Repository Visibility
 
@@ -10,7 +10,7 @@
 
 - audit and score run live in real `v6`-enriched mode when the authorized private runtime is available
 - doctor and status are report-only and truthful about runtime state
-- operational `/repobrain ask` now answers runtime/workflow/public-readiness questions as a status/ops response rather than a generic review-style synthesis
+- operational `/repobrain ask` answers runtime/workflow/public-readiness questions as a status/ops response rather than a generic review-style synthesis
 - no patch/autofix
 - no RepoBrain-created branch, commit, or PR behavior
 - no `v5`
@@ -22,7 +22,7 @@
 - TopoCore v6 repository
 - TopoCore v6 source and internal implementation details
 - any real token or private key material
-- consumer repository secrets such as `TOPOCORE_V6_REPO_TOKEN`
+- consumer repository secrets such as `TOPOCORE_V6_REPO_TOKEN` and `TOPOCORE_V6_ARTIFACT_TOKEN`
 
 ## Public Scrub Status
 
@@ -52,13 +52,19 @@ Sprint 87 installed-package proof update:
 - private TopoCore source checkout remained avoided in the external proof branch
 - external artifact delivery did not become operational with the current scoped credential
 - exact blocker was identified as `TOKEN_SCOPE_NOT_READY`
-- the detailed proof record is tracked in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
+
+Sprint 88 authorization update:
+- GitHub-supported artifact read paths were evaluated against official docs and the existing proof plumbing
+- selected Sprint 88 path: `fine_grained_pat_actions_read_artifact_download`
+- preferred longer-term hardening alternative: GitHub App installation token
+- current remaining blocker is no longer conceptual runtime uncertainty
+- current remaining blocker is owner-side issuance of the minimum-scope artifact credential into the external workflow
 
 Sprint 87 normal control smoke:
 - Elen-MCP still ran successfully in controlled `private_checkout` beta mode on main
 - `/repobrain audit` remained real `v6`-enriched scoring
 - `/repobrain score`, `/repobrain doctor`, and `/repobrain status` all passed with truthful runtime-mode reporting
-- `/repobrain ask` now returned a precise operational status answer without secret or source leakage
+- `/repobrain ask` returned a precise operational status answer without secret or source leakage
 
 ## Remaining Conditions Before Visibility Change
 
@@ -71,7 +77,7 @@ Public visibility still requires all of the following:
 5. final approval checklist and partner pack review completed
 6. final pre-public smoke remains green on a controlled external repository
 7. enterprise P0 hardening remains green, including supply-chain baseline, governance evidence, least-privilege workflow posture, and mutation-surface cleanup
-8. installed-package delivery token scope must be operationally ready for external artifact or package retrieval without source checkout
+8. minimum-scope artifact credential must be issued and external installed-package proof must resolve real `v6` without source checkout
 
 ## User Support Implication
 
@@ -83,7 +89,7 @@ If RepoBrain-Action becomes public after approval:
 
 ## Decision
 
-- current public readiness decision: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`
+- current public readiness decision: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`
 - Marketplace decision: `MARKETPLACE_NOT_READY`
@@ -92,6 +98,7 @@ Historical state retained for traceability:
 
 - Sprint 84 / Sprint 85 decision: `PUBLIC_READY_PENDING_OWNER_APPROVAL`
 - Sprint 86 decision: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`
+- Sprint 87 decision: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`
 
 Sprint 85 packaging note:
 
@@ -106,12 +113,15 @@ Sprint 86 enterprise hardening note:
 - dependency review, CodeQL, SBOM, and provenance-prep workflows are prepared with least-privilege gates
 - governance verification is documented with `403 => UNKNOWN`, not false PASS
 - installed-package live proof remained a hard gate and is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
-- Sprint 86 attempted installed-package proof on `alexworkingai/Elen-MCP-v.2.2.0` without `private_checkout`
-- the proof path stayed safe and truthful, but external package delivery was not operationally available
 
 Sprint 87 runtime-proof note:
 
-- a private runtime artifact workflow now exists and produced a real wheel artifact for proof consumption
+- a private runtime artifact workflow exists and produced a real wheel artifact for proof consumption
 - the external proof workflow avoided private source checkout and requested true `installed_package` mode
-- the blocker is now exact rather than generic: `TOKEN_SCOPE_NOT_READY`
-- because of that, Sprint 87 still blocks the public switch on token-scoped delivery readiness rather than on supply-chain, mutation-surface, or ask-quality readiness
+- the blocker became exact rather than generic: `TOKEN_SCOPE_NOT_READY`
+
+Sprint 88 authorization note:
+
+- the supported cross-repo artifact access model is now selected and documented in `docs/release/ARTIFACT_ACCESS_AUTHORIZATION_MODEL.md`
+- the remaining gap is credential issuance, not RepoBrain runtime ambiguity
+- owner action is required before the external workflow can fetch the approved private runtime artifact with the intended minimum scope

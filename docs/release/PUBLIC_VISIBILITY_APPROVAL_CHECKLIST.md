@@ -1,4 +1,4 @@
-# Public Visibility Approval Checklist
+﻿# Public Visibility Approval Checklist
 
 ## 1. Purpose
 
@@ -7,9 +7,10 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 ## 2. Current State
 
 - RepoBrain-Action is still private.
-- Public visibility is not switched in Sprint 86 or Sprint 87.
+- Public visibility is not switched in Sprint 86, Sprint 87, or Sprint 88.
 - Marketplace work is not started.
-- Current product status: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
+- Current product status: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
+- Historical Sprint 87 blocker remains recorded as: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
 - Historical Sprint 86 blocker remains recorded as: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
 - Sprint 85 approval-pack state remains recorded as: `PUBLIC_VISIBILITY_APPROVAL_PACK_READY`.
 
@@ -27,14 +28,15 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - audit live `v6`-enriched scoring passed on the normal controlled runtime path
 - score live `v6`-enriched scoring passed on the normal controlled runtime path
 - doctor and status live passed
-- operational ask quality now returns workflow/runtime/public-readiness status cleanly
+- operational ask quality returns workflow/runtime/public-readiness status cleanly
 - runtime mode is explicit
 - `installed_private_package` is selected for selected partner testing
 - `private_checkout` remains beta-only fallback
 - validation is green
 - enterprise P0 hardening adds SECURITY / CONTRIBUTING / CODEOWNERS, supply-chain workflows, governance documentation, and mutation-surface cleanup
 - release, onboarding, command, and troubleshooting docs are updated
-- external installed-package delivery is not yet live-proven because the current scoped credential cannot fetch the approved private runtime artifact
+- external installed-package delivery path is designed and source-checkout-free
+- external installed-package delivery is not yet live-proven because the selected minimum-scope artifact credential has not been issued into the external workflow
 
 ## 5. Security Readiness
 
@@ -63,7 +65,7 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - partner feedback template is complete
 - partner troubleshooting path is complete
 - runtime/token issuance runbook is complete
-- installed-package rollout remains blocked until token scope is ready for external artifact retrieval
+- installed-package rollout remains blocked until the owner issues the minimum-scope artifact credential and external proof passes
 
 ## 8. Public Switch Procedure
 
@@ -99,7 +101,7 @@ Rollback note:
 ## 9. Final Decision
 
 - `BLOCKED_BY_RUNTIME`
-- exact blocker: `TOKEN_SCOPE_NOT_READY`
+- exact blocker: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 
 Other allowed outcomes:
 

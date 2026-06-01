@@ -1,8 +1,8 @@
-# Enterprise P0 Hardening Report
+﻿# Enterprise P0 Hardening Report
 
 ## Purpose
 
-This report records the Sprint 86 enterprise P0 hardening pass before any public visibility approval and the Sprint 87 runtime-proof follow-through.
+This report records the Sprint 86 enterprise P0 hardening pass, the Sprint 87 runtime-proof follow-through, and the Sprint 88 authorization-gate closeout before any public visibility approval.
 
 ## Meta-Audit Baseline
 
@@ -19,6 +19,7 @@ Targeted gaps:
 - dormant mutation surface
 - internal workflow permissions
 - structural maintainability hotspots
+- installed-package artifact authorization model
 
 ## What Changed
 
@@ -30,6 +31,7 @@ Targeted gaps:
 - internal workflow permission model documented and tightened where safe
 - hotspot visibility and containment plan added
 - Sprint 87 added an external installed-package delivery design, a private runtime artifact proof workflow, and operational ask quality hardening
+- Sprint 88 added the explicit artifact authorization model and owner-action issuance runbook
 
 ## What Was Verified Live
 
@@ -39,21 +41,22 @@ Targeted gaps:
   - audit
   - score
   - ask
-- ask now returned a precise operational status answer without secret or source leakage
-- installed-package proof was re-attempted on a workflow-only branch without `private_checkout`
-- local private packaging truth was also verified from an installed wheel in a clean environment
+- ask returned a precise operational status answer without secret or source leakage
+- installed-package proof remains source-checkout-free by design
+- local private packaging truth was verified from an installed wheel in a clean environment
 
 ## What Remains
 
-- installed-package external delivery remains the blocking gate
-- exact runtime-proof blocker is now `TOKEN_SCOPE_NOT_READY`
+- external installed-package delivery remains the blocking gate
+- exact Sprint 88 blocker is now `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- historical lower-level proof marker remains `TOKEN_SCOPE_NOT_READY`
 - governance API visibility remains partially unknown under `403`
 - provenance/attestation is prepared but not yet exercised as a real release
 - structural hotspots remain contained, not eliminated
 
 ## Public Switch Decision
 
-- `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`
+- `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 
 Allowed final states:
 
@@ -62,7 +65,8 @@ Allowed final states:
 - `PUBLIC_BLOCKED_BY_GOVERNANCE`
 - `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`
 - `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`
-- `PUBLIC_BLOCKED_BY_MUTATION_SURFACE`
+- `PUBLIC_BLOCKED_BY_ARTIFACT_AUTHORIZATION`
+- `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 - `PUBLIC_BLOCKED_BY_RELEASE_INTEGRITY`
 - `PUBLIC_BLOCKED_BY_VALIDATION`
 - `PUBLIC_BLOCKED_BY_LIVE_SMOKE`

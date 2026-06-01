@@ -5717,10 +5717,12 @@ def _read_public_readiness_status(control_plane_root: Path) -> str:
         "PUBLIC_BLOCKED_BY_RUNTIME_PROOF",
         "PUBLIC_BLOCKED_BY_PACKAGE_DELIVERY",
         "PUBLIC_BLOCKED_BY_TOKEN_SCOPE",
-        "PUBLIC_BLOCKED_BY_ARTIFACT_SECURITY",
+        "PUBLIC_BLOCKED_BY_ARTIFACT_AUTHORIZATION",
+        "PUBLIC_BLOCKED_BY_GITHUB_PLATFORM_LIMITATION",
         "PUBLIC_BLOCKED_BY_VALIDATION",
         "PUBLIC_BLOCKED_BY_LIVE_SMOKE",
         "PUBLIC_READY_PENDING_OWNER_APPROVAL",
+        "OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE",
     ):
         if token.lower() in text.lower():
             return token
@@ -5753,8 +5755,12 @@ def _public_readiness_next_step(status: str) -> str:
         return "Operationalize private artifact/package delivery for external workflows without source checkout."
     if normalized == "PUBLIC_BLOCKED_BY_TOKEN_SCOPE":
         return "Tighten partner/package credential scope so external install works without broad source-repo access."
-    if normalized == "PUBLIC_BLOCKED_BY_ARTIFACT_SECURITY":
-        return "Strengthen artifact integrity and delivery assurances before public-switch approval."
+    if normalized == "PUBLIC_BLOCKED_BY_ARTIFACT_AUTHORIZATION":
+        return "Resolve cross-repo private artifact authorization without widening TopoCore source access."
+    if normalized == "PUBLIC_BLOCKED_BY_GITHUB_PLATFORM_LIMITATION":
+        return "Choose a GitHub-supported delivery channel that works within current platform authorization limits."
+    if normalized == "OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE":
+        return "Have the owner issue the minimum-scope artifact credential and rerun installed-package proof."
     if normalized == "PUBLIC_BLOCKED_BY_VALIDATION":
         return "Re-run the validation suite and close remaining red checks before asking for approval."
     if normalized == "PUBLIC_BLOCKED_BY_LIVE_SMOKE":

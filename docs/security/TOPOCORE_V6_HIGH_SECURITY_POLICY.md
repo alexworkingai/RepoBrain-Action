@@ -100,5 +100,6 @@ Access control, token discipline, workstation discipline, and distribution disci
 - SECURITY / CONTRIBUTING / CODEOWNERS now reinforce the public-switch boundary from the RepoBrain side
 - installed-package live proof remains a hard gate before public visibility approval
 - Sprint 86 attempted that proof without `private_checkout`; the result stayed blocked on external package delivery, not on source secrecy policy
+- Sprint 88 selected a GitHub-supported minimum-scope artifact-read credential path, but the proof still cannot proceed until the owner issues that credential into the external workflow
 - no TopoCore source rights are granted through partner runtime access
 - no public switch is executed in Sprint 86

@@ -1,4 +1,4 @@
-# Partner Runtime Access Runbook
+﻿# Partner Runtime Access Runbook
 
 ## Purpose
 
@@ -57,7 +57,10 @@ This runbook defines the selected partner runtime access model for RepoBrain.
 - Sprint 87 result:
   - private workflow artifact proof path was built successfully
   - external proof still blocked on `TOKEN_SCOPE_NOT_READY`
-  - do not issue partner rollout approval for this mode until artifact/package retrieval works with the intended scoped credential
+- Sprint 88 result:
+  - selected authorization path is `fine_grained_pat_actions_read_artifact_download`
+  - exact remaining gate is `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+  - do not issue partner rollout approval for this mode until `TOPOCORE_V6_ARTIFACT_TOKEN` exists and the external proof reaches real `v6` without source checkout
 
 ## Package Caveat
 
@@ -68,6 +71,7 @@ This runbook defines the selected partner runtime access model for RepoBrain.
 
 - managed runtime
 - compiled or signed runtime artifact
+- GitHub App installation token instead of a fine-grained PAT for stronger lifecycle control
 
 ## Operational Checklist
 
