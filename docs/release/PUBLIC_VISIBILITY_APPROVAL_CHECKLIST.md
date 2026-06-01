@@ -1,4 +1,4 @@
-﻿# Public Visibility Approval Checklist
+# Public Visibility Approval Checklist
 
 ## 1. Purpose
 
@@ -9,7 +9,8 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - RepoBrain-Action is still private.
 - Public visibility is not switched in Sprint 86, Sprint 87, Sprint 88, Sprint 89, or Sprint 90.
 - Marketplace work is not started.
-- Current product status: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
+- Current product status: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
+- Historical Sprint 88 / Sprint 89 gate remains recorded as: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
 - Historical Sprint 87 blocker remains recorded as: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
 - Historical Sprint 86 blocker remains recorded as: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
 - Sprint 85 approval-pack state remains recorded as: `PUBLIC_VISIBILITY_APPROVAL_PACK_READY`.
@@ -35,8 +36,7 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - validation is green
 - enterprise P0 hardening adds SECURITY / CONTRIBUTING / CODEOWNERS, supply-chain workflows, governance documentation, and mutation-surface cleanup
 - release, onboarding, command, and troubleshooting docs are updated
-- external installed-package delivery path is designed and source-checkout-free
-- external installed-package delivery is not yet live-proven because the selected minimum-scope artifact credential has still not been issued into the external workflow
+- external installed-package delivery path is now live-proven without private source checkout
 
 ## 5. Security Readiness
 
@@ -65,9 +65,8 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - partner feedback template is complete
 - partner troubleshooting path is complete
 - runtime/token issuance runbook is complete
-- Sprint 89 rechecked the owner-token gate and confirmed the required secret is still absent
-- Sprint 90 rechecked the owner-token gate again and confirmed the required secret is still absent
-- installed-package rollout remains blocked until the owner issues the minimum-scope artifact credential and external proof passes
+- Sprint 90 verified the owner-issued artifact credential path and completed decisive installed-package proof
+- installed-package rollout is no longer blocked by runtime proof; the remaining gate is explicit owner approval for the public switch and selected partner pilot
 
 ## 8. Public Switch Procedure
 
@@ -78,7 +77,7 @@ Pre-switch checks:
 3. confirm no secret, token-like, or private-path residue remains in tracked files
 4. confirm partner runtime/token issuance process is ready for first testers
 5. confirm selected partner docs point to the correct runtime distribution mode
-6. confirm installed-package delivery credential scope works without source checkout
+6. confirm installed-package delivery remains scoped and source-checkout-free
 
 Switch step:
 
@@ -102,8 +101,9 @@ Rollback note:
 
 ## 9. Final Decision
 
-- `BLOCKED_BY_RUNTIME`
-- exact blocker: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- `APPROVAL_PENDING`
+- technical runtime gate is closed
+- remaining gate: explicit owner approval
 
 Other allowed outcomes:
 

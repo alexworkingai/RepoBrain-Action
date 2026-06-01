@@ -81,7 +81,7 @@ Sprint 86 enterprise P0 hardening update:
 - installed-package live proof was attempted and is now blocked with exact evidence rather than left ambiguous
 - Sprint 88 narrowed that blocker further:
   - selected authorization path is a minimum-scope artifact-read credential
-  - current remaining gate is `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- Sprint 90 closed the installed-package runtime proof gate and moved current readiness to `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
 - issue-comment live smoke remains green for doctor, status, audit, and score after the hardening pass
 
 ## Current Limitations

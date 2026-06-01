@@ -8,7 +8,7 @@ This document records the Sprint 88 decision for external access to the approved
 
 - previous blocker: `TOKEN_SCOPE_NOT_READY`
 - Sprint 88 clarification: the remaining gate is no longer runtime ambiguity
-- the remaining gate is issuance of a GitHub-supported minimum-scope credential for external artifact retrieval
+- Sprint 90 exercised that GitHub-supported minimum-scope credential path successfully in a live external installed-package proof
 
 ## Options Evaluated
 

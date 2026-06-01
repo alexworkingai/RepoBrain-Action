@@ -1,4 +1,4 @@
-﻿# Public Readiness Assessment
+# Public Readiness Assessment
 
 ## Current Repository Visibility
 
@@ -47,36 +47,29 @@ Important caveat:
 - this is acceptable for selected partner testing only under explicit approval and scoped access
 - it is not the same as strong source secrecy or broad public distribution hardening
 
-Sprint 87 installed-package proof update:
-- selected proof path: `temporary_controlled_artifact_proof`
-- private TopoCore source checkout remained avoided in the external proof branch
-- external artifact delivery did not become operational with the current scoped credential
-- exact blocker was identified as `TOKEN_SCOPE_NOT_READY`
+Historical runtime-proof trace:
+- Sprint 87 established the external installed-package proof path
+- Sprint 88 selected the GitHub-supported minimum-scope artifact authorization model
+- Sprint 89 correctly stopped because the required secret was absent
 
-Sprint 88 authorization update:
-- GitHub-supported artifact read paths were evaluated against official docs and the existing proof plumbing
-- selected Sprint 88 path: `fine_grained_pat_actions_read_artifact_download`
-- preferred longer-term hardening alternative: GitHub App installation token
-- current remaining blocker is no longer conceptual runtime uncertainty
-- current remaining blocker is owner-side issuance of the minimum-scope artifact credential into the external workflow
-
-Sprint 89 owner-token verification update:
-- the owner-action gate was rechecked before any new proof attempt
-- `TOPOCORE_V6_ARTIFACT_TOKEN` was still not present in `alexworkingai/Elen-MCP-v.2.2.0`
-- Sprint 89 therefore did not rerun the installed-package proof workflow
-- no new external installed-package runtime evidence can be claimed until the required secret exists and passes real artifact access preflight
-
-Sprint 90 owner-token verification update:
-- the owner-action gate was rechecked again before any new proof attempt
-- `TOPOCORE_V6_ARTIFACT_TOKEN` was still not present in `alexworkingai/Elen-MCP-v.2.2.0`
-- Sprint 90 therefore did not recreate the proof branch and did not rerun the decisive installed-package proof
-- no new external installed-package runtime evidence can be claimed until the required secret exists and passes real artifact access preflight
-
-Sprint 87 normal control smoke:
-- Elen-MCP still ran successfully in controlled `private_checkout` beta mode on main
-- `/repobrain audit` remained real `v6`-enriched scoring
-- `/repobrain score`, `/repobrain doctor`, and `/repobrain status` all passed with truthful runtime-mode reporting
-- `/repobrain ask` returned a precise operational status answer without secret or source leakage
+Sprint 90 decisive runtime-proof update:
+- `TOPOCORE_V6_ARTIFACT_TOKEN` now exists in `alexworkingai/Elen-MCP-v.2.2.0`
+- artifact preflight passed:
+  - artifact listed
+  - artifact downloaded
+  - digest verified
+  - wheel installed
+  - package imported
+  - `run_audit_score_v1` detected
+  - `topocore.audit_score.v1` detected
+- external workflow used `RB_TOPOCORE_V6_RUNTIME_MODE=installed_package`
+- private TopoCore source checkout stayed avoided
+- `private_checkout` stayed unused on the installed-package proof branch
+- `/repobrain doctor` and `/repobrain status` reached `installed_package`
+- `/repobrain audit` and `/repobrain score` both reached real `v6-enriched scoring`
+- backend evidence: `auto -> v6`
+- fallback evidence: `no / none`
+- control smoke on the normal `private_checkout` path remained green separately
 
 ## Remaining Conditions Before Visibility Change
 
@@ -89,7 +82,7 @@ Public visibility still requires all of the following:
 5. final approval checklist and partner pack review completed
 6. final pre-public smoke remains green on a controlled external repository
 7. enterprise P0 hardening remains green, including supply-chain baseline, governance evidence, least-privilege workflow posture, and mutation-surface cleanup
-8. minimum-scope artifact credential must be issued and external installed-package proof must resolve real `v6` without source checkout
+8. public switch is still a manual owner-approved step, not an automatic RepoBrain action
 
 ## User Support Implication
 
@@ -101,7 +94,7 @@ If RepoBrain-Action becomes public after approval:
 
 ## Decision
 
-- current public readiness decision: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- current public readiness decision: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`
 - Marketplace decision: `MARKETPLACE_NOT_READY`
@@ -111,6 +104,7 @@ Historical state retained for traceability:
 - Sprint 84 / Sprint 85 decision: `PUBLIC_READY_PENDING_OWNER_APPROVAL`
 - Sprint 86 decision: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`
 - Sprint 87 decision: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`
+- Sprint 88 / Sprint 89 blocked state: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 
 Sprint 85 packaging note:
 
@@ -126,26 +120,8 @@ Sprint 86 enterprise hardening note:
 - governance verification is documented with `403 => UNKNOWN`, not false PASS
 - installed-package live proof remained a hard gate and is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
 
-Sprint 87 runtime-proof note:
+Sprint 90 readiness note:
 
-- a private runtime artifact workflow exists and produced a real wheel artifact for proof consumption
-- the external proof workflow avoided private source checkout and requested true `installed_package` mode
-- the blocker became exact rather than generic: `TOKEN_SCOPE_NOT_READY`
-
-Sprint 88 authorization note:
-
-- the supported cross-repo artifact access model is now selected and documented in `docs/release/ARTIFACT_ACCESS_AUTHORIZATION_MODEL.md`
-- the remaining gap is credential issuance, not RepoBrain runtime ambiguity
-- owner action is required before the external workflow can fetch the approved private runtime artifact with the intended minimum scope
-
-Sprint 89 blocked-state note:
-
-- the decisive proof gate remained blocked because the required owner-issued secret was still absent at startup
-- the product status therefore remains `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
-- public visibility must not be reconsidered until the owner issues the minimum-scope artifact credential and the external installed-package proof reaches real `v6`
-
-Sprint 90 blocked-state note:
-
-- the decisive proof gate remained blocked for the same reason at Sprint 90 startup
-- no proof rerun was attempted because the required secret was still absent
-- public visibility must not be reconsidered until the owner issues the minimum-scope artifact credential and the decisive external installed-package proof reaches real `v6`
+- the decisive installed-package proof gate is now closed with real external `v6` evidence
+- the final remaining gate is explicit owner approval for the public visibility switch and selected partner pilot
+- public visibility must still not be switched automatically

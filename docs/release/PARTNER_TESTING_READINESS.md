@@ -1,4 +1,4 @@
-﻿# Partner Testing Readiness
+# Partner Testing Readiness
 
 ## 1. Purpose
 
@@ -12,8 +12,9 @@ This document prepares RepoBrain for selected partner testing after explicit own
 - final public visibility still requires explicit owner approval.
 - final issue-comment smoke on Elen-MCP passed for doctor, status, audit, score, and ask.
 - operational ask quality is materially improved for runtime/workflow/public-readiness questions.
-- enterprise P0 hardening is complete enough to isolate the remaining blocker.
-- current public-switch blocker: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
+- enterprise P0 hardening is complete enough to isolate the remaining gate.
+- current public-switch status: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
+- historical Sprint 88 / Sprint 89 gate remains recorded as: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
 - historical Sprint 87 blocker remains recorded as: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
 - historical Sprint 86 blocker remains recorded as: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
 
@@ -48,23 +49,12 @@ Current truth:
 - `private_checkout` remains beta-only for owner-controlled or tightly managed pilots
 - selected partner testing should prefer installed private package mode
 - stronger managed-runtime or compiled-artifact protection is future work
-- Sprint 86 live-proof result:
-  - local packaging/install proof: passed
-  - external installed-package delivery proof: blocked
-- Sprint 87 live-proof result:
+- Sprint 90 decisive result:
+  - owner-issued artifact credential present
+  - artifact preflight passed
   - private source checkout still avoided in the external proof branch
-  - exact blocker moved from generic runtime-proof uncertainty to `TOKEN_SCOPE_NOT_READY`
-- Sprint 88 authorization result:
-  - selected GitHub-supported path is now `fine_grained_pat_actions_read_artifact_download`
-  - partner rollout must not start on installed-package mode until the owner issues the minimum-scope artifact credential and external proof reaches real `v6`
-- Sprint 89 owner-token result:
-  - the owner-token gate was rechecked
-  - `TOPOCORE_V6_ARTIFACT_TOKEN` was still absent in `alexworkingai/Elen-MCP-v.2.2.0`
-  - no decisive installed-package proof rerun is claimed
-- Sprint 90 owner-token result:
-  - the owner-token gate was rechecked again
-  - `TOPOCORE_V6_ARTIFACT_TOKEN` was still absent in `alexworkingai/Elen-MCP-v.2.2.0`
-  - no decisive installed-package proof rerun is claimed
+  - external proof reached real `v6` in `installed_package` mode
+  - control smoke on the normal `private_checkout` path remained green
 
 Honest limitation:
 - a normal Python package artifact can still contain readable implementation files
@@ -109,4 +99,4 @@ Honest limitation:
 - static fallback remains available when authorized `v6` runtime is absent
 - `v6` enrichment requires authorized runtime access
 - RC tag creation remains pending owner approval
-- installed-package external delivery remains blocked until `TOPOCORE_V6_ARTIFACT_TOKEN` is issued with the selected minimum scope and the external artifact proof passes without source checkout
+- public visibility still requires explicit owner approval even though the installed-package runtime proof gate is now closed

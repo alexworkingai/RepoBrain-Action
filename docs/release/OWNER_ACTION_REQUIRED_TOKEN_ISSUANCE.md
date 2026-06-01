@@ -1,12 +1,12 @@
-﻿# Owner Action Required Token Issuance
+# Owner Action Required Token Issuance
 
 ## Purpose
 
-This document records the exact owner-side action required to unblock Sprint 88 through Sprint 90 installed-package runtime proof.
+This document records the exact owner-side action that was required to unblock Sprint 88 through Sprint 90 installed-package runtime proof, and the fact that the owner action is now complete.
 
 ## Required Credential
 
-- secret name to create in `alexworkingai/Elen-MCP-v.2.2.0`: `TOPOCORE_V6_ARTIFACT_TOKEN`
+- secret name created in `alexworkingai/Elen-MCP-v.2.2.0`: `TOPOCORE_V6_ARTIFACT_TOKEN`
 - preferred credential type: fine-grained personal access token
 - acceptable stronger alternative: GitHub App installation token
 
@@ -40,16 +40,16 @@ For the GitHub App path:
 - target secret name: `TOPOCORE_V6_ARTIFACT_TOKEN`
 - do not print the token value in logs, docs, workflow output, or chat
 
-## Why Existing Token Failed
+## Why Existing Token Was Not Enough
 
-- current external proof token path supported controlled private source checkout scenarios
+- the older external token path supported controlled private source checkout scenarios
 - it did not provide the required cross-repo private Actions artifact read for the approved installed-package proof path
 - Sprint 87 therefore failed with `PACKAGE_AUTH_FAILED`
 - exact blocker label became `TOKEN_SCOPE_NOT_READY`
 
-## How To Verify
+## How It Was Verified
 
-1. create the secret `TOPOCORE_V6_ARTIFACT_TOKEN` in `alexworkingai/Elen-MCP-v.2.2.0`
+1. verify the secret `TOPOCORE_V6_ARTIFACT_TOKEN` exists in `alexworkingai/Elen-MCP-v.2.2.0`
 2. rerun the installed-package proof workflow branch after the secret exists
 3. confirm private TopoCore source checkout is still avoided
 4. confirm artifact digest verification passes
@@ -66,9 +66,9 @@ For the GitHub App path:
 
 ## Current Sprint 90 State
 
-- owner action required: `yes`
-- exact blocker state: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
-- Sprint 89 startup verification rechecked `alexworkingai/Elen-MCP-v.2.2.0` and the secret was still missing
-- Sprint 90 startup verification rechecked `alexworkingai/Elen-MCP-v.2.2.0` again and the secret was still missing
-- decisive installed-package proof must not be rerun until the owner-issued credential exists
-- public visibility remains blocked until the minimum-scope credential exists and the external installed-package proof passes.
+- owner action required: `no`
+- owner action completed: `yes`
+- exact historical blocker state: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- Sprint 90 verification confirmed the secret now exists without printing its value
+- decisive installed-package proof was rerun and passed
+- public visibility is no longer blocked by artifact-token issuance; the remaining gate is explicit owner approval for the public switch and selected partner pilot

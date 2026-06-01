@@ -13,14 +13,13 @@ def _read(path: str) -> str:
 def test_installed_package_decisive_proof_doc_keeps_result_explicit() -> None:
     text = _read("docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md").lower()
 
-    assert "installed_package_live_proof_blocked" in text
+    assert "installed_package_live_proof_passed" in text
     assert "owner_action_required_token_issuance" in text
 
 
-def test_installed_package_decisive_proof_doc_does_not_claim_sprint89_rerun() -> None:
+def test_installed_package_decisive_proof_doc_preserves_historical_trace_and_current_success() -> None:
     text = _read("docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md").lower()
 
-    assert "proof rerun:" in text
-    assert "not attempted" in text
-    assert "still absent" in text or "still missing" in text
-    assert "does not claim live external installed-package success" in text
+    assert "sprint 89 correctly stopped because the required secret was absent" in text
+    assert "sprint 90 completed the decisive external installed-package runtime proof" in text
+    assert "does not claim a public switch" in text

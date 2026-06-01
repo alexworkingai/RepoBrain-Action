@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Sprint 90 verifies whether the owner-issued artifact token now exists and runs the decisive external `installed_package` proof only if that prerequisite is complete.
+Sprint 90 verifies the owner-issued artifact token and runs the decisive external `installed_package` proof after the authorization gate is complete.
 
 It does not make `RepoBrain-Action` public.
 
@@ -12,7 +12,7 @@ It does not make `RepoBrain-Action` public.
   - `3fffeba Record owner token proof blocked state`
 - Sprint 89 status:
   - `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
-- blocker:
+- prior blocker:
   - missing `TOPOCORE_V6_ARTIFACT_TOKEN`
 
 ## 3. Token / Credential State
@@ -20,7 +20,7 @@ It does not make `RepoBrain-Action` public.
 - secret name:
   - `TOPOCORE_V6_ARTIFACT_TOKEN`
 - present:
-  - no
+  - yes
 - scope summary:
   - target private repo: `alexworkingai/topocore`
   - minimum intended permission: `Actions: read`
@@ -30,68 +30,115 @@ It does not make `RepoBrain-Action` public.
 - values printed:
   - no
 - owner action completed:
-  - no
+  - yes
 
 ## 4. Artifact Preflight
 
-Expected preflight path:
+Observed preflight steps:
 
-1. list artifacts
-2. find `topocore-v6-runtime-wheel`
-3. download artifact
-4. verify SHA-256 sidecar
-5. locate `topocore_v6-0.30.0-py3-none-any.whl`
-6. install wheel
-7. import `topocore_v6`
-8. detect `run_audit_score_v1`
-9. detect `topocore.audit_score.v1`
+1. artifacts listed
+2. target artifact found
+3. artifact downloaded
+4. SHA-256 sidecar verified
+5. wheel located
+6. wheel installed
+7. `topocore_v6` imported
+8. `run_audit_score_v1` detected
+9. `topocore.audit_score.v1` detected
 
 Sprint 90 result:
 
-- the required secret was still absent at startup
-- no artifact preflight was rerun
-- no new proof evidence is claimed
+- workflow branch: `codex/sprint-90-installed-package-proof`
+- doctor proof run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749906900`
+- artifacts listed: yes
+- target artifact found: yes
+- artifact downloaded: yes
+- digest verified: yes
+- wheel installed: yes
+- package imported: yes
+- capability detected: yes
+- contract detected: yes
+- result:
+  - `INSTALLED_PACKAGE_PREFLIGHT_STATUS=PASS`
 
 ## 5. External Installed-Package Proof
 
 - repo used:
-  - not rerun in Sprint 90
+  - `alexworkingai/Elen-MCP-v.2.2.0`
 - workflow branch:
-  - not recreated in Sprint 90 because the startup hard stop triggered first
+  - `codex/sprint-90-installed-package-proof`
 - issue URL:
-  - none in Sprint 90
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/37`
+- run URLs:
+  - doctor:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749906900`
+  - status:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749940756`
+  - audit:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749942289`
+  - score:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749943941`
+  - ask initial proof run:
+    - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749945553`
 - runtime mode requested:
   - `installed_package`
 - runtime mode used:
-  - not reached
-- doctor/status/audit/score/ask result:
-  - not rerun
-- backend evidence:
-  - not reached
+  - `installed_package`
+- doctor result:
+  - `PASS`
+  - dependency mode: `installed_private_package`
+- status result:
+  - `success`
+  - dependency mode: `installed_private_package`
+- audit result:
+  - `v6-enriched scoring`
+  - backend: `auto -> v6`
+  - fallback: `no / none`
+  - final score: `77 / 100 GOOD`
+- score result:
+  - `v6-enriched scoring`
+  - backend: `auto -> v6`
+  - fallback: `no / none`
+  - final score: `77 / 100 GOOD`
+- ask result:
+  - success
+  - initial answer still surfaced the pre-merge blocked readiness docs snapshot and therefore required a post-merge refresh
 - private_checkout avoided:
-  - yes by policy
+  - yes
 - source checkout avoided:
-  - yes by policy for the intended proof path
+  - yes for private TopoCore source
 - safety result:
   - no token values printed
-  - no source exposure
-  - no private-path exposure
+  - no TopoCore source exposure
+  - no private-path exposure in user-facing output
+  - no mutation
 
 ## 6. Control Smoke
 
-- Sprint 89 and Sprint 88 control evidence remain the latest live green control path
-- Sprint 90 did not modify the normal controlled `private_checkout` runtime path
+- control issue:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/37`
+- control doctor run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749992255`
+- control status run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749993658`
+- control audit run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749995358`
+- control score run:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26749997090`
+- result:
+  - controlled `private_checkout` beta path remains green
+  - audit and score stayed `v6-enriched scoring`
+  - no secret or source exposure
+  - no mutation
 
 ## 7. Public Readiness Decision
 
-- `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
-
-Ready state once decisive proof succeeds:
-
 - `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
 
-Allowed blocked states remain:
+Historical blocked states retained for traceability:
 
+- `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 - `PUBLIC_BLOCKED_BY_TOKEN_PERMISSION`
 - `PUBLIC_BLOCKED_BY_ARTIFACT_AUTHORIZATION`
 - `PUBLIC_BLOCKED_BY_PACKAGE_DELIVERY`
@@ -105,15 +152,16 @@ Allowed blocked states remain:
 
 ## 8. Product Status
 
-- public visibility remains blocked until the owner issues the minimum-scope artifact credential and the decisive external installed-package proof reaches real `v6`
+- decisive installed-package runtime proof is complete
+- remaining gate is explicit owner approval for the public visibility switch and selected partner pilot
 
 ## 9. Next Step
 
 If ready:
 - Sprint 91 - Owner-Approved Public Visibility Switch and Selected Partner Pilot Kickoff.
 
-If blocked:
-- Sprint 91 should target owner token issuance, actual artifact preflight, and the decisive installed-package rerun.
+If blocked later by a new signal:
+- Sprint 91 should target the exact newly observed blocker rather than reopening installed-package proof ambiguity.
 
 ## 10. Non-Goals
 

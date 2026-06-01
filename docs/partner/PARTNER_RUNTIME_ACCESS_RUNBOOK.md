@@ -1,4 +1,4 @@
-﻿# Partner Runtime Access Runbook
+# Partner Runtime Access Runbook
 
 ## Purpose
 
@@ -51,24 +51,12 @@ This runbook defines the selected partner runtime access model for RepoBrain.
 - deliver a private runtime package or approved runtime artifact
 - keep consumer repositories free of private source checkout by default
 - operational live-proof status is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
-- Sprint 86 result:
-  - local package/install proof passed
-  - external delivery/install proof was still blocked
-- Sprint 87 result:
-  - private workflow artifact proof path was built successfully
-  - external proof still blocked on `TOKEN_SCOPE_NOT_READY`
-- Sprint 88 result:
-  - selected authorization path is `fine_grained_pat_actions_read_artifact_download`
-  - exact remaining gate is `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
-  - do not issue partner rollout approval for this mode until `TOPOCORE_V6_ARTIFACT_TOKEN` exists and the external proof reaches real `v6` without source checkout
-- Sprint 89 result:
-  - the owner-token gate was rechecked before any new proof attempt
-  - `TOPOCORE_V6_ARTIFACT_TOKEN` was still missing in the external consumer repository
-  - no decisive installed-package rerun is claimed until the owner-side secret exists
 - Sprint 90 result:
-  - the owner-token gate was rechecked again before any new proof attempt
-  - `TOPOCORE_V6_ARTIFACT_TOKEN` was still missing in the external consumer repository
-  - no decisive installed-package rerun is claimed until the owner-side secret exists
+  - owner-issued artifact credential was verified present
+  - artifact preflight passed
+  - external installed-package proof reached real `v6`
+  - private TopoCore source checkout remained avoided
+  - the remaining gate is explicit owner approval for the public switch and selected partner pilot
 
 ## Package Caveat
 

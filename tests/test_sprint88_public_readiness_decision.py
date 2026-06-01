@@ -16,7 +16,7 @@ def test_sprint88_architecture_doc_exists() -> None:
     assert (ROOT / "docs/architecture/SPRINT_88_ARTIFACT_ACCESS_FINAL_RUNTIME_PROOF.md").exists()
 
 
-def test_sprint88_public_readiness_docs_reflect_owner_action_gate() -> None:
+def test_sprint88_public_readiness_docs_retain_owner_action_history() -> None:
     readiness = _read("docs/release/PUBLIC_READINESS_ASSESSMENT.md").lower()
     approval = _read("docs/release/PUBLIC_VISIBILITY_APPROVAL_CHECKLIST.md").lower()
     hardening = _read("docs/release/ENTERPRISE_P0_HARDENING_REPORT.md").lower()
@@ -29,9 +29,9 @@ def test_sprint88_public_readiness_docs_reflect_owner_action_gate() -> None:
     assert "public switch" in combined
 
 
-def test_operational_readiness_parser_handles_owner_action_status() -> None:
+def test_operational_readiness_parser_now_reports_ready_after_runtime_proof() -> None:
     status = _read_public_readiness_status(ROOT)
 
-    assert status == "OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE"
+    assert status == "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF"
     next_step = _public_readiness_next_step(status)
-    assert "minimum-scope artifact credential" in next_step.lower()
+    assert "owner approval" in next_step.lower()

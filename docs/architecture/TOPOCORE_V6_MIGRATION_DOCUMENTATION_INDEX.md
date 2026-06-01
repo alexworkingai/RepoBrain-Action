@@ -36,7 +36,7 @@ Current truth:
 - Sprint 87 proves or precisely blocks external installed-package runtime delivery and hardens operational ask quality without switching visibility
 - Sprint 88 selects the GitHub-supported artifact authorization model and narrows the remaining external installed-package gate to owner-issued minimum-scope credential provisioning
 - Sprint 89 rechecks the owner-token gate, confirms the decisive installed-package proof cannot be rerun honestly while the required secret is still absent, and records the exact blocked state without faking new runtime evidence
-- Sprint 90 rechecks the owner-token gate again, confirms the decisive installed-package proof still cannot be rerun honestly while the required secret is absent, and preserves an exact blocked state without fabricating runtime evidence
+- Sprint 90 verifies the owner-issued artifact token, completes decisive installed-package proof with real external `v6` enrichment, and moves public readiness to `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF` without switching visibility
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -320,7 +320,7 @@ Current decision state:
 - Sprint 87 still does not switch visibility and keeps public readiness blocked until token-scoped installed-package delivery works externally
 - Sprint 88 still does not switch visibility and keeps public readiness blocked until the owner issues the minimum-scope artifact credential for the external proof path
 - Sprint 89 still does not switch visibility and keeps public readiness blocked until the owner actually issues the required artifact secret and the decisive external installed-package proof reaches real `v6`
-- Sprint 90 still does not switch visibility and keeps public readiness blocked until the owner actually issues the required artifact secret and the decisive external installed-package proof reaches real `v6`
+- Sprint 90 still does not switch visibility, but it closes the installed-package runtime proof gate and leaves explicit owner approval as the remaining gate
 
 ## 7. Repository Boundary Summary
 

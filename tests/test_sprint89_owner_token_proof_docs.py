@@ -24,12 +24,12 @@ def test_sprint89_docs_keep_owner_token_gate_explicit() -> None:
     combined = "\n".join((architecture, readiness, owner))
     assert "topocore_v6_artifact_token" in combined
     assert "owner_action_required_token_issuance" in combined
-    assert "still absent" in combined or "still missing" in combined
+    assert "historical" in combined or "still absent" in architecture or "missing" in architecture
 
 
-def test_sprint89_public_readiness_parser_stays_blocked() -> None:
+def test_sprint89_public_readiness_parser_moves_to_ready_after_runtime_proof() -> None:
     status = _read_public_readiness_status(ROOT)
 
-    assert status == "OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE"
+    assert status == "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF"
     next_step = _public_readiness_next_step(status).lower()
-    assert "minimum-scope artifact credential" in next_step
+    assert "owner approval" in next_step

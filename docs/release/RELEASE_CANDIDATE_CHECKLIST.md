@@ -127,7 +127,7 @@ It does not publish the repository, change visibility, create a release tag, or 
 - `PUBLIC_SWITCH_READY_AFTER_P0_HARDENING`: no
 - `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`: historical Sprint 86 state only
 - `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`: historical Sprint 87 state only
-- `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`: yes
-- `PUBLIC_BLOCKED_BY_DISTRIBUTION_STRATEGY`: no
+- `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`: historical Sprint 88 / Sprint 89 state only
+- `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`: yes
 - `MARKETPLACE_READY_FOR_PREP_PENDING_APPROVAL`: no
 - `MARKETPLACE_NOT_READY`: yes
