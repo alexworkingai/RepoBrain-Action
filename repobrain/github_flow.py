@@ -5713,6 +5713,7 @@ def _read_public_readiness_status(control_plane_root: Path) -> str:
     if match:
         return str(match.group(1) or "UNKNOWN").strip().upper() or "UNKNOWN"
     for token in (
+        "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY",
         "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF",
         "PUBLIC_BLOCKED_BY_RUNTIME_PROOF",
         "PUBLIC_BLOCKED_BY_PACKAGE_DELIVERY",
@@ -5745,6 +5746,8 @@ def _read_installed_package_proof_status(control_plane_root: Path) -> str:
 
 def _public_readiness_next_step(status: str) -> str:
     normalized = str(status or "UNKNOWN").strip().upper()
+    if normalized == "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY":
+        return "Run the selected partner pilot from the public action surface, collect feedback, and keep Marketplace planning deferred until pilot evidence matures."
     if normalized == "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF":
         return "Seek explicit owner approval for the public visibility switch and selected partner pilot."
     if normalized == "PUBLIC_READY_PENDING_OWNER_APPROVAL":

@@ -29,9 +29,9 @@ def test_sprint88_public_readiness_docs_retain_owner_action_history() -> None:
     assert "public switch" in combined
 
 
-def test_operational_readiness_parser_now_reports_ready_after_runtime_proof() -> None:
+def test_operational_readiness_parser_now_reports_public_switch_complete() -> None:
     status = _read_public_readiness_status(ROOT)
 
-    assert status == "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF"
+    assert status == "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY"
     next_step = _public_readiness_next_step(status)
-    assert "owner approval" in next_step.lower()
+    assert "partner pilot" in next_step.lower()

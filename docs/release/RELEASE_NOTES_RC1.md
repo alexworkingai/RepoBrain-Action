@@ -1,13 +1,13 @@
-﻿# RepoBrain Release Notes - RC1
+# RepoBrain Release Notes - RC1
 
 ## Summary
 
-This release-candidate draft reflects the current external RepoBrain product path after the v6-only closeout, external pilot hardening, public scrub, and release-readiness gate work.
+This release-candidate draft reflects the current external RepoBrain product path after the v6-only closeout, external pilot hardening, decisive installed-package proof, and the Sprint 91 public visibility switch.
 
 ## Highlights
 
 - v6-only runtime policy
-- direct external repository support through `RepoBrain-Action`
+- public RepoBrain action surface through `alexworkingai/RepoBrain-Action`
 - supported external command matrix:
   - help
   - ask
@@ -19,13 +19,11 @@ This release-candidate draft reflects the current external RepoBrain product pat
   - verify
   - fix
 - audit MVP implemented with 100-point repository quality/readiness scoring
-- audit benchmark report added to show credible ranking across sparse, risky, and mature repository shapes
 - doctor implemented as a report-only installation/runtime diagnostic
 - status implemented as a report-only runtime snapshot
-- verify productionized as informational verification reporting
 - fix productized as safe proposal/governance with explicit no-mutation markers
 - security, permissions, token degradation, fork-safety, and TopoCore security hardening
-- canonical onboarding, command, and troubleshooting docs
+- canonical onboarding, command, troubleshooting, and partner-pilot docs
 - source-available BYO-LLM license for RepoBrain-Action
 
 ## Product Positioning
@@ -44,63 +42,50 @@ The strategic differentiator is full repository intelligence, quality scoring, e
 
 ## External Install Shape
 
-- consumer repository workflow calls `alexworkingai/RepoBrain-Action@main` in the current controlled pilot
-- private TopoCore v6 is checked out separately
-- `TOPOCORE_V6_REPO_TOKEN` is required
+- consumer repository workflow can now call `alexworkingai/RepoBrain-Action@main` from the public repo
+- preferred partner runtime path is `installed_private_package`
+- `private_checkout` remains beta-only fallback for controlled environments
 - current external workflow baseline is read-mostly
 - users bring and pay for their own LLM or provider usage
+- TopoCore remains private and is not distributed as source
 
 Sprint 84 public-ready gate update:
 
 - selected partner testing should prefer installed private package mode
 - `private_checkout` remains beta-only
 - plain Python package artifacts can still contain readable implementation files and are documented honestly
-- live Elen-MCP smoke after Sprint 84 still passed with:
-  - audit: `v6-enriched scoring`
-  - score: compact `v6-enriched scoring`
-  - doctor: `PASS`
-  - status: `success`
-  - explicit runtime mode truth for controlled `private_checkout`
 
-Sprint 85 approval-pack update:
-
-- public visibility approval checklist is prepared
-- selected partner setup pack is prepared
-- RC tag and pinning plan is prepared
-- final pre-public live smoke passed on Elen-MCP for doctor, status, audit, score, and ask
-- audit and score remained real `v6`-enriched scoring with truthful backend evidence
-- public visibility remains approval-gated and is not executed in Sprint 85
-
-Sprint 86 enterprise P0 hardening update:
+Sprint 86-90 hardening update:
 
 - SECURITY / CONTRIBUTING / CODEOWNERS baseline added
 - dependency review, CodeQL, SBOM, and provenance-prep workflows prepared
 - governance verification model documented with `403 => UNKNOWN`, not false PASS
 - dormant production mutation helpers were removed from `repobrain/github_flow.py`
 - main RepoBrain execution workflow no longer requests `checks: write` or `pull-requests: write`
-- installed-package live proof was attempted and is now blocked with exact evidence rather than left ambiguous
-- Sprint 88 narrowed that blocker further:
-  - selected authorization path is a minimum-scope artifact-read credential
-- Sprint 90 closed the installed-package runtime proof gate and moved current readiness to `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
-- Sprint 91 owner approval for the public visibility switch is now recorded, but the switch itself is not yet executed in this pre-switch package
-- issue-comment live smoke remains green for doctor, status, audit, and score after the hardening pass
+- Sprint 90 closed the decisive installed-package runtime proof gate with real external `v6` evidence
+
+Sprint 91 public-switch update:
+
+- owner-approved public visibility switch executed for RepoBrain-Action
+- RepoBrain-Action is now public
+- TopoCore remains private
+- Elen-MCP remains private
+- post-switch smoke passed on Elen-MCP for doctor, status, audit, score, and ask
+- audit and score remained real `v6-enriched scoring` with truthful backend evidence
+- selected partner pilot kickoff pack is now aligned with the public action surface
+- RC tag creation remains deferred
 
 ## Current Limitations
 
 - TopoCore v6 remains private permanently
-- RepoBrain-Action remains private at Sprint 91 startup and is scheduled for controlled visibility switch in Sprint 91
 - `/repobrain audit` is implemented as an MVP repository-level audit
-- benchmark evidence now supports the current audit MVP demo narrative
-- `/repobrain score` is now implemented as a compact summary of the same guarded audit engine
+- `/repobrain score` is implemented as a compact summary of the same guarded audit engine
 - `/repobrain fix-lite` is unsupported as a user-facing command spelling
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
-- this RC does not enable Marketplace or public release
+- this RC does not enable Marketplace or a public TopoCore runtime distribution
 
 ## Distribution Note
 
-This RC draft supports private beta decision-making.
-It does not itself publish RepoBrain-Action publicly or to GitHub Marketplace.
+This RC draft supports selected partner testing through the public RepoBrain action surface and a private runtime boundary.
+It does not publish to GitHub Marketplace.
 TopoCore v6 source rights are not granted through this RC.
-
-- score now ships as a compact summary of the same guarded audit engine
-- v6-enriched audit UX now keeps safe repo-relative evidence visible while preserving private-path redaction

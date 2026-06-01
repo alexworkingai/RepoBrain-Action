@@ -2,18 +2,20 @@
 
 ## 1. Purpose
 
-This document prepares RepoBrain for selected partner testing after explicit owner approval and any future public visibility switch.
+This document defines the selected-partner testing state after the Sprint 91 public visibility switch.
 
 ## 2. Current Status
 
-- RepoBrain-Action remains private in Sprint 86, Sprint 87, Sprint 88, Sprint 89, and Sprint 90.
-- Public visibility has not been switched yet at Sprint 91 startup.
+- RepoBrain-Action is public in Sprint 91.
+- TopoCore remains private.
+- Elen-MCP remains private.
 - Marketplace work has not started.
-- owner approval for the public visibility switch is now recorded.
-- final issue-comment smoke on Elen-MCP passed for doctor, status, audit, score, and ask.
+- owner approval for the public visibility switch was recorded and executed.
+- post-switch public-action smoke on Elen-MCP passed for doctor, status, audit, score, and ask.
 - operational ask quality is materially improved for runtime/workflow/public-readiness questions.
-- enterprise P0 hardening is complete enough to isolate the remaining gate.
-- current pre-switch public-switch status: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
+- enterprise P0 hardening remains in force after the switch.
+- current public readiness status: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
+- historical Sprint 90 readiness remains recorded as: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
 - historical Sprint 88 / Sprint 89 gate remains recorded as: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
 - historical Sprint 87 blocker remains recorded as: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
 - historical Sprint 86 blocker remains recorded as: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
@@ -22,7 +24,7 @@ This document prepares RepoBrain for selected partner testing after explicit own
 
 - GitHub repository admin access for the consumer repository
 - allowed GitHub Actions policy for external actions
-- RepoBrain-Action public visibility only after explicit owner approval
+- public RepoBrain action reference: `alexworkingai/RepoBrain-Action@main` until a separately approved tag exists
 - authorized TopoCore runtime access according to the chosen mode
 - BYO-LLM or user-paid model/provider access when needed
 
@@ -46,20 +48,23 @@ Chosen near-term mode:
 - `installed_private_package`
 
 Current truth:
-- `private_checkout` remains beta-only for owner-controlled or tightly managed pilots
+- `private_checkout` remains controlled beta-only fallback for owner-controlled or tightly managed pilots
 - selected partner testing should prefer installed private package mode
 - stronger managed-runtime or compiled-artifact protection is future work
 - Sprint 90 decisive result:
   - owner-issued artifact credential present
   - artifact preflight passed
-  - private source checkout still avoided in the external proof branch
+  - private source checkout stayed avoided in the external proof branch
   - external proof reached real `v6` in `installed_package` mode
   - control smoke on the normal `private_checkout` path remained green
+- Sprint 91 public-action smoke result:
+  - RepoBrain-Action public action source remained usable from Elen-MCP
+  - doctor/status/audit/score/ask all passed post-switch
 
 Honest limitation:
 - a normal Python package artifact can still contain readable implementation files
 - selected partner testing therefore remains controlled and approval-based even when source checkout is avoided
-- Sprint 91 starts selected partner pilot kickoff preparation but does not start Marketplace work
+- Sprint 91 starts selected partner pilot kickoff but does not start Marketplace work
 
 ## 6. Security Expectations
 
@@ -99,5 +104,5 @@ Honest limitation:
 - no patch/autofix
 - static fallback remains available when authorized `v6` runtime is absent
 - `v6` enrichment requires authorized runtime access
-- RC tag creation remains pending owner approval
-- public visibility still requires controlled Sprint 91 execution even though approval is now recorded and the installed-package runtime proof gate is closed
+- RC tag creation remains pending separate owner approval
+- public visibility does not imply TopoCore source rights or broad public runtime distribution

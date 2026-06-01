@@ -14,11 +14,11 @@ def test_partner_testing_readiness_doc_exists() -> None:
     assert (ROOT / 'docs/release/PARTNER_TESTING_READINESS.md').exists()
 
 
-def test_partner_testing_readiness_doc_states_private_and_owner_approval() -> None:
+def test_partner_testing_readiness_doc_states_public_switch_and_owner_approval_history() -> None:
     text = _read('docs/release/PARTNER_TESTING_READINESS.md').lower()
 
-    assert 'repobrain-action remains private in sprint 86' in text
-    assert 'explicit owner approval' in text
+    assert 'repobrain-action is public in sprint 91' in text
+    assert 'owner approval' in text
     assert 'marketplace work has not started' in text or 'marketplace' in text
 
 

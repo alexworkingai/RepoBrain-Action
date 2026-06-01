@@ -50,14 +50,17 @@ This runbook defines the selected partner runtime access model for RepoBrain.
 - preferred selected-partner path
 - deliver a private runtime package or approved runtime artifact
 - keep consumer repositories free of private source checkout by default
+- the current owner-controlled reference secret name is `TOPOCORE_V6_ARTIFACT_TOKEN`
 - operational live-proof status is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
 - Sprint 90 result:
   - owner-issued artifact credential was verified present
   - artifact preflight passed
   - external installed-package proof reached real `v6`
   - private TopoCore source checkout remained avoided
-  - owner approval for the public switch and selected partner pilot is now recorded
-  - Sprint 91 still treats the actual visibility change as a controlled manual step
+- Sprint 91 result:
+  - RepoBrain-Action is now public
+  - selected partners can reference the public action surface while still receiving private runtime access separately
+  - the normal control path may still use `private_checkout` in owner-managed environments, but partner preference remains `installed_package`
 
 ## Package Caveat
 

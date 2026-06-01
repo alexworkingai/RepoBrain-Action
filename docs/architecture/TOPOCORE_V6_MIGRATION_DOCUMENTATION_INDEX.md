@@ -37,6 +37,7 @@ Current truth:
 - Sprint 88 selects the GitHub-supported artifact authorization model and narrows the remaining external installed-package gate to owner-issued minimum-scope credential provisioning
 - Sprint 89 rechecks the owner-token gate, confirms the decisive installed-package proof cannot be rerun honestly while the required secret is still absent, and records the exact blocked state without faking new runtime evidence
 - Sprint 90 verifies the owner-issued artifact token, completes decisive installed-package proof with real external `v6` enrichment, and moves public readiness to `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF` without switching visibility
+- Sprint 91 executes the owner-approved public visibility switch for RepoBrain-Action, preserves private TopoCore boundaries, and finalizes the selected partner pilot kickoff pack with post-switch smoke evidence
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 

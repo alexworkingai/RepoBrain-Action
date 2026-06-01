@@ -33,8 +33,8 @@ def test_release_readiness_docs_preserve_private_topocore_and_no_publication_cla
     ).lower()
 
     assert "topocore v6 remains private" in combined
-    assert "does not itself publish repobrain-action publicly" in combined
-    assert "does not itself publish repobrain-action publicly or to github marketplace" in combined
+    assert "repo is already public" not in combined
+    assert "does not publish to github marketplace" in combined or "marketplace not started" in combined
     assert "no v5" in combined
     assert "no repobrain-community" in combined
     assert "no patch/autofix" in combined

@@ -14,7 +14,7 @@ def test_sprint91_architecture_doc_exists() -> None:
     assert (ROOT / "docs/architecture/SPRINT_91_PUBLIC_SWITCH_PARTNER_PILOT.md").exists()
 
 
-def test_sprint91_pre_switch_docs_record_owner_approval_but_not_executed_switch() -> None:
+def test_sprint91_docs_record_owner_approval_and_executed_switch() -> None:
     architecture = _read("docs/architecture/SPRINT_91_PUBLIC_SWITCH_PARTNER_PILOT.md").lower()
     readiness = _read("docs/release/PUBLIC_READINESS_ASSESSMENT.md").lower()
     checklist = _read("docs/release/PUBLIC_VISIBILITY_APPROVAL_CHECKLIST.md").lower()
@@ -23,7 +23,7 @@ def test_sprint91_pre_switch_docs_record_owner_approval_but_not_executed_switch(
     assert "owner approval" in combined
     assert "public_switch_ready_after_runtime_proof" in combined
     assert "public_visibility_switched_partner_pilot_ready" in combined
-    assert "public visibility is not switched" in checklist or "switch still pending execution" in architecture
+    assert "repobrain-action is now public" in combined
 
 
 def test_sprint91_docs_keep_topocore_private_and_marketplace_not_started() -> None:

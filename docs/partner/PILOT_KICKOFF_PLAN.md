@@ -6,9 +6,12 @@ This plan defines the selected partner pilot kickoff path after the RepoBrain pu
 
 ## 2. Pilot Status
 
-- owner approval received for public RepoBrain-Action visibility
-- Sprint 91 starts with the switch still pending execution
+- owner approval was received and executed for public RepoBrain-Action visibility
+- RepoBrain-Action is now public
+- TopoCore remains private
+- Elen-MCP remains private
 - Marketplace is not started
+- selected partner pilot is ready to begin from the public action surface
 
 ## 3. Partner Selection Criteria
 
@@ -20,7 +23,7 @@ This plan defines the selected partner pilot kickoff path after the RepoBrain pu
 ## 4. Partner Onboarding Steps
 
 1. confirm partner repository admin contact
-2. provide public RepoBrain action reference and setup docs
+2. provide the public RepoBrain action reference and setup docs
 3. provision partner-scoped runtime credential
 4. validate workflow permissions
 5. run first smoke commands

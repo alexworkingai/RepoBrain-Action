@@ -27,9 +27,9 @@ def test_sprint89_docs_keep_owner_token_gate_explicit() -> None:
     assert "historical" in combined or "still absent" in architecture or "missing" in architecture
 
 
-def test_sprint89_public_readiness_parser_moves_to_ready_after_runtime_proof() -> None:
+def test_sprint89_public_readiness_parser_moves_to_public_switch_complete() -> None:
     status = _read_public_readiness_status(ROOT)
 
-    assert status == "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF"
+    assert status == "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY"
     next_step = _public_readiness_next_step(status).lower()
-    assert "owner approval" in next_step
+    assert "partner pilot" in next_step

@@ -36,7 +36,7 @@ Expected first-smoke backend truth:
 
 Stop and resolve setup if:
 
-- private action access is not working
+- public action resolution is not working because Actions policy blocks external actions or the ref is wrong
 - `TOPOCORE_V6_REPO_TOKEN` is missing or invalid
 - the workflow permissions are tighter than the read-mostly baseline
 - unsupported commands are being treated as supported

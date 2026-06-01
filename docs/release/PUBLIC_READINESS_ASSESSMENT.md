@@ -2,7 +2,7 @@
 
 ## Current Repository Visibility
 
-- `RepoBrain-Action`: `PRIVATE`
+- `RepoBrain-Action`: `PUBLIC`
 - TopoCore v6: `PRIVATE`
 - `Elen-MCP-v.2.2.0`: `PRIVATE`
 
@@ -15,7 +15,7 @@
 - no RepoBrain-created branch, commit, or PR behavior
 - no `v5`
 - no `repobrain-community`
-- enterprise P0 hardening from Sprint 86 remains in place before any public switch
+- enterprise P0 hardening from Sprint 86 remains in place after the public switch
 
 ## What Must Stay Private
 
@@ -26,17 +26,18 @@
 
 ## Public Scrub Status
 
-Public scrub improvements completed before Sprint 84:
+Public scrub improvements remain intact after Sprint 91:
 
 - top-level `LICENSE` exists
 - local machine paths have been sanitized from tracked docs
 - no private TopoCore source is present in RepoBrain-Action
 - no real secret or private key values are present in tracked docs
 - command/docs/support surface is aligned with current product behavior
+- post-switch public file checks completed without exposure findings
 
 ## Runtime Distribution Status
 
-Sprint 84 selected a near-term partner-testing runtime model:
+Sprint 84 selected the near-term partner-testing runtime model:
 
 - decision: `INSTALLED_PRIVATE_PACKAGE_SELECTED`
 - `private_checkout` remains controlled beta only
@@ -44,57 +45,45 @@ Sprint 84 selected a near-term partner-testing runtime model:
 
 Important caveat:
 - a standard private Python wheel can still contain readable implementation files
-- this is acceptable for selected partner testing only under explicit approval and scoped access
+- this is acceptable for selected partner testing only under scoped access and explicit approval
 - it is not the same as strong source secrecy or broad public distribution hardening
 
 Historical runtime-proof trace:
 - Sprint 87 established the external installed-package proof path
 - Sprint 88 selected the GitHub-supported minimum-scope artifact authorization model
 - Sprint 89 correctly stopped because the required secret was absent
+- Sprint 90 completed decisive external installed-package proof with real `v6` enrichment and no private source checkout
 
-Sprint 90 decisive runtime-proof update:
-- `TOPOCORE_V6_ARTIFACT_TOKEN` now exists in `alexworkingai/Elen-MCP-v.2.2.0`
-- artifact preflight passed:
-  - artifact listed
-  - artifact downloaded
-  - digest verified
-  - wheel installed
-  - package imported
-  - `run_audit_score_v1` detected
-  - `topocore.audit_score.v1` detected
-- external workflow used `RB_TOPOCORE_V6_RUNTIME_MODE=installed_package`
-- private TopoCore source checkout stayed avoided
-- `private_checkout` stayed unused on the installed-package proof branch
-- `/repobrain doctor` and `/repobrain status` reached `installed_package`
-- `/repobrain audit` and `/repobrain score` both reached real `v6-enriched scoring`
-- backend evidence: `auto -> v6`
-- fallback evidence: `no / none`
-- control smoke on the normal `private_checkout` path remained green separately
+Sprint 91 public-action smoke update:
+- RepoBrain-Action is now public while TopoCore and Elen-MCP remain private
+- post-switch Elen-MCP smoke passed for doctor, status, audit, score, and ask
+- audit and score remained `v6-enriched scoring`
+- backend evidence remained `auto -> v6`
+- no secret or TopoCore source exposure occurred in user-facing output
 
-## Remaining Conditions Before Visibility Change
+## Current Operating Conditions
 
-Public visibility still requires all of the following:
+Public visibility is now switched, but the operating model remains constrained:
 
-1. explicit owner approval
-2. selected-partner runtime/token process in place
+1. TopoCore must remain private
+2. selected-partner runtime/token process remains scoped and revocable
 3. no accidental source-repo access grants beyond the chosen distribution model
 4. no Marketplace publication in this phase
-5. final approval checklist and partner pack review completed
-6. final pre-public smoke remains green on a controlled external repository
-7. enterprise P0 hardening remains green, including supply-chain baseline, governance evidence, least-privilege workflow posture, and mutation-surface cleanup
-8. public switch is still a manual owner-approved step, not an automatic RepoBrain action
+5. selected partner pilot only
+6. enterprise P0 hardening remains green, including supply-chain baseline, governance evidence, least-privilege workflow posture, and mutation-surface cleanup
+7. public switch remains a manual owner-approved event and is not automated by RepoBrain
 
 ## User Support Implication
 
-If RepoBrain-Action becomes public after approval:
+Now that RepoBrain-Action is public:
 
 - the public repo still fronts a private TopoCore boundary
-- selected partners may receive runtime access without source-repo access
+- selected partners can reference the public action surface while receiving private runtime access separately
 - broader turnkey public install and Marketplace support are still future work
 
 ## Decision
 
-- current public readiness decision: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
+- current public readiness decision: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`
 - Marketplace decision: `MARKETPLACE_NOT_READY`
@@ -105,24 +94,15 @@ Historical state retained for traceability:
 - Sprint 86 decision: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`
 - Sprint 87 decision: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`
 - Sprint 88 / Sprint 89 blocked state: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
+- Sprint 90 decision: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
 
-Sprint 85 packaging note:
+## Sprint 91 Result
 
-- the public visibility approval checklist and selected partner pack are prepared
-- the final pre-public smoke passed on Elen-MCP with doctor, status, audit, score, and ask all succeeding
-- the approval pack is ready for owner review once runtime proof is no longer blocked
-- tag creation remains approval-gated and is not performed automatically
-
-Sprint 86 enterprise hardening note:
-
-- SECURITY.md, CONTRIBUTING.md, and CODEOWNERS are now part of the pre-public baseline
-- dependency review, CodeQL, SBOM, and provenance-prep workflows are prepared with least-privilege gates
-- governance verification is documented with `403 => UNKNOWN`, not false PASS
-- installed-package live proof remained a hard gate and is tracked separately in `docs/release/INSTALLED_PACKAGE_LIVE_PROOF.md`
-
-Sprint 90 readiness note:
-
-- the decisive installed-package proof gate is now closed with real external `v6` evidence
-- explicit owner approval for the public visibility switch and selected partner pilot is now recorded
-- Sprint 91 is the controlled execution sprint for the switch itself
-- public visibility must still not be switched automatically
+- owner approval was recorded and executed as a controlled visibility switch
+- `RepoBrain-Action` is now public
+- TopoCore remains private
+- Elen-MCP remains private
+- post-switch external smoke passed
+- selected partner pilot readiness package is now aligned with the public action surface
+- RC tag creation remains deferred pending separate approval
+- public visibility must not be confused with Marketplace start or TopoCore source distribution

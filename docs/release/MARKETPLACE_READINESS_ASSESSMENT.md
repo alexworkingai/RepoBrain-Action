@@ -18,7 +18,7 @@
 
 - canonical install guide exists:
   - `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
-- private action access and TopoCore token setup are documented
+- public action install and private TopoCore runtime setup are documented
 - current install path is still private-beta oriented rather than Marketplace turnkey
 
 ## Command Docs

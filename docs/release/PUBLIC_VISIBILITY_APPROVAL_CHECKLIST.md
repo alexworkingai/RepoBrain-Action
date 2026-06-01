@@ -2,15 +2,16 @@
 
 ## 1. Purpose
 
-This is the final checklist before making `RepoBrain-Action` public for selected partner testing.
+This is the final checklist record for making `RepoBrain-Action` public for selected partner testing.
 
 ## 2. Current State
 
-- RepoBrain-Action is still private.
-- Public visibility is not switched in Sprint 86, Sprint 87, Sprint 88, Sprint 89, or Sprint 90.
-- Public visibility is not switched yet at Sprint 91 startup.
+- RepoBrain-Action is now public.
+- Public visibility was switched in Sprint 91 after validated pre-switch checks.
+- TopoCore remains private.
+- Elen-MCP remains private.
 - Marketplace work is not started.
-- Current product status: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
+- Current product status: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
 - Historical Sprint 88 / Sprint 89 gate remains recorded as: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`.
 - Historical Sprint 87 blocker remains recorded as: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`.
 - Historical Sprint 86 blocker remains recorded as: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`.
@@ -18,7 +19,7 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 
 ## 3. Approval Decision
 
-- explicit owner approval is required before any public visibility change, RC tag creation, or selected partner rollout
+- explicit owner approval was required before public visibility change, RC tag creation, or selected partner rollout
 - owner approves public visibility: `yes`
 - owner approves selected partner testing: `yes`
 - owner approves RC tag creation: `deferred` / not separately confirmed
@@ -37,7 +38,8 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - validation is green
 - enterprise P0 hardening adds SECURITY / CONTRIBUTING / CODEOWNERS, supply-chain workflows, governance documentation, and mutation-surface cleanup
 - release, onboarding, command, and troubleshooting docs are updated
-- external installed-package delivery path is now live-proven without private source checkout
+- external installed-package delivery path is live-proven without private source checkout
+- post-switch smoke from a private external consumer passed after the public action source became visible
 
 ## 5. Security Readiness
 
@@ -66,26 +68,26 @@ This is the final checklist before making `RepoBrain-Action` public for selected
 - partner feedback template is complete
 - partner troubleshooting path is complete
 - runtime/token issuance runbook is complete
-- Sprint 90 verified the owner-issued artifact credential path and completed decisive installed-package proof
-- installed-package rollout is no longer blocked by runtime proof; the remaining gate is explicit owner approval for the public switch and selected partner pilot
+- installed-package rollout is preferred and remains proven
+- selected partner pilot kickoff pack is aligned with the public action surface
 
 ## 8. Public Switch Procedure
 
-Pre-switch checks:
+Pre-switch checks completed in Sprint 91:
 
-1. confirm owner approval is explicit and recorded
-2. confirm the repository is still private before the switch
-3. confirm no secret, token-like, or private-path residue remains in tracked files
-4. confirm partner runtime/token issuance process is ready for first testers
-5. confirm selected partner docs point to the correct runtime distribution mode
-6. confirm installed-package delivery remains scoped and source-checkout-free
+1. owner approval was explicit and recorded
+2. the repository was private before the switch
+3. no secret, token-like, or private-path residue remained in tracked files
+4. partner runtime/token issuance process was ready for first testers
+5. selected partner docs pointed to the correct runtime distribution mode
+6. installed-package delivery remained scoped and source-checkout-free
 
-Switch step:
+Switch step executed in Sprint 91:
 
-- perform the GitHub visibility change manually in the repository settings or by an approved operator command
-- do not run visibility switching automatically from RepoBrain
+- GitHub visibility was changed only for `alexworkingai/RepoBrain-Action`
+- RepoBrain itself did not perform the visibility switch automatically
 
-Immediate post-switch checks:
+Immediate post-switch checks completed:
 
 1. README renders correctly
 2. LICENSE is visible
@@ -102,12 +104,13 @@ Rollback note:
 
 ## 9. Final Decision
 
-- `APPROVAL_PENDING`
+- `APPROVED_FOR_PUBLIC_PARTNER_TESTING`
 - technical runtime gate is closed
-- owner approval is recorded
-- remaining step is executing the controlled public visibility switch and post-switch smoke
+- owner approval was recorded and executed
+- post-switch smoke passed
+- Marketplace remains deferred
 
-Other allowed outcomes:
+Other allowed outcomes retained for traceability:
 
 - `APPROVED_FOR_PUBLIC_PARTNER_TESTING`
 - `APPROVAL_PENDING`

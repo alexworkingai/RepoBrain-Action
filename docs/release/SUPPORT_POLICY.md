@@ -57,7 +57,7 @@ Current unsupported or not-approved surfaces:
 ## Known Limitations
 
 - private TopoCore v6 token requirement
-- private action access during pilot
+- public action surface with private runtime access during the selected partner pilot
 - fork restrictions
 - verify may report `NOT_RUN` when no checks exist
 - audit is implemented as a repository-level MVP

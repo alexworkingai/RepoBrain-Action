@@ -2,12 +2,13 @@
 
 ## Purpose
 
-This runbook describes how to perform the RepoBrain public visibility switch after explicit owner approval.
+This runbook records how to perform the RepoBrain public visibility switch after explicit owner approval.
 
-## Sprint 91 Boundary
+## Sprint 91 Execution Record
 
-This runbook is executed in Sprint 91 only after pre-switch validation passes.
+This runbook was executed in Sprint 91 after pre-switch validation passed.
 It was not executed in Sprint 85.
+The switch is not automated by RepoBrain.
 
 ## Prerequisites
 
@@ -30,6 +31,8 @@ It was not executed in Sprint 85.
 ## Switch Steps
 
 - perform the GitHub visibility change manually in the GitHub UI or through an approved operator command
+- only `alexworkingai/RepoBrain-Action` is changed
+- TopoCore and Elen-MCP remain private
 - do not run visibility switching automatically from RepoBrain
 
 ## Immediate Post-Switch Checks

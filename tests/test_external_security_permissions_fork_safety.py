@@ -57,7 +57,7 @@ def test_permissions_and_user_docs_do_not_recommend_broad_write_or_fork_secret_e
     assert "contents: write" in permissions
     assert "not required" in permissions.lower()
     assert "pull_request_target" in permissions
-    assert "private action access" in guide.lower()
+    assert "consumer repository actions policy" in guide.lower() or "external actions" in guide.lower()
     assert "untrusted fork" in guide.lower()
     assert "no patch/autofix" in guide.lower() or "no-patch" in guide.lower()
 

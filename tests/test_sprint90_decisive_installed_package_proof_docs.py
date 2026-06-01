@@ -29,9 +29,9 @@ def test_sprint90_docs_record_decisive_proof_pass() -> None:
     assert "source checkout avoided" in combined
 
 
-def test_sprint90_public_readiness_parser_is_ready_after_runtime_proof() -> None:
+def test_sprint90_public_readiness_parser_is_now_post_switch_ready() -> None:
     status = _read_public_readiness_status(ROOT)
 
-    assert status == "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF"
+    assert status == "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY"
     next_step = _public_readiness_next_step(status).lower()
-    assert "owner approval" in next_step
+    assert "partner pilot" in next_step

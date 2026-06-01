@@ -14,9 +14,8 @@ Current product runtime is v6-only:
 
 Current distribution stage:
 
-- private beta RC / pilot path
+- public action surface with selected partner pilot path
 - not a public Marketplace install flow yet
-- public visibility is not changed by this guide
 - selected partner testing should prefer installed private package mode when authorized
 
 ## Repository Model
@@ -29,7 +28,7 @@ Current external pilot shape:
 
 Preferred near-term partner-testing shape:
 
-- `RepoBrain-Action`: public later only after owner approval
+- `RepoBrain-Action`: public action surface
 - private TopoCore v6 runtime: installed private package or approved runtime artifact
 - consumer repository: no TopoCore source checkout in the normal partner path
 
@@ -50,10 +49,8 @@ Do not use:
 Before installation, confirm all of the following:
 
 - you can resolve `alexworkingai/RepoBrain-Action@main`
-- private action sharing is enabled for `RepoBrain-Action`
 - the consumer repository Actions policy allows external action resolution
-- you have a token with read access to the private TopoCore v6 repository
-- you can store that token as `TOPOCORE_V6_REPO_TOKEN`
+- you have the correct private runtime credential for the mode you are using
 - you understand which runtime mode you are using:
   - `installed_private_package` preferred for selected partner testing
   - `private_checkout` beta-only
@@ -66,14 +63,12 @@ Reference docs:
 - version pinning: `docs/release/VERSIONING_AND_PINNING_STRATEGY.md`
 - license model: `docs/release/LICENSE_MODEL.md`
 
-## Step 1: Configure Private Action Access
+## Step 1: Confirm Public Action Resolution
 
-`RepoBrain-Action` is private during the pilot.
-The consumer repository must be allowed to resolve it.
+`RepoBrain-Action` is public, but the consumer repository still needs to allow external action resolution.
 
 Check:
 
-- `RepoBrain-Action` private action sharing is enabled for repositories owned by `alexworkingai`
 - the consumer repository does not stay on `allowed_actions=local_only`
 - if the consumer repository uses selected actions, allow `alexworkingai/RepoBrain-Action`
 
@@ -102,22 +97,29 @@ Honest caveat:
 - a standard Python wheel can still contain readable implementation files
 - this is safer than source checkout, but it is not the same as strong source secrecy
 
-## Step 3: Create Or Configure The TopoCore v6 Token
+## Step 3: Create Or Configure The TopoCore v6 Runtime Credential
 
-Create a token that can read the private TopoCore v6 repository.
+Create the credential that matches your runtime mode.
 
-Required property:
+Preferred installed-package path:
 
-- read access to the private TopoCore v6 repository
+- use an artifact or package credential equivalent in scope to `TOPOCORE_V6_ARTIFACT_TOKEN`
+- keep it read-only, scoped, expiring, and revocable
+
+Controlled `private_checkout` fallback:
+
+- use `TOPOCORE_V6_REPO_TOKEN`
+- keep it read-only and limited to the private TopoCore repository
 
 Do not print, commit, or paste the token into docs, comments, or workflow logs.
 Private runtime access does not grant any TopoCore v6 source rights.
 
 ## Step 4: Add The Repository Secret
 
-In the consumer repository, add:
+In the consumer repository, add the secret that matches your runtime mode:
 
-- `TOPOCORE_V6_REPO_TOKEN`
+- preferred: partner-specific equivalent of `TOPOCORE_V6_ARTIFACT_TOKEN`
+- controlled fallback: `TOPOCORE_V6_REPO_TOKEN`
 
 Expected behavior:
 
@@ -185,7 +187,7 @@ Expected healthy doctor behavior:
 
 - overall diagnostic status shown as `PASS`, `WARN`, or `UNKNOWN`
 - workflow/action context shown
-- `TOPOCORE_V6_REPO_TOKEN` discussed by name without exposing any value
+- runtime credential discussed by name without exposing any value
 - v6-only / no-v5 policy shown
 - no patch/autofix
 - no mutation
@@ -276,7 +278,7 @@ Current product truth:
 
 | Failure | Likely cause | Fix |
 |---|---|---|
-| `Unable to resolve action ... repository not found` | private action access not enabled, `allowed_actions=local_only`, or wrong slug | enable private action access, allow external actions, confirm `alexworkingai/RepoBrain-Action@main` |
+| `Unable to resolve action ... repository not found` | Actions policy blocks external actions, repository slug/ref is wrong, or GitHub resolution is stale | allow external actions, confirm `alexworkingai/RepoBrain-Action@main`, and retry |
 | `TOPOCORE_V6_REPO_TOKEN` missing | consumer secret not configured | add the repository secret |
 | private checkout failed | token lacks access, token expired, wrong repo/ref, token approval incomplete | reissue token with read access and update the secret |
 | verify returns `NOT_RUN` | no concrete checks/statuses/workflow runs observed | treat as informational absence, not pass/fail |
@@ -290,7 +292,7 @@ Full troubleshooting guide:
 ## Security Notes
 
 - TopoCore v6 remains private
-- RepoBrain-Action remains private during the pilot
+- RepoBrain-Action is public for the selected partner pilot
 - do not use `pull_request_target` for the external pilot
 - do not expose `TOPOCORE_V6_REPO_TOKEN` to untrusted fork code
 - do not checkout untrusted fork head code with the private TopoCore token by default

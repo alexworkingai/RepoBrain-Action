@@ -16,7 +16,7 @@ Setup materials:
 
 Runtime note:
 
-- RepoBrain-Action is the public action surface for the pilot.
+- RepoBrain-Action is now the public action surface for the pilot.
 - TopoCore runtime access still uses a private installed-package credential path.
 - TopoCore source is not distributed or licensed through this pilot.
 

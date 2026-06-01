@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Sprint 91 executes the owner-approved public visibility switch for `RepoBrain-Action` and prepares the selected partner pilot kickoff.
+Sprint 91 executes the owner-approved public visibility switch for `RepoBrain-Action`, verifies post-switch safety, and closes the selected partner pilot kickoff package.
 
 It does not make TopoCore public.
 It does not start Marketplace publication.
@@ -25,52 +25,99 @@ It does not start Marketplace publication.
 - owner approval for `installed_package` as preferred runtime path:
   - yes
 - RC tag approval:
-  - deferred unless explicitly confirmed later in Sprint 91
+  - deferred unless explicitly confirmed later
 
 ## 4. Pre-Switch Checks
 
 - startup gates passed on RepoBrain-Action, Elen-MCP, and TopoCore
-- Sprint 90 installed-package proof is present and passed
-- TopoCore remains private
-- Elen-MCP remains private
-- final pre-switch safety scan must pass before visibility changes
+- Sprint 90 installed-package proof was already present and passed
+- pre-switch safety scan passed
+- pre-switch docs/tests were validated and merged to `main`
+- TopoCore remained private before the switch
+- Elen-MCP remained private before the switch
 
 ## 5. Visibility Switch Execution
 
-- planned for Sprint 91 after pre-switch docs/tests are validated on `main`
 - target repository:
   - `alexworkingai/RepoBrain-Action`
-- non-target repositories that must remain private:
-  - `alexworkingai/topocore`
-  - `alexworkingai/Elen-MCP-v.2.2.0`
+- switch command executed in Sprint 91:
+  - `gh repo edit alexworkingai/RepoBrain-Action --visibility public --accept-visibility-change-consequences`
+- post-switch visibility:
+  - `RepoBrain-Action`: `PUBLIC`
+  - `alexworkingai/topocore`: `PRIVATE`
+  - `alexworkingai/Elen-MCP-v.2.2.0`: `PRIVATE`
+- public repo URL:
+  - `https://github.com/alexworkingai/RepoBrain-Action`
 
 ## 6. Post-Switch Checks
 
-- verify RepoBrain-Action is public
-- verify TopoCore stays private
-- verify Elen-MCP stays private
-- verify public docs render safely
-- verify no secrets, private paths, or TopoCore source details are exposed
+- public file accessibility rechecked for:
+  - `README.md`
+  - `LICENSE`
+  - `SECURITY.md`
+  - `CONTRIBUTING.md`
+  - `action.yml`
+  - `docs/commands/REPOBRAIN_COMMANDS.md`
+  - `docs/partner/PARTNER_TESTING_SETUP.md`
+  - `docs/release/PUBLIC_READINESS_ASSESSMENT.md`
+  - `docs/release/PARTNER_TESTING_READINESS.md`
+  - `docs/security/TOPOCORE_V6_HIGH_SECURITY_POLICY.md`
+- usersafe scan passed again after the switch
+- no secret, token-like, or private-path exposure was confirmed in tracked public content
+- TopoCore source remained private and unexposed
 
 ## 7. Public Install Smoke
 
-- run public-action smoke against Elen-MCP after the switch
-- verify doctor, status, audit, score, and ask
-- confirm `installed_package` remains the preferred runtime path
+Safe issue:
+- `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/38`
+
+Live public-action smoke after the switch:
+- doctor:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26751278884`
+  - result: `PASS`
+- status:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26751312946`
+  - result: `success`
+- audit:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26751343246`
+  - result: `success`
+  - mode: `v6-enriched scoring`
+  - score: `77 / 100 GOOD`
+  - backend: `auto -> v6`
+- score:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26751372597`
+  - result: `success`
+  - mode: `v6-enriched scoring`
+  - score: `77 / 100 GOOD`
+  - backend: `auto -> v6`
+- ask refresh after docs convergence:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26751660595`
+  - result: `success`
+  - operational answer reflected public visibility, workflow location, runtime mode, and post-switch readiness truth
+
+Current external smoke truth:
+- action source resolves from public `alexworkingai/RepoBrain-Action@main`
+- Elen-MCP remained private
+- TopoCore remained private
+- active Elen-MCP workflow mode stayed `private_checkout` for the standard control path
+- `installed_package` remains the preferred partner runtime path and its decisive proof remains passed from Sprint 90
+- no mutation occurred
+- no secret or TopoCore source exposure was observed in user-facing output
 
 ## 8. Partner Pilot Kickoff
 
-- selected partner pilot docs will be finalized in Sprint 91
+- selected partner pilot docs are now finalized for the post-switch state
 - runtime model remains:
   - `installed_package` preferred
   - `private_checkout` controlled beta fallback only
-- feedback template and onboarding materials remain part of the required package
+- onboarding email template, kickoff plan, setup guide, and runtime runbook are aligned with the public action surface and private runtime boundary
+- Marketplace planning remains deferred until partner feedback exists
 
 ## 9. Product Status
 
-- pre-switch status:
+- historical readiness before execution:
   - `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
-- post-switch target:
+- current Sprint 91 result:
   - `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`
 
 ## 10. Non-Goals
@@ -81,3 +128,4 @@ It does not start Marketplace publication.
 - no patch/autofix
 - no mutation
 - no Microsoft/GitHub partnership claim
+- no public RC tag creation in Sprint 91

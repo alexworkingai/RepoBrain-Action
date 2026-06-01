@@ -44,7 +44,7 @@ It does not publish the repository, change visibility, create a release tag, or 
 - canonical command guide exists
 - canonical troubleshooting guide exists
 - external workflow example is usable and read-mostly
-- private action access and `TOPOCORE_V6_REPO_TOKEN` requirements are documented
+- public action access through `alexworkingai/RepoBrain-Action@main` is documented
 - selected partner testing now has a preferred `installed_private_package` runtime path
 - note:
   - controlled beta example workflow still uses `private_checkout`
@@ -77,14 +77,13 @@ It does not publish the repository, change visibility, create a release tag, or 
   - `INSTALLED_PRIVATE_PACKAGE_SELECTED`
 - notes:
   - `private_checkout` remains beta-only
-  - public visibility still requires explicit owner approval
+  - public visibility is now switched for RepoBrain-Action only
   - Marketplace remains blocked
 
 ## Marketplace Readiness
 
 - Status: `BLOCKED`
 - blockers:
-  - repository is still private
   - product still depends on a private TopoCore v6 tokenized access path
   - no approved public distribution strategy for TopoCore exists yet
   - no public support channel is approved
@@ -106,8 +105,8 @@ It does not publish the repository, change visibility, create a release tag, or 
 ## Known Limitations
 
 - TopoCore v6 remains private permanently
-- RepoBrain-Action remains private in the current pilot state
-- external install still requires `TOPOCORE_V6_REPO_TOKEN`
+- RepoBrain-Action is public, but TopoCore remains private
+- external install still requires private runtime authorization
 - verify is informational only
 - fix is no-patch and no-mutation governance only
 - no patch/autofix
@@ -128,7 +127,8 @@ It does not publish the repository, change visibility, create a release tag, or 
 - `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`: historical Sprint 86 state only
 - `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`: historical Sprint 87 state only
 - `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`: historical Sprint 88 / Sprint 89 state only
-- `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`: yes
+- `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`: historical Sprint 90 state only
+- `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`: yes
 - owner approval for the Sprint 91 public visibility switch: yes
 - `MARKETPLACE_READY_FOR_PREP_PENDING_APPROVAL`: no
 - `MARKETPLACE_NOT_READY`: yes

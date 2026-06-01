@@ -12,7 +12,6 @@ Example:
 
 ### Likely causes
 
-- private action access is not enabled for `RepoBrain-Action`
 - the consumer repository Actions policy is too strict, including `allowed_actions=local_only`
 - the workflow uses the wrong slug or wrong ref
 
@@ -20,7 +19,6 @@ Example:
 
 Check all of the following:
 
-- private action sharing is enabled for `RepoBrain-Action`
 - the consumer repository allows external actions from `alexworkingai`
 - the workflow uses the exact action ref `alexworkingai/RepoBrain-Action@main`
 

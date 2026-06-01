@@ -10,15 +10,16 @@ def _read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_post_switch_ready_status_is_defined_but_not_yet_claimed() -> None:
+def test_post_switch_ready_status_is_now_claimed_explicitly() -> None:
     combined = "\n".join(
         (
             _read("docs/architecture/SPRINT_91_PUBLIC_SWITCH_PARTNER_PILOT.md"),
             _read("docs/release/PUBLIC_VISIBILITY_APPROVAL_CHECKLIST.md"),
+            _read("docs/release/PUBLIC_READINESS_ASSESSMENT.md"),
         )
     )
     assert "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY" in combined
-    assert "APPROVAL_PENDING" in combined or "switch still pending" in combined.lower()
+    assert "APPROVED_FOR_PUBLIC_PARTNER_TESTING" in combined
 
 
 def test_docs_do_not_claim_marketplace_or_topocore_source_distribution() -> None:

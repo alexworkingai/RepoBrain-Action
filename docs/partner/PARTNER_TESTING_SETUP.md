@@ -31,6 +31,7 @@ RepoBrain is a guarded repository-intelligence action that reviews repository st
 - install the RepoBrain workflow into the consumer repository
 - keep explicit permissions blocks in place
 - do not use `pull_request_target`
+- current public action reference is `alexworkingai/RepoBrain-Action@main` until a separately approved tag exists
 
 ## Permissions Baseline
 
@@ -41,10 +42,10 @@ RepoBrain is a guarded repository-intelligence action that reviews repository st
 ## Runtime Mode
 
 - preferred mode: `installed_private_package`
-- `private_checkout` is beta-only fallback for owner-controlled environments
+- `private_checkout` is controlled beta-only fallback for owner-managed environments
 - the supported authorization model is selected and live-proven
-- owner approval for the Sprint 91 public visibility switch and selected partner pilot is now recorded
-- before the switch executes, RepoBrain-Action is still private
+- RepoBrain-Action is now public
+- TopoCore remains private and source is not licensed or distributed
 
 ## Secret and Runtime Credential Setup
 

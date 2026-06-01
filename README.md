@@ -64,8 +64,9 @@ Current external product behavior remains intentionally conservative:
 
 The current external pilot uses:
 
-- `alexworkingai/RepoBrain-Action@main` in controlled pilot repositories
-- private TopoCore v6 checked out separately with `TOPOCORE_V6_REPO_TOKEN`
+- public `alexworkingai/RepoBrain-Action@main` in controlled pilot repositories
+- preferred partner runtime path: private installed package / runtime artifact
+- `private_checkout` only as a controlled beta fallback in owner-managed environments
 - a caller-owned workflow in the consumer repository
 - a bring-your-own-LLM or user-paid model provider model
 
@@ -75,22 +76,15 @@ Sprint 84 public-ready gate truth:
 - selected partner testing should prefer installed private package mode when authorized
 - plain Python package artifacts still need honest handling because they can contain readable implementation files
 
-Sprint 85 approval-pack truth:
+Sprint 91 public-switch truth:
 
-- RepoBrain-Action still remains private
-- public visibility still requires explicit owner approval
-- selected partner testing pack is now documented for controlled rollout
+- owner approval for the RepoBrain-Action public visibility switch was recorded and executed
+- RepoBrain-Action is now public
+- selected partner pilot kickoff pack is ready from the public action surface
 - RC tag creation remains approval-gated and is not executed automatically
-
-Sprint 91 switch-planning truth:
-
-- owner approval for the RepoBrain-Action public visibility switch is now recorded
-- Sprint 91 is the controlled execution sprint for that switch
-- before the switch executes, RepoBrain-Action still remains private
 - Marketplace remains not started
 
 RepoBrain is not an LLM reseller.
-RepoBrain-Action remains private until the Sprint 91 visibility switch is actually executed.
 TopoCore v6 remains private.
 `repobrain-community` is retired from the working product architecture and is not required.
 

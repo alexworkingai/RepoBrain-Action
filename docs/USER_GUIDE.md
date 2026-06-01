@@ -69,8 +69,8 @@ Current pilot truth:
 - `TOPOCORE_V6_REPO_TOKEN` is required for private checkout
 - `repobrain-community` is retired and not required
 - missing or invalid private-token access is a setup failure, not a `v5` fallback case
-- private action access must be enabled for `alexworkingai/RepoBrain-Action`
-- `Unable to resolve action ... repository not found` can mean private action access or Actions policy failure
+- RepoBrain-Action is public, but the consumer repository Actions policy must still allow external actions
+- `Unable to resolve action ... repository not found` can mean Actions policy failure or wrong ref, not only a typo
 - untrusted fork PRs should not receive private TopoCore secrets
 
 ## Where To Go Next
