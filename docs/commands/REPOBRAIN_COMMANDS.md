@@ -7,7 +7,7 @@ Current external GitHub command surface is intentionally bounded.
 | Command | Issue scope | PR scope | Mutation behavior | Backend expectation | Notes |
 |---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
-| `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` when available; compact runtime/LLM block by default | primary repo/PR question flow |
+| `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` when available; compact runtime/LLM block by default | primary repo/PR question flow; route label stays `ASK` |
 | `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; default comments stay compact | full repository-level 100-point audit with evidence and roadmap |
 | `/repobrain score` | supported | supported as compact repository score with PR context | none | same guarded audit engine as `/repobrain audit`; default comments stay compact | compact summary view of the same audit engine |
 | `/repobrain doctor` | supported | supported | none | report-only diagnostics; backend remains explicit | installation/runtime diagnostic command |
@@ -63,6 +63,7 @@ Also supported when parser routes them:
 ## Verify Policy
 
 `/repobrain verify` is informational only.
+It is a checks/statuses report only.
 
 It can report:
 
@@ -78,6 +79,12 @@ It does not mean:
 - safe to merge
 - merge approval
 - security approval
+
+Default verify output stays compact:
+
+- no legacy TopoCore diagnostics header
+- no mojibake diagnostics title
+- runtime/safety summary stays compact by default
 
 ## Audit Policy
 
@@ -139,6 +146,8 @@ It reports:
 - fork/private-boundary policy
 - recommended fixes
 
+When workflow permissions are otherwise safe and `pull-requests: write` is present only for RepoBrain PR command response comments, doctor may report `PASS_WITH_NOTES` instead of `WARN`.
+
 `/repobrain doctor` does not rerun private checkout, does not dump the environment, and does not mutate the repository.
 
 ## Status Policy
@@ -155,6 +164,9 @@ It reports:
 - score as a compact summary of the same guarded audit engine
 - no-patch/no-mutation policy
 - install hints for `/repobrain doctor`, `/repobrain score`, and `/repobrain audit`
+- partner-friendly runtime wording by default
+- installed private package as the preferred partner path
+- raw runtime mode fields only in verbose/artifact diagnostics
 
 `/repobrain status` is informational only and does not require expensive TopoCore import or repository mutation.
 
@@ -186,7 +198,9 @@ Visible no-mutation expectations:
 ## LLM Execution Notes
 
 - ask and explain do not require an LLM call to produce a bounded answer
+- issue ask may use an LLM only when safe policy allows
 - when policy or provider availability blocks the LLM path, RepoBrain can still answer from deterministic retrieval, workflow/runtime inspection, evidence extraction, and TopoCore v6 signals
+- route labels always reflect the user command; internal analysis mode is separate from the visible route
 - diagnostics must state whether the LLM was actually called
 - default GitHub comments keep compact LLM/runtime/safety blocks
 - raw TKY/TKYA internals belong to verbose diagnostics or artifacts, not default partner-facing comments

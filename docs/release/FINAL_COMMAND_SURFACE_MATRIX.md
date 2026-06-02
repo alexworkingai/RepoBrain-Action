@@ -3,7 +3,7 @@
 | Command | Issue scope | PR scope | Backend behavior | Mutation behavior | Partner-testing status | Notes |
 |---|---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | not applicable | none | ready | lists supported commands |
-| `/repobrain ask` | supported | supported | `v6` when runtime is available | none | ready | bounded repository Q&A |
+| `/repobrain ask` | supported | supported | `v6` when runtime is available | none | ready | bounded repository Q&A; route label stays `ASK` |
 | `/repobrain locate` | supported | supported when routed | `v6` when runtime is available | none | ready | file/evidence locator |
 | `/repobrain explain` | supported | supported when routed | `v6` when runtime is available | none | ready | explanation flow |
 | `/repobrain review` | scoped unsupported or safe guidance | supported | issue: not applicable; PR: `v6` when runtime is available | none | ready with PR context | informational only |
@@ -24,5 +24,6 @@
 - default GitHub comments use compact diagnostics
 - `RB_REPOBRAIN_VERBOSE_DIAGNOSTICS=1` enables expanded sanitized diagnostics
 - full trace stays in artifacts/logs rather than default partner-facing comments
+- visible route labels always reflect the typed command; internal reasoning mode is separate
 - no patch/autofix
 - no RepoBrain-created branch, commit, or PR

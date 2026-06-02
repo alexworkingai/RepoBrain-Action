@@ -81,6 +81,14 @@ Sprint 91 public-switch truth:
 - RC tag creation remains approval-gated and is not executed automatically
 - Marketplace remains not started
 
+Sprint 92D branch truth:
+
+- issue ask may use an LLM only when safe policy allows
+- deterministic fallback remains available for operational and product-analysis questions
+- route labels reflect the typed command rather than internal analysis mode
+- protected main baseline is enabled on the public RepoBrain repository
+- required status checks remain intentionally deferred until stable check names are locked
+
 RepoBrain is not an LLM reseller.
 TopoCore v6 remains private.
 `repobrain-community` is retired from the working product architecture and is not required.

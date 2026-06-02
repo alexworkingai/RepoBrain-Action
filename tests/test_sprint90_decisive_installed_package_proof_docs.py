@@ -32,6 +32,6 @@ def test_sprint90_docs_record_decisive_proof_pass() -> None:
 def test_sprint90_public_readiness_parser_is_now_post_switch_ready() -> None:
     status = _read_public_readiness_status(ROOT)
 
-    assert status == "PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION"
+    assert status == "SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL"
     next_step = _public_readiness_next_step(status).lower()
     assert "partner pilot" in next_step

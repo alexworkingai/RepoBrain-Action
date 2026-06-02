@@ -67,7 +67,8 @@ RepoBrain is a guarded repository-intelligence action that reviews repository st
 ## Expected Outputs
 
 - doctor and status report the active runtime mode truthfully
-- ask and explain may use an LLM when policy and provider access allow it, but they can also answer from deterministic retrieval and TopoCore-backed evidence when no LLM call occurs
+- ask and explain may use an LLM when safe policy and provider access allow it, but they can also answer from deterministic retrieval and TopoCore-backed evidence when no LLM call occurs
+- route labels reflect the typed command even when internal analysis mode differs
 - default GitHub comments stay compact and developer-facing
 - `RB_REPOBRAIN_VERBOSE_DIAGNOSTICS=1` enables expanded sanitized diagnostics
 - audit and score are informational only
@@ -79,6 +80,7 @@ RepoBrain is a guarded repository-intelligence action that reviews repository st
 - use `/repobrain doctor` first
 - confirm runtime credential scope and expiration
 - confirm the workflow keeps explicit permissions and avoids `pull_request_target`
+- treat protected main as a governance improvement signal, while required checks may still be deferred
 
 ## Feedback Submission
 

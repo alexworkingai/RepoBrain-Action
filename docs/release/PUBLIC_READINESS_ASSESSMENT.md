@@ -69,6 +69,15 @@ Sprint 92C diagnostics and permission update:
 - latest PR audit and score comments improved to `85 / 100 STRONG`
 - no `.topocore-v6` leakage was observed in the latest checked issue and PR comment slices
 
+Sprint 92D branch update:
+- issue ask now has a deterministic product-analysis fallback when safe issue-mode LLM policy does not allow an LLM call
+- visible route labels reflect the typed command rather than internal analysis mode
+- PR ask scope is rendered as `PR ask`
+- verify default output stays compact and no longer uses the legacy TopoCore diagnostics header
+- review and fix default comments are compact by default, with deeper internals reserved for verbose/artifact diagnostics
+- protected main baseline is now enabled on the public RepoBrain repository
+- required checks and CODEOWNERS enforcement remain intentionally deferred for now
+
 ## Current Operating Conditions
 
 Public visibility is now switched, but the operating model remains constrained:
@@ -91,7 +100,7 @@ Now that RepoBrain-Action is public:
 
 ## Decision
 
-- current public readiness decision: `PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION`
+- current public readiness decision on the Sprint 92D branch: `SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL`
 - historical Sprint 91 post-switch decision: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`

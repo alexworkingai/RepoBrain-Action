@@ -119,7 +119,7 @@ def test_pr_verify_emits_explicit_scoped_backend_diagnostics() -> None:
         audit=audit,
     )
 
-    assert "TopoCore backend diagnostics" in markdown
+    assert "Runtime and safety" in markdown
     assert "verification report" in markdown
     assert "verify_report_only" not in markdown
     assert audit["requested_backend"] == "auto"

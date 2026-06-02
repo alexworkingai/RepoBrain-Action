@@ -34,5 +34,5 @@ def test_governance_script_preserves_non_mutating_unknown_semantics() -> None:
     assert "BRANCH_PROTECTION=" in text
     assert "RULESETS=" in text
     assert "CODEOWNERS=" in text
-    assert "'gh'" in text
-    assert "'api'" in text
+    assert '"gh"' in text or "'gh'" in text
+    assert '"api"' in text or "'api'" in text

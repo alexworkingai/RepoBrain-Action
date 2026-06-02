@@ -97,7 +97,7 @@ def test_private_checkout_mode_is_marked_beta_only_in_status_and_doctor(monkeypa
     })
 
     assert status_report['topocore_dependency_mode'] == 'private_checkout_beta_only'
-    assert 'TopoCore runtime mode requested: `private_checkout`' in status_md
+    assert 'Current run: private runtime checkout path.' in status_md
     assert 'TopoCore dependency mode: `private_checkout_beta_only`' in doctor_md
     assert 'hidden/private/runtime' not in status_md
     assert 'hidden/private/runtime' not in doctor_md
@@ -164,5 +164,5 @@ def test_installed_package_mode_reports_unavailable_when_package_is_not_importab
     assert doctor_report['overall_status'] == 'WARN'
     assert status_report['topocore_runtime_mode_effective'] == 'installed_package_unavailable'
     assert 'installed private package mode was requested, but the runtime package is not importable' in doctor_md.lower()
-    assert 'installed_package_unavailable' in status_md
+    assert 'installed private package requested, but unavailable in this run' in status_md
     assert 'appears available without exposing a checkout path' not in doctor_md.lower()

@@ -24,6 +24,28 @@ def _route(audit_summary: dict[str, Any]) -> str:
     return route or "FAST"
 
 
+def _display_route_label(command: str, audit_summary: dict[str, Any]) -> str:
+    normalized_command = str(command or audit_summary.get("command", "") or "").strip().lower()
+    command_routes = {
+        "ask": "ASK",
+        "locate": "LOCATE",
+        "explain": "EXPLAIN",
+        "review": "REVIEW",
+        "fix": "FIX",
+        "verify": "VERIFY",
+        "audit": "AUDIT",
+        "score": "SCORE",
+        "doctor": "DOCTOR",
+        "status": "STATUS",
+        "help": "HELP",
+    }
+    if normalized_command == "ask" and "command" not in audit_summary:
+        return _route(audit_summary)
+    if normalized_command in command_routes:
+        return command_routes[normalized_command]
+    return _route(audit_summary)
+
+
 def _verbose_diagnostics_enabled() -> bool:
     value = str(os.getenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "0") or "0").strip().lower()
     return value in {"1", "true", "yes", "on"}
@@ -1130,7 +1152,7 @@ def _normalized_backend_evidence(audit_summary: dict[str, Any]) -> dict[str, str
     }
 
 
-def _command_scope_label(command: str) -> str:
+def _command_scope_label(command: str, audit_summary: dict[str, Any] | None = None) -> str:
     mapping = {
         "review": "PR review",
         "ask": "issue ask",
@@ -1144,6 +1166,10 @@ def _command_scope_label(command: str) -> str:
         "explain": "repository explanation",
     }
     normalized = str(command or "ask").strip().lower()
+    if normalized == "ask":
+        summary = audit_summary if isinstance(audit_summary, dict) else {}
+        if bool(summary.get("pr_metadata_used", False)) or bool(summary.get("is_pr", False)):
+            return "PR ask"
     return mapping.get(normalized, normalized or "repository command")
 
 
@@ -1190,7 +1216,7 @@ def _compact_safety_lines(audit_summary: dict[str, Any]) -> list[str]:
         f"- Runtime: `{_compact_runtime_label(audit_summary)}`",
         f"- Backend: `{_compact_backend_label(audit_summary)}`",
         f"- Fallback: `{_compact_fallback_label(audit_summary)}`",
-        f"- Scope: `{_command_scope_label(str(audit_summary.get('command', 'ask') or 'ask'))}`",
+        f"- Scope: `{_command_scope_label(str(audit_summary.get('command', 'ask') or 'ask'), audit_summary)}`",
         "- Safety: informational only; no patch/autofix, no file changes, no branch/commit/PR created.",
         "- No v5 or legacy community dependency.",
         "- Not a merge/security/production approval.",
@@ -2486,18 +2512,15 @@ def render_answer_markdown(
     repo: str | None = None,
     sha: str | None = None,
 ) -> str:
-    route = _route(audit_summary)
-    if command == "locate":
-        route = "LOCATE"
-    elif command == "explain":
-        route = "EXPLAIN"
+    execution_route = _route(audit_summary)
+    route = _display_route_label(command, audit_summary)
     evidence_block = _evidence_lines(evidence, repo=repo, sha=sha, audit_summary=audit_summary)
     route_header = "### ✅ Answer"
-    if route == "WAIT":
+    if execution_route == "WAIT":
         route_header = "### ⏳ Needs verification"
-    elif route == "REFUSE":
+    elif execution_route == "REFUSE":
         route_header = "### 🚫 Refused"
-    elif route == "BLOCK":
+    elif execution_route == "BLOCK":
         route_header = "### 🛑 Blocked"
 
     verification_status = _verification_status(audit_summary)
@@ -2534,7 +2557,7 @@ def render_answer_markdown(
             "",
             *_verification_lines(audit_summary),
             "### 🧾 Audit anchors",
-            *_audit_anchor_lines({**audit_summary, "route_final": route}),
+            *_audit_anchor_lines({**audit_summary, "route_final": route, "command": command}),
             "",
             _audit_note(),
         ]
@@ -2555,7 +2578,7 @@ def render_answer_markdown(
                 *_render_diagnostic_table(audit_summary),
                 "",
                 "### 🧾 Audit anchors",
-                *_audit_anchor_lines({**audit_summary, "route_final": route}),
+                *_audit_anchor_lines({**audit_summary, "route_final": route, "command": command}),
                 *_version_backend_lines(audit_summary),
                 "",
                 _audit_note(),
@@ -2592,7 +2615,7 @@ def render_answer_markdown(
             "",
             *_verification_lines(audit_summary),
             "### 🧾 Audit anchors",
-            *_audit_anchor_lines({**audit_summary, "route_final": route}),
+            *_audit_anchor_lines({**audit_summary, "route_final": route, "command": command}),
             "",
             _audit_note(),
         ]
@@ -2616,7 +2639,7 @@ def render_answer_markdown(
                 *_render_diagnostic_table(audit_summary),
                 "",
                 "### 🧾 Audit anchors",
-                *_audit_anchor_lines({**audit_summary, "route_final": route}),
+                *_audit_anchor_lines({**audit_summary, "route_final": route, "command": command}),
                 *_version_backend_lines(audit_summary),
                 "",
                 _audit_note(),
@@ -3448,7 +3471,7 @@ def _audit_safety_statement_lines(audit_summary: dict[str, Any]) -> list[str]:
 
 
 def _audit_anchor_lines(audit_summary: dict[str, Any]) -> list[str]:
-    route = str(audit_summary.get("route_final", "AUDIT") or "AUDIT").strip().upper()
+    route = _display_route_label(str(audit_summary.get("command", "") or ""), audit_summary)
     version = str(audit_summary.get("repobrain_version", "") or "").strip()
     backend_mode = str(audit_summary.get("backend_mode", "n/a") or "n/a").strip()
     scope_status = str(audit_summary.get("scope_status", "n/a") or "n/a").strip()
@@ -3621,6 +3644,37 @@ def _doctor_check_table_lines(checks: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _partner_runtime_summary(report: dict[str, Any]) -> list[str]:
+    dependency_mode = str(report.get("topocore_dependency_mode", "not_detected") or "not_detected").strip()
+    runtime_requested = str(report.get("topocore_runtime_mode_requested", "auto") or "auto").strip()
+    runtime_effective = str(report.get("topocore_runtime_mode_effective", "auto") or "auto").strip()
+    if dependency_mode == "private_checkout_beta_only":
+        current_run = "private runtime checkout path"
+    elif dependency_mode == "installed_private_package":
+        current_run = "installed private package path"
+    elif dependency_mode == "installed_private_package_unavailable":
+        current_run = "installed private package requested, but unavailable in this run"
+    elif dependency_mode == "local_path_dev_only":
+        current_run = "development-only local runtime path"
+    else:
+        current_run = dependency_mode.replace("_", " ")
+    lines = [
+        f"- Current run: {current_run}.",
+        "- Partner-preferred path: installed private package.",
+        "- TopoCore source: private and not exposed through partner-facing output.",
+        "- Backend policy: v6-only, no v5 fallback.",
+    ]
+    if _verbose_diagnostics_enabled():
+        lines.extend(
+            [
+                f"- Raw runtime requested: `{runtime_requested}`",
+                f"- Raw runtime effective: `{runtime_effective}`",
+                f"- Raw dependency mode: `{dependency_mode}`",
+            ]
+        )
+    return lines
+
+
 def render_status_markdown(
     *,
     report: dict[str, Any],
@@ -3649,9 +3703,7 @@ def render_status_markdown(
             "",
             "## Backend policy",
             *_policy_lines(topocore_policy if isinstance(topocore_policy, list) else [], fallback="No backend policy notes recorded."),
-            f"- TopoCore dependency mode: `{str(report.get('topocore_dependency_mode', 'not_detected') or 'not_detected').strip()}`",
-            f"- TopoCore runtime mode requested: `{str(report.get('topocore_runtime_mode_requested', 'auto') or 'auto').strip()}`",
-            f"- TopoCore runtime mode effective: `{str(report.get('topocore_runtime_mode_effective', 'auto') or 'auto').strip()}`",
+            *_partner_runtime_summary(report),
             "",
             "## Workflow snapshot",
             f"- RepoBrain workflow detected: `{_bool_label(bool(workflow.get('exists', False)))}`",
