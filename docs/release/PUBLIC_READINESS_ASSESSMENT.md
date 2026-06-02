@@ -62,6 +62,13 @@ Sprint 91 public-action smoke update:
 - backend evidence remained `auto -> v6`
 - no secret or TopoCore source exposure occurred in user-facing output
 
+Sprint 92C diagnostics and permission update:
+- live Elen-MCP issue and PR retest passed for ask, locate, explain, review, verify, fix, audit, and score
+- default GitHub comments are now compact by default while verbose and artifact traces remain available behind sanitized gates
+- justified `pull-requests: write` is now classified as a constrained PR comment response permission rather than a broad write-heavy workflow risk when all no-mutation constraints hold
+- latest PR audit and score comments improved to `85 / 100 STRONG`
+- no `.topocore-v6` leakage was observed in the latest checked issue and PR comment slices
+
 ## Current Operating Conditions
 
 Public visibility is now switched, but the operating model remains constrained:

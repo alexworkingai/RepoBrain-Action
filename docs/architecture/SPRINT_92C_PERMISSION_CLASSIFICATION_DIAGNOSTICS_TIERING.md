@@ -116,16 +116,56 @@ Sprint 92C adds targeted coverage for:
 
 ## 11. Live Retest
 
-Live retest is required after merge:
+Live retest was completed after merge on `alexworkingai/Elen-MCP-v.2.2.0`.
 
-- PR review / verify / fix / audit / score
-- issue ask / locate / explain
-- confirmation that default comments stay compact
-- confirmation that justified PR comment permission is not overstated as broad write-heavy risk
+Issue fixture:
+
+- issue: `#42`
+- URL: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/issues/42`
+- commands:
+  - `/repobrain ask What is the current RepoBrain action source, runtime mode, and partner pilot readiness status?`
+  - `/repobrain locate Where is the GitHub Actions workflow that connects this repository to RepoBrain?`
+  - `/repobrain explain Explain how this repository is connected to RepoBrain and what runtime mode is used.`
+- run URLs:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26810871815`
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26810872318`
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26810872347`
+
+PR fixture:
+
+- PR: `#41`
+- URL: `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/pull/41`
+- commands:
+  - `/repobrain review --profile balanced`
+  - `/repobrain verify`
+  - `/repobrain fix --profile balanced Improve wording in the manual PR smoke document.`
+  - `/repobrain audit Focus on this PR as part of repository readiness and partner pilot quality.`
+  - `/repobrain score Focus on this PR as part of repository readiness.`
+- run URLs:
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26810871735`
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26810872002`
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26810873209`
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26810873416`
+  - `https://github.com/alexworkingai/Elen-MCP-v.2.2.0/actions/runs/26810873753`
+
+Observed result:
+
+- all issue and PR retest runs completed successfully
+- default GitHub comments stayed compact by default
+- compact comments kept decision-relevant LLM, runtime, safety, and evidence summary lines
+- raw TKY/TKYA plumbing did not appear in default comment output
+- `.topocore-v6` did not appear in the latest checked issue or PR comment slices
+- `locate` reported `Route: LOCATE`
+- `explain` reported `Route: EXPLAIN`
+- issue-mode ask/explain stayed truthful when the LLM was not called
+- latest PR review / verify / fix comments were compact and no-mutation
+- latest audit and score comments improved to `85 / 100 STRONG`
+- justified `pull-requests: write` was no longer overstated as a broad write-heavy workflow risk
+- next-step guidance moved to selected partner onboarding plus monitoring of justified PR comment response permission
 
 ## 12. Product Status
 
-Target status after live retest:
+Final status after live retest:
 
 - `PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION`
 

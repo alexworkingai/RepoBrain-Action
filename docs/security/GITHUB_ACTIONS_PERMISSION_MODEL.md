@@ -78,3 +78,14 @@ Current explicit justifications:
 
 - continue reducing internal workflow write scopes where possible
 - keep publisher-style write scopes isolated in dedicated workflows rather than the main execution workflow
+
+## Live Validation
+
+Sprint 92C live PR retest on `alexworkingai/Elen-MCP-v.2.2.0` confirmed the documented narrow exception works as intended:
+
+- latest PR command response comments were published successfully
+- review, verify, fix, audit, and score stayed no-mutation
+- latest audit and score comments no longer treated the constrained `pull-requests: write` as a broad dangerous workflow posture
+- no `contents: write`
+- no `checks: write` on the partner baseline
+- no `pull_request_target`

@@ -12,6 +12,7 @@ This document defines the selected-partner testing state after the Sprint 91 pub
 - Marketplace work has not started.
 - owner approval for the public visibility switch was recorded and executed.
 - post-switch public-action smoke on Elen-MCP passed for doctor, status, audit, score, and ask.
+- Sprint 92C live issue and PR retest on Elen-MCP passed for ask, locate, explain, review, verify, fix, audit, and score.
 - operational ask quality is materially improved for runtime/workflow/public-readiness questions.
 - deterministic retrieval and TopoCore-backed synthesis remain valid when issue-mode LLM policy or provider availability prevents an LLM call.
 - enterprise P0 hardening remains in force after the switch.
@@ -78,6 +79,7 @@ Honest limitation:
 - no `pull_request_target`
 - read-mostly workflow permissions by default
 - `pull-requests: write` is allowed only when it is narrowly scoped to RepoBrain PR command response comments
+- the justified PR comment response permission is monitored and must not drift into mutation-capable workflow behavior
 - `contents: write` remains out of scope for normal partner setup
 - per-partner or equally scoped runtime access only
 - token rotation and revocation required
@@ -106,6 +108,7 @@ Honest limitation:
 
 - ask and explain diagnostics must state whether the LLM was actually called; no-LLM answers can still come from deterministic retrieval, workflow inspection, and TopoCore v6 signals
 - default GitHub comments intentionally hide raw TKY/TKYA internals; expanded sanitized diagnostics move to verbose/artifact mode
+- Sprint 92C live retest confirmed compact default comments on both issue and PR paths while preserving verbose/artifact debug paths for deeper investigation
 - no Marketplace
 - no public TopoCore distribution
 - no patch/autofix

@@ -291,6 +291,10 @@ Current tests prove that:
   - the deprecated lite alias is removed from the public command surface
   - issue-mode LLM diagnostics must reflect whether an LLM call actually happened
   - locate and explain issue output stays compact and truthful by default
+- Sprint 92C adds permission-classification and diagnostics-tier coverage:
+  - justified PR comment response permission is classified separately from dangerous or write-heavy workflow postures
+  - compact default GitHub comments stay partner-facing while verbose and artifact modes preserve sanitized debug detail
+  - latest live Elen-MCP issue and PR retest confirmed compact ask/locate/explain/review/verify/fix/audit/score output without `.topocore-v6` leakage
 
 ## 6. What Tests Do Not Prove
 
