@@ -7,9 +7,9 @@ Current external GitHub command surface is intentionally bounded.
 | Command | Issue scope | PR scope | Mutation behavior | Backend expectation | Notes |
 |---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
-| `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` | primary repo/PR question flow |
-| `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; backend diagnostics stay explicit | full repository-level 100-point audit with evidence and roadmap |
-| `/repobrain score` | supported | supported as compact repository score with PR context | none | same guarded audit engine as `/repobrain audit`; backend diagnostics stay explicit | compact summary view of the same audit engine |
+| `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` when available; compact runtime/LLM block by default | primary repo/PR question flow |
+| `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; default comments stay compact | full repository-level 100-point audit with evidence and roadmap |
+| `/repobrain score` | supported | supported as compact repository score with PR context | none | same guarded audit engine as `/repobrain audit`; default comments stay compact | compact summary view of the same audit engine |
 | `/repobrain doctor` | supported | supported | none | report-only diagnostics; backend remains explicit | installation/runtime diagnostic command |
 | `/repobrain locate <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | returns likely files and evidence |
 | `/repobrain explain <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | explains setup or changed context |
@@ -95,7 +95,8 @@ It provides:
 - a 30/60/90-day roadmap
 - evidence references
 - confidence and limitations
-- explicit runtime/safety diagnostics
+- compact runtime/safety diagnostics by default
+- expanded sanitized diagnostics only in verbose/artifact mode
 
 `/repobrain audit` is informational only.
 It does not certify merge safety, security approval, or production readiness.
@@ -172,12 +173,9 @@ Possible fix product statuses:
 
 Visible no-mutation expectations:
 
-- `patch_authorized=false`
-- `patch_applied=false`
-- `files_modified=false`
-- `branch_created=false`
-- `commit_created=false`
-- `pr_created=false`
+- no patch/autofix
+- no file changes
+- no RepoBrain-created branch/commit/PR
 
 `/repobrain fix` does not apply patches and does not mutate the repository.
 
@@ -190,3 +188,5 @@ Visible no-mutation expectations:
 - ask and explain do not require an LLM call to produce a bounded answer
 - when policy or provider availability blocks the LLM path, RepoBrain can still answer from deterministic retrieval, workflow/runtime inspection, evidence extraction, and TopoCore v6 signals
 - diagnostics must state whether the LLM was actually called
+- default GitHub comments keep compact LLM/runtime/safety blocks
+- raw TKY/TKYA internals belong to verbose diagnostics or artifacts, not default partner-facing comments

@@ -15,7 +15,7 @@ This document defines the selected-partner testing state after the Sprint 91 pub
 - operational ask quality is materially improved for runtime/workflow/public-readiness questions.
 - deterministic retrieval and TopoCore-backed synthesis remain valid when issue-mode LLM policy or provider availability prevents an LLM call.
 - enterprise P0 hardening remains in force after the switch.
-- current public readiness status: `PARTNER_PILOT_READY_AFTER_MANUAL_SMOKE_HOTFIX`.
+- current public readiness status: `PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION`.
 - Sprint 92A manual issue smoke hotfix passed for help, doctor, status, ask, locate, explain, audit, score, and the deprecated lite-alias regression.
 - historical Sprint 91 post-switch status remains recorded as: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
 - historical Sprint 90 readiness remains recorded as: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
@@ -76,7 +76,9 @@ Honest limitation:
 - no patch/autofix
 - no shared broad PAT
 - no `pull_request_target`
-- read-mostly workflow permissions only
+- read-mostly workflow permissions by default
+- `pull-requests: write` is allowed only when it is narrowly scoped to RepoBrain PR command response comments
+- `contents: write` remains out of scope for normal partner setup
 - per-partner or equally scoped runtime access only
 - token rotation and revocation required
 
@@ -103,6 +105,7 @@ Honest limitation:
 ## 9. Known Limitations
 
 - ask and explain diagnostics must state whether the LLM was actually called; no-LLM answers can still come from deterministic retrieval, workflow inspection, and TopoCore v6 signals
+- default GitHub comments intentionally hide raw TKY/TKYA internals; expanded sanitized diagnostics move to verbose/artifact mode
 - no Marketplace
 - no public TopoCore distribution
 - no patch/autofix

@@ -138,10 +138,15 @@ Use the current external read-mostly baseline:
 - `statuses: read`
 - `actions: read`
 
+Allowed justified exception:
+
+- `pull-requests: write`
+  - only for publishing RepoBrain PR command response comments
+  - only if `contents: write`, `checks: write`, and `pull_request_target` remain absent
+
 Do not add by default:
 
 - `contents: write`
-- `pull-requests: write`
 - `checks: write`
 - `pull_request_target`
 
@@ -150,10 +155,10 @@ If you need a quick setup snapshot after changing permissions, run:
 - `/repobrain doctor`
 - `/repobrain status`
 
-Current doctor guidance should warn if the workflow still uses:
+Current doctor guidance should:
 
-- `checks: write`
-- `pull-requests: write`
+- warn on `checks: write`
+- warn or monitor justified `pull-requests: write` rather than treating it like broad mutation authority
 
 ## 8. Fork PR Restrictions
 
@@ -199,3 +204,4 @@ Important current boundaries:
 - no support for untrusted fork workflows with private secrets
 - no support for undocumented custom workflow mutations beyond the published baseline
 - no public Marketplace support promise exists yet
+- raw TKY/TKYA runtime internals are intentionally hidden from default GitHub comments; use verbose diagnostics or workflow artifacts when deeper trace detail is required

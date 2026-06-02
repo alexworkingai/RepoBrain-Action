@@ -21,5 +21,8 @@
 - fix = proposal/governance only
 - verify = informational only
 - doctor and status = report-only diagnostics
+- default GitHub comments use compact diagnostics
+- `RB_REPOBRAIN_VERBOSE_DIAGNOSTICS=1` enables expanded sanitized diagnostics
+- full trace stays in artifacts/logs rather than default partner-facing comments
 - no patch/autofix
 - no RepoBrain-created branch, commit, or PR

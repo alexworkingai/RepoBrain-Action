@@ -33,8 +33,8 @@ def test_render_answer_markdown_fast() -> None:
         command="ask",
     )
     assert "### ✅ Answer" in text
-    assert "### 📊 Evidence" in text
-    assert "Route/Mode: `FAST`" in text
+    assert "### 📍 Evidence used" in text
+    assert "- Route: `FAST`" in text
 
 
 def test_render_answer_markdown_deep_marks_second_pass() -> None:
@@ -51,8 +51,8 @@ def test_render_answer_markdown_deep_marks_second_pass() -> None:
         next_steps="Open evidence links and verify logic",
         command="ask",
     )
-    assert "Route/Mode: `DEEP`" in text
-    assert "Deep retrieval pass was used." in text
+    assert "- Route: `DEEP`" in text
+    assert "### 🤖 LLM" in text
 
 
 def test_render_wait_markdown() -> None:

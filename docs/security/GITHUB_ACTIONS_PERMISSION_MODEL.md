@@ -6,7 +6,7 @@ This document explains the least-privilege model for RepoBrain workflows before 
 
 ## External Partner Baseline
 
-External partner workflows should stay read-mostly:
+External partner workflows should stay read-mostly by default:
 
 - `contents: read`
 - `models: read` when applicable
@@ -15,6 +15,22 @@ External partner workflows should stay read-mostly:
 - `actions: read`
 - `issues: write`
 - `pull-requests: read`
+
+If selected PR command-response comments are required in the partner pilot, a narrowly justified exception is allowed:
+
+- `issues: write`
+- `pull-requests: write`
+
+That exception is acceptable only when all of the following hold:
+
+- `contents: write` is absent
+- `checks: write` is absent
+- `pull_request_target` is absent
+- RepoBrain remains no-mutation:
+  - no patch/autofix
+  - no file changes
+  - no RepoBrain-created branch/commit/PR
+- the permission is documented as PR command response publication only
 
 ## Internal Workflow Permissions
 
@@ -35,7 +51,8 @@ Current explicit justifications:
 - `statuses: write`
   - limited to the dedicated publisher workflow for sanitized status-context fallback publication
 - `pull-requests: write`
-  - not required in the current active internal workflows
+  - justified only when a workflow must publish RepoBrain PR command response comments
+  - not a license to create PRs, commits, branches, or file mutations
 - `contents: write`
   - not required in the current active internal workflows
 
@@ -50,6 +67,12 @@ Current explicit justifications:
 - no patch/autofix
 - no RepoBrain-created branch, commit, or PR behavior
 - no workflow should imply otherwise
+
+## Diagnostics Tiers
+
+- compact default output is for GitHub issue/PR comments
+- `RB_REPOBRAIN_VERBOSE_DIAGNOSTICS=1` enables expanded sanitized diagnostics
+- full sanitized debug trace belongs in workflow artifacts/logs, not default partner comments
 
 ## Future Tightening Plan
 

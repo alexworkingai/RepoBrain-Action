@@ -532,12 +532,10 @@ def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path, monkey
     assert second_audit["runtime_provenance_status"] in {"aligned", "governed_divergent"}
     assert "runtime_provenance_reason_code" in second_audit
     _set_runtime_env_cfg(None)  # noqa: SLF001
-    assert "Retrieval snapshot cache" in first_markdown
-    assert "- Status: `miss`" in first_markdown
-    assert "Retrieval snapshot cache" in second_markdown
-    assert "- Status: `hit`" in second_markdown
-    assert "### 🧬 Runtime provenance" in second_markdown
-    assert "### 🔄 Review delta" in first_markdown
-    assert "- Prior state available: `no`" in first_markdown
-    assert "### 🔄 Review delta" in second_markdown
-    assert "- Prior state available: `yes`" in second_markdown
+    assert "Retrieval snapshot cache" not in first_markdown
+    assert "Retrieval snapshot cache" not in second_markdown
+    assert "Runtime provenance" not in second_markdown
+    assert "Review delta" not in first_markdown
+    assert "Review delta" not in second_markdown
+    assert "<summary>Evidence and diagnostics</summary>" in first_markdown
+    assert "<summary>Evidence and diagnostics</summary>" in second_markdown

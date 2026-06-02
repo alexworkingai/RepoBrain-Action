@@ -23,8 +23,8 @@ def test_markdown_includes_tkya_llm_reason_lines() -> None:
         command="ask",
     )
 
-    assert "TKYA LLM decision: not used" in md
-    assert "Reason: LLM not used: direct answer available from retrieved evidence." in md
+    assert "- LLM: not called" in md
+    assert "- Reason: direct retrieval/report command" in md
 
 
 def test_runtime_override_is_rendered_when_tkya_wanted_llm_but_runtime_blocked() -> None:
@@ -48,9 +48,8 @@ def test_runtime_override_is_rendered_when_tkya_wanted_llm_but_runtime_blocked()
         command="ask",
     )
 
-    assert "TKYA LLM decision: not called" in md
-    assert "Reason: LLM was not called; answer generated from deterministic retrieval/template path." in md
-    assert "Runtime override: LLM blocked: disabled by runtime policy." in md
+    assert "- LLM: not called" in md
+    assert "- Reason: LLM blocked: disabled by runtime policy." in md
 
 
 def test_issue_comment_used_path_still_prints_tkya_reason() -> None:
@@ -77,6 +76,6 @@ def test_issue_comment_used_path_still_prints_tkya_reason() -> None:
         command="ask",
     )
 
-    assert "TKYA LLM decision: used" in md
-    assert "Reason: LLM used: multi-source synthesis required after deep retrieval." in md
-    assert "LLM used: yes" in md
+    assert "- LLM: used" in md
+    assert "- Reason: LLM used: multi-source synthesis required after deep retrieval." in md
+    assert "- Model: `openai/gpt-4.1-mini`" in md

@@ -407,10 +407,10 @@ def test_ask_truncated_output_keeps_snapshot_cache_miss_then_hit_visible() -> No
 
     assert miss_cut is True
     assert hit_cut is True
-    assert "Retrieval snapshot cache" in miss_truncated
-    assert "- Status: `miss`" in miss_truncated
-    assert "Retrieval snapshot cache" in hit_truncated
-    assert "- Status: `hit`" in hit_truncated
+    assert "Retrieval snapshot cache" not in miss_truncated
+    assert "Retrieval snapshot cache" not in hit_truncated
+    assert "### 🤖 LLM" in miss_truncated
+    assert "### 🛡️ Runtime and safety" in hit_truncated
 
 
 def test_review_truncated_output_keeps_snapshot_cache_miss_then_hit_visible() -> None:
@@ -489,12 +489,10 @@ def test_review_truncated_output_keeps_snapshot_cache_miss_then_hit_visible() ->
 
     assert miss_cut is True
     assert hit_cut is True
-    assert "Retrieval snapshot cache" in miss_truncated
-    assert "- Status: `miss`" in miss_truncated
-    assert "### Async batch orchestration" in miss_truncated
-    assert "Retrieval snapshot cache" in hit_truncated
-    assert "- Status: `hit`" in hit_truncated
-    assert "### Async batch orchestration" in hit_truncated
+    assert "Retrieval snapshot cache" not in miss_truncated
+    assert "Retrieval snapshot cache" not in hit_truncated
+    assert "### 🤖 LLM" in miss_truncated
+    assert "### 🛡️ Runtime and safety" in hit_truncated
 
 
 def test_incremental_retrieval_fields_render_in_review_diagnostics() -> None:

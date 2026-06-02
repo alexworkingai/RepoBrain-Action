@@ -59,10 +59,8 @@ def test_issue_scope_audit_is_supported_and_includes_required_sections() -> None
     assert "## Evidence summary" in markdown
     assert "## Confidence and limitations" in markdown
     assert "## Runtime and safety" in markdown
-    assert "## Safety statement" in markdown
-    assert "Patch applied: `no`" in markdown
-    assert "Not a security approval." in markdown
-    assert "Not a merge approval." in markdown
+    assert "- Safety: informational only; no patch/autofix, no file changes, no branch/commit/PR created." in markdown
+    assert "Not a merge/security/production approval." in markdown
     assert audit["route_final"] == "AUDIT"
     assert audit["scope_status"] == "repository_audit"
 

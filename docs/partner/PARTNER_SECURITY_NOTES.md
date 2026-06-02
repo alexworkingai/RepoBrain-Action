@@ -32,7 +32,11 @@
 ## Workflow Permissions
 
 - use read-mostly baseline permissions
+- `pull-requests: write` is acceptable only for publishing RepoBrain PR command response comments
+- keep that permission documented and monitored
 - do not introduce `pull_request_target`
+- do not introduce `contents: write` for normal partner setup
+- do not introduce `checks: write` unless a future check-publication feature is explicitly enabled and documented
 - do not introduce broad write permissions without explicit review
 
 ## BYO-LLM Cost Model

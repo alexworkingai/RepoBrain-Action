@@ -28,8 +28,8 @@ def test_default_issue_mode_output_is_compact() -> None:
     assert "Runtime diagnostics" not in md
     assert "### Secondary diagnostics" not in md
     assert "### Async batch orchestration" not in md
-    assert "Runtime override: LLM blocked: issue_comment policy disabled." in md
-    assert "LLM used: no (issue_comment_policy_disabled)" in md
+    assert "- LLM: not called" in md
+    assert "policy disabled" in md
 
 
 def test_verbose_mode_restores_partner_facing_diagnostics(monkeypatch: pytest.MonkeyPatch) -> None:

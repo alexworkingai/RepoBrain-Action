@@ -320,10 +320,13 @@ def _review_async_subsection_contract(entries: list[AuditEntry]) -> dict[str, An
         verification_report={"summary": "NOT_RUN", "checks": []},
         audit_summary=dict(latest.audit),
     )
-    ok = "### Async batch orchestration" in rendered
+    ok = (
+        "<summary>Evidence and diagnostics</summary>" in rendered
+        and "### Async batch orchestration" not in rendered
+    )
     return {
         "status": "pass" if ok else "fail",
-        "reason": "ok" if ok else "missing_async_subsection",
+        "reason": "ok" if ok else "default_output_not_compacted",
     }
 
 

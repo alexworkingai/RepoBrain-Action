@@ -95,7 +95,5 @@ def test_audit_output_is_not_duplicative_and_keeps_static_limitations(tmp_path: 
 
     assert markdown.count("Requested focus:") == 1
     assert markdown.count("Overall score:") == 1
-    assert markdown.count("### 🧭 Runtime backend evidence") == 1
-    assert "No runtime execution was performed" in markdown
-    assert "Not a security approval." in markdown
-    assert "Not a merge approval." in markdown
+    assert markdown.count("Runtime and safety") >= 1
+    assert "Not a merge/security/production approval." in markdown

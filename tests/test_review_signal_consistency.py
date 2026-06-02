@@ -32,7 +32,7 @@ def test_possible_signals_counter_matches_rendered_items() -> None:
     )
 
     assert "### 🟡 Possible signals" in md
-    assert "- None." not in md
+    assert "- No confirmed findings." in md
     assert "### ℹ️ Informational notes" in md
 
 

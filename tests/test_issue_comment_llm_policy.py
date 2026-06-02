@@ -159,4 +159,5 @@ def test_issue_comment_policy_disabled_sets_runtime_override(monkeypatch) -> Non
         next_steps="verify",
         command="ask",
     )
-    assert "Runtime override: LLM blocked: issue_comment policy disabled." in md
+    assert "- LLM: not called" in md
+    assert "- Reason: LLM blocked: issue_comment policy disabled." in md

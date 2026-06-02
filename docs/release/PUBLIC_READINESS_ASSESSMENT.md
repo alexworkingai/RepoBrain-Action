@@ -84,7 +84,7 @@ Now that RepoBrain-Action is public:
 
 ## Decision
 
-- current public readiness decision: `PARTNER_PILOT_READY_AFTER_MANUAL_SMOKE_HOTFIX`
+- current public readiness decision: `PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION`
 - historical Sprint 91 post-switch decision: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`

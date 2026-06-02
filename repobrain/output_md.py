@@ -495,6 +495,27 @@ def _evidence_context_summary_lines(audit_summary: dict[str, Any]) -> list[str]:
     ]
 
 
+def _compact_evidence_path_lines(
+    evidence: list[EvidenceItem],
+    *,
+    audit_summary: dict[str, Any] | None = None,
+    max_items: int = 5,
+) -> list[str]:
+    items: list[str] = []
+    for item in evidence:
+        safe_path = _safe_visible_repo_path(item.file_path)
+        if not safe_path:
+            continue
+        label = _evidence_context_label_for_path(safe_path, audit_summary)
+        items.append(f"- [{label}] `{safe_path}`")
+    unique = list(dict.fromkeys(items))
+    if not unique:
+        return ["- No source locators selected."]
+    if len(unique) <= max_items:
+        return unique
+    return [*unique[:max_items], f"- +{len(unique) - max_items} more"]
+
+
 def _verification_status(audit_summary: dict[str, Any]) -> str:
     raw_overall = str(audit_summary.get("verification_overall", "") or "").strip().upper()
     passed = _int(audit_summary.get("verification_pass_count", 0))
@@ -616,28 +637,82 @@ def _normalized_budget_action(
     return retention_note
 
 
-def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
+def _llm_summary(audit_summary: dict[str, Any]) -> dict[str, Any]:
     llm_used = bool(audit_summary.get("llm_used", False))
-    skip_reason = str(audit_summary.get("llm_skip_reason", "n/a") or "n/a")
     planned_llm = str(audit_summary.get("execution_mode", "retrieval_only") or "retrieval_only") == "retrieval_plus_llm"
+    skip_reason = str(audit_summary.get("llm_skip_reason", "n/a") or "n/a").strip()
+    runtime_override = str(audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a").strip()
     if llm_used:
-        tkya_decision = "used"
+        decision = "used"
     elif planned_llm:
-        tkya_decision = "not called"
+        decision = "not called"
     else:
-        tkya_decision = "not used"
-    decision_reason = str(
+        decision = "not called"
+    reason = str(
         audit_summary.get(
             "llm_decision_reason_short",
             "LLM not used: direct answer available from retrieved evidence.",
         )
         or "LLM not used: direct answer available from retrieved evidence."
-    )
-    runtime_override = str(audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a")
+    ).strip()
     if not llm_used and planned_llm:
-        decision_reason = (
-            "LLM was not called; answer generated from deterministic retrieval/template path."
-        )
+        if runtime_override not in {"", "n/a"}:
+            reason = runtime_override
+        elif skip_reason not in {"", "n/a"}:
+            reason = f"policy blocked ({skip_reason})"
+        else:
+            reason = "deterministic retrieval/template fallback"
+    elif not llm_used and runtime_override not in {"", "n/a"}:
+        reason = runtime_override
+    elif not llm_used and not planned_llm:
+        reason = "direct retrieval/report command"
+    model = str(audit_summary.get("llm_model_used", "not used") or "not used").strip()
+    total_tokens = _int(audit_summary.get("llm_tokens_total", 0))
+    downgrade_reason = str(audit_summary.get("llm_model_downgrade_reason", "n/a") or "n/a").strip()
+    downgraded = downgrade_reason not in {"", "n/a"}
+    return {
+        "decision": decision,
+        "used": llm_used,
+        "reason": reason,
+        "model": model if llm_used else "not used",
+        "tokens_total": total_tokens,
+        "downgraded": downgraded,
+        "downgrade_reason": downgrade_reason,
+    }
+
+
+def _compact_llm_lines(audit_summary: dict[str, Any]) -> list[str]:
+    summary = _llm_summary(audit_summary)
+    if summary["used"]:
+        lines = [
+            "### 🤖 LLM",
+            "- LLM: used",
+            f"- Model: `{summary['model']}`",
+            f"- Reason: {summary['reason']}",
+            f"- Tokens: `{summary['tokens_total']}`",
+            (
+                f"- Downgrade: `yes` ({summary['downgrade_reason']})"
+                if summary["downgraded"]
+                else "- Downgrade: `no`"
+            ),
+        ]
+    else:
+        lines = [
+            "### 🤖 LLM",
+            "- LLM: not called",
+            f"- Reason: {summary['reason']}",
+            "- Tokens: `0`",
+        ]
+    return lines
+
+
+def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
+    llm_summary = _llm_summary(audit_summary)
+    llm_used = bool(llm_summary["used"])
+    skip_reason = str(audit_summary.get("llm_skip_reason", "n/a") or "n/a")
+    tkya_decision = str(llm_summary["decision"])
+    decision_reason = str(llm_summary["reason"])
+    runtime_override = str(audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a")
     model_id = str(audit_summary.get("llm_model_used", "not used") or "not used")
     preferred_model_id = str(audit_summary.get("llm_preferred_model_id", "n/a") or "n/a")
     final_synthesis_model_id = str(
@@ -1053,6 +1128,73 @@ def _normalized_backend_evidence(audit_summary: dict[str, Any]) -> dict[str, str
         "commit_created": commit_created,
         "pr_created": pr_created,
     }
+
+
+def _command_scope_label(command: str) -> str:
+    mapping = {
+        "review": "PR review",
+        "ask": "issue ask",
+        "audit": "repository audit",
+        "score": "score summary",
+        "status": "status report",
+        "doctor": "doctor diagnostic",
+        "verify": "verification report",
+        "fix": "fix proposal",
+        "locate": "code location",
+        "explain": "repository explanation",
+    }
+    normalized = str(command or "ask").strip().lower()
+    return mapping.get(normalized, normalized or "repository command")
+
+
+def _compact_runtime_label(audit_summary: dict[str, Any]) -> str:
+    command = str(audit_summary.get("command", "ask") or "ask").strip().lower()
+    resolved_backend = str(audit_summary.get("resolved_backend", "not_applicable") or "not_applicable").strip().lower()
+    audit_mode = str(audit_summary.get("audit_mode", "static_mvp") or "static_mvp").strip().lower()
+    if command in {"audit", "score"} and audit_mode == "v6_enriched":
+        return "v6-enriched"
+    if command in {"audit", "score"}:
+        return "report-only"
+    if command in {"doctor", "status", "verify"}:
+        return "report-only"
+    if resolved_backend in {"v6", "not_applicable"}:
+        return "retrieval-only"
+    return "not applicable"
+
+
+def _compact_backend_label(audit_summary: dict[str, Any]) -> str:
+    requested = str(audit_summary.get("requested_backend", "not_applicable") or "not_applicable").strip()
+    resolved = str(audit_summary.get("resolved_backend", "not_applicable") or "not_applicable").strip()
+    if requested.lower() == "not_applicable" and resolved.lower() == "not_applicable":
+        return "not applicable"
+    return f"{requested} -> {resolved}"
+
+
+def _compact_fallback_label(audit_summary: dict[str, Any]) -> str:
+    used = str(audit_summary.get("fallback_used", "not_applicable") or "not_applicable").strip().lower()
+    reason = str(audit_summary.get("fallback_reason", "none") or "none").strip()
+    if used in {"no", "false"} and reason.lower() in {"none", "n/a", "not_applicable"}:
+        return "no"
+    if used in {"not_applicable", "n/a"}:
+        return "not applicable"
+    if used in {"no", "false"}:
+        return "no"
+    if reason.lower() in {"", "n/a", "none", "not_applicable"}:
+        return "yes"
+    return f"yes ({reason})"
+
+
+def _compact_safety_lines(audit_summary: dict[str, Any]) -> list[str]:
+    return [
+        "### 🛡️ Runtime and safety",
+        f"- Runtime: `{_compact_runtime_label(audit_summary)}`",
+        f"- Backend: `{_compact_backend_label(audit_summary)}`",
+        f"- Fallback: `{_compact_fallback_label(audit_summary)}`",
+        f"- Scope: `{_command_scope_label(str(audit_summary.get('command', 'ask') or 'ask'))}`",
+        "- Safety: informational only; no patch/autofix, no file changes, no branch/commit/PR created.",
+        "- No v5 or legacy community dependency.",
+        "- Not a merge/security/production approval.",
+    ]
 
 
 def _runtime_backend_evidence_lines(audit_summary: dict[str, Any]) -> list[str]:
@@ -2365,26 +2507,24 @@ def render_answer_markdown(
 
     sections: list[str] = [route_header]
     if command == "locate":
-        promoted_backend_lines = (
-            [*_runtime_backend_evidence_lines(audit_summary), ""]
-            if _has_pr_backend_evidence_context(audit_summary)
-            else []
-        )
         sections.extend(
             [
                 "Top locations found for the query:",
+                *_compact_evidence_path_lines(evidence, audit_summary=audit_summary, max_items=5),
                 "",
                 "### 🧭 Run summary",
                 f"- Route: `{route}`",
+                "- Retrieval: direct retrieval command; no LLM synthesis required.",
                 f"- Selected evidence: `{selected_evidence}`",
                 f"- Verification: `{verification_status}`",
                 "",
-                *promoted_backend_lines,
+                *_compact_llm_lines(audit_summary),
+                "",
+                *_compact_safety_lines({**audit_summary, "command": command}),
+                "",
             ]
         )
         detail_lines = [
-            *_retrieval_snapshot_lines(audit_summary),
-            *_ultra_large_pr_mode_lines(audit_summary, command=command),
             "### 📊 Evidence",
             *evidence_block,
             "",
@@ -2393,31 +2533,41 @@ def render_answer_markdown(
             f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
             "",
             *_verification_lines(audit_summary),
-            "",
-            *_llm_lines(audit_summary),
-            "",
-            *_embeddings_lines(audit_summary),
-            "",
-            "### 🧭 Route details",
-            *_mode_lines(audit_summary),
-            *_render_diagnostic_table(audit_summary),
-            "",
             "### 🧾 Audit anchors",
             *_audit_anchor_lines({**audit_summary, "route_final": route}),
-            *_version_backend_lines(audit_summary),
             "",
             _audit_note(),
         ]
+        if _verbose_diagnostics_enabled():
+            detail_lines = [
+                *_retrieval_snapshot_lines(audit_summary),
+                *_ultra_large_pr_mode_lines(audit_summary, command=command),
+                *detail_lines[:-3],
+                "",
+                *_llm_lines(audit_summary),
+                "",
+                *_embeddings_lines(audit_summary),
+                "",
+                *_runtime_backend_evidence_lines(audit_summary),
+                "",
+                "### 🧭 Route details",
+                *_mode_lines(audit_summary),
+                *_render_diagnostic_table(audit_summary),
+                "",
+                "### 🧾 Audit anchors",
+                *_audit_anchor_lines({**audit_summary, "route_final": route}),
+                *_version_backend_lines(audit_summary),
+                "",
+                _audit_note(),
+            ]
         sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
     else:
-        promoted_backend_lines = (
-            ["", *_runtime_backend_evidence_lines(audit_summary)]
-            if _has_pr_backend_evidence_context(audit_summary)
-            else []
-        )
         sections.extend(
             [
                 answer_text.strip() or "No answer generated.",
+                "",
+                "### 📍 Evidence used",
+                *_compact_evidence_path_lines(evidence, audit_summary=audit_summary, max_items=5),
                 "",
                 "### 🧭 Run summary",
                 f"- Route: `{route}`",
@@ -2425,13 +2575,14 @@ def render_answer_markdown(
                 f"- Segment summary: `{segment_summary}`",
                 f"- Selected evidence: `{selected_evidence}`",
                 f"- Verification: `{verification_status}`",
-                *promoted_backend_lines,
+                "",
+                *_compact_llm_lines(audit_summary),
+                "",
+                *_compact_safety_lines({**audit_summary, "command": command}),
             ]
         )
         sections.append("")
         detail_lines = [
-            *_retrieval_snapshot_lines(audit_summary),
-            *_ultra_large_pr_mode_lines(audit_summary, command=command),
             "### 📊 Evidence",
             *evidence_block,
             "",
@@ -2440,24 +2591,36 @@ def render_answer_markdown(
             f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
             "",
             *_verification_lines(audit_summary),
-            "",
-            *_llm_lines(audit_summary),
-            "",
-            *_embeddings_lines(audit_summary),
-            "",
-            "### 🧭 Route details",
-            *_mode_lines(audit_summary),
-            "",
-            *_pr_segments_lines(audit_summary),
-            "",
-            *_render_diagnostic_table(audit_summary),
-            "",
             "### 🧾 Audit anchors",
             *_audit_anchor_lines({**audit_summary, "route_final": route}),
-            *_version_backend_lines(audit_summary),
             "",
             _audit_note(),
         ]
+        if _verbose_diagnostics_enabled():
+            detail_lines = [
+                *_retrieval_snapshot_lines(audit_summary),
+                *_ultra_large_pr_mode_lines(audit_summary, command=command),
+                *detail_lines[:-3],
+                "",
+                *_llm_lines(audit_summary),
+                "",
+                *_embeddings_lines(audit_summary),
+                "",
+                *_runtime_backend_evidence_lines(audit_summary),
+                "",
+                "### 🧭 Route details",
+                *_mode_lines(audit_summary),
+                "",
+                *_pr_segments_lines(audit_summary),
+                "",
+                *_render_diagnostic_table(audit_summary),
+                "",
+                "### 🧾 Audit anchors",
+                *_audit_anchor_lines({**audit_summary, "route_final": route}),
+                *_version_backend_lines(audit_summary),
+                "",
+                _audit_note(),
+            ]
         sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
     return "\n".join(sections)
 
@@ -2476,18 +2639,9 @@ def render_wait_markdown(
             "- Status: **NOT_RUN**",
             "- checks were not run.",
             "",
-            *_llm_lines(audit_summary),
+            *_compact_llm_lines(audit_summary),
             "",
-            *_embeddings_lines(audit_summary),
-            "",
-            "### 🧭 Route details",
-            "- Route/Mode: `WAIT`",
-            "- Passes: `1`",
-            "",
-            "### 🧾 Audit anchors",
-            *_version_backend_lines(audit_summary),
-            "",
-            *_render_diagnostic_table(audit_summary),
+            *_compact_safety_lines(audit_summary),
             "",
             _audit_note(),
         ]
@@ -2515,15 +2669,9 @@ def render_refuse_markdown(
             "- Status: **NOT_RUN**",
             "- checks were not run.",
             "",
-            *_llm_lines(audit_summary),
+            *_compact_llm_lines(audit_summary),
             "",
-            *_embeddings_lines(audit_summary),
-            "",
-            "### 🧾 Audit anchors",
-            f"- route: {_route(audit_summary)}",
-            *_version_backend_lines(audit_summary),
-            "",
-            *_render_diagnostic_table(audit_summary),
+            *_compact_safety_lines(audit_summary),
             "",
             _audit_note(),
         ]
@@ -2540,15 +2688,9 @@ def render_error_markdown(
             "### 🛑 Error",
             message.strip() or "Unexpected error.",
             "",
-            *_llm_lines(audit_summary),
+            *_compact_llm_lines(audit_summary),
             "",
-            *_embeddings_lines(audit_summary),
-            "",
-            "### 🧾 Audit anchors",
-            f"- route: {_route(audit_summary)}",
-            *_version_backend_lines(audit_summary),
-            "",
-            *_render_diagnostic_table(audit_summary),
+            *_compact_safety_lines(audit_summary),
             "",
             _audit_note(),
         ]
@@ -2569,21 +2711,18 @@ def render_scoped_command_markdown(
         title.strip() or "### ⏳ Scoped command status",
         message.strip() or "This command is intentionally scoped in the current context.",
         "",
-        *_runtime_backend_evidence_lines(audit_summary),
+        *_compact_llm_lines(audit_summary),
+        "",
+        *_compact_safety_lines(audit_summary),
         "",
         "### ✅ Next steps",
         *(f"- {item}" for item in next_step_lines),
         "",
-        "### 🧭 Scope details",
-        *_mode_lines(audit_summary),
-        "",
-        *_render_diagnostic_table(audit_summary),
-        "",
-        "### 🧾 Audit anchors",
-        *_version_backend_lines(audit_summary),
-        "",
         _audit_note(),
     ]
+    scope_status = str(audit_summary.get("scope_status", "not_applicable") or "not_applicable").strip()
+    if scope_status.startswith("unsupported_"):
+        sections.insert(len(sections) - 4, f"- Scope status: `{scope_status}`")
     return "\n".join(sections)
 
 
@@ -2701,11 +2840,6 @@ def render_review_markdown(
         verification_report.get("summary", verification_report.get("overall", _verification_status(audit_summary)))
         or _verification_status(audit_summary)
     ).strip()
-    promoted_backend_lines = (
-        ["", *_runtime_backend_evidence_lines(audit_summary)]
-        if _has_pr_backend_evidence_context(audit_summary)
-        else []
-    )
     sections = [
         "### ✅ PR Review",
         f"TL;DR: {summary_text}",
@@ -2716,7 +2850,22 @@ def render_review_markdown(
         ),
         f"- Segment summary: `{segment_summary}`",
         f"- Verification: `{verification_status}`",
-        *promoted_backend_lines,
+        "",
+        *_compact_llm_lines(audit_summary),
+        "",
+        *_compact_safety_lines({**audit_summary, "command": "review"}),
+        "",
+        "Changed files:",
+        *(files_block[:4] if files_block else ["- No changed files detected."]),
+        "",
+        "Findings:",
+        *(confirmed_block[:4] if confirmed_block else ["- No confirmed findings."]),
+        "",
+        "Signals:",
+        *(possible_block[:4] if possible_signals else ["- No additional signals retained."]),
+        "",
+        "Notes:",
+        *([f"- {item}" for item in informational_notes[:4]] if informational_notes else ["- No additional notes."]),
     ]
     sections.extend(
         [
@@ -2728,11 +2877,6 @@ def render_review_markdown(
     )
 
     detail_lines = [
-        *_retrieval_snapshot_lines(audit_summary),
-        *_runtime_provenance_lines(audit_summary, command="review"),
-        *_review_delta_lines(audit_summary),
-        *_ultra_large_pr_mode_lines(audit_summary, command="review"),
-        *_render_async_batch_lines(audit_summary, command="review"),
         "### 🧩 Decision cards",
         "",
         "Risk drivers:",
@@ -2755,21 +2899,36 @@ def render_review_markdown(
         *([f"- {item}" for item in informational_notes[:6]] if informational_notes else ["- None."]),
         "",
         *_verification_report_lines(verification_report),
-        "",
-        *_llm_lines(audit_summary),
-        "",
-        *_embeddings_lines(audit_summary),
-        "",
-        "### 🧭 Route details",
-        *_mode_lines(audit_summary),
-        "",
-        *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
-        "",
         "### 🧾 Audit anchors",
-        *_version_backend_lines(audit_summary),
+        *_audit_anchor_lines(audit_summary),
         "",
         _audit_note(),
     ]
+    if _verbose_diagnostics_enabled():
+        detail_lines = [
+            *_retrieval_snapshot_lines(audit_summary),
+            *_runtime_provenance_lines(audit_summary, command="review"),
+            *_review_delta_lines(audit_summary),
+            *_ultra_large_pr_mode_lines(audit_summary, command="review"),
+            *_render_async_batch_lines(audit_summary, command="review"),
+            *detail_lines[:-3],
+            "",
+            *_llm_lines(audit_summary),
+            "",
+            *_embeddings_lines(audit_summary),
+            "",
+            *_runtime_backend_evidence_lines(audit_summary),
+            "",
+            "### 🧭 Route details",
+            *_mode_lines(audit_summary),
+            "",
+            *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
+            "",
+            "### 🧾 Audit anchors",
+            *_version_backend_lines(audit_summary),
+            "",
+            _audit_note(),
+        ]
     sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
     return "\n".join(sections)
 
@@ -2915,14 +3074,6 @@ def render_patch_markdown(
         status_label=fix_status,
     )
     validation_suggestion_lines = _fix_validation_suggestion_lines(review)
-    safety_gate_lines = [
-        f"- Patch authorized: `{_bool_label(audit_summary.get('patch_authorized', False))}`",
-        f"- Patch applied: `{_bool_label(audit_summary.get('patch_applied', False))}`",
-        f"- Files modified: `{_bool_label(audit_summary.get('files_modified', False))}`",
-        f"- Branch created: `{_bool_label(audit_summary.get('branch_created', False))}`",
-        f"- Commit created: `{_bool_label(audit_summary.get('commit_created', False))}`",
-        f"- PR created: `{_bool_label(audit_summary.get('pr_created', False))}`",
-    ]
     sections = [
         "### 🛠️ Fix proposal / governance",
         f"- Status: `{fix_status}`",
@@ -2942,8 +3093,9 @@ def render_patch_markdown(
         "Validation suggestions:",
         *validation_suggestion_lines,
         "",
-        "Safety gates:",
-        *safety_gate_lines,
+        *_compact_llm_lines(audit_summary),
+        "",
+        *_compact_safety_lines({**audit_summary, "command": "fix"}),
         "",
         "### 🛠️ Patch operation",
         f"Summary: {summary_text}",
@@ -2964,10 +3116,6 @@ def render_patch_markdown(
     sections.append("")
 
     detail_lines = [
-        *_retrieval_snapshot_lines(audit_summary),
-        *_runtime_provenance_lines(audit_summary, command="fix"),
-        *_ultra_large_pr_mode_lines(audit_summary, command="fix"),
-        *_render_async_batch_lines(audit_summary, command="fix"),
         "### 🧩 Decision cards",
         "",
         "### 🎯 Patch targeting",
@@ -3003,18 +3151,32 @@ def render_patch_markdown(
         "```",
         "",
         *_verification_report_lines(verification_report),
-        "",
-        *_llm_lines(audit_summary),
-        "",
-        *_embeddings_lines(audit_summary),
-        "",
-        *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
-        "",
         "### 🧾 Audit anchors",
-        *_version_backend_lines(audit_summary),
+        *_audit_anchor_lines(audit_summary),
         "",
         _audit_note(),
     ]
+    if _verbose_diagnostics_enabled():
+        detail_lines = [
+            *_retrieval_snapshot_lines(audit_summary),
+            *_runtime_provenance_lines(audit_summary, command="fix"),
+            *_ultra_large_pr_mode_lines(audit_summary, command="fix"),
+            *_render_async_batch_lines(audit_summary, command="fix"),
+            *detail_lines[:-3],
+            "",
+            *_llm_lines(audit_summary),
+            "",
+            *_embeddings_lines(audit_summary),
+            "",
+            *_runtime_backend_evidence_lines(audit_summary),
+            "",
+            *_render_diagnostic_table(audit_summary, suppress_async_planner_rows=True),
+            "",
+            "### 🧾 Audit anchors",
+            *_version_backend_lines(audit_summary),
+            "",
+            _audit_note(),
+        ]
     sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
     return "\n".join(sections)
 
@@ -3360,13 +3522,9 @@ def render_audit_markdown(
             *_audit_confidence_and_limitations_lines(report),
             "",
             "## Runtime and safety",
-            *_runtime_backend_evidence_lines(audit_summary),
-            "- No `v5`: `yes`",
-            "- No legacy community dependency: `yes`",
-            "- No patch/autofix: `yes`",
+            *_compact_llm_lines(audit_summary),
             "",
-            "## Safety statement",
-            *_audit_safety_statement_lines(audit_summary),
+            *_compact_safety_lines({**audit_summary, "command": "audit"}),
             "",
             "### 🧾 Audit anchors",
             *_audit_anchor_lines(audit_summary),
@@ -3411,11 +3569,9 @@ def render_score_markdown(
             *_audit_improvement_lines(improvements, limit=3),
             "",
             "## Runtime and safety",
-            f"- Backend resolved: `{str(audit_summary.get('resolved_backend', 'not_applicable') or 'not_applicable').strip()}`",
-            f"- Backend mode: `{str(audit_summary.get('backend_mode', 'n/a') or 'n/a').strip()}`",
-            f"- Fallback: `{str(audit_summary.get('fallback_used', 'not_applicable') or 'not_applicable').strip()}` / `{str(audit_summary.get('fallback_reason', 'n/a') or 'n/a').strip()}`",
-            "- No patch/mutation: `yes`",
-            "- Informational only: `yes`",
+            *_compact_llm_lines(audit_summary),
+            "",
+            *_compact_safety_lines({**audit_summary, "command": "score"}),
             "",
             "Use `/repobrain audit` for the full evidence report.",
             "",
@@ -3509,18 +3665,9 @@ def render_status_markdown(
             *_policy_lines(install_hints if isinstance(install_hints, list) else [], fallback="No install hints recorded."),
             "",
             "## Runtime and safety",
-            *_runtime_backend_evidence_lines(audit_summary),
-            "- No `v5`: `yes`",
-            "- No legacy community dependency: `yes`",
-            "- No patch/autofix: `yes`",
+            *_compact_llm_lines(audit_summary),
             "",
-            "## Safety statement",
-            "- Status is informational only.",
-            "- No files modified.",
-            "- No patch applied.",
-            "- No branch, commit, or PR created by RepoBrain.",
-            "- Not a security approval.",
-            "- Not a merge approval.",
+            *_compact_safety_lines({**audit_summary, "command": "status"}),
             "",
             "### 🧾 Audit anchors",
             *_audit_anchor_lines(audit_summary),
@@ -3584,18 +3731,9 @@ def render_doctor_markdown(
             *limitation_lines,
             "",
             "## Runtime and safety",
-            *_runtime_backend_evidence_lines(audit_summary),
-            "- No `v5`: `yes`",
-            "- No legacy community dependency: `yes`",
-            "- No patch/autofix: `yes`",
+            *_compact_llm_lines(audit_summary),
             "",
-            "## Safety statement",
-            "- Doctor is informational only.",
-            "- No files modified.",
-            "- No patch applied.",
-            "- No branch, commit, or PR created by RepoBrain.",
-            "- Not a security approval.",
-            "- Not a merge approval.",
+            *_compact_safety_lines({**audit_summary, "command": "doctor"}),
             "",
             "### 🧾 Audit anchors",
             *_audit_anchor_lines(audit_summary),
@@ -3625,10 +3763,9 @@ def render_unsupported_command_markdown(
             *step_lines,
             "",
             "## Runtime and safety",
-            *_runtime_backend_evidence_lines(audit_summary),
-            "- No `v5`: `yes`",
-            "- No legacy community dependency: `yes`",
-            "- No patch/autofix: `yes`",
+            *_compact_llm_lines(audit_summary),
+            "",
+            *_compact_safety_lines(audit_summary),
             "",
             "### 🧾 Audit anchors",
             *_audit_anchor_lines(audit_summary),

@@ -38,6 +38,9 @@ RepoBrain is a guarded repository-intelligence action that reviews repository st
 - read-mostly baseline only
 - no broad write scopes
 - no token or env dump
+- if PR command-response comments are required, `pull-requests: write` may be granted only as a narrowly justified PR comment response permission
+- do not grant `contents: write` for normal partner setup
+- do not use `pull_request_target`
 
 ## Runtime Mode
 
@@ -65,6 +68,8 @@ RepoBrain is a guarded repository-intelligence action that reviews repository st
 
 - doctor and status report the active runtime mode truthfully
 - ask and explain may use an LLM when policy and provider access allow it, but they can also answer from deterministic retrieval and TopoCore-backed evidence when no LLM call occurs
+- default GitHub comments stay compact and developer-facing
+- `RB_REPOBRAIN_VERBOSE_DIAGNOSTICS=1` enables expanded sanitized diagnostics
 - audit and score are informational only
 - no mutation occurs
 - no secret or TopoCore source exposure occurs in user-facing output

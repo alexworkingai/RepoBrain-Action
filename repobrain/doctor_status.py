@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 from typing import Any
 
 from repobrain import __version__ as REPOBRAIN_VERSION
 from repobrain.topocore_backend import TopoCoreBackendError, resolve_backend
 from repobrain.topocore_v6_adapter import resolve_topocore_v6_runtime_mode
+from repobrain.workflow_permission_classifier import (
+    JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION,
+    classify_workflow_permission_policy,
+)
 
 SUPPORTED_COMMANDS: tuple[str, ...] = (
     "/repobrain help",
@@ -23,14 +26,6 @@ SUPPORTED_COMMANDS: tuple[str, ...] = (
     "/repobrain status",
 )
 ROADMAP_COMMANDS: tuple[str, ...] = ()
-
-_DANGEROUS_PERMISSION_PATTERNS: tuple[tuple[str, str], ...] = (
-    ("pull_request_target", r"\bpull_request_target\b"),
-    ("contents: write", r"contents\s*:\s*write"),
-    ("checks: write", r"checks\s*:\s*write"),
-    ("pull-requests: write", r"pull-requests\s*:\s*write"),
-)
-
 
 def build_status_report(
     *,
@@ -191,6 +186,8 @@ def _workflow_context_status(workflow: dict[str, Any]) -> str:
 def _permissions_status(workflow: dict[str, Any]) -> str:
     if not workflow["exists"]:
         return "UNKNOWN"
+    if workflow.get("permission_classification") == JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION:
+        return "WARN"
     if workflow["dangerous_permissions"]:
         return "WARN"
     if workflow["permissions_explicit"]:
@@ -201,6 +198,12 @@ def _permissions_status(workflow: dict[str, Any]) -> str:
 def _permissions_detail(workflow: dict[str, Any]) -> str:
     if not workflow["exists"]:
         return "RepoBrain workflow file was not found, so permission posture could not be assessed."
+    if workflow.get("permission_classification") == JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION:
+        return (
+            "Workflow uses `pull-requests: write` only for RepoBrain PR command response comments. "
+            "No `contents: write`, no `checks: write`, no `pull_request_target`, and no RepoBrain mutation path were detected. "
+            "Keep the permission documented and monitored."
+        )
     if workflow["dangerous_permissions"]:
         joined = ", ".join(f"`{item}`" for item in workflow["dangerous_permissions"])
         return (
@@ -327,7 +330,9 @@ def _doctor_recommended_fixes(*, workflow: dict[str, Any], checks: list[dict[str
     fixes: list[str] = []
     if not workflow["exists"]:
         fixes.append("Add or restore `.github/workflows/repobrain.yml` from the canonical external install guide.")
-    if workflow["dangerous_permissions"]:
+    if workflow.get("permission_classification") == JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION:
+        fixes.append("Keep `pull-requests: write` limited to PR command response comments and avoid adding `contents: write` or `pull_request_target`.")
+    elif workflow["dangerous_permissions"]:
         fixes.append("Reduce RepoBrain workflow permissions to the read-mostly external baseline.")
     if not workflow["topocore_secret_referenced"]:
         fixes.append("Wire `TOPOCORE_V6_REPO_TOKEN` into the TopoCore private checkout step.")
@@ -360,19 +365,31 @@ def _workflow_snapshot(repo_root: Path) -> dict[str, Any]:
     workflow_path = Path(repo_root) / ".github" / "workflows" / "repobrain.yml"
     exists = workflow_path.exists()
     text = _read_text(workflow_path).lower() if exists else ""
-    dangerous_permissions = [
-        label for label, pattern in _DANGEROUS_PERMISSION_PATTERNS if re.search(pattern, text)
-    ]
+    docs_text = "\n".join(
+        _read_text(Path(repo_root) / relative)
+        for relative in (
+            "README.md",
+            "docs/commands/REPOBRAIN_COMMANDS.md",
+            "docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md",
+            "docs/partner/PARTNER_TESTING_SETUP.md",
+            "docs/partner/PARTNER_SECURITY_NOTES.md",
+        )
+    ).lower()
+    permission_policy = classify_workflow_permission_policy(
+        workflow_text=text,
+        docs_text=docs_text,
+    )
     permissions_explicit = "permissions:" in text
     return {
         "path": workflow_path.as_posix(),
         "exists": exists,
         "permissions_explicit": permissions_explicit,
-        "dangerous_permissions": dangerous_permissions,
-        "uses_pull_request_target": bool(re.search(r"\bpull_request_target\b", text)),
+        "dangerous_permissions": permission_policy["effective_risky_permissions"],
+        "uses_pull_request_target": bool(permission_policy["uses_pull_request_target"]),
         "uses_private_action": "alexworkingai/repobrain-action@" in text,
         "topocore_secret_referenced": "topocore_v6_repo_token" in text,
-        "read_mostly_baseline": permissions_explicit and not dangerous_permissions,
+        "read_mostly_baseline": permissions_explicit and not permission_policy["effective_risky_permissions"],
+        "permission_classification": permission_policy["classification"],
     }
 
 

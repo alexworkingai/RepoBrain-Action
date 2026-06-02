@@ -3,8 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
-import re
 from typing import Any
+
+from repobrain.workflow_permission_classifier import (
+    JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION,
+    classify_workflow_permission_policy,
+)
 
 
 @dataclass(frozen=True)
@@ -299,18 +303,6 @@ def _scan_inventory(repo_root: Path) -> dict[str, Any]:
     workflow_texts = {path: _read_text_limited(repo_root / path) for path in workflow_paths}
     workflow_text_joined = "\n".join(workflow_texts.values()).lower()
     permissions_block_present = "permissions:" in workflow_text_joined
-    dangerous_permissions = sorted(
-        {
-            item
-            for item, pattern in (
-                ("pull_request_target", r"\bpull_request_target\b"),
-                ("contents: write", r"contents\s*:\s*write"),
-                ("checks: write", r"checks\s*:\s*write"),
-                ("pull-requests: write", r"pull-requests\s*:\s*write"),
-            )
-            if re.search(pattern, workflow_text_joined)
-        }
-    )
     ci_keywords = (
         "pytest",
         "ruff",
@@ -334,6 +326,10 @@ def _scan_inventory(repo_root: Path) -> dict[str, Any]:
         if path in file_set
     ]
     docs_text = "\n".join(_read_text_limited(repo_root / path) for path in docs_text_paths).lower()
+    permission_policy = classify_workflow_permission_policy(
+        workflow_text=workflow_text_joined,
+        docs_text=docs_text,
+    )
     manifest_text = "\n".join(_read_text_limited(repo_root / path) for path in manifest_paths[:3]).lower()
     has_install_docs = "install" in docs_text or any("onboarding" in path.lower() for path in docs_paths)
     has_troubleshooting_docs = "troubleshooting" in docs_text or any("troubleshooting" in path.lower() for path in docs_paths)
@@ -378,7 +374,15 @@ def _scan_inventory(repo_root: Path) -> dict[str, Any]:
         "governance_paths": governance_paths,
         "workflow_texts": workflow_texts,
         "permissions_block_present": permissions_block_present,
-        "dangerous_permissions": dangerous_permissions,
+        "dangerous_permissions": permission_policy["effective_risky_permissions"],
+        "workflow_permission_classification": permission_policy["classification"],
+        "workflow_permission_rationale": permission_policy["rationale"],
+        "workflow_permission_monitor_note": permission_policy["monitor_note"],
+        "workflow_permission_documented": bool(permission_policy["purpose_documented"]),
+        "workflow_permission_no_mutation_policy": bool(permission_policy["no_mutation_policy_active"]),
+        "workflow_permission_justified_pr_comment": bool(permission_policy["justified_pr_comment_permission"]),
+        "workflow_write_heavy_permissions": permission_policy["write_heavy_permissions"],
+        "workflow_dangerous_policy_signals": permission_policy["dangerous_policy_signals"],
         "ci_keywords_detected": ci_keywords_detected,
         "has_readme": "README.md" in file_set,
         "has_license": "LICENSE" in file_set,
@@ -611,7 +615,10 @@ def _security_result(inventory: dict[str, Any]) -> dict[str, Any]:
         penalties += 3
     if "checks: write" in inventory["dangerous_permissions"]:
         penalties += 1
-    if "pull-requests: write" in inventory["dangerous_permissions"]:
+    if (
+        "pull-requests: write" in inventory["dangerous_permissions"]
+        and inventory.get("workflow_permission_classification") != JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION
+    ):
         penalties += 2
     score -= penalties
     assessable = bool(inventory["workflow_paths"] or inventory["security_paths"] or inventory["docs_paths"])
@@ -620,7 +627,14 @@ def _security_result(inventory: dict[str, Any]) -> dict[str, Any]:
         rationale_parts.append("Security-focused docs or policies are present.")
     else:
         rationale_parts.append("No dedicated security policy files were detected.")
-    if inventory["dangerous_permissions"]:
+    if inventory.get("workflow_permission_classification") == JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION:
+        rationale_parts.append(
+            inventory.get(
+                "workflow_permission_rationale",
+                "PR comment response permission is present with a constrained no-mutation RepoBrain posture.",
+            )
+        )
+    elif inventory["dangerous_permissions"]:
         rationale_parts.append(
             "Workflow review found potentially risky triggers or permissions: "
             + ", ".join(f"`{item}`" for item in inventory["dangerous_permissions"])
@@ -649,6 +663,8 @@ def _ci_cd_result(inventory: dict[str, Any]) -> dict[str, Any]:
         score += 3
     if inventory["permissions_block_present"] and not inventory["dangerous_permissions"]:
         score += 2
+    elif inventory.get("workflow_permission_classification") == JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION:
+        score += 1
     assessable = bool(inventory["workflow_paths"])
     rationale_parts = []
     if inventory["workflow_paths"]:
@@ -804,6 +820,8 @@ def _governance_result(inventory: dict[str, Any]) -> dict[str, Any]:
         rationale_parts.append("Workflow permissions are explicit.")
     else:
         rationale_parts.append("Workflow permission intent is not explicit.")
+    if inventory.get("workflow_permission_classification") == JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION:
+        rationale_parts.append("PR comment response permission is documented or product-constrained without RepoBrain mutation rights.")
     return _category_result(
         title="GitHub governance",
         key="governance",
@@ -890,6 +908,8 @@ def _build_critical_blockers(*, inventory: dict[str, Any], categories: list[dict
                     rationale="Write-heavy workflow permissions increase blast radius unless they are explicitly required and justified.",
                 )
             )
+    if inventory.get("workflow_permission_classification") == JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION:
+        blockers = [item for item in blockers if "pull-requests: write" not in str(item.get("title", ""))]
     if not inventory["has_readme"] and not inventory["has_docs_dir"]:
         blockers.append(
             _blocker(
@@ -933,7 +953,20 @@ def _build_top_improvements(*, inventory: dict[str, Any], categories: list[dict[
                 expected_score_impact="high",
             )
         )
-    if inventory["dangerous_permissions"]:
+    if inventory.get("workflow_permission_classification") == JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION:
+        improvements.append(
+            _improvement(
+                category="Security posture",
+                title="Document and monitor PR comment response permission.",
+                affected_files=inventory["workflow_paths"][:2],
+                rationale=inventory.get(
+                    "workflow_permission_rationale",
+                    "`pull-requests: write` is acceptable here only for RepoBrain PR command response comments and should stay tightly scoped.",
+                ),
+                expected_score_impact="low",
+            )
+        )
+    elif inventory["dangerous_permissions"]:
         improvements.append(
             _improvement(
                 category="Security posture",

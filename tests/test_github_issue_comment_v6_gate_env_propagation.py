@@ -95,9 +95,8 @@ def test_backend_evidence_is_rendered_in_issue_comment_safe_output() -> None:
         command="ask",
     )
 
-    assert "TopoCore backend requested" in markdown
-    assert "TopoCore backend resolved" in markdown
-    assert "TopoCore fallback used" in markdown
-    assert "TopoCore fallback reason" in markdown
+    assert "### 🛡️ Runtime and safety" in markdown
+    assert "- Backend: `auto -> v6`" in markdown
+    assert "TopoCore backend requested" not in markdown
     assert "safe-to-merge" not in markdown.lower()
     assert "security-approved" not in markdown.lower()

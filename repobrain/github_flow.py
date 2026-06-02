@@ -998,6 +998,7 @@ def _build_scope_audit_summary(
     topocore_backend = "v5" if is_v5_requested else "not_applicable"
 
     audit_summary: dict[str, Any] = {
+        "command": cmd,
         "route_final": route_final,
         "pass_count": 1,
         "retrieved": 0,
@@ -5776,6 +5777,8 @@ def _read_installed_package_proof_status(control_plane_root: Path) -> str:
 
 def _public_readiness_next_step(status: str) -> str:
     normalized = str(status or "UNKNOWN").strip().upper()
+    if normalized == "PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION":
+        return "Continue selected partner pilot onboarding with the compact diagnostics baseline and monitor justified PR comment response permission."
     if normalized == "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY":
         return "Run the selected partner pilot from the public action surface, collect feedback, and keep Marketplace planning deferred until pilot evidence matures."
     if normalized == "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF":

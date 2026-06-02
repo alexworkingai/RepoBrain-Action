@@ -190,7 +190,8 @@ def test_audit_output_remains_static_when_capability_is_unavailable(tmp_path: Pa
     )
 
     assert "static scoring with v6 contract-ready guard" in markdown
-    assert "TopoCore fallback reason: `audit_v6_capability_unavailable_static_scoring`" in markdown
+    assert "### 🛡️ Runtime and safety" in markdown
+    assert "- Runtime: `report-only`" in markdown
 
 
 def test_audit_output_rejects_invalid_v6_response_without_raw_json(tmp_path: Path) -> None:

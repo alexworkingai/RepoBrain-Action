@@ -59,7 +59,7 @@ def _gate_zero_v5_audit() -> dict[str, object]:
     }
 
 
-def test_pr_ask_output_renders_visible_backend_evidence() -> None:
+def test_pr_ask_output_uses_compact_runtime_and_llm_blocks_by_default() -> None:
     markdown = render_answer_markdown(
         answer_text="PR summary.",
         evidence=[],
@@ -68,19 +68,15 @@ def test_pr_ask_output_renders_visible_backend_evidence() -> None:
         command="ask",
     )
 
-    assert "### 🧭 Runtime backend evidence" in markdown
-    assert "TKY mode requested" in markdown
-    assert "TKY mode used" in markdown
-    assert "TKYA mode" in markdown
-    assert "TopoCore backend requested" in markdown
-    assert "TopoCore backend resolved" in markdown
-    assert "TopoCore fallback used" in markdown
-    assert "TopoCore fallback reason" in markdown
-    assert "`auto`" in markdown
-    assert "`v6`" in markdown
+    assert "### 🛡️ Runtime and safety" in markdown
+    assert "- Backend: `auto -> v6`" in markdown
+    assert "- Runtime: `retrieval-only`" in markdown
+    assert "- LLM: not called" in markdown
+    assert "TKY mode requested" not in markdown
+    assert "TKYA mode" not in markdown
 
 
-def test_pr_review_output_renders_visible_backend_evidence_without_merge_claims() -> None:
+def test_pr_review_output_stays_compact_without_merge_claims() -> None:
     markdown = render_review_markdown(
         review={
             "summary_text": "Review summary.",
@@ -96,16 +92,14 @@ def test_pr_review_output_renders_visible_backend_evidence_without_merge_claims(
         audit_summary=_gate_one_v6_audit(),
     )
 
-    assert "### 🧭 Runtime backend evidence" in markdown
-    assert "TopoCore backend requested" in markdown
-    assert "TopoCore backend resolved" in markdown
-    assert "TopoCore fallback used" in markdown
-    assert "TopoCore fallback reason" in markdown
+    assert "### 🛡️ Runtime and safety" in markdown
+    assert "- Backend: `auto -> v6`" in markdown
+    assert "TKY mode requested" not in markdown
     assert "safe-to-merge" not in markdown.lower()
     assert "security-approved" not in markdown.lower()
 
 
-def test_pr_verify_output_renders_backend_evidence_for_report_only_scope() -> None:
+def test_pr_verify_output_uses_compact_report_only_scope() -> None:
     audit: dict[str, object] = {}
 
     markdown = _build_verify_markdown(
@@ -117,13 +111,11 @@ def test_pr_verify_output_renders_backend_evidence_for_report_only_scope() -> No
         audit=audit,
     )
 
-    assert "### 🧭 Runtime backend evidence" in markdown
-    assert "TopoCore backend requested" in markdown
-    assert "TopoCore backend resolved" in markdown
-    assert "TopoCore fallback used" in markdown
-    assert "TopoCore fallback reason" in markdown
-    assert "Scope status" in markdown
-    assert "verify_report_only" in markdown
+    assert "### 🛡️ Runtime and safety" in markdown
+    assert "- Scope: `verification report`" in markdown
+    assert "- Runtime: `report-only`" in markdown
+    assert "verify_report_only" not in markdown
+    assert "TopoCore backend requested" not in markdown
     assert "safe-to-merge" not in markdown.lower()
     assert "approved" not in markdown.lower()
 
@@ -146,14 +138,12 @@ def test_backend_evidence_renderer_handles_missing_fields_safely() -> None:
         command="ask",
     )
 
-    assert "### 🧭 Runtime backend evidence" in markdown
-    assert "TopoCore backend requested: `n/a`" in markdown
-    assert "TopoCore backend resolved: `n/a`" in markdown
-    assert "TopoCore fallback used: `n/a`" in markdown
-    assert "TopoCore fallback reason: `n/a`" in markdown
+    assert "### 🛡️ Runtime and safety" in markdown
+    assert "- Backend: `not applicable`" in markdown
+    assert "- Fallback: `not applicable`" in markdown
 
 
-def test_gate_zero_backend_evidence_can_show_v5() -> None:
+def test_gate_zero_backend_evidence_can_show_v5_compactly() -> None:
     markdown = render_answer_markdown(
         answer_text="Issue summary.",
         evidence=[],
@@ -162,16 +152,14 @@ def test_gate_zero_backend_evidence_can_show_v5() -> None:
         command="ask",
     )
 
-    assert "TKY mode requested: `auto`" in markdown
-    assert "TKY mode used: `baseline`" in markdown
-    assert "TKYA mode: `baseline-policy`" in markdown
-    assert "TopoCore backend requested: `v5`" in markdown
-    assert "TopoCore backend resolved: `v5`" in markdown
+    assert "- Backend: `v5 -> v5`" in markdown
+    assert "TKY mode requested" not in markdown
+    assert "TKYA mode" not in markdown
 
 
 def test_scoped_unsupported_issue_fix_preserves_scope_and_patch_safety() -> None:
     markdown = render_scoped_command_markdown(
-        title="### ⏳ Scoped command not available",
+        title="### Scoped command not available",
         message="Fix is unsupported in issue-only context.",
         audit_summary={
             "route_final": "WAIT",
@@ -190,9 +178,8 @@ def test_scoped_unsupported_issue_fix_preserves_scope_and_patch_safety() -> None
     )
 
     assert "unsupported_issue_context" in markdown
-    assert "TopoCore backend resolved: `not_applicable`" in markdown
-    assert "Patch authorized: `no`" in markdown
-    assert "Patch applied: `no`" in markdown
+    assert "- Backend: `auto -> not_applicable`" in markdown
+    assert "- Safety: informational only; no patch/autofix, no file changes, no branch/commit/PR created." in markdown
 
 
 def test_changed_paths_do_not_introduce_runtime_patch_or_pr_side_effects() -> None:

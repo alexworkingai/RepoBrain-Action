@@ -53,13 +53,8 @@ def test_pr_fix_renders_product_governance_section_with_visible_safety_markers()
     assert "- Scope: `pull_request`" in md
     assert "Affected files:" in md
     assert "`docs/repobrain_fix_fixture.md`" in md
-    assert "Safety gates:" in md
-    assert "- Patch authorized: `no`" in md
-    assert "- Patch applied: `no`" in md
-    assert "- Files modified: `no`" in md
-    assert "- Branch created: `no`" in md
-    assert "- Commit created: `no`" in md
-    assert "- PR created: `no`" in md
+    assert "### 🛡️ Runtime and safety" in md
+    assert "- Safety: informational only; no patch/autofix, no file changes, no branch/commit/PR created." in md
     assert "safe to merge" not in md.lower()
     assert "security approved" not in md.lower()
 
@@ -109,11 +104,8 @@ def test_pr_fix_can_block_unsafe_mutation_request_safely() -> None:
 
     assert "- Status: `BLOCKED_BY_SAFETY`" in md
     assert "Patch/autofix is disabled." in md
-    assert "- Patch authorized: `no`" in md
-    assert "- Patch applied: `no`" in md
-    assert "- Branch created: `no`" in md
-    assert "- Commit created: `no`" in md
-    assert "- PR created: `no`" in md
+    assert "### 🛡️ Runtime and safety" in md
+    assert "- Safety: informational only; no patch/autofix, no file changes, no branch/commit/PR created." in md
     assert "patch applied and pushed" not in md.lower()
 
 
@@ -142,12 +134,8 @@ def test_issue_fix_scope_can_render_full_no_mutation_markers() -> None:
     )
 
     assert "unsupported_issue_context" in md
-    assert "Patch authorized: `no`" in md
-    assert "Patch applied: `no`" in md
-    assert "Files modified: `no`" in md
-    assert "Branch created: `no`" in md
-    assert "Commit created: `no`" in md
-    assert "PR created: `no`" in md
+    assert "### 🛡️ Runtime and safety" in md
+    assert "- Safety: informational only; no patch/autofix, no file changes, no branch/commit/PR created." in md
 
 
 def test_fix_request_analysis_detects_unsafe_and_vague_prompts() -> None:

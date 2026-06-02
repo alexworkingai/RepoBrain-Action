@@ -25,10 +25,11 @@ def test_policy_blocked_llm_is_reported_consistently() -> None:
         command='ask',
     )
 
-    assert 'TKYA LLM decision: not called' in md
-    assert 'LLM was not called; answer generated from deterministic retrieval/template path.' in md
-    assert 'Runtime override: LLM blocked: issue_comment policy disabled.' in md
-    assert 'LLM used: no (issue_comment_policy_disabled)' in md
+    assert '### 🤖 LLM' in md
+    assert '- LLM: not called' in md
+    assert 'policy disabled' in md
+    assert 'Runtime override: LLM blocked: issue_comment policy disabled.' not in md
+    assert 'LLM used: no (issue_comment_policy_disabled)' not in md
 
 
 def test_verbose_mode_can_still_render_llm_diagnostics(monkeypatch: pytest.MonkeyPatch) -> None:

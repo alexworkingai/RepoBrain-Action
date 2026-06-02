@@ -64,10 +64,9 @@ def test_pr_ask_markdown_renders_topocore_backend_evidence() -> None:
         command="ask",
     )
 
-    assert "TopoCore backend requested" in markdown
-    assert "TopoCore backend resolved" in markdown
-    assert "TopoCore fallback used" in markdown
-    assert "TopoCore fallback reason" in markdown
+    assert "### 🛡️ Runtime and safety" in markdown
+    assert "- Backend: `auto -> v6`" in markdown
+    assert "TopoCore backend requested" not in markdown
 
 
 def test_pr_review_markdown_renders_topocore_backend_evidence() -> None:
@@ -103,10 +102,9 @@ def test_pr_review_markdown_renders_topocore_backend_evidence() -> None:
         },
     )
 
-    assert "TopoCore backend requested" in markdown
-    assert "TopoCore backend resolved" in markdown
-    assert "TopoCore fallback used" in markdown
-    assert "TopoCore fallback reason" in markdown
+    assert "### 🛡️ Runtime and safety" in markdown
+    assert "- Backend: `auto -> v6`" in markdown
+    assert "TopoCore backend requested" not in markdown
 
 
 def test_pr_verify_emits_explicit_scoped_backend_diagnostics() -> None:
@@ -122,8 +120,8 @@ def test_pr_verify_emits_explicit_scoped_backend_diagnostics() -> None:
     )
 
     assert "TopoCore backend diagnostics" in markdown
-    assert "Scope status" in markdown
-    assert "verify_report_only" in markdown
+    assert "verification report" in markdown
+    assert "verify_report_only" not in markdown
     assert audit["requested_backend"] == "auto"
     assert audit["resolved_backend"] == "not_applicable"
     assert audit["scope_status"] == "verify_report_only"
@@ -159,6 +157,6 @@ def test_issue_only_fix_is_explicitly_scoped_and_patch_safe(capsys) -> None:
     assert status == "DRY_RUN_OK"
     assert "Scoped command not available" in output
     assert "pull-request scoped" in output
-    assert "Patch authorized" in output
-    assert "Patch applied" in output
-    assert "`no`" in output
+    assert "no patch/autofix" in output
+    assert "no branch/commit/PR created" in output
+    assert "Scope status: `unsupported_issue_context`" in output
