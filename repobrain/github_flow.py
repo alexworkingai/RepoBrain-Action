@@ -147,11 +147,17 @@ Examples:
 - `/repobrain verify`
 
 Command notes:
+- `/repobrain help` shows the active command surface, examples, and safety boundaries.
+- `/repobrain ask` answers repository questions and should analyze the current target repository, not the RepoBrain implementation, unless RepoBrain is the target repo.
+- `/repobrain locate` finds the most relevant repository locations for a symbol, path, or workflow question.
+- `/repobrain explain` explains repository behavior, workflow connection, or code paths using repository evidence.
+- `/repobrain review` is a PR-only review summary and keeps mutation disabled.
+- `/repobrain verify` is informational only and reports checks/status truth without merge approval.
+- `/repobrain fix` is proposal/governance only and stays no-patch/no-mutation.
 - `/repobrain audit` is the full repository audit and may apply contract-validated private v6 enrichment when available.
 - `/repobrain score` is the compact score summary view of the same guarded audit engine.
-- `/repobrain doctor` and `/repobrain status` are report-only diagnostics.
-- `/repobrain verify` is informational only.
-- `/repobrain fix` is proposal/governance only and stays no-patch/no-mutation.
+- `/repobrain doctor` reports setup and workflow diagnostics in partner-facing language.
+- `/repobrain status` reports current runtime, command surface, and safety posture in partner-facing language.
 
 Execution profiles:
 - Use `--profile cheap|balanced|premium` with ask, review, and fix.
@@ -5702,6 +5708,19 @@ _OPERATIONAL_ASK_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
 )
 
+_PR_IMPACT_ASK_PATTERNS: tuple[str, ...] = (
+    "assess this pr",
+    "assess the pr",
+    "does this change affect",
+    "does this pr affect",
+    "docs-only or behavior-affecting",
+    "docs-only or behavior affecting",
+    "partner-pilot readiness",
+    "partner pilot readiness",
+    "change type",
+    "risk level",
+)
+
 
 def _classify_operational_ask_intent(question: str) -> str | None:
     normalized = " ".join(str(question or "").strip().lower().split())
@@ -5720,6 +5739,15 @@ def _classify_operational_ask_intent(question: str) -> str | None:
     if "runtime_status" in matched_kinds or "workflow_status" in matched_kinds:
         return "runtime_status"
     return matched_kinds[0]
+
+
+def _classify_pr_ask_intent(question: str) -> str | None:
+    normalized = " ".join(str(question or "").strip().lower().split())
+    if not normalized:
+        return None
+    if any(pattern in normalized for pattern in _PR_IMPACT_ASK_PATTERNS):
+        return "pr_impact_assessment"
+    return None
 
 
 def _control_plane_root(repo_root: Path) -> Path:
@@ -5775,6 +5803,8 @@ def _read_public_readiness_status(control_plane_root: Path) -> str:
         return str(match.group(1) or "UNKNOWN").strip().upper() or "UNKNOWN"
     for token in (
         "SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL",
+        "SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX",
+        "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_CONSUMER_REPO_ASK_AND_UX_FIX",
         "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_ISSUE_PR_UX_POLISH_AND_PROTECTED_MAIN",
         "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY",
         "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF",
@@ -5814,11 +5844,300 @@ def _read_governance_baseline_status(control_plane_root: Path) -> str:
     for token in (
         "PROTECTED_MAIN_BASELINE_ENABLED",
         "GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED",
+        "GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED_SOLO_OWNER_MODEL",
         "GOVERNANCE_PARTIAL_API_LIMITED",
     ):
         if token.lower() in text.lower():
             return token
     return "UNKNOWN"
+
+
+def _target_repo_name(*, repo_root: Path, github_context: dict[str, Any] | None) -> str:
+    repo_name = str((github_context or {}).get("repository", "") or "").strip()
+    if repo_name:
+        return repo_name
+    return repo_root.name or "target repository"
+
+
+def _is_action_repo_target(*, repo_root: Path, github_context: dict[str, Any] | None) -> bool:
+    repo_name = _target_repo_name(repo_root=repo_root, github_context=github_context).lower()
+    return repo_name.endswith("repobrain-action") or (repo_root / "repobrain").exists()
+
+
+def _existing_relative_paths(repo_root: Path, candidates: tuple[tuple[str, str], ...]) -> list[tuple[str, str]]:
+    return [(path, label) for path, label in candidates if (repo_root / path).exists()]
+
+
+def _read_target_repo_text(repo_root: Path) -> str:
+    snippets: list[str] = []
+    for rel_path in (
+        "README.md",
+        "docs/ARCHITECTURE.md",
+        "docs/API_ENDPOINTS.md",
+    ):
+        path = repo_root / rel_path
+        if path.exists():
+            snippets.append(_read_markdown(path)[:8000])
+    return "\n".join(snippets).lower()
+
+
+def _target_repo_product_analysis_sections(
+    *,
+    repo_root: Path,
+    github_context: dict[str, Any] | None,
+    workflow_location: str,
+    public_readiness_status: str,
+    runtime_note: str,
+    llm_used: bool,
+) -> list[str]:
+    repo_name = _target_repo_name(repo_root=repo_root, github_context=github_context)
+    target_text = _read_target_repo_text(repo_root)
+    module_candidates = (
+        ("src/mcpServer.ts", "`src/mcpServer.ts`: MCP server and request orchestration layer."),
+        ("src/index.ts", "`src/index.ts`: application bootstrap and runtime entrypoint."),
+        ("src/runtimePaths.ts", "`src/runtimePaths.ts`: runtime path and environment resolution."),
+        ("src/auth", "`src/auth/`: authentication, JWT/OAuth, and access-control surface."),
+        ("src/admin", "`src/admin/`: admin/API-key/session/user management routes."),
+        ("apps/console/src/main.tsx", "`apps/console/src/main.tsx`: console/UI entrypoint."),
+        ("prisma", "`prisma/`: persistence and schema layer."),
+        ("k8s", "`k8s/`: Kubernetes deployment and cluster runtime manifests."),
+    )
+    module_lines = [label for _, label in _existing_relative_paths(repo_root, module_candidates)]
+    if not module_lines and (repo_root / "repobrain").exists():
+        module_lines = [
+            "`repobrain/`: command, runtime, and output orchestration modules for the action repository itself."
+        ]
+    if not module_lines:
+        module_lines = ["Visible modules are limited from the current repository snapshot; the answer stays scoped to repository evidence only."]
+
+    product_purpose_lines: list[str] = []
+    if (repo_root / "src" / "mcpServer.ts").exists():
+        product_purpose_lines.append(
+            f"`{repo_name}` appears to implement an MCP server/runtime rather than an analysis tool."
+        )
+    if "vector" in target_text or "qdrant" in target_text:
+        product_purpose_lines.append("Repository evidence points to vector-search or retrieval integrations.")
+    if "gitlab" in target_text or "github" in target_text or "jenkins" in target_text or "argo" in target_text:
+        product_purpose_lines.append("Repository evidence points to CI/CD and developer-tool integrations.")
+    if "console" in target_text or (repo_root / "apps" / "console").exists():
+        product_purpose_lines.append("Repository includes an operator or console-facing UI surface.")
+    if not product_purpose_lines:
+        product_purpose_lines.append(
+            f"`{repo_name}` appears to be the target product repository being analyzed; RepoBrain is only the external analysis workflow."
+        )
+
+    runtime_workflows: list[str] = []
+    if (repo_root / ".github" / "workflows" / "repobrain.yml").exists():
+        runtime_workflows.append(
+            f"`{workflow_location}` connects the repository to RepoBrain for analysis; it is not part of the target product runtime."
+        )
+    if (repo_root / "Dockerfile").exists():
+        runtime_workflows.append("`Dockerfile` indicates a containerized runtime path.")
+    if any((repo_root / name).exists() for name in ("docker-compose.yml", "docker-compose.yaml", "docker-compose.dev.yml")):
+        runtime_workflows.append("Docker Compose files indicate local/dev deployment workflows.")
+    if (repo_root / "k8s").exists():
+        runtime_workflows.append("`k8s/` indicates Kubernetes deployment support.")
+    if not runtime_workflows:
+        runtime_workflows.append("No strong deployment workflow beyond repository code layout was detected from the current evidence set.")
+
+    integrations: list[str] = []
+    integration_map = (
+        ("qdrant", "Qdrant / vector-store integration is visible from repository evidence."),
+        ("jwks", "JWKS-based authentication or key discovery is documented."),
+        ("oauth", "OAuth-based authorization or identity integration is documented."),
+        ("prometheus", "Prometheus metrics/monitoring are visible."),
+        ("opentelemetry", "OpenTelemetry tracing/observability is visible."),
+        ("grafana", "Grafana/dashboard support is visible."),
+        ("gitlab", "GitLab integration is visible."),
+        ("github", "GitHub integration is visible."),
+        ("jenkins", "Jenkins integration is visible."),
+        ("argo", "Argo or GitOps-style deployment integration is visible."),
+    )
+    for needle, line in integration_map:
+        if needle in target_text:
+            integrations.append(line)
+    integrations = list(dict.fromkeys(integrations)) or [
+        "Visible integrations are limited to what is exposed in the repository docs, workflows, and source tree."
+    ]
+
+    quality_signals: list[str] = []
+    if (repo_root / "tests").exists():
+        quality_signals.append("Repository has a dedicated test surface.")
+    if (repo_root / "SECURITY.md").exists():
+        quality_signals.append("Repository publishes a security policy.")
+    if (repo_root / "docs" / "ARCHITECTURE.md").exists():
+        quality_signals.append("Architecture documentation is present.")
+    if (repo_root / ".github" / "workflows").exists():
+        quality_signals.append("GitHub workflow automation is present.")
+    if (repo_root / "sbom.json").exists():
+        quality_signals.append("SBOM or supply-chain evidence is present in the repository.")
+    if (repo_root / "apps" / "console").exists():
+        quality_signals.append("Repository spans both service/runtime code and operator-facing UI.")
+    if not quality_signals:
+        quality_signals.append("The repository has enough visible structure to support a bounded product analysis.")
+
+    risks = [
+        "This answer is limited to repository evidence; live environment readiness still needs runtime validation outside the repo snapshot.",
+        "Security and deployment surface appear broad, so configuration drift across auth, CI/CD, and runtime integrations is a likely operational risk.",
+        "RepoBrain workflow integration should stay clearly separated from target product architecture in future docs and smoke prompts.",
+    ]
+
+    next_steps = [
+        "Confirm the highest-risk runtime and deployment paths through environment-backed smoke tests, not docs alone.",
+        "Lock the most important architecture and API docs to current code paths and remove stale wording quickly.",
+        "Expand CI and readiness checks around the most exposed integrations and operational flows.",
+        "Review security and secrets boundaries around auth, admin routes, and external service connectors.",
+        "Use partner-pilot feedback to prioritize the next product-quality and operability improvements.",
+    ]
+
+    llm_line = (
+        "LLM synthesis was used, but the answer below is constrained to target-repository evidence and repository-role boundaries."
+        if llm_used
+        else "LLM was not called; answer generated by deterministic product-analysis fallback from target repository evidence."
+    )
+    return [
+        llm_line,
+        "",
+        "Product purpose / functions:",
+        *(f"- {item}" for item in product_purpose_lines),
+        "",
+        "Major target-repo modules/layers:",
+        *(f"- {item}" for item in module_lines[:8]),
+        "",
+        "Runtime/deployment workflows:",
+        *(f"- {item}" for item in runtime_workflows[:6]),
+        "",
+        "Visible integrations/APIs:",
+        *(f"- {item}" for item in integrations[:8]),
+        "",
+        "Production readiness:",
+        f"- Current public readiness state recorded by RepoBrain control-plane docs: `{public_readiness_status}`.",
+        "- The target repository shows meaningful production-oriented structure, but repository evidence alone is not merge, security, or production approval.",
+        "",
+        "Strongest quality signals:",
+        *(f"- {item}" for item in quality_signals[:6]),
+        "",
+        "Main blockers/risks:",
+        *(f"- {item}" for item in risks),
+        "",
+        "Next 5 practical engineering steps:",
+        *(f"- {item}" for item in next_steps),
+        "",
+        "Limitations:",
+        "- This analysis is grounded in the target repository checkout and visible repo metadata only.",
+        "- RepoBrain-Action is the analysis tool and should not be treated as the target product unless the target repository actually is RepoBrain-Action.",
+        "",
+        "Runtime/safety note:",
+        f"- {runtime_note}",
+        "- Private TopoCore runtime/source remains outside the target product code and is not exposed in user-facing output.",
+    ]
+
+
+def _is_docs_like_path(path: str) -> bool:
+    lowered = str(path or "").strip().lower()
+    if not lowered:
+        return False
+    return lowered.startswith(("docs/", ".github/")) or lowered.endswith((".md", ".rst", ".txt", ".adoc"))
+
+
+def _build_pr_impact_assessment_answer(
+    *,
+    repo_root: Path,
+    github_context: dict[str, Any] | None,
+    public_readiness_status: str,
+    runtime_note: str,
+    llm_used: bool,
+) -> list[str]:
+    changed_entries = _collect_pr_changed_file_entries_from_context(github_context)
+    changed_files = [str(item.get("path", "")).strip() for item in changed_entries if str(item.get("path", "")).strip()]
+    unique_files = list(dict.fromkeys(changed_files))
+    docs_only = bool(unique_files) and all(_is_docs_like_path(path) for path in unique_files)
+    touched_roots = []
+    for path in unique_files:
+        root = path.split("/", 1)[0] if "/" in path else path
+        if root not in touched_roots:
+            touched_roots.append(root)
+    llm_line = (
+        "LLM synthesis was used, but the answer below is constrained to PR changed files and target-repository evidence."
+        if llm_used
+        else "LLM was not called; answer generated from PR changed files and target-repository evidence."
+    )
+    change_type = "docs-only" if docs_only else "behavior-affecting or mixed"
+    functionality_impact = (
+        "No direct product-functionality change is visible; the PR appears to update documentation and operator guidance."
+        if docs_only
+        else "Potentially yes; changed files should be reviewed in the target repository context."
+    )
+    runtime_impact = (
+        "No direct runtime change is visible from the changed-file set."
+        if docs_only
+        else "Review runtime/config implications in the changed files before treating this as documentation-only."
+    )
+    security_impact = (
+        "No direct security control change is visible from the changed-file set."
+        if docs_only
+        else "Security impact should be checked against changed workflows, auth, runtime, and docs claims."
+    )
+    validation_needed = (
+        "Docs accuracy review plus optional CI/docs checks."
+        if docs_only
+        else "Run the relevant CI checks and verify any behavior/config changes against the target repository."
+    )
+    partner_effect = (
+        "Minor positive or neutral; clearer docs can improve partner-pilot confidence without changing runtime behavior."
+        if docs_only
+        else "Depends on whether changed files alter partner-facing runtime, workflow, or documentation behavior."
+    )
+    changed_file_lines = [f"- `{path}`" for path in unique_files[:8]] or [
+        "- Changed files were not available from PR metadata."
+    ]
+    touched_root_lines = [f"- `{item}`" for item in touched_roots[:6]] or [
+        "- No touched module root could be derived."
+    ]
+    return [
+        llm_line,
+        "",
+        "PR impact summary:",
+        f"- This PR in `{_target_repo_name(repo_root=repo_root, github_context=github_context)}` currently looks `{change_type}` based on changed-file evidence.",
+        "",
+        "Changed files:",
+        *changed_file_lines,
+        "",
+        "Change type:",
+        f"- `{change_type}`",
+        f"- Behavior-affecting: `{'no' if docs_only else 'possible'}`",
+        "",
+        "Touched target-repo modules/layers:",
+        *touched_root_lines,
+        "",
+        "Product functionality impact:",
+        f"- {functionality_impact}",
+        "",
+        "Architecture/runtime impact:",
+        f"- {runtime_impact}",
+        "",
+        "Security posture impact:",
+        f"- {security_impact}",
+        "",
+        "Test/CI validation needed:",
+        f"- {validation_needed}",
+        "",
+        "Production readiness effect:",
+        f"- {'Minor positive or neutral documentation polish.' if docs_only else 'Requires changed-file review before readiness impact can be called neutral.'}",
+        "",
+        "Partner-pilot effect:",
+        f"- {partner_effect}",
+        "",
+        "Risk level:",
+        f"- `{'LOW' if docs_only else 'MEDIUM'}`",
+        "",
+        "Limitations:",
+        "- This is a PR-scoped assessment and not a merge, security, or production approval.",
+        "- RepoBrain-Action is the analysis tool; the target product remains the PR repository.",
+        "",
+        "Safety note:",
+        f"- {runtime_note}",
+    ]
 
 
 def _build_product_analysis_answer(
@@ -5834,75 +6153,32 @@ def _build_product_analysis_answer(
     dependency_mode: str,
     dependency_summary: str,
 ) -> str:
-    module_paths = (
-        ("repobrain/commands.py", "repobrain/commands.py"),
-        ("repobrain/github_flow.py", "repobrain/github_flow.py"),
-        ("repobrain/output_md.py", "repobrain/output_md.py"),
-        ("repobrain/doctor_status.py", "repobrain/doctor_status.py"),
-        ("repobrain/audit_scoring.py", "repobrain/audit_scoring.py"),
-        ("repobrain/topocore_v6_runtime_module.py", "repobrain TopoCore runtime adapter"),
+    runtime_note = (
+        f"Repository is connected to RepoBrain through `{workflow_location}` using `{action_source}`. "
+        f"Current runtime summary: {dependency_summary} "
+        f"(requested `{runtime_requested}`, effective `{runtime_effective}`, dependency mode `{dependency_mode}`, "
+        f"installed-package proof `{installed_package_proof_status}`, governance `{governance_status}`, public-readiness `{public_readiness_status}`)."
     )
-    key_modules = [f"`{label}`" for path, label in module_paths if (repo_root / path).exists()]
-    if not key_modules:
-        key_modules = ["`repobrain/` command and runtime modules`"]
-    integrations = [
-        "GitHub issue and pull-request comment workflows",
-        "private TopoCore v6 runtime through the guarded contract boundary",
-        "optional LLM synthesis layered on top of retrieval, not required for every command",
-    ]
-    quality_signals = [
-        f"Public control plane is live through `{action_source}`.",
-        f"Workflow entrypoint is `{workflow_location}`.",
-        f"Installed-package proof status is `{installed_package_proof_status}`.",
-        f"Governance baseline is `{governance_status}`.",
-        "No patch/autofix and no RepoBrain-created branch/commit/PR behavior remain enforced.",
-    ]
-    risks = [
-        "Protected main is enabled, but required status checks and CODEOWNERS enforcement are still deferred.",
-        "Large orchestration modules such as `repobrain/github_flow.py` and `repobrain/output_md.py` remain maintainability hotspots.",
-        "Partner UX depends on concise, truthful diagnostics; regressions here would hurt trust quickly.",
-    ]
-    next_steps = [
-        "Onboard the first selected partner repo through the public RepoBrain-Action surface.",
-        "Collect partner feedback on ask/review/audit/score usefulness and friction.",
-        "Decide whether to enable required status checks once stable check names are locked.",
-        "Exercise RC tagging and provenance on the release path without widening runtime/source access.",
-        "Decompose the largest orchestration/output modules without changing the no-mutation contract.",
-    ]
-    lines = [
-        "RepoBrain-Action currently looks like a public MCP-style control plane around a private TopoCore v6 runtime boundary.",
-        "",
-        "Core functions and modules:",
-        f"- Key modules: {', '.join(key_modules[:6])}",
-        "- Command surface: help, ask, locate, explain, review, verify, fix, audit, score, doctor, status.",
-        "- Runtime path: v6-only policy, with installed private package preferred for partners and private_checkout kept as a controlled fallback.",
-        "",
-        "Runtime and delivery state:",
-        f"- Requested runtime mode: `{runtime_requested}`",
-        f"- Effective runtime mode: `{runtime_effective}`",
-        f"- Dependency mode: `{dependency_mode}`",
-        f"- Current run summary: {dependency_summary}",
-        "",
-        "External integrations:",
-        *(f"- {item}" for item in integrations),
-        "",
-        "Readiness and quality signals:",
-        *(f"- {item}" for item in quality_signals),
-        f"- Public-readiness status: `{public_readiness_status}`",
-        "",
-        "Main risks to watch:",
-        *(f"- {item}" for item in risks),
-        "",
-        "Next 5 steps:",
-        *(f"- {item}" for item in next_steps),
-    ]
-    return "\n".join(lines)
+    return "\n".join(
+        _target_repo_product_analysis_sections(
+            repo_root=repo_root,
+            github_context=None,
+            workflow_location=workflow_location,
+            public_readiness_status=public_readiness_status,
+            runtime_note=runtime_note,
+            llm_used=False,
+        )
+    )
 
 
 def _public_readiness_next_step(status: str) -> str:
     normalized = str(status or "UNKNOWN").strip().upper()
     if normalized == "SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL":
-        return "Open or approve the protected-main PR, rerun the final Elen-MCP issue/PR smoke after merge, and then proceed with the selected partner pilot."
+        return "This status is stale after PR #119 merge; update product-state docs before relying on it in user-facing output."
+    if normalized == "SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX":
+        return "Complete the final live retest fixes and evidence update, then proceed with the selected partner pilot onboarding flow."
+    if normalized == "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_CONSUMER_REPO_ASK_AND_UX_FIX":
+        return "Proceed with selected partner onboarding from the public RepoBrain action surface and keep Marketplace work deferred."
     if normalized == "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_ISSUE_PR_UX_POLISH_AND_PROTECTED_MAIN":
         return "Proceed with selected partner onboarding from the public RepoBrain action surface and keep Marketplace work deferred."
     if normalized == "PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION":
@@ -5962,7 +6238,6 @@ def _maybe_refine_operational_ask_answer(
     control_plane_root = _control_plane_root(repo_root)
     public_readiness_status = _read_public_readiness_status(control_plane_root)
     installed_package_proof_status = _read_installed_package_proof_status(control_plane_root)
-    governance_status = _read_governance_baseline_status(control_plane_root)
     requested_backend = str(audit_summary.get("requested_backend", "auto") or "auto")
     resolved_backend = str(audit_summary.get("resolved_backend", "not_applicable") or "not_applicable")
     fallback_used = str(audit_summary.get("fallback_used", "not_applicable") or "not_applicable")
@@ -5982,27 +6257,47 @@ def _maybe_refine_operational_ask_answer(
     else:
         dependency_summary = f"dependency mode is `{dependency_mode}`."
 
-    if operational_kind == "product_analysis":
-        answer_lines = _build_product_analysis_answer(
+    runtime_note = (
+        f"Repository is connected to RepoBrain through `{workflow_location}` using `{action_source}`. "
+        f"Current runtime summary: {dependency_summary}"
+    )
+    llm_used = bool(audit_summary.get("llm_used", False))
+    is_pr_context = bool((github_context or {}).get("is_pr", False))
+    if cmd == "ask" and is_pr_context and _classify_pr_ask_intent(question) == "pr_impact_assessment":
+        answer_lines = _build_pr_impact_assessment_answer(
             repo_root=repo_root,
-            workflow_location=workflow_location,
-            action_source=action_source,
+            github_context=github_context,
             public_readiness_status=public_readiness_status,
-            installed_package_proof_status=installed_package_proof_status,
-            governance_status=governance_status,
-            runtime_requested=runtime_requested,
-            runtime_effective=runtime_effective,
-            dependency_mode=dependency_mode,
-            dependency_summary=dependency_summary,
-        ).splitlines()
+            runtime_note=runtime_note,
+            llm_used=llm_used,
+        )
+        refined_summary = dict(audit_summary)
+        refined_summary["operational_ask_intent"] = True
+        refined_summary["operational_ask_kind"] = "pr_impact_assessment"
+        refined_summary["workflow_location"] = workflow_location
+        refined_summary["action_source"] = action_source
+        refined_summary["public_readiness_status"] = public_readiness_status
+        refined_summary["installed_package_proof_status"] = installed_package_proof_status
+        refined_summary["route_final"] = "ASK"
+        return "\n".join(answer_lines), "Review the changed files and partner-facing docs for accuracy before merge.", refined_summary
+    if operational_kind == "product_analysis":
+        answer_lines = _target_repo_product_analysis_sections(
+            repo_root=repo_root,
+            github_context=github_context,
+            workflow_location=workflow_location,
+            public_readiness_status=public_readiness_status,
+            runtime_note=runtime_note,
+            llm_used=llm_used,
+        )
     elif cmd == "explain":
         answer_lines = [
             "RepoBrain is connected through the repository workflow.",
             f"The workflow entrypoint is `{workflow_location}` and it currently references `{action_source}` as the action source.",
             (
-                "In this issue context, the workflow runs RepoBrain in a report-only, no-mutation mode."
+            "In this issue context, the workflow runs RepoBrain in a report-only, no-mutation mode."
             ),
-            f"For this run, the TopoCore runtime mode was requested as `{runtime_requested}` and resolved as `{runtime_effective}`.",
+            "The private runtime boundary is configured and remains separate from the target product code.",
+            f"For this run, RepoBrain requested runtime `{runtime_requested}` and resolved `{runtime_effective}`.",
             f"The dependency mode is `{dependency_mode}`, which means {dependency_summary}",
             f"Installed-package live proof status is `{installed_package_proof_status}` and the current public-readiness state is `{public_readiness_status}`.",
             (
@@ -6016,9 +6311,10 @@ def _maybe_refine_operational_ask_answer(
             "Current RepoBrain operational status:",
             f"- Workflow location: `{workflow_location}`",
             f"- Action source: `{action_source}`",
-            f"- TopoCore runtime mode: requested `{runtime_requested}`, effective `{runtime_effective}`",
-            f"- TopoCore dependency mode: `{dependency_mode}`",
-            f"- Runtime delivery: {dependency_summary}",
+            "- Private runtime boundary is configured.",
+            f"- Current run: {dependency_summary}",
+            "- Partner-preferred path: installed private package.",
+            "- Runtime source remains private and is not exposed.",
             f"- Public-switch readiness: `{public_readiness_status}`",
             f"- Installed-package live proof: `{installed_package_proof_status}`",
             f"- Backend evidence for this run: requested `{requested_backend}` -> resolved `{resolved_backend}`; fallback `{fallback_used}` / `{fallback_reason}`",

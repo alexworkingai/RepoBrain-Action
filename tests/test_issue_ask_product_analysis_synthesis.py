@@ -7,56 +7,57 @@ import pytest
 from repobrain.github_flow import _maybe_refine_operational_ask_answer
 
 
-def test_issue_ask_product_analysis_has_deterministic_fallback(
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_issue_ask_product_analysis_stays_on_target_repo(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    workflow = tmp_path / ".github" / "workflows" / "repobrain.yml"
-    workflow.parent.mkdir(parents=True, exist_ok=True)
-    workflow.write_text(
+    _write(
+        tmp_path / ".github" / "workflows" / "repobrain.yml",
         "name: RepoBrain\npermissions:\n  contents: read\n  issues: write\n",
-        encoding="utf-8",
     )
-    for rel in (
-        "repobrain/commands.py",
-        "repobrain/github_flow.py",
-        "repobrain/output_md.py",
-        "repobrain/doctor_status.py",
-        "repobrain/audit_scoring.py",
-        "repobrain/topocore_v6_adapter.py",
-    ):
-        path = tmp_path / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("# stub\n", encoding="utf-8")
+    _write(tmp_path / "src" / "mcpServer.ts", "export const mcpServer = true;\n")
+    _write(tmp_path / "src" / "runtimePaths.ts", "export const runtimePaths = true;\n")
+    _write(tmp_path / "apps" / "console" / "src" / "main.tsx", "export const app = true;\n")
+    _write(
+        tmp_path / "README.md",
+        "# Elen MCP Server\n\nQdrant GitHub GitLab Jenkins Argo OAuth JWKS Prometheus OpenTelemetry Grafana\n",
+    )
+    _write(tmp_path / "docs" / "ARCHITECTURE.md", "# Architecture\n")
+    _write(tmp_path / "docs" / "API_ENDPOINTS.md", "# APIs\n")
+    _write(tmp_path / "SECURITY.md", "# Security\n")
+    _write(tmp_path / "Dockerfile", "FROM node:20\n")
+    _write(tmp_path / "docs" / "release" / "PUBLIC_READINESS_ASSESSMENT.md", "")
 
     control_plane_root = tmp_path / "repobrain-control"
-    control_plane_root.mkdir(parents=True, exist_ok=True)
-    (control_plane_root / "pyproject.toml").write_text("[project]\nname = 'repobrain-control'\n", encoding="utf-8")
-    release_dir = control_plane_root / "docs" / "release"
-    security_dir = control_plane_root / "docs" / "security"
-    release_dir.mkdir(parents=True, exist_ok=True)
-    security_dir.mkdir(parents=True, exist_ok=True)
-    (release_dir / "PUBLIC_READINESS_ASSESSMENT.md").write_text(
-        "- current public readiness decision: `PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION`\n",
-        encoding="utf-8",
+    _write(control_plane_root / "pyproject.toml", "[project]\nname = 'repobrain-control'\n")
+    _write(
+        control_plane_root / "docs" / "release" / "PUBLIC_READINESS_ASSESSMENT.md",
+        "- current public readiness decision: `SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX`\n",
     )
-    (release_dir / "INSTALLED_PACKAGE_LIVE_PROOF.md").write_text(
+    _write(
+        control_plane_root / "docs" / "release" / "INSTALLED_PACKAGE_LIVE_PROOF.md",
         "- `INSTALLED_PACKAGE_LIVE_PROOF_PASSED`\n",
-        encoding="utf-8",
     )
-    (security_dir / "REPO_GOVERNANCE_MODEL.md").write_text(
-        "- `PROTECTED_MAIN_BASELINE_ENABLED`\n- `GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED`\n",
-        encoding="utf-8",
+    _write(
+        control_plane_root / "docs" / "security" / "REPO_GOVERNANCE_MODEL.md",
+        "- `PROTECTED_MAIN_BASELINE_ENABLED`\n- `GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED_SOLO_OWNER_MODEL`\n",
     )
     monkeypatch.setenv("GITHUB_ACTION_PATH", str(control_plane_root))
-    monkeypatch.setenv("RB_TOPOCORE_V6_RUNTIME_MODE", "installed_package")
+    monkeypatch.setenv("RB_TOPOCORE_V6_RUNTIME_MODE", "private_checkout")
 
     answer_text, next_steps, audit_summary = _maybe_refine_operational_ask_answer(
         repo_root=tmp_path,
         cmd="ask",
         question=(
-            "Analyze this repository as an MCP product. Summarize functions/modules, runtime, "
-            "external integrations, readiness, quality signals, risks, and next 5 steps."
+            "Analyze this repository as an MCP product. Explain what functions it appears to implement, "
+            "what major modules or layers it consists of, how it is connected to runtime/deployment workflows, "
+            "what external integrations or APIs are visible from repository evidence, how ready it looks for production use, "
+            "what the strongest quality signals are, what the main blockers or risks are, and what the next 5 practical engineering steps should be."
         ),
         answer_text="Question: test\nRoute: REVIEW",
         next_steps="placeholder",
@@ -66,14 +67,23 @@ def test_issue_ask_product_analysis_has_deterministic_fallback(
             "resolved_backend": "not_applicable",
             "fallback_used": "not_applicable",
             "fallback_reason": "status_report_only",
+            "llm_used": False,
         },
-        github_context={"repository": "alexworkingai/RepoBrain-Action"},
+        github_context={"repository": "alexworkingai/Elen-MCP-v.2.2.0"},
     )
 
-    assert "Core functions and modules:" in answer_text
-    assert "External integrations:" in answer_text
-    assert "Readiness and quality signals:" in answer_text
-    assert "Next 5 steps:" in answer_text
+    assert "Product purpose / functions:" in answer_text
+    assert "Major target-repo modules/layers:" in answer_text
+    assert "Visible integrations/APIs:" in answer_text
+    assert "Next 5 practical engineering steps:" in answer_text
+    assert "LLM was not called; answer generated by deterministic product-analysis fallback from target repository evidence." in answer_text
+    assert "RepoBrain-Action currently looks like" not in answer_text
+    assert "repobrain/ command and runtime modules" not in answer_text
+    assert "`src/mcpServer.ts`" in answer_text
+    assert "`src/runtimePaths.ts`" in answer_text
+    assert "`apps/console/src/main.tsx`" in answer_text
+    assert ".github/workflows/repobrain.yml" in answer_text
     assert "Route: REVIEW" not in answer_text
     assert audit_summary["route_final"] == "ASK"
-    assert next_steps
+    assert audit_summary["operational_ask_kind"] == "product_analysis"
+    assert next_steps.startswith("Complete the final live retest fixes")

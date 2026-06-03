@@ -97,8 +97,8 @@ def test_private_checkout_mode_is_marked_beta_only_in_status_and_doctor(monkeypa
     })
 
     assert status_report['topocore_dependency_mode'] == 'private_checkout_beta_only'
-    assert 'Current run: private runtime checkout path.' in status_md
-    assert 'TopoCore dependency mode: `private_checkout_beta_only`' in doctor_md
+    assert 'Current run: controlled private runtime path.' in status_md
+    assert 'Current run: controlled private runtime path.' in doctor_md
     assert 'hidden/private/runtime' not in status_md
     assert 'hidden/private/runtime' not in doctor_md
 
@@ -121,7 +121,7 @@ def test_disabled_mode_reports_runtime_disabled(monkeypatch: pytest.MonkeyPatch,
 
     assert report['topocore_runtime_mode_requested'] == 'disabled'
     assert report['topocore_dependency_mode'] == 'runtime_disabled'
-    assert 'runtime mode requested: `disabled`' in markdown.lower()
+    assert 'Current run: runtime disabled.' in markdown
 
 
 def test_invalid_runtime_mode_fails_safely() -> None:

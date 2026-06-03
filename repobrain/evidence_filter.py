@@ -73,6 +73,19 @@ def _priority_path_rank(path: str, *, query: str) -> int:
     return 50
 
 
+def _exclude_unrelated_repobrain_workflow_padding(path: str, *, query: str) -> bool:
+    lowered = str(path or "").strip().lower()
+    if not _repobrain_workflow_query(query):
+        return False
+    if lowered == ".github/workflows/repobrain.yml":
+        return False
+    if lowered == ".github/repobrain.instructions.md":
+        return False
+    if lowered == "readme.md" or lowered.startswith("docs/"):
+        return False
+    return lowered.startswith(".github/workflows/") and "repobrain" not in lowered
+
+
 def filter_candidate_evidence(
     candidates: list[CandidateChunk],
     *,
@@ -103,6 +116,11 @@ def filter_candidate_evidence(
         if _is_unsafe_private_path(item.file_path):
             dropped += 1
             reason_codes.add("unsafe_private_path")
+            continue
+
+        if _exclude_unrelated_repobrain_workflow_padding(item.file_path, query=query):
+            dropped += 1
+            reason_codes.add("workflow_padding")
             continue
 
         score = float(item.score)

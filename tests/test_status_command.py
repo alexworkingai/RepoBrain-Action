@@ -48,15 +48,17 @@ def test_issue_status_is_supported_and_includes_version_policy_and_commands() ->
     assert "RepoBrain version:" in markdown
     assert "## Command surface" in markdown
     assert "## Backend policy" in markdown
+    assert "Private runtime boundary: configured." in markdown
     assert "Current run:" in markdown
     assert "Partner-preferred path: installed private package." in markdown
+    assert "Installed-package proof:" in markdown
     assert "## Safety policy" in markdown
     assert "/repobrain audit" in markdown
     assert "/repobrain doctor" in markdown
     assert "/repobrain status" in markdown
     assert "/repobrain score" in markdown
     assert "compact summary view of the same guarded audit engine" in markdown
-    assert "no v5 fallback" in markdown.lower()
+    assert "legacy fallback is disabled" in markdown.lower()
     assert "no patch/autofix" in markdown.lower()
     assert audit["route_final"] == "STATUS"
     assert audit["resolved_backend"] == "not_applicable"

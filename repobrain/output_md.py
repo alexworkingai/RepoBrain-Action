@@ -1218,7 +1218,6 @@ def _compact_safety_lines(audit_summary: dict[str, Any]) -> list[str]:
         f"- Fallback: `{_compact_fallback_label(audit_summary)}`",
         f"- Scope: `{_command_scope_label(str(audit_summary.get('command', 'ask') or 'ask'), audit_summary)}`",
         "- Safety: informational only; no patch/autofix, no file changes, no branch/commit/PR created.",
-        "- No v5 or legacy community dependency.",
         "- Not a merge/security/production approval.",
     ]
 
@@ -2900,26 +2899,9 @@ def render_review_markdown(
     )
 
     detail_lines = [
-        "### 🧩 Decision cards",
-        "",
-        "Risk drivers:",
-        *risk_driver_block,
-        "",
         "### 🗂️ Touched files",
         *(files_block[:6] if files_block else ["- No changed files detected."]),
         *([f"- +{len(files_block) - 6} more"] if len(files_block) > 6 else []),
-        "",
-        *_evidence_context_summary_lines(audit_summary),
-        *confirmed_section,
-        "",
-        "### 📌 Evidence verdicts",
-        *_evidence_verdict_lines(review),
-        "",
-        "### 🟡 Possible signals",
-        *possible_block,
-        "",
-        "### ℹ️ Informational notes",
-        *([f"- {item}" for item in informational_notes[:6]] if informational_notes else ["- None."]),
         "",
         *_verification_report_lines(verification_report),
         "### 🧾 Audit anchors",
@@ -2934,6 +2916,23 @@ def render_review_markdown(
             *_review_delta_lines(audit_summary),
             *_ultra_large_pr_mode_lines(audit_summary, command="review"),
             *_render_async_batch_lines(audit_summary, command="review"),
+            "### 🧩 Decision cards",
+            "",
+            "Risk drivers:",
+            *risk_driver_block,
+            "",
+            *_evidence_context_summary_lines(audit_summary),
+            *confirmed_section,
+            "",
+            "### 📌 Evidence verdicts",
+            *_evidence_verdict_lines(review),
+            "",
+            "### 🟡 Possible signals",
+            *possible_block,
+            "",
+            "### ℹ️ Informational notes",
+            *([f"- {item}" for item in informational_notes[:6]] if informational_notes else ["- None."]),
+            "",
             *detail_lines[:-3],
             "",
             *_llm_lines(audit_summary),
@@ -3139,24 +3138,6 @@ def render_patch_markdown(
     sections.append("")
 
     detail_lines = [
-        "### 🧩 Decision cards",
-        "",
-        "### 🎯 Patch targeting",
-        f"- Patch target files total: {patch_target_files_total}",
-        f"- Patch target files selected: {patch_target_files}",
-        f"- Patch targeting mode: `{patch_targeting_mode}`",
-        f"- Patch targeting reason: {patch_targeting_reason}",
-        f"- Localized patch evidence: {localized_patch_evidence}",
-        f"- Patch grounding mode: {patch_grounding_mode}",
-        "",
-        *_evidence_context_summary_lines(audit_summary),
-        "### 📌 Patch governance",
-        *_patch_governance_lines(
-            review=review,
-            verification_report=verification_report,
-            audit_summary=audit_summary,
-        ),
-        "",
         "### ✅ Patch validation",
         f"- Patch generation result: `{patch_generation_result}`",
         f"- Patch validation result: `{patch_validation_result}`",
@@ -3167,11 +3148,6 @@ def render_patch_markdown(
         if patch_written
         else "- No patch generated (safe outcome).",
         f"- Apply status: {patch_apply_message}",
-        "",
-        "### 🧩 Patch snippet",
-        "```diff",
-        patch_snippet.strip() or "# no patch generated",
-        "```",
         "",
         *_verification_report_lines(verification_report),
         "### 🧾 Audit anchors",
@@ -3185,6 +3161,29 @@ def render_patch_markdown(
             *_runtime_provenance_lines(audit_summary, command="fix"),
             *_ultra_large_pr_mode_lines(audit_summary, command="fix"),
             *_render_async_batch_lines(audit_summary, command="fix"),
+            "### 🧩 Decision cards",
+            "",
+            "### 🎯 Patch targeting",
+            f"- Patch target files total: {patch_target_files_total}",
+            f"- Patch target files selected: {patch_target_files}",
+            f"- Patch targeting mode: `{patch_targeting_mode}`",
+            f"- Patch targeting reason: {patch_targeting_reason}",
+            f"- Localized patch evidence: {localized_patch_evidence}",
+            f"- Patch grounding mode: {patch_grounding_mode}",
+            "",
+            *_evidence_context_summary_lines(audit_summary),
+            "### 📌 Patch governance",
+            *_patch_governance_lines(
+                review=review,
+                verification_report=verification_report,
+                audit_summary=audit_summary,
+            ),
+            "",
+            "### 🧩 Patch snippet",
+            "```diff",
+            patch_snippet.strip() or "# no patch generated",
+            "```",
+            "",
             *detail_lines[:-3],
             "",
             *_llm_lines(audit_summary),
@@ -3648,8 +3647,9 @@ def _partner_runtime_summary(report: dict[str, Any]) -> list[str]:
     dependency_mode = str(report.get("topocore_dependency_mode", "not_detected") or "not_detected").strip()
     runtime_requested = str(report.get("topocore_runtime_mode_requested", "auto") or "auto").strip()
     runtime_effective = str(report.get("topocore_runtime_mode_effective", "auto") or "auto").strip()
+    installed_package_proof = str(report.get("installed_package_proof_status", "passed") or "passed").strip().lower()
     if dependency_mode == "private_checkout_beta_only":
-        current_run = "private runtime checkout path"
+        current_run = "controlled private runtime path"
     elif dependency_mode == "installed_private_package":
         current_run = "installed private package path"
     elif dependency_mode == "installed_private_package_unavailable":
@@ -3659,10 +3659,12 @@ def _partner_runtime_summary(report: dict[str, Any]) -> list[str]:
     else:
         current_run = dependency_mode.replace("_", " ")
     lines = [
+        "- Private runtime boundary: configured.",
         f"- Current run: {current_run}.",
         "- Partner-preferred path: installed private package.",
+        f"- Installed-package proof: {installed_package_proof.replace('_', ' ')}.",
         "- TopoCore source: private and not exposed through partner-facing output.",
-        "- Backend policy: v6-only, no v5 fallback.",
+        "- Backend policy: current private runtime only; legacy fallback disabled.",
     ]
     if _verbose_diagnostics_enabled():
         lines.extend(
@@ -3766,9 +3768,7 @@ def render_doctor_markdown(
         [
             "",
             "## Runtime mode",
-            f"- TopoCore runtime mode requested: `{str(report.get('topocore_runtime_mode_requested', 'auto') or 'auto').strip()}`",
-            f"- TopoCore runtime mode effective: `{str(report.get('topocore_runtime_mode_effective', 'auto') or 'auto').strip()}`",
-            f"- TopoCore dependency mode: `{str(report.get('topocore_dependency_mode', 'not_detected') or 'not_detected').strip()}`",
+            *_partner_runtime_summary(report),
             "",
             "## Diagnostic checks",
             *_doctor_check_table_lines(checks),

@@ -77,6 +77,27 @@ Doctor or status reports an unexpected TopoCore runtime mode, or audit stays sta
 - keep `private_checkout` beta-only
 - use `/repobrain audit` if `/repobrain score` is too compact and you need the full evidence path
 
+## 3B. Ask answers the wrong repository
+
+### Symptom
+
+Issue ask describes RepoBrain-Action internals such as `repobrain/` modules instead of the consumer repository you are testing.
+
+### Meaning
+
+This is a targeting bug. Issue ask should analyze the current consumer repository from the workflow and repository context unless the target repository actually is RepoBrain-Action.
+
+### What to do
+
+- rerun after the Sprint 92E consumer-repository ask isolation fix
+- confirm the comment is on the consumer repository issue rather than the RepoBrain control-plane repository
+- use `/repobrain locate` or `/repobrain explain` if you need a narrower file-level answer
+
+Expected behavior after the fix:
+
+- issue ask describes the consumer repository product/modules/integrations
+- PR ask stays PR-scoped and reports change impact rather than a generic product overview
+
 ## 4. Verify returns `NOT_RUN`
 
 ### Meaning

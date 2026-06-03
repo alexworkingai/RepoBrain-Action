@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from repobrain.github_flow import _normalize_fix_semantics
 from repobrain.output_md import render_patch_markdown
 
@@ -17,7 +19,8 @@ def test_fix_semantics_maps_review_reason_to_patch_reason() -> None:
     assert "patch synthesis required" in short.lower()
 
 
-def test_render_patch_markdown_uses_patch_specific_sections() -> None:
+def test_render_patch_markdown_uses_patch_specific_sections(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_patch_markdown(
         review={"summary_text": "Patch synthesis summary"},
         verification_report={"summary": "NOT_RUN", "checks": []},
@@ -40,10 +43,10 @@ def test_render_patch_markdown_uses_patch_specific_sections() -> None:
         },
     )
 
-    assert "### 🧾 Patch result" in md
-    assert "### 🎯 Patch targeting" in md
-    assert "### ✅ Patch validation" in md
+    assert "Patch result" in md
+    assert "Patch targeting" in md
+    assert "Patch validation" in md
     assert "Patch generation result: `valid_patch`" in md
     assert "Patch target files selected: 2" in md
-    assert "### ⚠️ Confirmed findings" not in md
-    assert "### 🟡 Possible signals" not in md
+    assert "Confirmed findings" not in md
+    assert "Possible signals" not in md

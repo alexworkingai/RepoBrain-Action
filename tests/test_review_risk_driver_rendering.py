@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from repobrain.output_md import render_review_markdown
 from repobrain.review_validator import validate_review_findings
 
 
-def test_risk_driver_items_are_not_rendered_as_confirmed_findings() -> None:
+def test_risk_driver_items_are_not_rendered_as_confirmed_findings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review = validate_review_findings(
         {
             "summary_text": "Workflow and CI changes detected.",
@@ -34,5 +37,5 @@ def test_risk_driver_items_are_not_rendered_as_confirmed_findings() -> None:
     assert "Risk drivers:" in md
     assert "- CI/CD changed: verify workflows" in md
     assert "- n/a" not in md
-    assert "### ⚠️ Confirmed findings" not in md
+    assert "Confirmed findings: none." in md
     assert "Confirmed findings: none." in md

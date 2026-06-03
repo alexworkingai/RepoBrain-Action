@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from repobrain.output_md import render_patch_markdown
 
 
-def test_fix_no_patch_is_rendered_as_intentional_safe_outcome() -> None:
+def test_fix_no_patch_is_rendered_as_intentional_safe_outcome(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_patch_markdown(
         review={"summary_text": "Generic review summary that should not dominate fix output."},
         verification_report={"summary": "NOT_RUN", "checks": []},
@@ -29,9 +32,9 @@ def test_fix_no_patch_is_rendered_as_intentional_safe_outcome() -> None:
     )
 
     assert "Summary: No patch generated: no sufficiently localized, evidence-backed patch target was found." in md
-    assert "### 🧾 Patch result" in md
-    assert "### 🎯 Patch targeting" in md
-    assert "### ✅ Patch validation" in md
+    assert "Patch result" in md
+    assert "Patch targeting" in md
+    assert "Patch validation" in md
     assert "Outcome: safe no_patch (no grounded localized target)." in md
     assert "No patch generated (safe outcome)." in md
-    assert "### ✅ PR Review" not in md
+    assert "PR Review" not in md

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from repobrain.output_md import render_review_markdown
 from repobrain.review_validator import validate_review_findings
 
 
-def test_confirmed_finding_includes_compact_evidence_reference() -> None:
+def test_confirmed_finding_includes_compact_evidence_reference(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review = validate_review_findings(
         {
             "summary_text": "Review summary.",
@@ -29,11 +32,12 @@ def test_confirmed_finding_includes_compact_evidence_reference() -> None:
         audit_summary={"route_final": "DEEP", "pass_count": 1},
     )
 
-    assert "### ⚠️ Confirmed findings" in md
+    assert "Confirmed findings" in md
     assert "`repobrain/github_flow.py`" in md
 
 
-def test_heuristic_signal_without_evidence_stays_out_of_confirmed_findings() -> None:
+def test_heuristic_signal_without_evidence_stays_out_of_confirmed_findings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review = validate_review_findings(
         {
             "summary_text": "Review summary.",
@@ -52,6 +56,6 @@ def test_heuristic_signal_without_evidence_stays_out_of_confirmed_findings() -> 
         audit_summary={"route_final": "DEEP", "pass_count": 1},
     )
 
-    assert "### ⚠️ Confirmed findings" not in md
+    assert "Confirmed findings: none." in md
     assert "heuristic security wording was downgraded" in md.lower()
     assert "possible secret leakage in patch" not in md.lower()

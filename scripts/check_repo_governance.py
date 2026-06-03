@@ -118,6 +118,12 @@ def _extract_ruleset_flags(ruleset: dict[str, Any]) -> dict[str, str]:
             flags[key] = "no"
     if flags["required_pr"] == "unknown":
         flags["required_pr"] = "no"
+    if flags["required_approvals"] == "unknown":
+        flags["required_approvals"] = "0"
+    if flags["dismiss_stale_approvals"] == "unknown":
+        flags["dismiss_stale_approvals"] = "no"
+    if flags["conversation_resolution"] == "unknown":
+        flags["conversation_resolution"] = "no"
     if flags["required_checks"] == "unknown":
         flags["required_checks"] = "deferred"
     return flags
@@ -201,6 +207,7 @@ def main() -> int:
     codeowner_review = "unknown"
     linear_history = "unknown"
     admin_bypass = "unknown"
+    solo_owner_model = "unknown"
 
     if ruleset_status == "PASS" and isinstance(ruleset_payload, list):
         ruleset_count = str(len(ruleset_payload))
@@ -232,6 +239,7 @@ def main() -> int:
             codeowner_review = flags["codeowner_review"]
             linear_history = flags["linear_history"]
             admin_bypass = _admin_bypass_label(protect_main_ruleset)
+            solo_owner_model = "active" if required_pr == "no" else "review_enforced"
         else:
             main_protection = "not_detected"
     elif overall == "PASS":
@@ -265,9 +273,13 @@ def main() -> int:
     print(f"CODEOWNER_REVIEW={codeowner_review}")
     print(f"LINEAR_HISTORY={linear_history}")
     print(f"ADMIN_BYPASS={admin_bypass}")
+    print(f"SOLO_OWNER_MODEL={solo_owner_model}")
     if main_protection == "enabled" and required_checks == "deferred":
         print("GOVERNANCE_BASELINE=PROTECTED_MAIN_BASELINE_ENABLED")
-        print("GOVERNANCE_REASON=GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED")
+        if solo_owner_model == "active":
+            print("GOVERNANCE_REASON=GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED_SOLO_OWNER_MODEL")
+        else:
+            print("GOVERNANCE_REASON=GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED")
     if repo_reason:
         print(f"REPO_REASON={repo_reason}")
     if codeowners_reason and codeowners_reason != "ok":

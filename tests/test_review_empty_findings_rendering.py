@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from repobrain.output_md import render_review_markdown
 
 
-def test_review_zero_findings_and_zero_risk_drivers_render_cleanly() -> None:
+def test_review_zero_findings_and_zero_risk_drivers_render_cleanly(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_review_markdown(
         review={
             "summary_text": "Changes are mostly refactors and naming cleanup.",
@@ -19,7 +22,7 @@ def test_review_zero_findings_and_zero_risk_drivers_render_cleanly() -> None:
         audit_summary={"route_final": "FAST", "pass_count": 1},
     )
 
-    assert "### ⚠️ Confirmed findings" not in md
+    assert "Confirmed findings" in md
     assert "Confirmed findings: none." in md
     assert "No confirmed high-risk findings detected." not in md
     assert "Risk drivers:" in md
@@ -28,7 +31,8 @@ def test_review_zero_findings_and_zero_risk_drivers_render_cleanly() -> None:
     assert "Proceed with standard CI checks before merge." in md
 
 
-def test_review_filters_pseudo_confirmed_findings_line() -> None:
+def test_review_filters_pseudo_confirmed_findings_line(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_review_markdown(
         review={
             "summary_text": "Small cleanup changes.",
