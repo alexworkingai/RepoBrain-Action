@@ -28,22 +28,27 @@ Expected governance posture:
 
 ## Current Protected-Main Baseline
 
-Current Sprint 92D truth:
+Current Sprint 92E truth:
 
 - `PROTECTED_MAIN_BASELINE_ENABLED`
 - ruleset name: `Protect main`
 - active on the default branch / `main`
-- PR before merge: enabled
-- required approvals: `1`
-- dismiss stale approvals: enabled
-- conversation resolution: enabled when available
-- deletion restricted: enabled
+- current public ruleset follows a solo-owner model rather than a review-enforced PR model
 - force pushes blocked: enabled
+- deletions restricted: enabled
+- linear history required: enabled
+- PR approval requirement: currently not enforced by the active ruleset
 - required checks: deferred
 - CODEOWNERS review enforcement: deferred
-- interpretation: `GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED`
+- interpretation: `GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED_SOLO_OWNER_MODEL`
 
 This is real governance improvement, but it is not the final enterprise governance state.
+
+Historical merge evidence:
+
+- PR `#119` merged the protected-main UX polish without admin bypass
+- dependency graph enabled on the public RepoBrain repository
+- dependency review passed on PR `#119`
 
 ## Required Checks
 
@@ -57,9 +62,9 @@ At minimum, governance should require or strongly enforce once stable:
 
 ## Review Requirements
 
-- release and workflow changes should be reviewed deliberately
+- release and workflow changes should still be reviewed deliberately even in solo-owner mode
 - security-sensitive docs and workflow paths should not rely on casual direct edits
-- protected-main flow should use PR review rather than routine direct pushes
+- future tightening should reintroduce explicit review gates once stable required checks and check names are locked
 
 ## Admin Bypass Policy
 
@@ -71,7 +76,7 @@ At minimum, governance should require or strongly enforce once stable:
 
 - RepoBrain-Action is public
 - protected main baseline is enabled
-- current Sprint 92D branch work should still flow through PR review and approval
+- current Sprint 92E branch work should still prefer PR flow even though the active ruleset is currently modeled for solo-owner operation
 
 ## How Governance Is Verified
 
@@ -94,7 +99,16 @@ Current result should be treated as one of:
 - `FAIL`
 - `UNKNOWN`
 
-Current protected-main baseline can be `PASS` or `PARTIAL` depending on API visibility and deferred checks.
+Current protected-main baseline should currently be treated as `PARTIAL`.
+
+Reason:
+
+- protected-main baseline is real
+- dependency graph enabled
+- dependency review passed
+- required checks remain deferred
+- CODEOWNERS review enforcement remains deferred
+- active ruleset is solo-owner rather than review-enforced
 
 GitHub API limitations are handled by `scripts/check_repo_governance.py`.
 

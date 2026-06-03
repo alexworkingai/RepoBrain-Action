@@ -62,7 +62,8 @@ def test_operational_ask_answer_includes_runtime_workflow_and_readiness(
 
     assert "Current RepoBrain operational status:" in answer_text
     assert "Workflow location: `.github/workflows/repobrain.yml`" in answer_text
-    assert "requested `installed_package`" in answer_text
+    assert "Private runtime boundary is configured." in answer_text
+    assert "Partner-preferred path: installed private package." in answer_text
     assert "Public-switch readiness: `PUBLIC_BLOCKED_BY_RUNTIME_PROOF`" in answer_text
     assert "Installed-package live proof: `INSTALLED_PACKAGE_LIVE_PROOF_BLOCKED`" in answer_text
     assert "no patch/autofix" in answer_text.lower()

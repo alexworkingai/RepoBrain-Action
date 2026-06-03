@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from repobrain.output_md import render_patch_markdown, render_review_markdown
 from repobrain.review_validator import validate_review_findings
 
@@ -35,7 +37,8 @@ def test_review_validator_emits_evidence_verdict_contract_fields() -> None:
     assert verdict["uncertainty"]
 
 
-def test_review_markdown_renders_evidence_verdicts_in_details_only() -> None:
+def test_review_markdown_renders_evidence_verdicts_in_details_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review = validate_review_findings(
         {
             "summary_text": "Review summary.",
@@ -55,14 +58,15 @@ def test_review_markdown_renders_evidence_verdicts_in_details_only() -> None:
         audit_summary={"command": "review", "route_final": "FAST"},
     )
 
-    assert "### 📌 Evidence verdicts" in md
+    assert "Evidence verdicts" in md
     assert "Claim: Merge conflict markers present" in md
     assert "Evidence anchors: `repobrain/github_flow.py`" in md
-    assert "Patchability: `patchable`" in md
-    assert "### 📌 Evidence verdicts" not in _primary(md)
+    assert "Patchability:" in md
+    assert "Evidence verdicts" not in _primary(md)
 
 
-def test_fix_no_patch_renders_governed_evidence_verdict() -> None:
+def test_fix_no_patch_renders_governed_evidence_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     md = render_patch_markdown(
         review={"summary_text": "Patch flow"},
         verification_report={"summary": "NOT_RUN", "checks": []},
@@ -84,10 +88,10 @@ def test_fix_no_patch_renders_governed_evidence_verdict() -> None:
         },
     )
 
-    assert "### 📌 Patch governance" in md
+    assert "Patch governance" in md
     assert "Patchability class: `patch_blocked_not_localized`" in md
     assert "Minimum proof threshold: `not_met`" in md
     assert "Verification preconditions: `missing`" in md
     assert "Why not: no_localized_evidence_backed_patch_target" in md
     assert "Next safe step: Narrow request to concrete files/hunks and rerun /repobrain fix." in md
-    assert "### 📌 Patch governance" not in _primary(md)
+    assert "Patch governance" not in _primary(md)

@@ -7,7 +7,7 @@ Current external GitHub command surface is intentionally bounded.
 | Command | Issue scope | PR scope | Mutation behavior | Backend expectation | Notes |
 |---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
-| `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` when available; compact runtime/LLM block by default | primary repo/PR question flow; route label stays `ASK` |
+| `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` when available; compact runtime/LLM block by default | issue ask analyzes the target repository; PR ask stays PR-scoped; route label stays `ASK` |
 | `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; default comments stay compact | full repository-level 100-point audit with evidence and roadmap |
 | `/repobrain score` | supported | supported as compact repository score with PR context | none | same guarded audit engine as `/repobrain audit`; default comments stay compact | compact summary view of the same audit engine |
 | `/repobrain doctor` | supported | supported | none | report-only diagnostics; backend remains explicit | installation/runtime diagnostic command |
@@ -41,6 +41,12 @@ Conservative in issues:
 
 These commands do not pretend issue context is equivalent to PR context.
 
+Issue ask behavior:
+
+- product-analysis asks should describe the current consumer repository rather than RepoBrain-Action internals
+- operational asks should answer workflow/runtime/readiness questions directly
+- deterministic fallback remains valid when safe LLM policy blocks an LLM call
+
 ### PR Scope
 
 Supported in PRs:
@@ -59,6 +65,11 @@ Also supported when parser routes them:
 
 - `/repobrain locate <query>`
 - `/repobrain explain <query>`
+
+PR ask behavior:
+
+- PR ask should stay scoped to the PR
+- it should summarize change impact, touched areas, validation needs, and risk level rather than a generic repository overview
 
 ## Verify Policy
 

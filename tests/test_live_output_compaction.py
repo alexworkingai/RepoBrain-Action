@@ -297,7 +297,8 @@ def test_review_delta_block_stays_in_details_not_primary() -> None:
     assert "Review delta" not in md
     assert "<summary>Evidence and diagnostics</summary>" in md
 
-def test_runtime_provenance_and_decision_cards_render_in_details_only() -> None:
+def test_runtime_provenance_and_decision_cards_render_in_details_only(monkeypatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review_md = render_review_markdown(
         review={
             "summary_text": "Review summary.",
@@ -334,7 +335,7 @@ def test_runtime_provenance_and_decision_cards_render_in_details_only() -> None:
     )
     review_primary = _primary(review_md)
     assert "Runtime provenance" not in review_primary
-    assert "Runtime provenance" not in review_md
+    assert "Runtime provenance" in review_md
     assert "Decision cards" in review_md
     assert "#### Verdict 1" in review_md
 
@@ -365,5 +366,5 @@ def test_runtime_provenance_and_decision_cards_render_in_details_only() -> None:
     )
     fix_primary = _primary(fix_md)
     assert "Runtime provenance" not in fix_primary
-    assert "Runtime provenance" not in fix_md
-    assert "#### Patch governance decision" in fix_md
+    assert "Runtime provenance" in fix_md
+    assert "Patch governance" in fix_md

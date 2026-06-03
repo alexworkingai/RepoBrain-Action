@@ -65,7 +65,7 @@ def test_operational_explain_produces_real_explanation(
     assert 'RepoBrain is connected through the repository workflow.' in answer_text
     assert '`.github/workflows/repobrain.yml`' in answer_text
     assert '`alexworkingai/RepoBrain-Action@main`' in answer_text
-    assert 'requested as `installed_package` and resolved as `installed_package_unavailable`' in answer_text
+    assert 'requested runtime `installed_package` and resolved `installed_package_unavailable`' in answer_text
     assert 'installed_private_package_unavailable' in answer_text
     assert 'INSTALLED_PACKAGE_LIVE_PROOF_PASSED' in answer_text
     assert '.topocore-v6' not in answer_text

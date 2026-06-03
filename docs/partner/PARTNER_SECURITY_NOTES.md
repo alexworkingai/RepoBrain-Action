@@ -34,7 +34,11 @@
 - use read-mostly baseline permissions
 - `pull-requests: write` is acceptable only for publishing RepoBrain PR command response comments
 - keep that permission documented and monitored
-- protected main baseline is enabled on the public RepoBrain repository, but required checks remain deferred for now
+- protected main baseline is enabled on the public RepoBrain repository
+- current public-ruleset model is solo-owner rather than review-enforced
+- force pushes, deletions, and non-linear history remain blocked
+- required checks remain deferred for now
+- CODEOWNERS review enforcement remains deferred for now
 - do not introduce `pull_request_target`
 - do not introduce `contents: write` for normal partner setup
 - do not introduce `checks: write` unless a future check-publication feature is explicitly enabled and documented

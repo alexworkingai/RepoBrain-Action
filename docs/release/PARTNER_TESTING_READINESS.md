@@ -16,9 +16,16 @@ This document defines the selected-partner testing state after the Sprint 91 pub
 - operational ask quality is materially improved for runtime/workflow/public-readiness questions.
 - issue ask may use an LLM only when safe policy allows.
 - deterministic retrieval and TopoCore-backed synthesis remain valid when issue-mode LLM policy or provider availability prevents an LLM call.
+- issue ask analyzes the current consumer repository and its visible product surface unless the target repository actually is RepoBrain-Action.
+- PR ask is expected to stay scoped to the PR and summarize change impact rather than produce a generic product overview.
 - route labels now reflect the typed command rather than internal analysis mode.
 - enterprise P0 hardening remains in force after the switch.
-- current public readiness status on the Sprint 92D branch: `SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL`.
+- PR `#119` merged the protected-main UX polish without admin bypass.
+- dependency graph enabled on the public RepoBrain repository.
+- dependency review passed on PR `#119`.
+- the public RepoBrain repository currently runs under a solo-owner protected-main baseline with force-push/deletion blocking and linear-history protection.
+- required status checks and CODEOWNERS review enforcement remain intentionally deferred while stable check names are locked.
+- current public readiness status on the Sprint 92E branch: `SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX`.
 - Sprint 92A manual issue smoke hotfix passed for help, doctor, status, ask, locate, explain, audit, score, and the deprecated lite-alias regression.
 - historical Sprint 91 post-switch status remains recorded as: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
 - historical Sprint 90 readiness remains recorded as: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
@@ -66,6 +73,10 @@ Current truth:
 - Sprint 91 public-action smoke result:
   - RepoBrain-Action public action source remained usable from Elen-MCP
   - doctor/status/audit/score/ask all passed post-switch
+- Sprint 92E fix target:
+  - issue ask should analyze the consumer repository being tested, not RepoBrain-Action internals
+  - PR ask should stay PR-scoped and assess change impact
+  - doctor/status/review/fix defaults should remain compact and partner-facing
 
 Honest limitation:
 - a normal Python package artifact can still contain readable implementation files

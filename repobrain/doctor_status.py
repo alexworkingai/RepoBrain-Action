@@ -37,6 +37,7 @@ def build_status_report(
     event_context = _event_context_label(github_context)
     repo_name = str((github_context or {}).get("repository", "") or "").strip() or "unknown"
     runtime = _topocore_runtime_snapshot(workflow=workflow)
+    installed_package_proof_status = _installed_package_proof_status(repo_root)
     return {
         "version": REPOBRAIN_VERSION,
         "repo_name": repo_name,
@@ -48,11 +49,11 @@ def build_status_report(
         "topocore_dependency_mode": runtime["dependency_mode"],
         "topocore_runtime_mode_requested": runtime["requested_mode"],
         "topocore_runtime_mode_effective": runtime["effective_mode"],
+        "installed_package_proof_status": installed_package_proof_status,
         "topocore_policy": [
-            "v6-only runtime policy",
-            "no v5 fallback",
-            "private_checkout beta-only",
-            "preferred near-term partner path is installed_private_package when available",
+            "private runtime boundary is configured",
+            "partner-preferred path is installed private package",
+            "legacy fallback is disabled",
             "audit keeps a static baseline and may apply contract-validated private v6 enrichment when available",
             "score is a compact summary view of the same guarded audit engine",
         ],
@@ -83,6 +84,7 @@ def build_doctor_report(
     event_context = _event_context_label(github_context)
     repo_name = str((github_context or {}).get("repository", "") or "").strip() or "unknown"
     runtime = _topocore_runtime_snapshot(workflow=workflow)
+    installed_package_proof_status = _installed_package_proof_status(repo_root)
     checks: list[dict[str, str]] = []
 
     checks.append(
@@ -161,6 +163,7 @@ def build_doctor_report(
         "topocore_runtime_mode_requested": runtime["requested_mode"],
         "topocore_runtime_mode_effective": runtime["effective_mode"],
         "topocore_dependency_mode": runtime["dependency_mode"],
+        "installed_package_proof_status": installed_package_proof_status,
     }
 
 
@@ -231,44 +234,45 @@ def _topocore_setup_detail(workflow: dict[str, Any], *, runtime: dict[str, Any])
     local_path_present = _local_path_present()
     secret_env_visible = _env_key_present("TOPOCORE_V6_REPO_TOKEN")
     expected_secret = "Expected secret name: `TOPOCORE_V6_REPO_TOKEN`."
-    runtime_line = (
-        f"Requested runtime mode: `{runtime['requested_mode']}`. "
-        f"Effective runtime hint: `{runtime['effective_mode']}`."
-    )
+    runtime_line = "Raw runtime mode details stay available in verbose diagnostics."
     if runtime["requested_mode"] == "disabled":
         return (
-            f"{runtime_line} TopoCore v6 runtime is explicitly disabled, so audit/score stay on static fallback unless the mode changes. "
+            "Private runtime boundary is disabled for this run, so audit/score stay on static fallback unless the mode changes. "
+            f"{runtime_line} "
             f"{expected_secret}"
         )
     if runtime["effective_mode"] == "installed_package_unavailable":
         return (
-            f"{runtime_line} Installed private package mode was requested, but the runtime package is not importable in this run. "
-            "No checkout path was exposed, which is correct for this mode, but external v6 enrichment cannot be claimed until a real package or approved runtime artifact is installed. "
+            "Partner-preferred installed private package mode was requested, but the runtime package is not importable in this run. "
+            "No private source checkout path was exposed, which is correct for this mode. "
+            f"{runtime_line} "
             f"{expected_secret} Secret value remains hidden."
         )
     if runtime["effective_mode"] == "installed_package" and not local_path_present:
         return (
-            f"{runtime_line} Installed private package mode appears available without exposing a checkout path. "
+            "Installed private package mode appears available without exposing a checkout path. "
+            f"{runtime_line} "
             f"{expected_secret} Secret value remains hidden."
         )
     if local_path_present:
         return (
-            "TopoCore v6 private runtime path is present for this run. "
-            f"{runtime_line} {expected_secret} Secret value remains hidden, and TopoCore source stays private."
+            "Current run uses the controlled private runtime path. "
+            "Runtime source remains private and is not exposed in partner-facing output. "
+            f"{runtime_line} {expected_secret} Secret value remains hidden."
         )
     if workflow["topocore_secret_referenced"]:
         return (
-            "Workflow references `TOPOCORE_V6_REPO_TOKEN`, but the secret value is not directly inspectable "
+            "Workflow references the private runtime credential, but the secret value is not directly inspectable "
             f"and local runtime path visibility is `{_yes_no(local_path_present)}`. "
             f"{runtime_line} Verify token access and selected runtime distribution mode if setup fails. {expected_secret}"
         )
     if secret_env_visible:
         return (
-            "`TOPOCORE_V6_REPO_TOKEN` is visible as an environment key for this run, but runtime path propagation "
+            "The private runtime credential key is visible for this run, but runtime path propagation "
             f"was not detected. {runtime_line} {expected_secret}"
         )
     return (
-        "TopoCore v6 setup could not be directly verified from runtime-safe signals. "
+        "Private runtime setup could not be directly verified from runtime-safe signals. "
         f"{runtime_line} {expected_secret}"
     )
 
@@ -286,7 +290,7 @@ def _backend_policy_check() -> tuple[str, str]:
         "PASS",
         (
             f"Requested backend policy is `{resolution.requested_backend}` from `{resolution.source_env}`; "
-            "selected backend stays `v6`, there is no v5 fallback, private_checkout is beta-only, "
+            "selected backend stays `v6`, legacy fallback is disabled, "
             "and audit keeps a static baseline with optional contract-validated private v6 enrichment when the runtime exposes it."
         ),
     )
@@ -400,6 +404,27 @@ def _read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except OSError:
         return ""
+
+
+def _control_plane_root(repo_root: Path) -> Path:
+    action_path = str(os.environ.get("GITHUB_ACTION_PATH", "") or "").strip()
+    if action_path:
+        candidate = Path(action_path)
+        if candidate.exists():
+            return candidate
+    return repo_root
+
+
+def _installed_package_proof_status(repo_root: Path) -> str:
+    text = _read_text(_control_plane_root(repo_root) / "docs" / "release" / "INSTALLED_PACKAGE_LIVE_PROOF.md")
+    lowered = text.lower()
+    if "installed_package_live_proof_passed" in lowered:
+        return "passed"
+    if "installed_package_live_proof_blocked" in lowered:
+        return "blocked"
+    if "installed_package_live_proof_failed" in lowered:
+        return "failed"
+    return "unknown"
 
 
 def _event_context_label(github_context: dict[str, Any] | None) -> str:

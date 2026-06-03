@@ -23,6 +23,15 @@ Sprint 92D adds focused partner-surface coverage for:
 - partner-friendly status wording
 - protected-main governance baseline and ruleset-aware script detection
 
+Sprint 92E adds focused partner-surface coverage for:
+
+- consumer-repository issue ask isolation
+- PR ask impact assessment scoping
+- compact doctor/status partner wording
+- locate/explain workflow relevance filtering
+- PR `#119` merged-state public-readiness status
+- dependency graph and dependency-review governance evidence
+
 ## 2. Current Test Baseline
 
 Current test baseline:

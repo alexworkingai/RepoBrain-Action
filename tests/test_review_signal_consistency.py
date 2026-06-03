@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from repobrain.output_md import render_review_markdown
 from repobrain.review_validator import validate_review_findings
 
 
-def test_possible_signals_counter_matches_rendered_items() -> None:
+def test_possible_signals_counter_matches_rendered_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review = validate_review_findings(
         {
             "summary_text": "Potential review risks.",
@@ -31,12 +34,13 @@ def test_possible_signals_counter_matches_rendered_items() -> None:
         audit_summary=audit_summary,
     )
 
-    assert "### 🟡 Possible signals" in md
-    assert "- No confirmed findings." in md
-    assert "### ℹ️ Informational notes" in md
+    assert "Possible signals" in md
+    assert "Confirmed findings: none." in md
+    assert "Informational notes" in md
 
 
-def test_high_risk_output_includes_explicit_risk_drivers() -> None:
+def test_high_risk_output_includes_explicit_risk_drivers(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review = validate_review_findings(
         {
             "summary_text": "Appears low risk.",
@@ -60,7 +64,8 @@ def test_high_risk_output_includes_explicit_risk_drivers() -> None:
     assert "Security-sensitive area changed" in md
 
 
-def test_rendered_review_never_leaks_heuristic_secret_signal() -> None:
+def test_rendered_review_never_leaks_heuristic_secret_signal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review = validate_review_findings(
         {
             "summary_text": "Review summary.",
@@ -83,7 +88,8 @@ def test_rendered_review_never_leaks_heuristic_secret_signal() -> None:
     assert "heuristic security wording was downgraded" in md.lower()
 
 
-def test_render_review_strips_raw_leaked_secret_phrase_from_possible_signals() -> None:
+def test_render_review_strips_raw_leaked_secret_phrase_from_possible_signals(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review = {
         "summary_text": "Summary includes review notes.",
         "risk_level": "low",
@@ -102,7 +108,8 @@ def test_render_review_strips_raw_leaked_secret_phrase_from_possible_signals() -
     assert "Possible secret leakage in patch (signal: heuristic wording)" not in md
 
 
-def test_render_review_strips_raw_leaked_secret_phrase_from_informational_notes() -> None:
+def test_render_review_strips_raw_leaked_secret_phrase_from_informational_notes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")
     review = {
         "summary_text": "Summary includes review notes.",
         "risk_level": "low",

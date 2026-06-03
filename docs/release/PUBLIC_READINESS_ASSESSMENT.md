@@ -78,6 +78,16 @@ Sprint 92D branch update:
 - protected main baseline is now enabled on the public RepoBrain repository
 - required checks and CODEOWNERS enforcement remain intentionally deferred for now
 
+Sprint 92E implementation target:
+- issue `/repobrain ask` must analyze the current consumer repository rather than defaulting to RepoBrain-Action self-description
+- PR `/repobrain ask` must stay PR-scoped and produce an impact assessment instead of a product overview
+- locate and explain must stay relevant to the target repository and avoid unrelated workflow padding
+- doctor and status default wording must stay partner-facing and compact
+- PR `#119` merged the protected-main UX polish without admin bypass
+- dependency graph enabled on the public RepoBrain repository
+- dependency review passed on PR `#119`
+- governance currently follows a solo-owner protected-main model rather than review-enforced branch protection
+
 ## Current Operating Conditions
 
 Public visibility is now switched, but the operating model remains constrained:
@@ -100,7 +110,7 @@ Now that RepoBrain-Action is public:
 
 ## Decision
 
-- current public readiness decision on the Sprint 92D branch: `SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL`
+- current public readiness decision on the Sprint 92E branch: `SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX`
 - historical Sprint 91 post-switch decision: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`
@@ -113,6 +123,20 @@ Historical state retained for traceability:
 - Sprint 87 decision: `PUBLIC_BLOCKED_BY_TOKEN_SCOPE`
 - Sprint 88 / Sprint 89 blocked state: `OWNER_ACTION_REQUIRED_TOKEN_ISSUANCE`
 - Sprint 90 decision: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`
+
+## Governance Snapshot After PR #119
+
+- protected-main baseline remains enabled on `main`
+- current active ruleset follows a solo-owner model:
+  - prevent force pushes
+  - prevent deletions
+  - require linear history
+- PR `#119` is the merge evidence for the protected-main UX polish path
+- dependency graph enabled
+- dependency review passed
+- required status checks: deferred
+- CODEOWNERS review enforcement: deferred
+- governance remains partial rather than enterprise-complete
 
 ## Sprint 91 Result
 
