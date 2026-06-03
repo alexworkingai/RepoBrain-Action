@@ -30,6 +30,6 @@ def test_sprint89_docs_keep_owner_token_gate_explicit() -> None:
 def test_sprint89_public_readiness_parser_moves_to_public_switch_complete() -> None:
     status = _read_public_readiness_status(ROOT)
 
-    assert status == "PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION"
+    assert status == "SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL"
     next_step = _public_readiness_next_step(status).lower()
     assert "partner pilot" in next_step

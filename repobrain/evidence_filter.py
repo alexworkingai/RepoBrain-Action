@@ -48,6 +48,31 @@ def _explicit_doc_request(query: str) -> bool:
     return bool({"readme", "doc", "docs", "documentation"} & query_terms)
 
 
+def _repobrain_workflow_query(query: str) -> bool:
+    normalized = " ".join(str(query or "").strip().lower().split())
+    if "workflow" not in normalized:
+        return False
+    return "repobrain" in normalized or "repo brain" in normalized
+
+
+def _priority_path_rank(path: str, *, query: str) -> int:
+    lowered = str(path or "").strip().lower()
+    if not lowered:
+        return 100
+    if _repobrain_workflow_query(query):
+        if lowered == ".github/workflows/repobrain.yml":
+            return 0
+        if lowered == ".github/repobrain.instructions.md":
+            return 1
+        if lowered.startswith("docs/") or lowered == "readme.md":
+            return 2
+        if "repobrain" in lowered and lowered.startswith(".github/workflows/"):
+            return 3
+        if lowered.startswith(".github/workflows/"):
+            return 8
+    return 50
+
+
 def filter_candidate_evidence(
     candidates: list[CandidateChunk],
     *,
@@ -114,6 +139,16 @@ def filter_candidate_evidence(
         filtered = [candidates[0]]
         dropped = max(0, len(candidates) - 1)
         reason_codes.add("fallback_keep_top")
+
+    filtered = sorted(
+        filtered,
+        key=lambda item: (
+            _priority_path_rank(item.file_path, query=query),
+            -float(item.score),
+            str(item.file_path or ""),
+            int(item.line_start),
+        ),
+    )
 
     evidence_items = [
         EvidenceItem(

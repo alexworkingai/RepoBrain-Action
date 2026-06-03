@@ -71,7 +71,7 @@ def test_operational_ask_answer_includes_runtime_workflow_and_readiness(
     assert "repo brain-action is public" not in answer_text.lower()
     assert "C:\\" not in answer_text
     assert next_steps.startswith("Complete external installed-package live proof")
-    assert audit_summary["route_final"] == "FAST"
+    assert audit_summary["route_final"] == "ASK"
     assert audit_summary["operational_ask_intent"] is True
 
 

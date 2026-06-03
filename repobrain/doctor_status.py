@@ -166,7 +166,7 @@ def build_doctor_report(
 
 def _doctor_check(*, name: str, status: str, detail: str) -> dict[str, str]:
     normalized_status = str(status or "UNKNOWN").strip().upper()
-    if normalized_status not in {"PASS", "WARN", "FAIL", "UNKNOWN"}:
+    if normalized_status not in {"PASS", "PASS_WITH_NOTES", "WARN", "FAIL", "UNKNOWN"}:
         normalized_status = "UNKNOWN"
     return {
         "name": str(name or "").strip() or "Unnamed check",
@@ -187,7 +187,7 @@ def _permissions_status(workflow: dict[str, Any]) -> str:
     if not workflow["exists"]:
         return "UNKNOWN"
     if workflow.get("permission_classification") == JUSTIFIED_PR_COMMENT_RESPONSE_PERMISSION:
-        return "WARN"
+        return "PASS_WITH_NOTES"
     if workflow["dangerous_permissions"]:
         return "WARN"
     if workflow["permissions_explicit"]:
@@ -356,6 +356,8 @@ def _overall_doctor_status(checks: list[dict[str, str]]) -> str:
         return "FAIL"
     if "WARN" in statuses:
         return "WARN"
+    if "PASS_WITH_NOTES" in statuses:
+        return "PASS_WITH_NOTES"
     if "PASS" in statuses:
         return "PASS"
     return "UNKNOWN"

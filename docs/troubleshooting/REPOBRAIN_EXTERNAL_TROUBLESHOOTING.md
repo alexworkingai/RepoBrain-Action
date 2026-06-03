@@ -158,7 +158,7 @@ If you need a quick setup snapshot after changing permissions, run:
 Current doctor guidance should:
 
 - warn on `checks: write`
-- warn or monitor justified `pull-requests: write` rather than treating it like broad mutation authority
+- return `PASS_WITH_NOTES` or a monitored note for justified `pull-requests: write` rather than treating it like broad mutation authority
 
 ## 8. Fork PR Restrictions
 
@@ -205,3 +205,4 @@ Important current boundaries:
 - no support for undocumented custom workflow mutations beyond the published baseline
 - no public Marketplace support promise exists yet
 - raw TKY/TKYA runtime internals are intentionally hidden from default GitHub comments; use verbose diagnostics or workflow artifacts when deeper trace detail is required
+- issue ask may use an LLM only when safe policy allows; otherwise deterministic fallback is expected and truthful

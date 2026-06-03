@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document explains the least-privilege model for RepoBrain workflows before public visibility.
+This document explains the least-privilege model for RepoBrain workflows after public visibility and during selected partner pilot onboarding.
 
 ## External Partner Baseline
 
@@ -89,3 +89,5 @@ Sprint 92C live PR retest on `alexworkingai/Elen-MCP-v.2.2.0` confirmed the docu
 - no `contents: write`
 - no `checks: write` on the partner baseline
 - no `pull_request_target`
+
+Protected-main governance baseline on the public RepoBrain repository is now enabled separately from workflow permissions. Required checks remain intentionally deferred until stable check names are locked.

@@ -222,7 +222,11 @@ def format_refusal_comment(
     return "\n".join(sections)
 
 
-def format_verify_comment(report: dict[str, object]) -> str:
+def format_verify_comment(
+    report: dict[str, object],
+    *,
+    audit_summary: dict[str, object] | None = None,
+) -> str:
     """Format a PR verification report based on GitHub checks/status APIs."""
     state = str(report.get("state", "unknown")).lower()
     status_label = str(report.get("status_label", state.upper() or "UNKNOWN")).upper()
@@ -281,7 +285,7 @@ def format_verify_comment(report: dict[str, object]) -> str:
             "Verification signals were unavailable or ambiguous. Inspect workflow permissions and CI visibility, then verify again."
         ]
 
-    audit_summary = {
+    compact_audit_summary = {
         "route": "VERIFY",
         "verification_status": status_label,
         "checks_total": total,
@@ -290,7 +294,7 @@ def format_verify_comment(report: dict[str, object]) -> str:
         "verify_source": verify_source,
     }
     if head_sha:
-        audit_summary["head_sha"] = head_sha[:12]
+        compact_audit_summary["head_sha"] = head_sha[:12]
 
     sections = [
         "### ✅ Verification report",
@@ -339,9 +343,33 @@ def format_verify_comment(report: dict[str, object]) -> str:
             "",
             "### ✅ Next steps",
             *[f"- {line}" for line in next_steps],
+        ]
+    )
+    if audit_summary:
+        fallback_used = str(audit_summary.get("fallback_used", "not_applicable") or "not_applicable")
+        fallback_reason = str(audit_summary.get("fallback_reason", "not_applicable") or "not_applicable")
+        fallback_label = (
+            "not applicable"
+            if fallback_reason == "verify_report_only"
+            else f"{fallback_used} / {fallback_reason}"
+        )
+        sections.extend(
+            [
+                "",
+                "### 🛡️ Runtime and safety",
+                f"- Route: `{str(audit_summary.get('route_final', 'VERIFY') or 'VERIFY').strip().upper()}`",
+                "- Scope: `verification report`",
+                "- Runtime: `report-only`",
+                f"- Backend: `{str(audit_summary.get('requested_backend', 'not_applicable') or 'not_applicable')}` -> `{str(audit_summary.get('resolved_backend', 'not_applicable') or 'not_applicable')}`",
+                f"- Fallback: `{fallback_label}`",
+                "- Safety: informational only; no patch/autofix, no file changes, no branch/commit/PR created.",
+            ]
+        )
+    sections.extend(
+        [
             "",
             "### 🧾 Audit summary",
-            *_format_audit_summary(audit_summary),
+            *_format_audit_summary(compact_audit_summary),
             "",
             _audit_artifact_note(),
         ]

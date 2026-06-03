@@ -14,9 +14,11 @@ This document defines the selected-partner testing state after the Sprint 91 pub
 - post-switch public-action smoke on Elen-MCP passed for doctor, status, audit, score, and ask.
 - Sprint 92C live issue and PR retest on Elen-MCP passed for ask, locate, explain, review, verify, fix, audit, and score.
 - operational ask quality is materially improved for runtime/workflow/public-readiness questions.
+- issue ask may use an LLM only when safe policy allows.
 - deterministic retrieval and TopoCore-backed synthesis remain valid when issue-mode LLM policy or provider availability prevents an LLM call.
+- route labels now reflect the typed command rather than internal analysis mode.
 - enterprise P0 hardening remains in force after the switch.
-- current public readiness status: `PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION`.
+- current public readiness status on the Sprint 92D branch: `SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL`.
 - Sprint 92A manual issue smoke hotfix passed for help, doctor, status, ask, locate, explain, audit, score, and the deprecated lite-alias regression.
 - historical Sprint 91 post-switch status remains recorded as: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
 - historical Sprint 90 readiness remains recorded as: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
@@ -80,6 +82,8 @@ Honest limitation:
 - read-mostly workflow permissions by default
 - `pull-requests: write` is allowed only when it is narrowly scoped to RepoBrain PR command response comments
 - the justified PR comment response permission is monitored and must not drift into mutation-capable workflow behavior
+- protected main baseline is enabled on the public RepoBrain repository
+- required status checks and CODEOWNERS enforcement remain deferred until stable check names are locked
 - `contents: write` remains out of scope for normal partner setup
 - per-partner or equally scoped runtime access only
 - token rotation and revocation required

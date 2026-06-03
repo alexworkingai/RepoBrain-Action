@@ -123,33 +123,45 @@ from repobrain.verification_runner import (
 from repobrain.verify import build_verify_report
 from repobrain.topocore_backend import TopoCoreBackendError, resolve_backend
 
-HELP_TEXT = """RepoBrain command examples:
-- /repobrain help
-- /repobrain ask --profile balanced How does provider selection work?
-- /repobrain audit
-- /repobrain audit Focus on repository readiness for a Microsoft/GitHub-facing demo.
-- /repobrain score
-- /repobrain score Focus on partner-demo readiness.
-- /repobrain doctor
-- /repobrain status
-- /repobrain locate TKYProvider
-- /repobrain explain retrieve_topk
-- /repobrain review --profile balanced
-- /repobrain fix --profile premium Improve guard conditions in github_flow
-- /repobrain verify (PR checks-based verification ladder v0)
+HELP_TEXT = """RepoBrain supported commands:
+- `/repobrain help`
+- `/repobrain ask`
+- `/repobrain locate`
+- `/repobrain explain`
+- `/repobrain review`
+- `/repobrain verify`
+- `/repobrain fix`
+- `/repobrain audit`
+- `/repobrain score`
+- `/repobrain doctor`
+- `/repobrain status`
 
-Supported today:
-- `/repobrain audit` is a repository-level, no-mutation audit MVP.
-- `/repobrain score` is a compact score summary that reuses the same guarded audit engine.
-- `/repobrain doctor` is a report-only installation/runtime diagnostic.
-- `/repobrain status` is a lightweight report-only runtime status snapshot.
-- `/repobrain fix` stays no-patch/no-mutation.
-- `/repobrain verify` stays informational only.
+Examples:
+- `/repobrain ask --profile balanced How does provider selection work?`
+- `/repobrain audit Focus on selected partner onboarding readiness.`
+- `/repobrain score Focus on repository readiness for partner testing.`
+- `/repobrain locate TKYProvider`
+- `/repobrain explain retrieve_topk`
+- `/repobrain review --profile balanced`
+- `/repobrain fix --profile premium Clarify the guarded no-mutation policy in github_flow`
+- `/repobrain verify`
 
-Execution profile:
-- Use `--profile cheap|balanced|premium` with ask/review/fix.
+Command notes:
+- `/repobrain audit` is the full repository audit and may apply contract-validated private v6 enrichment when available.
+- `/repobrain score` is the compact score summary view of the same guarded audit engine.
+- `/repobrain doctor` and `/repobrain status` are report-only diagnostics.
+- `/repobrain verify` is informational only.
+- `/repobrain fix` is proposal/governance only and stays no-patch/no-mutation.
+
+Execution profiles:
+- Use `--profile cheap|balanced|premium` with ask, review, and fix.
 - Default is `balanced` when `--profile` is omitted.
 - For review/fix safety, requested `cheap` may be normalized to `balanced`.
+
+Safety notes:
+- No patch/autofix.
+- No RepoBrain-created branch, commit, or PR.
+- No merge, security, legal, or production approval is implied.
 """
 
 BOT_MARKER = "[bot]"
@@ -5672,6 +5684,22 @@ _OPERATIONAL_ASK_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("release_status", ("release tag", "rc tag", "pinning", "release status")),
     ("safety_status", ("no-mutation", "no mutation", "patch/autofix", "patch autofix", "safety status")),
     ("permissions_status", ("permissions", "least privilege", "permission model")),
+    (
+        "product_analysis",
+        (
+            "analyze this repository",
+            "analyze this repo",
+            "mcp product",
+            "functions/modules",
+            "functions and modules",
+            "external integrations",
+            "quality signals",
+            "next 5 steps",
+            "next five steps",
+            "product analysis",
+            "repository analysis",
+        ),
+    ),
 )
 
 
@@ -5685,6 +5713,8 @@ def _classify_operational_ask_intent(question: str) -> str | None:
             matched_kinds.append(kind)
     if not matched_kinds:
         return None
+    if "product_analysis" in matched_kinds:
+        return "product_analysis"
     if "public_readiness" in matched_kinds:
         return "public_readiness"
     if "runtime_status" in matched_kinds or "workflow_status" in matched_kinds:
@@ -5737,13 +5767,15 @@ def _read_public_readiness_status(control_plane_root: Path) -> str:
     if not text:
         return "UNKNOWN"
     match = re.search(
-        r"current public readiness decision:\s*`([^`]+)`",
+        r"current public readiness decision(?:[^`\n]*)?:\s*`([^`]+)`",
         text,
         flags=re.IGNORECASE,
     )
     if match:
         return str(match.group(1) or "UNKNOWN").strip().upper() or "UNKNOWN"
     for token in (
+        "SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL",
+        "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_ISSUE_PR_UX_POLISH_AND_PROTECTED_MAIN",
         "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY",
         "PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF",
         "PUBLIC_BLOCKED_BY_RUNTIME_PROOF",
@@ -5775,8 +5807,104 @@ def _read_installed_package_proof_status(control_plane_root: Path) -> str:
     return "UNKNOWN"
 
 
+def _read_governance_baseline_status(control_plane_root: Path) -> str:
+    text = _read_markdown(control_plane_root / "docs" / "security" / "REPO_GOVERNANCE_MODEL.md")
+    if not text:
+        return "UNKNOWN"
+    for token in (
+        "PROTECTED_MAIN_BASELINE_ENABLED",
+        "GOVERNANCE_PARTIAL_REQUIRED_CHECKS_DEFERRED",
+        "GOVERNANCE_PARTIAL_API_LIMITED",
+    ):
+        if token.lower() in text.lower():
+            return token
+    return "UNKNOWN"
+
+
+def _build_product_analysis_answer(
+    *,
+    repo_root: Path,
+    workflow_location: str,
+    action_source: str,
+    public_readiness_status: str,
+    installed_package_proof_status: str,
+    governance_status: str,
+    runtime_requested: str,
+    runtime_effective: str,
+    dependency_mode: str,
+    dependency_summary: str,
+) -> str:
+    module_paths = (
+        ("repobrain/commands.py", "repobrain/commands.py"),
+        ("repobrain/github_flow.py", "repobrain/github_flow.py"),
+        ("repobrain/output_md.py", "repobrain/output_md.py"),
+        ("repobrain/doctor_status.py", "repobrain/doctor_status.py"),
+        ("repobrain/audit_scoring.py", "repobrain/audit_scoring.py"),
+        ("repobrain/topocore_v6_runtime_module.py", "repobrain TopoCore runtime adapter"),
+    )
+    key_modules = [f"`{label}`" for path, label in module_paths if (repo_root / path).exists()]
+    if not key_modules:
+        key_modules = ["`repobrain/` command and runtime modules`"]
+    integrations = [
+        "GitHub issue and pull-request comment workflows",
+        "private TopoCore v6 runtime through the guarded contract boundary",
+        "optional LLM synthesis layered on top of retrieval, not required for every command",
+    ]
+    quality_signals = [
+        f"Public control plane is live through `{action_source}`.",
+        f"Workflow entrypoint is `{workflow_location}`.",
+        f"Installed-package proof status is `{installed_package_proof_status}`.",
+        f"Governance baseline is `{governance_status}`.",
+        "No patch/autofix and no RepoBrain-created branch/commit/PR behavior remain enforced.",
+    ]
+    risks = [
+        "Protected main is enabled, but required status checks and CODEOWNERS enforcement are still deferred.",
+        "Large orchestration modules such as `repobrain/github_flow.py` and `repobrain/output_md.py` remain maintainability hotspots.",
+        "Partner UX depends on concise, truthful diagnostics; regressions here would hurt trust quickly.",
+    ]
+    next_steps = [
+        "Onboard the first selected partner repo through the public RepoBrain-Action surface.",
+        "Collect partner feedback on ask/review/audit/score usefulness and friction.",
+        "Decide whether to enable required status checks once stable check names are locked.",
+        "Exercise RC tagging and provenance on the release path without widening runtime/source access.",
+        "Decompose the largest orchestration/output modules without changing the no-mutation contract.",
+    ]
+    lines = [
+        "RepoBrain-Action currently looks like a public MCP-style control plane around a private TopoCore v6 runtime boundary.",
+        "",
+        "Core functions and modules:",
+        f"- Key modules: {', '.join(key_modules[:6])}",
+        "- Command surface: help, ask, locate, explain, review, verify, fix, audit, score, doctor, status.",
+        "- Runtime path: v6-only policy, with installed private package preferred for partners and private_checkout kept as a controlled fallback.",
+        "",
+        "Runtime and delivery state:",
+        f"- Requested runtime mode: `{runtime_requested}`",
+        f"- Effective runtime mode: `{runtime_effective}`",
+        f"- Dependency mode: `{dependency_mode}`",
+        f"- Current run summary: {dependency_summary}",
+        "",
+        "External integrations:",
+        *(f"- {item}" for item in integrations),
+        "",
+        "Readiness and quality signals:",
+        *(f"- {item}" for item in quality_signals),
+        f"- Public-readiness status: `{public_readiness_status}`",
+        "",
+        "Main risks to watch:",
+        *(f"- {item}" for item in risks),
+        "",
+        "Next 5 steps:",
+        *(f"- {item}" for item in next_steps),
+    ]
+    return "\n".join(lines)
+
+
 def _public_readiness_next_step(status: str) -> str:
     normalized = str(status or "UNKNOWN").strip().upper()
+    if normalized == "SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL":
+        return "Open or approve the protected-main PR, rerun the final Elen-MCP issue/PR smoke after merge, and then proceed with the selected partner pilot."
+    if normalized == "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_ISSUE_PR_UX_POLISH_AND_PROTECTED_MAIN":
+        return "Proceed with selected partner onboarding from the public RepoBrain action surface and keep Marketplace work deferred."
     if normalized == "PARTNER_PILOT_READY_AFTER_DIAGNOSTICS_AND_PERMISSION_CLASSIFICATION":
         return "Continue selected partner pilot onboarding with the compact diagnostics baseline and monitor justified PR comment response permission."
     if normalized == "PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY":
@@ -5834,6 +5962,7 @@ def _maybe_refine_operational_ask_answer(
     control_plane_root = _control_plane_root(repo_root)
     public_readiness_status = _read_public_readiness_status(control_plane_root)
     installed_package_proof_status = _read_installed_package_proof_status(control_plane_root)
+    governance_status = _read_governance_baseline_status(control_plane_root)
     requested_backend = str(audit_summary.get("requested_backend", "auto") or "auto")
     resolved_backend = str(audit_summary.get("resolved_backend", "not_applicable") or "not_applicable")
     fallback_used = str(audit_summary.get("fallback_used", "not_applicable") or "not_applicable")
@@ -5853,7 +5982,20 @@ def _maybe_refine_operational_ask_answer(
     else:
         dependency_summary = f"dependency mode is `{dependency_mode}`."
 
-    if cmd == "explain":
+    if operational_kind == "product_analysis":
+        answer_lines = _build_product_analysis_answer(
+            repo_root=repo_root,
+            workflow_location=workflow_location,
+            action_source=action_source,
+            public_readiness_status=public_readiness_status,
+            installed_package_proof_status=installed_package_proof_status,
+            governance_status=governance_status,
+            runtime_requested=runtime_requested,
+            runtime_effective=runtime_effective,
+            dependency_mode=dependency_mode,
+            dependency_summary=dependency_summary,
+        ).splitlines()
+    elif cmd == "explain":
         answer_lines = [
             "RepoBrain is connected through the repository workflow.",
             f"The workflow entrypoint is `{workflow_location}` and it currently references `{action_source}` as the action source.",
@@ -5895,8 +6037,10 @@ def _maybe_refine_operational_ask_answer(
     refined_summary["action_source"] = action_source
     refined_summary["public_readiness_status"] = public_readiness_status
     refined_summary["installed_package_proof_status"] = installed_package_proof_status
-    if route in {"REVIEW", "DEEP"}:
-        refined_summary["route_final"] = "EXPLAIN" if cmd == "explain" else "FAST"
+    if cmd == "explain":
+        refined_summary["route_final"] = "EXPLAIN"
+    elif cmd == "ask":
+        refined_summary["route_final"] = "ASK"
     return "\n".join(answer_lines), operational_next_step, refined_summary
 
 
@@ -6240,7 +6384,11 @@ def _build_qa_markdown(
         github_context=qa_github_context,
     )
     audit_summary["command"] = cmd
-    if cmd == "locate":
+    if cmd == "ask":
+        route_after_refinement = str(audit_summary.get("route_final", "ASK") or "ASK").strip().upper()
+        if route_after_refinement not in {"WAIT", "REFUSE", "BLOCK", "ERROR"}:
+            audit_summary["route_final"] = "ASK"
+    elif cmd == "locate":
         audit_summary["route_final"] = "LOCATE"
     elif cmd == "explain":
         audit_summary["route_final"] = "EXPLAIN"
@@ -9104,24 +9252,7 @@ def _build_verify_markdown(
             audit["route_final"] = "VERIFY"
             audit["pass_count"] = 1
         t0 = time.perf_counter()
-        body = format_verify_comment(report)
-        body = "\n\n".join(
-            [
-                body,
-                render_scoped_command_markdown(
-                    title="### рџ§­ TopoCore backend diagnostics",
-                    message=(
-                        "Verify reports PR checks directly. TopoCore backend evidence is recorded as a scoped observation "
-                        "signal for this command family."
-                    ),
-                    audit_summary=audit_summary,
-                    next_steps=[
-                        "Use PR ask/review runs for full retrieval-backed TopoCore evidence.",
-                        "Use verify to confirm PR checks and workflow status without patch actions.",
-                    ],
-                ),
-            ]
-        )
+        body = format_verify_comment(report, audit_summary=audit_summary)
         if audit is not None:
             audit["retrieved"] = 0
             audit["selected"] = 0
@@ -9173,24 +9304,7 @@ def _build_verify_markdown(
         audit["checks_pending"] = int(report.get("pending", 0) or 0)
         audit["verify_source"] = str(report.get("verify_source", "none") or "none")
     t0 = time.perf_counter()
-    body = format_verify_comment(report)
-    body = "\n\n".join(
-        [
-            body,
-            render_scoped_command_markdown(
-                title="### рџ§­ TopoCore backend diagnostics",
-                message=(
-                    "Verify reports PR checks directly. TopoCore backend evidence is recorded as a scoped observation "
-                    "signal for this command family."
-                ),
-                audit_summary=audit_summary,
-                next_steps=[
-                    "Use PR ask/review runs for full retrieval-backed TopoCore evidence.",
-                    "Use verify to confirm PR checks and workflow status without patch actions.",
-                ],
-            ),
-        ]
-    )
+    body = format_verify_comment(report, audit_summary=audit_summary)
     if audit is not None:
         _copy_topocore_backend_fields_to_audit(audit=audit, audit_summary=audit_summary)
         _copy_scoped_command_fields_to_audit(audit=audit, audit_summary=audit_summary)

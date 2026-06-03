@@ -11,6 +11,18 @@ Current truth:
 - it does not add runtime behavior
 - it helps explain what is covered and what is not covered
 
+Sprint 92D adds focused partner-surface coverage for:
+
+- help output cleanup
+- deterministic issue ask product-analysis fallback
+- route/scope canonicalization
+- verify output cleanup
+- compact review/fix default output
+- doctor `PASS_WITH_NOTES`
+- RepoBrain workflow rerank preference
+- partner-friendly status wording
+- protected-main governance baseline and ruleset-aware script detection
+
 ## 2. Current Test Baseline
 
 Current test baseline:
