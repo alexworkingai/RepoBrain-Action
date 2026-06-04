@@ -25,7 +25,7 @@ This document defines the selected-partner testing state after the Sprint 91 pub
 - dependency review passed on PR `#119`.
 - the public RepoBrain repository currently runs under a solo-owner protected-main baseline with force-push/deletion blocking and linear-history protection.
 - required status checks and CODEOWNERS review enforcement remain intentionally deferred while stable check names are locked.
-- current public readiness status on the Sprint 92G branch: `SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`.
+- current public readiness status on the Sprint 92H branch: `SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`.
 - controlled issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`.
 - audit narrative modes are now implemented for `/repobrain audit --narrative`, `/repobrain audit --executive`, and `/repobrain audit --profile premium`.
 - `/repobrain help` now uses a command-reference structure that documents every supported command and supported extension for partners.
@@ -86,6 +86,11 @@ Current truth:
   - `/repobrain audit --profile premium` should imply premium narrative semantics
   - explain should keep RepoBrain connection answers free of unrelated workflow padding
   - default review/fix/PR ask comments should stay compact without empty diagnostics shells
+- Sprint 92H polish target:
+  - PR audit narrative/executive/premium must follow canonical PR classifier facts
+  - docs-only PRs must not be narrated as behavior-affecting or moderate-risk
+  - premium narrative must stay bounded and complete
+  - score wording must distinguish final score from static baseline clearly
 
 Honest limitation:
 - a normal Python package artifact can still contain readable implementation files

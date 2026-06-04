@@ -2,6 +2,8 @@
 
 import re
 
+from repobrain.pr_impact import build_pr_impact_facts
+
 TODO_MARKERS = ("TODO", "FIXME")
 
 GITHUB_TOKEN_RE = re.compile(r"\bghp_[A-Za-z0-9]{20,}\b")
@@ -241,4 +243,11 @@ def build_pr_review(
             "files": file_count,
             "risk_level": risk_level,
         },
+        "pr_impact_facts": build_pr_impact_facts(
+            github_context={
+                "is_pr": True,
+                "changed_files": paths,
+            },
+            changed_files=paths,
+        ),
     }

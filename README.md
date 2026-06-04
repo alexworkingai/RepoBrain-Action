@@ -15,6 +15,7 @@ Current product runtime is v6-only:
 - when LLM quota is exhausted, RepoBrain falls back to deterministic output and reports the exhausted state without failing the command
 - current product behavior remains no-patch and no-mutation
 - `/repobrain help` now uses a four-block command-reference manual structure for partners
+- PR audit narrative modes now obey canonical PR impact classifier facts so docs-only PRs are not narrated as behavior-affecting or moderate-risk
 
 ## Quick Start
 
@@ -92,14 +93,16 @@ Sprint 92D branch truth:
 - protected main baseline is enabled on the public RepoBrain repository
 - required status checks remain intentionally deferred until stable check names are locked
 
-Sprint 92F implementation truth:
+Sprint 92F-92H implementation truth:
 
 - controlled trusted issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`
 - `/repobrain audit --narrative` adds an optional explanatory LLM layer after TopoCore scoring
 - `/repobrain audit --executive` adds an optional executive/partner-facing LLM layer after TopoCore scoring
 - `/repobrain audit --profile premium` implies a premium narrative/explanation layer after TopoCore scoring
+- PR audit narrative, executive, and premium modes now consume canonical PR classifier facts and keep docs-only PR impact grounded
+- premium audit narrative is bounded and explicitly reports when it was shortened to stay within response budget
 - `/repobrain score` remains a compact TopoCore-first summary and does not require an LLM
-- current readiness status on the Sprint 92G branch is `SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`
+- current readiness status on the Sprint 92H branch is `SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`
 
 RepoBrain is not an LLM reseller.
 TopoCore v6 remains private.

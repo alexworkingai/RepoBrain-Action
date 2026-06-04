@@ -417,3 +417,4 @@ See also:
 - `docs/architecture/TOPOCORE_V6_SPRINT_57_OBSERVATION_RESULTS.md`
 - `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
 - Sprint 92G adds final help/manual structure coverage, premium audit narrative semantics coverage, PR narrative de-duplication coverage, compact default-output polish coverage, and RepoBrain-connection explain rerank coverage.
+- Sprint 92H adds canonical PR impact fact coverage, PR audit classifier-consistency coverage, score-summary wording coverage, top-improvement consistency coverage, and premium narrative completion guard coverage.

@@ -34,6 +34,7 @@
 - use read-mostly baseline permissions
 - `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1` enables controlled issue ask/explain and issue audit narrative LLM by default; `RB_REPOBRAIN_ENABLE_ISSUE_LLM=0` disables that path without weakening deterministic fallback
 - `/repobrain audit --profile premium` stays explanation-only and implies a premium narrative layer without overriding the TopoCore score contract
+- LLM narrative layers must not override canonical PR classifier facts in PR audit modes
 - `pull-requests: write` is acceptable only for publishing RepoBrain PR command response comments
 - keep that permission documented and monitored
 - protected main baseline is enabled on the public RepoBrain repository

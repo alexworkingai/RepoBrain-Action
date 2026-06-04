@@ -32,6 +32,6 @@ def test_sprint90_docs_record_decisive_proof_pass() -> None:
 def test_sprint90_public_readiness_parser_is_now_post_switch_ready() -> None:
     status = _read_public_readiness_status(ROOT)
 
-    assert status == "SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING"
+    assert status == "SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING"
     next_step = _public_readiness_next_step(status).lower()
-    assert "partner pilot" in next_step or "partner onboarding" in next_step
+    assert "partner readiness" in next_step or "live issue/pr retest" in next_step

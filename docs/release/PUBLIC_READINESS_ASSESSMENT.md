@@ -104,6 +104,15 @@ Sprint 92G implementation target:
 - explain applies RepoBrain connection reranking consistently and suppresses unrelated workflow padding
 - review/fix/PR-ask compact outputs remove the last default evidence/verification noise without weakening verbose diagnostics
 
+Sprint 92H implementation target:
+- PR audit narrative, executive, and premium modes must obey canonical PR classifier facts
+- docs-only PRs must stay docs-only, LOW risk, and no-direct-impact in all audit narrative modes
+- PR impact summary headings must appear once and stay concrete
+- executive summary wording must state final score before static baseline
+- top improvements must not present maxed categories as weak areas
+- default ask/explain/review/fix output must stay compact and partner-facing
+- premium narrative must be bounded and explicit when shortened for budget
+
 ## Current Operating Conditions
 
 Public visibility is now switched, but the operating model remains constrained:
@@ -126,7 +135,7 @@ Now that RepoBrain-Action is public:
 
 ## Decision
 
-- current public readiness decision on the Sprint 92G branch: `SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`
+- current public readiness decision on the Sprint 92H branch: `SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`
 - historical Sprint 91 post-switch decision: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`

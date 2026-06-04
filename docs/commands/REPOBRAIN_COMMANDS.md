@@ -137,12 +137,14 @@ Optional narrative modes:
   - implies a premium narrative/explanation layer after TopoCore scoring even when used by itself
   - may combine with `--narrative` or `--executive` for premium detailed vs premium executive style
   - does not change the TopoCore score authority
+  - in PR context it must stay grounded in canonical PR classifier facts rather than guessing behavior impact
 
 Audit narrative truth:
 
 - LLM narrative may summarize and explain the score
 - LLM narrative does not change final score, category scores, blockers, improvements, evidence truth, backend result, fallback state, or contract status
 - when quota is exhausted, RepoBrain returns the TopoCore audit and explicitly reports that the narrative layer was skipped
+- when a premium narrative must be shortened for response budget, RepoBrain reports that explicitly instead of silently truncating the explanation
 
 `/repobrain audit` is informational only.
 It does not certify merge safety, security approval, or production readiness.

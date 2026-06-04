@@ -9,7 +9,7 @@
 | `/repobrain review` | scoped unsupported or safe guidance | supported | issue: not applicable; PR: `v6` when runtime is available | none | ready with PR context | informational only |
 | `/repobrain verify` | scoped unsupported or issue-safe guidance | supported | informational/report-only | none | ready with PR context | not merge approval |
 | `/repobrain fix` | scoped unsupported or safe no-patch guidance | supported | issue: not applicable; PR: `v6` when runtime is available | no patch, no mutation | ready with PR context | proposal/governance only |
-| `/repobrain audit` | supported | supported with PR context | full guarded audit engine; `v6`-enriched when runtime is available | none | ready | full repository audit; `--narrative` / `--executive` add optional LLM explanation, and `--profile premium` implies the premium explanation layer |
+| `/repobrain audit` | supported | supported with PR context | full guarded audit engine; `v6`-enriched when runtime is available | none | ready | full repository audit; `--narrative` / `--executive` add optional LLM explanation, `--profile premium` implies the premium explanation layer, and PR narrative modes stay classifier-grounded |
 | `/repobrain score` | supported | supported with PR context | same guarded audit engine; `v6`-enriched when runtime is available | none | ready | compact summary of audit |
 | `/repobrain doctor` | supported | supported | report-only diagnostics | none | ready | install/runtime diagnostic |
 | `/repobrain status` | supported | supported | report-only runtime snapshot | none | ready | command/runtime status |

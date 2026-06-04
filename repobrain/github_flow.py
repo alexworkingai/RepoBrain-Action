@@ -65,6 +65,10 @@ from repobrain.output_md import (
     render_unsupported_command_markdown,
     render_wait_markdown,
 )
+from repobrain.pr_impact import (
+    build_pr_impact_facts,
+    render_pr_impact_summary_lines,
+)
 from repobrain.retrieve_pro import retrieve_topk_pro
 from repobrain.retrieval.hybrid import rank_hybrid_candidates
 from repobrain.retrieval.hybrid_ranker import rerank_candidates
@@ -6001,6 +6005,8 @@ def _read_public_readiness_status(control_plane_root: Path) -> str:
     if match:
         return str(match.group(1) or "UNKNOWN").strip().upper() or "UNKNOWN"
     for token in (
+        "SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING",
+        "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_PR_AUDIT_CONSISTENCY_AND_EVIDENCE_PASS",
         "SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING",
         "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_HELP_AUDIT_PREMIUM_AND_UX_POLISH",
         "SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING",
@@ -6236,13 +6242,6 @@ def _target_repo_product_analysis_sections(
     ]
 
 
-def _is_docs_like_path(path: str) -> bool:
-    lowered = str(path or "").strip().lower()
-    if not lowered:
-        return False
-    return lowered.startswith(("docs/", ".github/")) or lowered.endswith((".md", ".rst", ".txt", ".adoc"))
-
-
 def _build_pr_impact_assessment_answer(
     *,
     repo_root: Path,
@@ -6254,7 +6253,10 @@ def _build_pr_impact_assessment_answer(
     changed_entries = _collect_pr_changed_file_entries_from_context(github_context)
     changed_files = [str(item.get("path", "")).strip() for item in changed_entries if str(item.get("path", "")).strip()]
     unique_files = list(dict.fromkeys(changed_files))
-    docs_only = bool(unique_files) and all(_is_docs_like_path(path) for path in unique_files)
+    facts = build_pr_impact_facts(
+        github_context=github_context,
+        changed_files=unique_files,
+    )
     touched_roots = []
     for path in unique_files:
         root = path.split("/", 1)[0] if "/" in path else path
@@ -6264,32 +6266,6 @@ def _build_pr_impact_assessment_answer(
         "LLM synthesis was used, but the answer below is constrained to PR changed files and target-repository evidence."
         if llm_used
         else "LLM was not called; answer generated from PR changed files and target-repository evidence."
-    )
-    change_type = "docs-only" if docs_only else "behavior-affecting or mixed"
-    functionality_impact = (
-        "No direct product-functionality change is visible; the PR appears to update documentation and operator guidance."
-        if docs_only
-        else "Potentially yes; changed files should be reviewed in the target repository context."
-    )
-    runtime_impact = (
-        "No direct runtime change is visible from the changed-file set."
-        if docs_only
-        else "Review runtime/config implications in the changed files before treating this as documentation-only."
-    )
-    security_impact = (
-        "No direct security control change is visible from the changed-file set."
-        if docs_only
-        else "Security impact should be checked against changed workflows, auth, runtime, and docs claims."
-    )
-    validation_needed = (
-        "Docs accuracy review plus optional CI/docs checks."
-        if docs_only
-        else "Run the relevant CI checks and verify any behavior/config changes against the target repository."
-    )
-    partner_effect = (
-        "Minor positive or neutral; clearer docs can improve partner-pilot confidence without changing runtime behavior."
-        if docs_only
-        else "Depends on whether changed files alter partner-facing runtime, workflow, or documentation behavior."
     )
     changed_file_lines = [f"- `{path}`" for path in unique_files[:8]] or [
         "- Changed files were not available from PR metadata."
@@ -6301,42 +6277,48 @@ def _build_pr_impact_assessment_answer(
         llm_line,
         "",
         "PR impact summary:",
-        f"- This PR in `{_target_repo_name(repo_root=repo_root, github_context=github_context)}` currently looks `{change_type}` based on changed-file evidence.",
+        (
+            f"- This PR in `{_target_repo_name(repo_root=repo_root, github_context=github_context)}` "
+            f"currently looks `{str(facts.get('change_type', 'unknown') or 'unknown')}` based on authoritative changed-file evidence."
+        ),
         "",
         "Changed files:",
         *changed_file_lines,
         "",
         "Change type:",
-        f"- `{change_type}`",
-        f"- Behavior-affecting: `{'no' if docs_only else 'possible'}`",
+        f"- `{str(facts.get('change_type', 'unknown') or 'unknown')}`",
+        (
+            "- Behavior-affecting: `no`"
+            if facts.get("behavior_affecting") is False
+            else "- Behavior-affecting: `not visible from changed-file evidence`"
+        ),
         "",
         "Touched target-repo modules/layers:",
         *touched_root_lines,
         "",
         "Product functionality impact:",
-        f"- {functionality_impact}",
+        f"- {str(facts.get('product_functionality_impact', 'unknown') or 'unknown')}",
         "",
         "Architecture/runtime impact:",
-        f"- {runtime_impact}",
+        f"- {str(facts.get('architecture_runtime_impact', 'unknown') or 'unknown')}",
         "",
         "Security posture impact:",
-        f"- {security_impact}",
+        f"- {str(facts.get('security_posture_impact', 'unknown') or 'unknown')}",
         "",
         "Test/CI validation needed:",
-        f"- {validation_needed}",
+        f"- {str(facts.get('tests_validation_needed', 'unknown') or 'unknown')}",
         "",
         "Production readiness effect:",
-        f"- {'Minor positive or neutral documentation polish.' if docs_only else 'Requires changed-file review before readiness impact can be called neutral.'}",
+        f"- {str(facts.get('production_readiness_effect', 'unknown') or 'unknown')}",
         "",
         "Partner-pilot effect:",
-        f"- {partner_effect}",
+        f"- {str(facts.get('partner_pilot_effect', 'unknown') or 'unknown')}",
         "",
         "Risk level:",
-        f"- `{'LOW' if docs_only else 'MEDIUM'}`",
+        f"- `{str(facts.get('risk_level', 'UNKNOWN') or 'UNKNOWN')}`",
         "",
         "Limitations:",
-        "- This is a PR-scoped assessment and not a merge, security, or production approval.",
-        "- RepoBrain-Action is the analysis tool; the target product remains the PR repository.",
+        *(f"- {item}" for item in facts.get("limitations", [])),
         "",
         "Safety note:",
         f"- {runtime_note}",
@@ -6376,6 +6358,10 @@ def _build_product_analysis_answer(
 
 def _public_readiness_next_step(status: str) -> str:
     normalized = str(status or "UNKNOWN").strip().upper()
+    if normalized == "SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING":
+        return "Run the Sprint 92H live issue/PR retest, then record final PR-audit consistency evidence and selected partner readiness."
+    if normalized == "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_PR_AUDIT_CONSISTENCY_AND_EVIDENCE_PASS":
+        return "Proceed with selected partner onboarding using the public action surface, canonical PR impact classifier, and final PR-audit consistency guardrails."
     if normalized == "SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING":
         return "Run the Sprint 92G live issue/PR retest, then update partner-readiness evidence and selected partner onboarding status."
     if normalized == "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_HELP_AUDIT_PREMIUM_AND_UX_POLISH":
@@ -6449,13 +6435,10 @@ def _maybe_refine_operational_ask_answer(
     control_plane_root = _control_plane_root(repo_root)
     public_readiness_status = _read_public_readiness_status(control_plane_root)
     installed_package_proof_status = _read_installed_package_proof_status(control_plane_root)
-    requested_backend = str(audit_summary.get("requested_backend", "auto") or "auto")
     resolved_backend = str(audit_summary.get("resolved_backend", "not_applicable") or "not_applicable")
     fallback_used = str(audit_summary.get("fallback_used", "not_applicable") or "not_applicable")
     fallback_reason = str(audit_summary.get("fallback_reason", "not_applicable") or "not_applicable")
     dependency_mode = str(status_report.get("topocore_dependency_mode", "auto_not_detected") or "auto_not_detected")
-    runtime_requested = str(status_report.get("topocore_runtime_mode_requested", "auto") or "auto")
-
     if dependency_mode == "installed_private_package":
         dependency_summary = "installed private package active; private TopoCore source checkout is not used."
     elif dependency_mode == "installed_private_package_unavailable":
@@ -6501,9 +6484,9 @@ def _maybe_refine_operational_ask_answer(
         )
     elif cmd == "explain":
         runtime_resolution_line = (
-            "RepoBrain resolved an installed private package for this run."
+            "RepoBrain resolved the installed private package path successfully for this run."
             if dependency_mode == "installed_private_package"
-            else "RepoBrain resolved a controlled private runtime path for this run while keeping the runtime source private."
+            else "RepoBrain resolved a controlled private runtime path for this run while keeping the runtime source private and not exposed."
             if dependency_mode == "private_checkout_beta_only"
             else "RepoBrain resolved a local development runtime path for this run."
             if dependency_mode == "local_path_dev_only"
@@ -6514,13 +6497,14 @@ def _maybe_refine_operational_ask_answer(
             f"The workflow entrypoint is `{workflow_location}` and it currently references `{action_source}` as the action source.",
             "In this issue context, the workflow runs RepoBrain in a report-only, no-mutation mode.",
             "The private runtime boundary is configured and remains separate from the target product code.",
-            f"Runtime policy requested for this run: `{runtime_requested}`.",
+            "Installed private package remains the preferred partner path, while the runtime source stays private and is not exposed.",
             runtime_resolution_line,
             f"Runtime summary: {dependency_summary}",
             f"Installed-package live proof status is `{installed_package_proof_status}` and the current public-readiness state is `{public_readiness_status}`.",
             (
-                f"Backend evidence for this run stayed at requested `{requested_backend}` -> resolved `{resolved_backend}` "
-                f"with fallback `{fallback_used}` / `{fallback_reason}`."
+                "Backend resolved successfully to the private runtime with no fallback used."
+                if str(resolved_backend).strip().lower() == "v6" and str(fallback_used).strip().lower() in {"no", "false"}
+                else f"Backend remained bounded for this run; fallback status is `{fallback_used}` / `{fallback_reason}`."
             ),
             "Safety remains unchanged: no patch/autofix, no RepoBrain-created branch/commit/PR, and no TopoCore source exposure in user-facing output.",
         ]
@@ -6535,7 +6519,11 @@ def _maybe_refine_operational_ask_answer(
             "- Runtime source remains private and is not exposed.",
             f"- Public-switch readiness: `{public_readiness_status}`",
             f"- Installed-package live proof: `{installed_package_proof_status}`",
-            f"- Backend evidence for this run: requested `{requested_backend}` -> resolved `{resolved_backend}`; fallback `{fallback_used}` / `{fallback_reason}`",
+            (
+                "- Backend evidence for this run: private runtime resolved successfully; no fallback used."
+                if str(resolved_backend).strip().lower() == "v6" and str(fallback_used).strip().lower() in {"no", "false"}
+                else f"- Backend evidence for this run: fallback `{fallback_used}` / `{fallback_reason}`"
+            ),
             "- Safety: no patch/autofix, no RepoBrain-created branch/commit/PR, no TopoCore source exposure in user-facing output.",
         ]
     operational_next_step = _public_readiness_next_step(public_readiness_status)
@@ -7227,8 +7215,11 @@ def _split_pr_audit_narrative_sections(text: str, *, mode: str) -> tuple[str, st
     if not raw:
         return "", ""
     heading_options = [
+        "## pr impact summary",
+        "### pr impact summary",
         "## pr impact",
         "### pr impact",
+        "pr impact summary:",
         "pr impact:",
         "pr narrative impact:",
     ]
@@ -7254,6 +7245,89 @@ def _split_pr_audit_narrative_sections(text: str, *, mode: str) -> tuple[str, st
     if pr.strip() == main.strip():
         pr = ""
     return main, pr
+
+
+def _strip_prefixed_heading(text: str, headings: tuple[str, ...]) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    lines = raw.splitlines()
+    if not lines:
+        return raw
+    first = lines[0].strip().lower().rstrip(":")
+    normalized_headings = {item.strip().lower().rstrip(":") for item in headings if item.strip()}
+    if first in normalized_headings:
+        return "\n".join(lines[1:]).strip()
+    return raw
+
+
+def _build_canonical_pr_impact_facts_for_audit(
+    *,
+    report: dict[str, Any],
+    audit_summary: dict[str, Any],
+    github_context_seed: dict[str, Any] | None,
+) -> dict[str, Any]:
+    pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
+    changed_files_raw = pr_context.get("changed_files", [])
+    changed_files = (
+        [str(item).strip() for item in changed_files_raw if str(item).strip()]
+        if isinstance(changed_files_raw, list)
+        else []
+    )
+    if not changed_files:
+        changed_files_seed = (github_context_seed or {}).get("changed_files", [])
+        if isinstance(changed_files_seed, list):
+            changed_files = [str(item).strip() for item in changed_files_seed if str(item).strip()]
+    return build_pr_impact_facts(
+        github_context=github_context_seed,
+        changed_files=changed_files,
+        pr_number=pr_context.get("pr_number"),
+        primary_segment=str(audit_summary.get("pr_primary_segments", "none") or "none"),
+        support_segments=str(audit_summary.get("pr_support_segments", "none") or "none"),
+        cross_segment=bool(audit_summary.get("pr_cross_segment", False)),
+    )
+
+
+def _pr_narrative_contradictions(text: str, facts: dict[str, Any]) -> list[str]:
+    lowered = str(text or "").strip().lower()
+    if not lowered:
+        return []
+    contradictions: list[str] = []
+    if bool(facts.get("docs_only", False)):
+        for marker in (
+            "behavior-affecting",
+            "behaviour-affecting",
+            "may affect behavior",
+            "likely affects behavior",
+            "affects behavior rather than being documentation-only",
+            "implied to be behavior-affecting",
+            "moderate risk",
+            "risk is moderate",
+        ):
+            if marker in lowered:
+                contradictions.append(marker)
+        if str(facts.get("security_posture_impact", "") or "").strip().lower() == "no direct impact":
+            if "security impact" in lowered and "no direct impact" not in lowered:
+                contradictions.append("security impact overstated")
+    return contradictions
+
+
+def _apply_premium_narrative_length_guard(text: str) -> tuple[str, bool]:
+    raw = str(text or "").strip()
+    if not raw:
+        return "", False
+    words = raw.split()
+    if len(words) <= 1000:
+        return raw, False
+    shortened = " ".join(words[:900]).strip()
+    sentence_break = max(shortened.rfind(". "), shortened.rfind("\n"))
+    if sentence_break > 200:
+        shortened = shortened[:sentence_break + 1].strip()
+    shortened = shortened.rstrip()
+    if not shortened.endswith((".", "!", "?")):
+        shortened += "."
+    shortened += "\n\nNote: Premium narrative shortened to stay within response budget."
+    return shortened, True
 
 
 def _build_score_markdown(
@@ -7309,6 +7383,7 @@ def _build_audit_narrative_messages(
     improvements_raw = report.get("top_improvements", [])
     improvements = [item for item in improvements_raw if isinstance(item, dict)]
     pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
+    pr_facts = report.get("pr_impact_facts", {}) if isinstance(report.get("pr_impact_facts", {}), dict) else {}
     payload = {
         "focus": str(query or "").strip() or "repository readiness",
         "overall_score": int(report.get("overall_score", 0) or 0),
@@ -7346,6 +7421,7 @@ def _build_audit_narrative_messages(
             "changed_files_count": int(pr_context.get("changed_files_count", 0) or 0),
             "summary": str(pr_context.get("summary", "") or "").strip(),
         },
+        "pr_facts": pr_facts,
         "audit_engine": str(audit_summary.get("backend_mode", "n/a") or "n/a"),
         "score_authority": "TopoCore contract",
     }
@@ -7366,19 +7442,29 @@ def _build_audit_narrative_messages(
         else "Explain why the score landed where it did, the main engineering priorities, and 30/60/90-day implications."
     )
     if is_premium and not is_executive:
-        extra_instruction += " Go one layer deeper on architecture, runtime, validation, and decision tradeoffs without changing any audit truth."
+        extra_instruction += (
+            " Structure the response into: 1. Premium interpretation, 2. Why the score landed here, "
+            "3. Highest-confidence strengths, 4. Main readiness gaps, 5. 30/60/90-day decisions, 6. Limitations. "
+            "Keep the total response bounded and complete."
+        )
     if is_premium and is_executive:
         extra_instruction += " Keep it concise but sharper and more decision-oriented than the default executive mode."
     pr_instruction = ""
     if bool(payload["pr_context"].get("is_pr", False)):
         pr_instruction = (
             " For PR context, return two distinct sections in Markdown: `## "
-            + ("Executive narrative" if is_executive else "Narrative interpretation")
-            + "` and `## PR impact`."
-            " The PR impact section must cover changed files, change type, docs-only vs behavior-affecting impact, "
+            + ("Premium narrative" if is_premium and not is_executive else "Executive narrative" if is_executive else "Narrative interpretation")
+            + "` and `## PR impact summary`."
+            " The PR impact summary must cover changed files, change type, docs-only vs behavior-affecting impact, "
             "architecture/runtime/security implications, validation requirements, production-readiness effect, partner-pilot effect, and risk summary."
             " Do not repeat the same paragraph in both sections."
+            " Treat the provided canonical PR facts as authoritative and do not contradict them."
         )
+        if is_premium:
+            pr_instruction += (
+                " For premium PR output, keep the structure bounded and complete: "
+                "1. Premium interpretation, 2. PR impact summary, 3. Reviewer decision notes, 4. Validation needed, 5. Limitations."
+            )
     system_text = (
         "You are RepoBrain's narrative explainer. Use only the provided audit payload. "
         "Do not change scores, category scores, blockers, improvements, evidence truth, backend result, or fallback state. "
@@ -7391,6 +7477,11 @@ def _build_audit_narrative_messages(
         "- TopoCore remains the score authority.\n"
         "- Score modified by LLM: no.\n"
         "- Keep the explanation informational only.\n\n"
+        "PR fact constraints:\n"
+        "- Treat canonical PR facts as authoritative.\n"
+        "- Do not contradict change_type, docs_only, behavior_affecting, runtime impact, security impact, or risk_level.\n"
+        "- If PR facts say docs-only and behavior_affecting=no, do not say the PR may affect behavior or carries moderate risk.\n"
+        "- If impact is not visible from changed-file evidence, say that explicitly instead of guessing.\n\n"
         f"Audit payload:\n{json.dumps(payload, ensure_ascii=True, indent=2)}"
     )
     messages = [
@@ -7478,10 +7569,50 @@ def _maybe_attach_audit_narrative(
         text = str(llm_text).strip()
         if bool((report.get("pr_context", {}) or {}).get("is_pr", False)):
             main_text, pr_text = _split_pr_audit_narrative_sections(text, mode=mode)
+            main_headings = (
+                "## Premium narrative",
+                "## Premium executive narrative",
+                "## Executive narrative",
+                "## Narrative interpretation",
+            )
+            pr_headings = ("## PR impact summary", "## PR impact", "## PR narrative impact")
+            main_text = _strip_prefixed_heading(main_text or text, main_headings)
+            pr_text = _strip_prefixed_heading(pr_text, pr_headings)
+            pr_facts = report.get("pr_impact_facts", {}) if isinstance(report.get("pr_impact_facts", {}), dict) else {}
+            contradiction_markers = _pr_narrative_contradictions(pr_text or main_text, pr_facts)
+            if contradiction_markers:
+                pr_text = "\n".join(render_pr_impact_summary_lines(pr_facts))
+                audit_summary["audit_pr_narrative_guard"] = "deterministic_pr_facts_fallback"
+                audit_summary["audit_pr_narrative_guard_reason"] = ",".join(contradiction_markers)
+            if mode.startswith("premium"):
+                main_text, shortened = _apply_premium_narrative_length_guard(main_text or text)
+                report["audit_narrative_shortened"] = bool(shortened)
+                if shortened:
+                    audit_summary["audit_narrative_shortened"] = True
+                    audit_summary["llm_runtime_override_reason"] = (
+                        "Premium narrative shortened to stay within response budget."
+                    )
             report["audit_narrative_text"] = main_text or text
             report["audit_pr_narrative_text"] = pr_text
         else:
-            report["audit_narrative_text"] = text
+            main_text = _strip_prefixed_heading(
+                text,
+                (
+                    "## Premium narrative",
+                    "## Premium executive narrative",
+                    "## Executive narrative",
+                    "## Narrative interpretation",
+                ),
+            )
+            if mode.startswith("premium"):
+                main_text, shortened = _apply_premium_narrative_length_guard(main_text or text)
+                report["audit_narrative_shortened"] = bool(shortened)
+                if shortened:
+                    audit_summary["audit_narrative_shortened"] = True
+                    audit_summary["llm_runtime_override_reason"] = (
+                        "Premium narrative shortened to stay within response budget."
+                    )
+            report["audit_narrative_text"] = main_text or text
     _merge_llm_meta(audit_summary, llm_meta)
     llm_limit_state = classify_llm_limit_state(llm_meta)
     if llm_limit_state == "exhausted":
@@ -7639,6 +7770,12 @@ def _build_repository_audit_payload(
             audit_summary["backend_mode"] = "audit_v6_contract_rejected_score_summary"
         else:
             audit_summary["backend_mode"] = "audit_static_score_summary"
+    if pr_context_used:
+        report["pr_impact_facts"] = _build_canonical_pr_impact_facts_for_audit(
+            report=report,
+            audit_summary=audit_summary,
+            github_context_seed=github_context,
+        )
     return report, audit_summary, None, resolved_repo_root
 
 

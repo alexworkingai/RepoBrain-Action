@@ -136,6 +136,7 @@ User text such as "use LLM" does not bypass that policy.
 
 - the base TopoCore audit score is still valid even when the narrative layer is skipped
 - `/repobrain score` remains compact TopoCore-only output in the current product path
+- if a premium narrative is shortened for response budget, RepoBrain states that explicitly instead of silently truncating the explanation
 
 ## 4. Verify returns `NOT_RUN`
 

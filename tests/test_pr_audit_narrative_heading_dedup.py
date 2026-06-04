@@ -5,13 +5,14 @@ from pathlib import Path
 from repobrain.github_flow import _build_audit_markdown
 
 
-def test_audit_premium_profile_works_in_pr_context(monkeypatch) -> None:
+def test_pr_audit_headings_are_not_duplicated(monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[1]
+    monkeypatch.setenv("RB_LLM_EXECUTION_PROFILE", "premium")
 
     monkeypatch.setattr(
         "repobrain.github_flow._maybe_generate_llm_text",
         lambda **_kwargs: (
-            "## Premium narrative\n- Overall score drivers.\n- Architecture and runtime tradeoffs.\n\n## PR impact\n- Changed files affect documentation and workflow clarity.\n- Validation remains lightweight.",
+            "## Premium narrative\n- Overall score drivers.\n\n## PR impact summary\n- Docs-only change.\n- Validation remains lightweight.",
             {
                 "llm_used": True,
                 "llm_skip_reason": "n/a",
@@ -24,21 +25,14 @@ def test_audit_premium_profile_works_in_pr_context(monkeypatch) -> None:
             },
         ),
     )
-    monkeypatch.setenv("RB_LLM_EXECUTION_PROFILE", "premium")
 
     markdown = _build_audit_markdown(
         repo_root=repo_root,
-        query="Focus on this PR as a large partner-repository readiness review.",
+        query="Focus on this PR for selected partner pilot readiness.",
         tky_mode="local",
-        github_context_seed={
-            "event_name": "issue_comment",
-            "is_pr": True,
-            "pr_number": 41,
-            "changed_files": ["docs/manual-smoke.md", "README.md"],
-        },
+        github_context_seed={"event_name": "issue_comment", "is_pr": True, "pr_number": 41},
     )
 
-    assert "## Premium narrative" in markdown
-    assert "## PR impact summary" in markdown
-    assert "- Audit narrative mode: `premium`" in markdown
-    assert "- Score modified by LLM: `no`" in markdown
+    assert markdown.count("## Premium narrative") == 1
+    assert markdown.count("## PR impact summary") == 1
+    assert "## Narrative interpretation\n## Narrative interpretation" not in markdown

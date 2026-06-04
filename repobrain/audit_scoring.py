@@ -933,6 +933,22 @@ def _blocker(*, title: str, category: str, evidence: list[str], rationale: str) 
 
 def _build_top_improvements(*, inventory: dict[str, Any], categories: list[dict[str, Any]]) -> list[dict[str, Any]]:
     improvements: list[dict[str, Any]] = []
+    category_scores = {
+        str(item.get("title", "") or "").strip().lower(): (
+            int(item.get("score", 0) or 0),
+            int(item.get("max_score", 0) or 0),
+        )
+        for item in categories
+        if isinstance(item, dict)
+    }
+
+    def _is_maxed_category(category_name: str) -> bool:
+        score, max_score = category_scores.get(str(category_name or "").strip().lower(), (0, 0))
+        return max_score > 0 and score >= max_score
+
+    def _impact_rank(level: str) -> int:
+        return {"high": 0, "medium": 1, "low": 2}.get(str(level or "medium").strip().lower(), 1)
+
     if not inventory["test_paths"]:
         improvements.append(
             _improvement(
@@ -1036,6 +1052,14 @@ def _build_top_improvements(*, inventory: dict[str, Any], categories: list[dict[
                 expected_score_impact="medium",
             )
         )
+    filtered: list[dict[str, Any]] = []
+    for item in improvements:
+        category = str(item.get("category", "") or "").strip()
+        title = str(item.get("title", "") or "").strip().lower()
+        if _is_maxed_category(category) and not title.startswith("maintain"):
+            continue
+        filtered.append(item)
+    improvements = filtered
     if not improvements:
         improvements.append(
             _improvement(
@@ -1046,6 +1070,16 @@ def _build_top_improvements(*, inventory: dict[str, Any], categories: list[dict[
                 expected_score_impact="low",
             )
         )
+    improvements.sort(
+        key=lambda item: (
+            (
+                category_scores.get(str(item.get("category", "") or "").strip().lower(), (0, 1))[0]
+                / max(category_scores.get(str(item.get("category", "") or "").strip().lower(), (0, 1))[1], 1)
+            ),
+            _impact_rank(str(item.get("expected_score_impact", "medium") or "medium")),
+            str(item.get("category", "") or ""),
+        )
+    )
     return improvements[:10]
 
 
@@ -1175,14 +1209,15 @@ def _build_executive_summary(
     ordered = sorted(categories, key=lambda item: (item["score"] / max(item["max_score"], 1)), reverse=True)
     strongest = ordered[0]["title"] if ordered else "repository structure"
     weakest = ordered[-1]["title"] if ordered else "documentation"
+    changed_files = _changed_files(github_context)
+    pr_context_suffix = " with PR context" if github_context and bool(github_context.get("is_pr", False)) and changed_files else ""
     parts = [
-        f"The repository currently scores {overall_score}/100 (`{readiness_band}`), with stronger signals in {strongest} and the largest drag in {weakest}.",
+        f"The static RepoBrain baseline score{pr_context_suffix} is {overall_score}/100 (`{readiness_band}`), with stronger signals in {strongest} and the largest drag in {weakest}.",
     ]
     if critical_blockers:
         parts.append(f"The most important near-term blocker is {critical_blockers[0]['title'].lower()}.")
     else:
         parts.append("No critical blocker was confirmed from the sampled evidence.")
-    changed_files = _changed_files(github_context)
     if github_context and bool(github_context.get("is_pr", False)) and changed_files:
         parts.append(f"Current PR context contributed {len(changed_files)} changed files as supplemental evidence.")
     return " ".join(parts)
@@ -1196,12 +1231,14 @@ def _build_pr_context(github_context: dict[str, Any] | None) -> dict[str, Any]:
             "pr_number": None,
             "changed_files_count": 0,
             "changed_files_sample": [],
+            "changed_files": [],
         }
     return {
         "is_pr": bool(github_context.get("is_pr", False)),
         "pr_number": github_context.get("pr_number"),
         "changed_files_count": len(changed_files),
         "changed_files_sample": changed_files[:5],
+        "changed_files": changed_files,
     }
 
 

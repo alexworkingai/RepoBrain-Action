@@ -75,6 +75,7 @@ Current explicit justifications:
 - full sanitized debug trace belongs in workflow artifacts/logs, not default partner comments
 - controlled issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`, but quota exhaustion or provider unavailability must fall back deterministically and stay non-mutating
 - premium audit narrative remains an explanation-only layer and must not require mutation-capable permissions or override TopoCore score authority
+- PR audit narrative layers must not override canonical PR classifier facts
 
 ## Future Tightening Plan
 

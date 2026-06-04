@@ -1185,7 +1185,8 @@ def test_ask_evidence_lines_include_context_role_labels_without_changing_truth_b
     assert "- [Changed in PR]" in md
     assert "- [Support context]" in md
     assert "- [Test context]" in md
-    assert "### 🏷️ Evidence context" in md
+    assert "### 🏷️ Evidence context" not in md
+    assert "### 🔎 Verification" not in md
     assert "### Async batch orchestration" not in md
 
 

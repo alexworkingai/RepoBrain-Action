@@ -39,8 +39,9 @@ def test_pr_ask_assessment_stays_pr_scoped_for_docs_only_change(tmp_path: Path) 
     assert "Change type:" in answer_text
     assert "`docs-only`" in answer_text
     assert "Behavior-affecting: `no`" in answer_text
-    assert "No direct runtime change is visible" in answer_text
-    assert "No direct security control change is visible" in answer_text
+    assert "Architecture/runtime impact:" in answer_text
+    assert "- no direct impact" in answer_text
+    assert "Security posture impact:" in answer_text
     assert "Risk level:" in answer_text and "`LOW`" in answer_text
     assert "RepoBrain-Action currently looks like" not in answer_text
     assert audit_summary["route_final"] == "ASK"

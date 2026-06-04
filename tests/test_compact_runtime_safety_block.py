@@ -33,7 +33,7 @@ def test_compact_runtime_and_safety_block_hides_raw_backend_fields() -> None:
 
     assert "### 🛡️ Runtime and safety" in md
     assert "- Runtime: `v6-enriched`" in md
-    assert "- Backend: `auto -> v6`" in md
+    assert "- Backend: `private runtime resolved successfully`" in md
     assert "TKY mode requested" not in md
     assert "TKYA mode" not in md
     assert "Files modified: `no`" not in md

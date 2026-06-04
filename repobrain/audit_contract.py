@@ -308,6 +308,7 @@ def merge_audit_report_with_v6(
         merged_band=merged["readiness_band"],
         adjustments=merged["v6_score_adjustments"],
         existing_summary=str(static_report.get("executive_summary", "") or "").strip(),
+        pr_context=merged.get("pr_context", {}),
     )
     return merged
 
@@ -480,19 +481,22 @@ def _build_v6_executive_summary(
     merged_band: str,
     adjustments: Sequence[Mapping[str, Any]],
     existing_summary: str,
+    pr_context: Mapping[str, Any] | None = None,
 ) -> str:
-    summary = existing_summary or "Repository audit completed."
+    is_pr = bool((pr_context or {}).get("is_pr", False))
+    pr_suffix = " with PR context" if is_pr else ""
     delta = merged_score - static_score
+    final_intro = f"The final RepoBrain score{pr_suffix} is `{merged_score} / 100` (`{merged_band}`)."
     if delta == 0:
         return (
-            f"{summary} Static baseline was `{static_score} / 100` (`{static_band}`), and the v6 contract path "
-            f"returned the same overall score with deeper rationale."
+            f"{final_intro} Static baseline was `{static_score} / 100` (`{static_band}`), and v6 bounded enrichment "
+            f"retained the same final score with deeper rationale."
         )
-    direction = "up" if delta > 0 else "down"
     count = len(adjustments)
+    delta_text = f"+{delta}" if delta > 0 else str(delta)
     return (
-        f"{summary} Static baseline was `{static_score} / 100` (`{static_band}`); "
-        f"v6 enrichment adjusted the score {direction} by `{abs(delta)}` to `{merged_score} / 100` (`{merged_band}`)"
+        f"{final_intro} Static baseline was `{static_score} / 100` (`{static_band}`), and v6 bounded enrichment "
+        f"adjusted the final score by `{delta_text}`"
         f"{' across ' + str(count) + ' bounded adjustments' if count else ''}."
     )
 
