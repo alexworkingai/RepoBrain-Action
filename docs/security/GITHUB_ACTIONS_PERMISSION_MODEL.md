@@ -73,6 +73,7 @@ Current explicit justifications:
 - compact default output is for GitHub issue/PR comments
 - `RB_REPOBRAIN_VERBOSE_DIAGNOSTICS=1` enables expanded sanitized diagnostics
 - full sanitized debug trace belongs in workflow artifacts/logs, not default partner comments
+- controlled issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`, but quota exhaustion or provider unavailability must fall back deterministically and stay non-mutating
 
 ## Future Tightening Plan
 

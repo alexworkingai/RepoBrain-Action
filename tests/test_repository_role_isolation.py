@@ -24,7 +24,7 @@ def test_consumer_repo_ask_does_not_describe_action_repo_modules(
     _write(control_plane_root / "pyproject.toml", "[project]\nname='repobrain-control'\n")
     _write(
         control_plane_root / "docs" / "release" / "PUBLIC_READINESS_ASSESSMENT.md",
-        "- current public readiness decision: `SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX`\n",
+        "- current public readiness decision: `SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`\n",
     )
     _write(control_plane_root / "docs" / "release" / "INSTALLED_PACKAGE_LIVE_PROOF.md", "- `INSTALLED_PACKAGE_LIVE_PROOF_PASSED`\n")
     _write(control_plane_root / "docs" / "security" / "REPO_GOVERNANCE_MODEL.md", "- `PROTECTED_MAIN_BASELINE_ENABLED`\n")
@@ -43,4 +43,3 @@ def test_consumer_repo_ask_does_not_describe_action_repo_modules(
     assert "RepoBrain-Action currently" not in answer_text
     assert "repobrain/" not in answer_text.lower()
     assert "target repository" in answer_text.lower() or "target-repo" in answer_text.lower()
-

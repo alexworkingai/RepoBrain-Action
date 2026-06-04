@@ -137,8 +137,12 @@ HELP_TEXT = """RepoBrain supported commands:
 - `/repobrain status`
 
 Examples:
-- `/repobrain ask --profile balanced How does provider selection work?`
-- `/repobrain audit Focus on selected partner onboarding readiness.`
+- `/repobrain ask --profile balanced Analyze this repository as a product.`
+- `/repobrain ask --profile premium Explain the architecture and risks.`
+- `/repobrain explain --profile balanced How is this repo connected to RepoBrain?`
+- `/repobrain audit --narrative Focus on product readiness.`
+- `/repobrain audit --executive Focus on partner pilot readiness.`
+- `/repobrain audit --profile premium Focus on a large PR readiness review.`
 - `/repobrain score Focus on repository readiness for partner testing.`
 - `/repobrain locate TKYProvider`
 - `/repobrain explain retrieve_topk`
@@ -149,20 +153,29 @@ Examples:
 Command notes:
 - `/repobrain help` shows the active command surface, examples, and safety boundaries.
 - `/repobrain ask` answers repository questions and should analyze the current target repository, not the RepoBrain implementation, unless RepoBrain is the target repo.
+- `/repobrain ask` may use controlled issue or PR LLM when policy and quota allow.
 - `/repobrain locate` finds the most relevant repository locations for a symbol, path, or workflow question.
 - `/repobrain explain` explains repository behavior, workflow connection, or code paths using repository evidence.
+- `/repobrain explain` may use controlled issue or PR LLM when policy and quota allow.
 - `/repobrain review` is a PR-only review summary and keeps mutation disabled.
 - `/repobrain verify` is informational only and reports checks/status truth without merge approval.
 - `/repobrain fix` is proposal/governance only and stays no-patch/no-mutation.
-- `/repobrain audit` is the full repository audit and may apply contract-validated private v6 enrichment when available.
+- `/repobrain audit` is the full repository audit; default scoring stays TopoCore-first, while `--narrative`, `--executive`, and `--profile premium` add an optional LLM explanation layer only.
 - `/repobrain score` is the compact score summary view of the same guarded audit engine.
 - `/repobrain doctor` reports setup and workflow diagnostics in partner-facing language.
 - `/repobrain status` reports current runtime, command surface, and safety posture in partner-facing language.
 
 Execution profiles:
-- Use `--profile cheap|balanced|premium` with ask, review, and fix.
+- Use `--profile cheap|balanced|premium` with ask, explain, review, and fix.
+- `/repobrain audit --profile premium` enables the premium narrative/explanation layer when requested with audit narrative flags.
 - Default is `balanced` when `--profile` is omitted.
 - For review/fix safety, requested `cheap` may be normalized to `balanced`.
+
+Environment / policy:
+- `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1` enables controlled issue ask/explain and issue audit narrative LLM by default.
+- `RB_REPOBRAIN_ENABLE_ISSUE_LLM=0` disables issue ask/explain and issue audit narrative LLM while keeping deterministic fallback available.
+- If LLM quota is exhausted, RepoBrain falls back to deterministic output and reports the exhausted state in the LLM block.
+- TopoCore remains the audit score authority; any optional LLM narrative does not change scores.
 
 Safety notes:
 - No patch/autofix.
@@ -1171,8 +1184,64 @@ def _env_int(name: str, default: int) -> int:
     return env_int(name, default)
 
 
+def is_issue_llm_enabled() -> bool:
+    return bool(_runtime_env_cfg().llm.enable_issue_llm)
+
+
+def is_trusted_issue_context(github_context: dict[str, Any] | None = None) -> bool:
+    context = github_context if isinstance(github_context, dict) else {}
+    event_name = str(
+        context.get("event_name") or os.environ.get("GITHUB_EVENT_NAME", "")
+    ).strip().lower()
+    is_pr_context = bool(
+        context.get("is_pr")
+        or context.get("pr_number")
+        or context.get("pull_request")
+    )
+    event_path = str(os.environ.get("GITHUB_EVENT_PATH", "") or "").strip()
+    return event_name == "issue_comment" and not is_pr_context and "pull_request_target" not in event_path.lower()
+
+
+def should_use_llm_for_issue_ask_explain(
+    *,
+    cmd: str,
+    github_context: dict[str, Any] | None = None,
+    execution_profile: str = "balanced",
+) -> bool:
+    cmd_norm = str(cmd or "").strip().lower()
+    profile_norm = str(execution_profile or "balanced").strip().lower()
+    if cmd_norm not in {"ask", "explain", "audit"}:
+        return False
+    if profile_norm not in {"balanced", "premium"} and cmd_norm != "audit":
+        return False
+    return is_trusted_issue_context(github_context) and is_issue_llm_enabled()
+
+
+def classify_llm_limit_state(meta: dict[str, Any] | None) -> str:
+    payload = meta if isinstance(meta, dict) else {}
+    if bool(payload.get("llm_used", False)):
+        return "ok"
+    skip_reason = str(payload.get("llm_skip_reason", "n/a") or "n/a").strip().lower()
+    provider_error_type = str(payload.get("llm_provider_error_type", "n/a") or "n/a").strip().lower()
+    governor_reason = str(payload.get("llm_governor_reason", "n/a") or "n/a").strip().lower()
+    if provider_error_type == "rate_limited":
+        return "exhausted"
+    if skip_reason.startswith("budget:") and (
+        "remaining_exhausted" in skip_reason
+        or "remaining_buffer" in skip_reason
+        or "quota" in skip_reason
+        or "limit" in skip_reason
+    ):
+        return "exhausted"
+    if "remaining_exhausted" in governor_reason or "quota" in governor_reason or "rate_limited" in governor_reason:
+        return "exhausted"
+    return "ok" if bool(payload.get("llm_used", False)) else "not_applicable"
+
+
 def _llm_runtime_policy(
     github_context: dict[str, Any] | None = None,
+    *,
+    cmd: str | None = None,
 ) -> tuple[bool, str]:
     cfg = _runtime_env_cfg()
     if not bool(cfg.llm.enabled):
@@ -1190,15 +1259,26 @@ def _llm_runtime_policy(
         or context.get("pr_number")
         or context.get("pull_request")
     )
+    cmd_norm = str(cmd or "").strip().lower()
 
     if event_name == "issue_comment":
-        if not bool(cfg.llm.enable_issue_comment):
-            return False, "issue_comment_policy_disabled"
         if is_pr_context:
+            if not bool(cfg.llm.enable_issue_comment):
+                return False, "issue_comment_policy_disabled"
             if not bool(cfg.llm.enable_pr_comments):
                 return False, "pr_comment_policy_disabled"
-        elif not bool(cfg.llm.enable_issue_only):
-            return False, "issue_only_policy_disabled"
+        elif cmd_norm in {"ask", "explain", "audit"}:
+            if not bool(cfg.llm.enable_issue_llm):
+                return False, "issue_llm_policy_disabled"
+            if not is_trusted_issue_context(context):
+                return False, "issue_context_untrusted"
+            if cmd_norm in {"ask", "explain"} and _normalize_execution_profile(cfg.llm.execution_profile) == "cheap":
+                return False, "issue_llm_cheap_profile_deterministic"
+        else:
+            if not bool(cfg.llm.enable_issue_comment):
+                return False, "issue_comment_policy_disabled"
+            if not bool(cfg.llm.enable_issue_only):
+                return False, "issue_only_policy_disabled"
 
     return True, "n/a"
 
@@ -1217,6 +1297,7 @@ def _llm_policy_context_fields(github_context: dict[str, Any] | None = None) -> 
     return {
         "llm_policy_event_name": event_name or "n/a",
         "llm_policy_is_pr_context": bool(is_pr_context),
+        "llm_policy_issue_llm_enabled": bool(cfg.llm.enable_issue_llm),
         "llm_policy_issue_comment_enabled": bool(cfg.llm.enable_issue_comment),
         "llm_policy_pr_comments_enabled": bool(cfg.llm.enable_pr_comments),
         "llm_policy_issue_only_enabled": bool(cfg.llm.enable_issue_only),
@@ -2588,7 +2669,7 @@ def _maybe_generate_llm_text(
         llm_decision_reason_code=decision_reason_code,
     )
     llm_meta["llm_decision_route"] = normalized_route or "n/a"
-    llm_allowed_by_policy, llm_policy_reason = _llm_runtime_policy(github_context)
+    llm_allowed_by_policy, llm_policy_reason = _llm_runtime_policy(github_context, cmd=cmd)
     if not llm_allowed_by_policy:
         llm_meta.update(profile_fields)
         llm_meta["llm_profile_model_alignment"] = "not_applicable"
@@ -3533,7 +3614,7 @@ def _run_batch_llm_review_fix(
         )
 
     is_patch_mode = _is_fix_intent(cmd, intent)
-    llm_allowed_by_policy, llm_policy_reason = _llm_runtime_policy(github_context)
+    llm_allowed_by_policy, llm_policy_reason = _llm_runtime_policy(github_context, cmd=cmd)
     llm_disabled = not llm_allowed_by_policy
     if llm_disabled:
         llm_meta = _llm_default_meta(
@@ -4458,14 +4539,27 @@ def _runtime_override_reason_from_skip(skip_reason: str) -> str:
         return "LLM blocked: missing GitHub token."
     if lowered == "locate_disabled":
         return "LLM blocked: locate mode is disabled by runtime policy."
+    if lowered == "issue_llm_policy_disabled":
+        return "LLM blocked: issue LLM disabled by RB_REPOBRAIN_ENABLE_ISSUE_LLM=0; deterministic fallback used."
+    if lowered == "issue_llm_cheap_profile_deterministic":
+        return "LLM not used: issue cheap profile stays deterministic unless a higher-quality profile is requested."
     if lowered == "issue_comment_policy_disabled":
         return "LLM blocked: issue_comment policy disabled."
     if lowered == "pr_comment_policy_disabled":
         return "LLM blocked: PR comment LLM policy disabled."
     if lowered == "issue_only_policy_disabled":
         return "LLM blocked: non-PR issue LLM policy disabled."
+    if lowered == "issue_context_untrusted":
+        return "LLM blocked: issue context is not trusted for controlled synthesis."
     if lowered.startswith("budget:"):
+        if any(
+            marker in lowered
+            for marker in ("remaining_exhausted", "remaining_buffer", "quota", "limit")
+        ):
+            return "LLM quota/limit exhausted; deterministic fallback used until limits reset."
         return f"LLM blocked: {reason[7:]}"
+    if lowered.startswith("llm_not_available:rate_limited"):
+        return "LLM quota/limit exhausted during provider call; deterministic fallback used."
     if lowered.startswith("llm_not_available:"):
         provider_reason = reason.split(":", 1)[1]
         return f"LLM blocked: provider unavailable ({provider_reason})."
@@ -5802,6 +5896,8 @@ def _read_public_readiness_status(control_plane_root: Path) -> str:
     if match:
         return str(match.group(1) or "UNKNOWN").strip().upper() or "UNKNOWN"
     for token in (
+        "SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING",
+        "SELECTED_PARTNER_PILOT_READY_AFTER_CONTROLLED_ISSUE_LLM_AND_AUDIT_NARRATIVE",
         "SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL",
         "SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX",
         "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_CONSUMER_REPO_ASK_AND_UX_FIX",
@@ -6173,6 +6269,10 @@ def _build_product_analysis_answer(
 
 def _public_readiness_next_step(status: str) -> str:
     normalized = str(status or "UNKNOWN").strip().upper()
+    if normalized == "SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING":
+        return "Run the Sprint 92F live issue/PR retest, then update partner-readiness evidence and selected partner onboarding status."
+    if normalized == "SELECTED_PARTNER_PILOT_READY_AFTER_CONTROLLED_ISSUE_LLM_AND_AUDIT_NARRATIVE":
+        return "Proceed with selected partner onboarding using the public action surface, controlled issue LLM defaults, and optional audit narrative modes."
     if normalized == "SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL":
         return "This status is stale after PR #119 merge; update product-state docs before relying on it in user-facing output."
     if normalized == "SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX":
@@ -6251,7 +6351,7 @@ def _maybe_refine_operational_ask_answer(
     elif dependency_mode == "installed_private_package_unavailable":
         dependency_summary = "installed private package was requested, but no importable runtime package is available in this run."
     elif dependency_mode == "private_checkout_beta_only":
-        dependency_summary = "private_checkout beta-only path is active for this run."
+        dependency_summary = "controlled private runtime path is active for this run; installed private package remains the preferred partner path."
     elif dependency_mode == "local_path_dev_only":
         dependency_summary = "local_path development-only runtime is active for this run."
     else:
@@ -6574,6 +6674,25 @@ def _build_qa_markdown(
         audit_summary["pr_changed_files_count"] = len(changed_files_from_pr)
     else:
         audit_summary["pr_changed_files_count"] = 0
+
+    current_profile = _normalize_execution_profile(
+        audit_summary.get(
+            "llm_execution_profile_command_override",
+            audit_summary.get("llm_execution_profile_requested", getattr(cfg.llm, "execution_profile", "balanced")),
+        ),
+        default=getattr(cfg.llm, "execution_profile", "balanced"),
+    )
+    if cmd in {"ask", "explain"} and should_use_llm_for_issue_ask_explain(
+        cmd=cmd,
+        github_context=qa_github_context,
+        execution_profile=current_profile,
+    ):
+        audit_summary["execution_mode"] = "retrieval_plus_llm"
+        audit_summary["llm_intent"] = "explain" if cmd == "explain" else "summarize"
+        audit_summary["llm_decision_reason_short"] = (
+            f"LLM used: controlled issue LLM enabled for {current_profile} {cmd} synthesis."
+        )
+        audit_summary["llm_decision_reason_code"] = "CONTROLLED_ISSUE_LLM_ENABLED"
 
     semantic_llm_intent = str(audit_summary.get("llm_intent", "none") or "none")
     semantic_execution_mode = str(audit_summary.get("execution_mode", "retrieval_only") or "retrieval_only")
@@ -6921,6 +7040,9 @@ def _build_audit_markdown(
     tky_mode: str,
     github_context_seed: dict[str, Any] | None = None,
     audit: dict[str, Any] | None = None,
+    governor: AIBudgetGovernor | None = None,
+    narrative_requested: bool = False,
+    executive_requested: bool = False,
 ) -> str:
     report, audit_summary, error_body, resolved_repo_root = _build_repository_audit_payload(
         repo_root=repo_root,
@@ -6933,6 +7055,16 @@ def _build_audit_markdown(
     )
     if error_body:
         return error_body
+
+    report, audit_summary = _maybe_attach_audit_narrative(
+        report=report,
+        audit_summary=audit_summary,
+        query=query,
+        github_context_seed=github_context_seed,
+        governor=governor,
+        narrative_requested=narrative_requested,
+        executive_requested=executive_requested,
+    )
 
     diagnostic_markdown = render_diagnostic_summary_markdown(audit_summary)
     diagnostic_path = _write_diagnostic_summary_markdown(resolved_repo_root, diagnostic_markdown)
@@ -6990,6 +7122,174 @@ def _build_score_markdown(
         if audit is not None:
             audit["audit_result_artifact"] = artifact_path.as_posix()
     return body
+
+
+def _build_audit_narrative_messages(
+    *,
+    report: dict[str, Any],
+    audit_summary: dict[str, Any],
+    query: str,
+    mode: str,
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    categories_raw = report.get("categories", [])
+    categories = [item for item in categories_raw if isinstance(item, dict)]
+    blockers_raw = report.get("critical_blockers", [])
+    blockers = [item for item in blockers_raw if isinstance(item, dict)]
+    improvements_raw = report.get("top_improvements", [])
+    improvements = [item for item in improvements_raw if isinstance(item, dict)]
+    pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
+    payload = {
+        "focus": str(query or "").strip() or "repository readiness",
+        "overall_score": int(report.get("overall_score", 0) or 0),
+        "readiness_band": str(report.get("readiness_band", "UNKNOWN") or "UNKNOWN"),
+        "confidence": str(report.get("confidence", "medium") or "medium"),
+        "categories": [
+            {
+                "title": str(item.get("title", "Category") or "Category"),
+                "score": int(item.get("score", 0) or 0),
+                "max_score": int(item.get("max_score", 0) or 0),
+                "label": str(item.get("label", "UNKNOWN") or "UNKNOWN"),
+                "rationale": str(item.get("rationale", "No rationale captured.") or "No rationale captured."),
+            }
+            for item in categories[:8]
+        ],
+        "blockers": [
+            {
+                "title": str(item.get("title", "Critical blocker") or "Critical blocker"),
+                "category": str(item.get("category", "n/a") or "n/a"),
+                "summary": str(item.get("summary", item.get("detail", "No detail captured.")) or "No detail captured."),
+            }
+            for item in blockers[:6]
+        ],
+        "improvements": [
+            {
+                "title": str(item.get("title", "Improvement") or "Improvement"),
+                "category": str(item.get("category", "n/a") or "n/a"),
+                "summary": str(item.get("summary", item.get("detail", "No detail captured.")) or "No detail captured."),
+            }
+            for item in improvements[:6]
+        ],
+        "roadmap": report.get("roadmap", {}),
+        "pr_context": {
+            "is_pr": bool(pr_context.get("is_pr", False)),
+            "changed_files_count": int(pr_context.get("changed_files_count", 0) or 0),
+            "summary": str(pr_context.get("summary", "") or "").strip(),
+        },
+        "audit_engine": str(audit_summary.get("backend_mode", "n/a") or "n/a"),
+        "score_authority": "TopoCore contract",
+    }
+    style = "executive summary" if mode == "executive" else "narrative interpretation"
+    extra_instruction = (
+        "Return 5-8 concise bullets for partner-facing leadership review."
+        if mode == "executive"
+        else "Explain why the score landed where it did, the main engineering priorities, and 30/60/90-day implications."
+    )
+    if bool(payload["pr_context"].get("is_pr", False)):
+        extra_instruction += " Include PR impact on changed files, architecture/runtime implications, security/CI implications, and partner-pilot effect."
+    system_text = (
+        "You are RepoBrain's narrative explainer. Use only the provided audit payload. "
+        "Do not change scores, category scores, blockers, improvements, evidence truth, backend result, or fallback state. "
+        "Do not claim merge approval, security approval, legal approval, production certification, or any Microsoft/GitHub partnership. "
+        "Do not expose secrets, private runtime source paths, or `.topocore-v6`."
+    )
+    user_text = (
+        f"Produce a {style} for this RepoBrain audit. {extra_instruction}\n\n"
+        "Mandatory truth constraints:\n"
+        "- TopoCore remains the score authority.\n"
+        "- Score modified by LLM: no.\n"
+        "- Keep the explanation informational only.\n\n"
+        f"Audit payload:\n{json.dumps(payload, ensure_ascii=True, indent=2)}"
+    )
+    messages = [
+        {"role": "system", "content": system_text},
+        {"role": "user", "content": user_text},
+    ]
+    budget_stats = {
+        "input_budget_limit": int(_runtime_env_cfg().llm.max_input_tokens),
+        "input_budget_used_est": estimate_tokens(system_text) + estimate_tokens(user_text),
+        "dropped_locators_count": 0,
+        "dropped_hunks_count": 0,
+        "dropped_snippets_count": 0,
+    }
+    return messages, budget_stats
+
+
+def _maybe_attach_audit_narrative(
+    *,
+    report: dict[str, Any],
+    audit_summary: dict[str, Any],
+    query: str,
+    github_context_seed: dict[str, Any] | None,
+    governor: AIBudgetGovernor | None,
+    narrative_requested: bool,
+    executive_requested: bool,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    requested = bool(narrative_requested or executive_requested)
+    mode = "executive" if executive_requested else "narrative"
+    report["audit_narrative_requested"] = requested
+    report["audit_narrative_mode"] = mode if requested else "none"
+    report["audit_narrative_text"] = ""
+    report["audit_pr_narrative_text"] = ""
+    audit_summary["audit_narrative_requested"] = requested
+    audit_summary["audit_narrative_mode"] = mode if requested else "none"
+    audit_summary["audit_score_modified_by_llm"] = False
+    if not requested:
+        return report, audit_summary
+
+    messages, budget_stats = _build_audit_narrative_messages(
+        report=report,
+        audit_summary=audit_summary,
+        query=query,
+        mode=mode,
+    )
+    llm_text, llm_meta = _maybe_generate_llm_text(
+        cmd="audit",
+        intent="analysis",
+        query=query or f"audit {mode}",
+        route="DEEP",
+        execution_mode="retrieval_plus_llm",
+        llm_intent_decision="summarize" if mode == "executive" else "explain",
+        llm_decision_reason_short=(
+            "LLM used: audit executive narrative requested after TopoCore scoring."
+            if mode == "executive"
+            else "LLM used: audit narrative requested after TopoCore scoring."
+        ),
+        llm_decision_reason_code=(
+            "AUDIT_EXECUTIVE_NARRATIVE_REQUESTED"
+            if mode == "executive"
+            else "AUDIT_NARRATIVE_REQUESTED"
+        ),
+        github_context=dict(github_context_seed or {}),
+        locators=[],
+        candidates_count=max(
+            1,
+            len(report.get("categories", []))
+            + len(report.get("critical_blockers", []))
+            + len(report.get("top_improvements", [])),
+        ),
+        prebuilt_messages=messages,
+        prebuilt_budget_stats=budget_stats,
+        governor=governor,
+    )
+    if llm_text:
+        report["audit_narrative_text"] = str(llm_text).strip()
+        if bool((report.get("pr_context", {}) or {}).get("is_pr", False)):
+            report["audit_pr_narrative_text"] = str(llm_text).strip()
+    _merge_llm_meta(audit_summary, llm_meta)
+    llm_limit_state = classify_llm_limit_state(llm_meta)
+    if llm_limit_state == "exhausted":
+        audit_summary["llm_runtime_override_reason"] = (
+            "LLM quota/limit exhausted; audit score is available and narrative layer was skipped until limits reset."
+        )
+    elif not bool(llm_meta.get("llm_used", False)) and str(llm_meta.get("llm_skip_reason", "n/a")).lower() == "issue_llm_policy_disabled":
+        audit_summary["llm_runtime_override_reason"] = (
+            "audit narrative LLM disabled by policy; TopoCore audit completed."
+        )
+    else:
+        audit_summary["llm_runtime_override_reason"] = str(
+            audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a"
+        )
+    return report, audit_summary
 
 
 def _build_repository_audit_payload(
@@ -9897,10 +10197,12 @@ def run_github_flow(
     cmd = str(parsed.get("cmd", "help") or "help")
     query = str(parsed.get("query", "") or "")
     profile_override = str(parsed.get("profile", "") or "").strip().lower()
+    audit_narrative_requested = bool(str(parsed.get("narrative", "") or "").strip())
+    audit_executive_requested = bool(str(parsed.get("executive", "") or "").strip())
     parse_error_code = str(parsed.get("error_code", "") or "").strip().lower()
     parse_error_message = str(parsed.get("error_message", "") or "").strip()
 
-    if profile_override and cmd in {"ask", "review", "fix"}:
+    if profile_override and cmd in {"ask", "explain", "review", "fix", "audit"}:
         env_cfg = replace(env_cfg, llm=replace(env_cfg.llm, execution_profile=profile_override))
         _set_runtime_env_cfg(env_cfg)
         audit["llm_execution_profile_command_override"] = profile_override
@@ -10061,6 +10363,9 @@ def run_github_flow(
             tky_mode=tky_mode,
             github_context_seed=github_context_seed,
             audit=audit,
+            governor=governor,
+            narrative_requested=audit_narrative_requested,
+            executive_requested=audit_executive_requested,
         )
         audit["index_source"] = "n/a"
     elif cmd == "doctor":

@@ -7,8 +7,8 @@ Current external GitHub command surface is intentionally bounded.
 | Command | Issue scope | PR scope | Mutation behavior | Backend expectation | Notes |
 |---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
-| `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` when available; compact runtime/LLM block by default | issue ask analyzes the target repository; PR ask stays PR-scoped; route label stays `ASK` |
-| `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; default comments stay compact | full repository-level 100-point audit with evidence and roadmap |
+| `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` when available; compact runtime/LLM block by default | issue ask analyzes the target repository; PR ask stays PR-scoped; route label stays `ASK`; issue LLM is controlled by `RB_REPOBRAIN_ENABLE_ISSUE_LLM` |
+| `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; optional LLM narrative layer only when requested | full repository-level 100-point audit with evidence and roadmap |
 | `/repobrain score` | supported | supported as compact repository score with PR context | none | same guarded audit engine as `/repobrain audit`; default comments stay compact | compact summary view of the same audit engine |
 | `/repobrain doctor` | supported | supported | none | report-only diagnostics; backend remains explicit | installation/runtime diagnostic command |
 | `/repobrain locate <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | returns likely files and evidence |
@@ -26,11 +26,18 @@ Supported in issues:
 
 - `/repobrain help`
 - `/repobrain ask <query>`
+- `/repobrain ask --profile balanced <query>`
+- `/repobrain ask --profile premium <query>`
 - `/repobrain audit`
+- `/repobrain audit --narrative`
+- `/repobrain audit --executive`
+- `/repobrain audit --profile premium`
 - `/repobrain score`
 - `/repobrain doctor`
 - `/repobrain locate <query>`
 - `/repobrain explain <query>`
+- `/repobrain explain --profile balanced <query>`
+- `/repobrain explain --profile premium <query>`
 - `/repobrain status`
 
 Conservative in issues:
@@ -45,6 +52,8 @@ Issue ask behavior:
 
 - product-analysis asks should describe the current consumer repository rather than RepoBrain-Action internals
 - operational asks should answer workflow/runtime/readiness questions directly
+- balanced and premium issue ask/explain may use LLM when repository policy, provider access, and quota allow
+- free-text such as "use LLM" never bypasses policy
 - deterministic fallback remains valid when safe LLM policy blocks an LLM call
 
 ### PR Scope
@@ -115,6 +124,24 @@ It provides:
 - confidence and limitations
 - compact runtime/safety diagnostics by default
 - expanded sanitized diagnostics only in verbose/artifact mode
+
+Optional narrative modes:
+
+- `--narrative`
+  - keeps TopoCore as score authority
+  - adds an explanatory narrative layer only when LLM policy and quota allow
+- `--executive`
+  - keeps TopoCore as score authority
+  - adds a concise partner-facing executive layer only when LLM policy and quota allow
+- `--profile premium`
+  - may upgrade the optional audit narrative layer
+  - does not change the TopoCore score authority
+
+Audit narrative truth:
+
+- LLM narrative may summarize and explain the score
+- LLM narrative does not change final score, category scores, blockers, improvements, evidence truth, backend result, fallback state, or contract status
+- when quota is exhausted, RepoBrain returns the TopoCore audit and explicitly reports that the narrative layer was skipped
 
 `/repobrain audit` is informational only.
 It does not certify merge safety, security approval, or production readiness.
@@ -209,7 +236,11 @@ Visible no-mutation expectations:
 ## LLM Execution Notes
 
 - ask and explain do not require an LLM call to produce a bounded answer
-- issue ask may use an LLM only when safe policy allows
+- issue ask and explain may use an LLM only when safe policy allows
+- `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1` enables controlled issue ask/explain and issue audit narrative LLM by default
+- `RB_REPOBRAIN_ENABLE_ISSUE_LLM=0` disables issue ask/explain and issue audit narrative LLM while preserving deterministic fallback
+- audit narrative flags may use LLM for explanation only; `/repobrain score` remains compact TopoCore-only output
+- quota exhaustion falls back to deterministic output and must be reported explicitly in the LLM block
 - when policy or provider availability blocks the LLM path, RepoBrain can still answer from deterministic retrieval, workflow/runtime inspection, evidence extraction, and TopoCore v6 signals
 - route labels always reflect the user command; internal analysis mode is separate from the visible route
 - diagnostics must state whether the LLM was actually called

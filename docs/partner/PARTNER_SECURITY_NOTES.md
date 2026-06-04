@@ -32,6 +32,7 @@
 ## Workflow Permissions
 
 - use read-mostly baseline permissions
+- `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1` enables controlled issue ask/explain and issue audit narrative LLM by default; `RB_REPOBRAIN_ENABLE_ISSUE_LLM=0` disables that path without weakening deterministic fallback
 - `pull-requests: write` is acceptable only for publishing RepoBrain PR command response comments
 - keep that permission documented and monitored
 - protected main baseline is enabled on the public RepoBrain repository
@@ -43,6 +44,7 @@
 - do not introduce `contents: write` for normal partner setup
 - do not introduce `checks: write` unless a future check-publication feature is explicitly enabled and documented
 - do not introduce broad write permissions without explicit review
+- LLM narrative layers must not change TopoCore scores, category scores, blockers, or evidence truth
 
 ## BYO-LLM Cost Model
 

@@ -25,7 +25,9 @@ This document defines the selected-partner testing state after the Sprint 91 pub
 - dependency review passed on PR `#119`.
 - the public RepoBrain repository currently runs under a solo-owner protected-main baseline with force-push/deletion blocking and linear-history protection.
 - required status checks and CODEOWNERS review enforcement remain intentionally deferred while stable check names are locked.
-- current public readiness status on the Sprint 92E branch: `SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX`.
+- current public readiness status on the Sprint 92F branch: `SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`.
+- controlled issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`.
+- audit narrative modes are now implemented for `/repobrain audit --narrative`, `/repobrain audit --executive`, and `/repobrain audit --profile premium`.
 - Sprint 92A manual issue smoke hotfix passed for help, doctor, status, ask, locate, explain, audit, score, and the deprecated lite-alias regression.
 - historical Sprint 91 post-switch status remains recorded as: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
 - historical Sprint 90 readiness remains recorded as: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
@@ -64,6 +66,7 @@ Current truth:
 - `private_checkout` remains controlled beta-only fallback for owner-controlled or tightly managed pilots
 - selected partner testing should prefer installed private package mode
 - stronger managed-runtime or compiled-artifact protection is future work
+- audit narrative modes do not change TopoCore score authority; they only add optional explanation layers
 - Sprint 90 decisive result:
   - owner-issued artifact credential present
   - artifact preflight passed

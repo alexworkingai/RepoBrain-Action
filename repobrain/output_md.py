@@ -664,8 +664,21 @@ def _llm_summary(audit_summary: dict[str, Any]) -> dict[str, Any]:
     planned_llm = str(audit_summary.get("execution_mode", "retrieval_only") or "retrieval_only") == "retrieval_plus_llm"
     skip_reason = str(audit_summary.get("llm_skip_reason", "n/a") or "n/a").strip()
     runtime_override = str(audit_summary.get("llm_runtime_override_reason", "n/a") or "n/a").strip()
+    provider_error_type = str(audit_summary.get("llm_provider_error_type", "n/a") or "n/a").strip().lower()
+    limit_status = "ok" if llm_used else "not_applicable"
+    if provider_error_type == "rate_limited":
+        limit_status = "exhausted"
+    elif skip_reason.lower().startswith("budget:") and any(
+        marker in skip_reason.lower()
+        for marker in ("remaining_exhausted", "remaining_buffer", "quota", "limit")
+    ):
+        limit_status = "exhausted"
+    reset_raw = audit_summary.get("llm_reset_time_utc_iso", audit_summary.get("llm_rate_limit_reset", None))
+    reset_value = str(reset_raw).strip() if reset_raw not in {None, "", "n/a"} else "unknown"
     if llm_used:
         decision = "used"
+    elif provider_error_type == "rate_limited":
+        decision = "attempted but not completed"
     elif planned_llm:
         decision = "not called"
     else:
@@ -700,6 +713,8 @@ def _llm_summary(audit_summary: dict[str, Any]) -> dict[str, Any]:
         "tokens_total": total_tokens,
         "downgraded": downgraded,
         "downgrade_reason": downgrade_reason,
+        "limit_status": limit_status,
+        "reset": reset_value,
     }
 
 
@@ -712,11 +727,21 @@ def _compact_llm_lines(audit_summary: dict[str, Any]) -> list[str]:
             f"- Model: `{summary['model']}`",
             f"- Reason: {summary['reason']}",
             f"- Tokens: `{summary['tokens_total']}`",
+            f"- Limit status: `{summary['limit_status']}`",
             (
                 f"- Downgrade: `yes` ({summary['downgrade_reason']})"
                 if summary["downgraded"]
                 else "- Downgrade: `no`"
             ),
+        ]
+    elif summary["decision"] == "attempted but not completed":
+        lines = [
+            "### 🤖 LLM",
+            "- LLM: attempted but not completed",
+            f"- Reason: {summary['reason']}",
+            f"- Tokens: `{summary['tokens_total'] or 'unknown'}`",
+            "- Limit status: `exhausted`",
+            f"- Reset: `{summary['reset']}`",
         ]
     else:
         lines = [
@@ -725,6 +750,9 @@ def _compact_llm_lines(audit_summary: dict[str, Any]) -> list[str]:
             f"- Reason: {summary['reason']}",
             "- Tokens: `0`",
         ]
+        if summary["limit_status"] == "exhausted":
+            lines.append("- Limit status: `exhausted`")
+            lines.append(f"- Reset: `{summary['reset']}`")
     return lines
 
 
@@ -806,6 +834,7 @@ def _llm_lines(audit_summary: dict[str, Any]) -> list[str]:
         "### 🤖 LLM",
         f"- TKYA LLM decision: {tkya_decision}",
         f"- Reason: {decision_reason}",
+        f"- Limit status: `{llm_summary['limit_status']}`",
     ]
     if runtime_override != "n/a":
         lines.append(f"- Runtime override: {runtime_override}")
@@ -2871,7 +2900,7 @@ def render_review_markdown(
         f"signals `{len(possible_signals)}` | notes `{len(informational_notes)}`"
         ),
         f"- Segment summary: `{segment_summary}`",
-        f"- Verification: `{verification_status}`",
+        f"- Verification summary: `{verification_status}`",
         "",
         *_compact_llm_lines(audit_summary),
         "",
@@ -2903,7 +2932,6 @@ def render_review_markdown(
         *(files_block[:6] if files_block else ["- No changed files detected."]),
         *([f"- +{len(files_block) - 6} more"] if len(files_block) > 6 else []),
         "",
-        *_verification_report_lines(verification_report),
         "### 🧾 Audit anchors",
         *_audit_anchor_lines(audit_summary),
         "",
@@ -2935,6 +2963,7 @@ def render_review_markdown(
             "",
             *detail_lines[:-3],
             "",
+            *_verification_report_lines(verification_report),
             *_llm_lines(audit_summary),
             "",
             *_embeddings_lines(audit_summary),
@@ -3131,25 +3160,12 @@ def render_patch_markdown(
         ),
         f"- Targeting reason: {patch_targeting_reason}",
         f"- Localized evidence: `{localized_patch_evidence}`",
-        f"- Validation result: `{patch_validation_result}`",
         f"- Segment summary: `{segment_summary}`",
-        f"- Verification: `{verification_status}`",
+        f"- Verification summary: `{verification_status}`",
     ]
     sections.append("")
 
     detail_lines = [
-        "### ✅ Patch validation",
-        f"- Patch generation result: `{patch_generation_result}`",
-        f"- Patch validation result: `{patch_validation_result}`",
-        f"- Patch validation reason: {patch_validation_reason}",
-        "",
-        "### 📦 Patch artifact",
-        "- Full patch is saved to `artifacts/patch.diff`."
-        if patch_written
-        else "- No patch generated (safe outcome).",
-        f"- Apply status: {patch_apply_message}",
-        "",
-        *_verification_report_lines(verification_report),
         "### 🧾 Audit anchors",
         *_audit_anchor_lines(audit_summary),
         "",
@@ -3184,6 +3200,18 @@ def render_patch_markdown(
             patch_snippet.strip() or "# no patch generated",
             "```",
             "",
+            "### ✅ Patch validation",
+            f"- Patch generation result: `{patch_generation_result}`",
+            f"- Patch validation result: `{patch_validation_result}`",
+            f"- Patch validation reason: {patch_validation_reason}",
+            "",
+            "### 📦 Patch artifact",
+            "- Full patch is saved to `artifacts/patch.diff`."
+            if patch_written
+            else "- No patch generated (safe outcome).",
+            f"- Apply status: {patch_apply_message}",
+            "",
+            *_verification_report_lines(verification_report),
             *detail_lines[:-3],
             "",
             *_llm_lines(audit_summary),
@@ -3365,9 +3393,12 @@ def _audit_mode_lines(report: dict[str, Any], audit_summary: dict[str, Any]) -> 
     fallback_reason = str(audit_summary.get("fallback_reason", "audit_static_scoring") or "audit_static_scoring").strip()
     capability = str(audit_summary.get("audit_contract_capability", "") or "").strip()
     warning = str(audit_summary.get("audit_contract_warning", "") or "").strip()
+    narrative_requested = bool(audit_summary.get("audit_narrative_requested", False))
+    narrative_mode = str(audit_summary.get("audit_narrative_mode", "none") or "none").strip().lower()
+    llm_used = bool(audit_summary.get("llm_used", False))
     lines: list[str] = []
     if audit_mode == "v6_enriched":
-        lines.append("- Audit mode: `v6-enriched scoring`")
+        lines.append("- Audit engine: `TopoCore v6-enriched scoring`")
         static_baseline = report.get("static_baseline", {})
         if isinstance(static_baseline, dict):
             baseline_score = _int(static_baseline.get("overall_score", 0))
@@ -3377,14 +3408,21 @@ def _audit_mode_lines(report: dict[str, Any], audit_summary: dict[str, Any]) -> 
         if isinstance(adjustments_raw, list) and adjustments_raw:
             lines.append(f"- v6 bounded adjustments: `{len(adjustments_raw)}`")
     elif audit_mode == "static_contract_ready":
-        lines.append("- Audit mode: `static scoring with v6 contract-ready guard`")
+        lines.append("- Audit engine: `static scoring with v6 contract-ready guard`")
         lines.append("- TopoCore v6 deep scoring capability was not available in this runtime.")
     elif audit_mode == "static_contract_rejected":
-        lines.append("- Audit mode: `static scoring with rejected v6 response`")
+        lines.append("- Audit engine: `static scoring with rejected v6 response`")
         if warning:
             lines.append(f"- Contract guard: `{warning}`")
     else:
-        lines.append("- Audit mode: `static scoring MVP`")
+        lines.append("- Audit engine: `static scoring MVP`")
+    lines.append("- Score authority: `TopoCore contract`")
+    if narrative_requested:
+        lines.append(
+            f"- Audit narrative mode: `{narrative_mode}`"
+        )
+        lines.append(f"- LLM: `{'used for narrative summary only' if llm_used else 'not called'}`")
+        lines.append("- Score modified by LLM: `no`")
     if capability:
         lines.append(f"- Audit contract capability: `{capability}`")
     lines.append(f"- Audit fallback reason: `{fallback_reason}`")
@@ -3501,6 +3539,9 @@ def render_audit_markdown(
         report.get("evidence_summary", {}) if isinstance(report.get("evidence_summary", {}), dict) else {}
     )
     pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
+    narrative_text = str(report.get("audit_narrative_text", "") or "").strip()
+    pr_narrative_text = str(report.get("audit_pr_narrative_text", "") or "").strip()
+    narrative_mode = str(report.get("audit_narrative_mode", "none") or "none").strip().lower()
     query = str(report.get("query", "") or "").strip()
     sections = [
         "# RepoBrain Repository Audit",
@@ -3510,6 +3551,11 @@ def render_audit_markdown(
     ]
     if query:
         sections.extend(["", f"Requested focus: {query}"])
+    if narrative_text:
+        section_title = "## Executive narrative" if narrative_mode == "executive" else "## Narrative interpretation"
+        sections.extend(["", section_title, narrative_text])
+    if pr_narrative_text and bool(pr_context.get("is_pr", False)):
+        sections.extend(["", "## PR narrative impact", pr_narrative_text])
     sections.extend(
         [
             "",
