@@ -50,9 +50,12 @@ def _explicit_doc_request(query: str) -> bool:
 
 def _repobrain_workflow_query(query: str) -> bool:
     normalized = " ".join(str(query or "").strip().lower().split())
-    if "workflow" not in normalized:
+    if "repobrain" not in normalized and "repo brain" not in normalized:
         return False
-    return "repobrain" in normalized or "repo brain" in normalized
+    return any(
+        token in normalized
+        for token in ("workflow", "connect", "connected", "connection", "runtime", "action source")
+    )
 
 
 def _priority_path_rank(path: str, *, query: str) -> int:

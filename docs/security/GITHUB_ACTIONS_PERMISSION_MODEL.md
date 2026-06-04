@@ -74,6 +74,7 @@ Current explicit justifications:
 - `RB_REPOBRAIN_VERBOSE_DIAGNOSTICS=1` enables expanded sanitized diagnostics
 - full sanitized debug trace belongs in workflow artifacts/logs, not default partner comments
 - controlled issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`, but quota exhaustion or provider unavailability must fall back deterministically and stay non-mutating
+- premium audit narrative remains an explanation-only layer and must not require mutation-capable permissions or override TopoCore score authority
 
 ## Future Tightening Plan
 

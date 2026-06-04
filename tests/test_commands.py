@@ -67,6 +67,12 @@ def test_parse_audit_with_narrative_flags_and_profile() -> None:
         "profile": "premium",
         "narrative": "1",
     }
+    assert parse_command("/repobrain audit --profile premium Focus on product readiness.") == {
+        "cmd": "audit",
+        "query": "Focus on product readiness.",
+        "profile": "premium",
+        "narrative": "1",
+    }
     assert parse_command("/repobrain audit --executive Focus on partner pilot readiness.") == {
         "cmd": "audit",
         "query": "Focus on partner pilot readiness.",

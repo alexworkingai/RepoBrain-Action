@@ -2613,6 +2613,23 @@ def render_answer_markdown(
             ]
         sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
     else:
+        pr_compact_default = command == "ask" and bool(
+            audit_summary.get("pr_segmentation_used")
+            or audit_summary.get("pr_metadata_used")
+            or audit_summary.get("is_pr")
+        )
+        run_summary_lines = [
+            f"- Route: `{route}`",
+            f"- Grounding: `{grounding_mode}`",
+            f"- Segment summary: `{segment_summary}`",
+        ]
+        if command != "ask":
+            run_summary_lines.extend(
+                [
+                    f"- Selected evidence: `{selected_evidence}`",
+                    f"- Verification: `{verification_status}`",
+                ]
+            )
         sections.extend(
             [
                 answer_text.strip() or "No answer generated.",
@@ -2621,11 +2638,7 @@ def render_answer_markdown(
                 *_compact_evidence_path_lines(evidence, audit_summary=audit_summary, max_items=5),
                 "",
                 "### 🧭 Run summary",
-                f"- Route: `{route}`",
-                f"- Grounding: `{grounding_mode}`",
-                f"- Segment summary: `{segment_summary}`",
-                f"- Selected evidence: `{selected_evidence}`",
-                f"- Verification: `{verification_status}`",
+                *run_summary_lines,
                 "",
                 *_compact_llm_lines(audit_summary),
                 "",
@@ -2637,16 +2650,35 @@ def render_answer_markdown(
             "### 📊 Evidence",
             *evidence_block,
             "",
-            *_evidence_context_summary_lines(audit_summary),
+        ]
+        if not pr_compact_default:
+            detail_lines.extend(
+                [
+                    *_evidence_context_summary_lines(audit_summary),
+                    "",
+                ]
+            )
+        detail_lines.extend(
+            [
             "### ✅ Next steps",
             f"- {next_steps.strip() or 'Open evidence links and verify logic'}",
             "",
-            *_verification_lines(audit_summary),
+            ]
+        )
+        if not pr_compact_default:
+            detail_lines.extend(
+                [
+                    *_verification_lines(audit_summary),
+                ]
+            )
+        detail_lines.extend(
+            [
             "### 🧾 Audit anchors",
             *_audit_anchor_lines({**audit_summary, "route_final": route, "command": command}),
             "",
             _audit_note(),
-        ]
+            ]
+        )
         if _verbose_diagnostics_enabled():
             detail_lines = [
                 *_retrieval_snapshot_lines(audit_summary),
@@ -2810,6 +2842,32 @@ def _sanitize_review_user_lines(values: list[str]) -> list[str]:
             continue
         sanitized.append(item)
     return list(dict.fromkeys(sanitized))
+
+
+def _show_default_review_details(audit_summary: dict[str, Any]) -> bool:
+    return any(
+        bool(audit_summary.get(key))
+        for key in (
+            "retrieval_snapshot_cache_used",
+            "runtime_provenance_status",
+            "async_batch_used",
+            "async_batch_tasks_total",
+            "ultra_large_pr_mode_active",
+        )
+    )
+
+
+def _show_default_fix_details(audit_summary: dict[str, Any]) -> bool:
+    return any(
+        bool(audit_summary.get(key))
+        for key in (
+            "retrieval_snapshot_cache_used",
+            "runtime_provenance_status",
+            "async_batch_used",
+            "async_batch_tasks_total",
+            "ultra_large_pr_mode_active",
+        )
+    )
 
 
 def render_review_markdown(
@@ -2980,7 +3038,8 @@ def render_review_markdown(
             "",
             _audit_note(),
         ]
-    sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
+    if _verbose_diagnostics_enabled() or _show_default_review_details(audit_summary):
+        sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
     return "\n".join(sections)
 
 
@@ -3127,6 +3186,7 @@ def render_patch_markdown(
     validation_suggestion_lines = _fix_validation_suggestion_lines(review)
     sections = [
         "### 🛠️ Fix proposal / governance",
+        f"- Route: `{_display_route_label('fix', audit_summary)}`",
         f"- Status: `{fix_status}`",
         f"- Scope: `{fix_scope}`",
         f"- Risk: `{risk_level}`",
@@ -3227,7 +3287,8 @@ def render_patch_markdown(
             "",
             _audit_note(),
         ]
-    sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
+    if _verbose_diagnostics_enabled() or _show_default_fix_details(audit_summary):
+        sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
     return "\n".join(sections)
 
 
@@ -3552,9 +3613,16 @@ def render_audit_markdown(
     if query:
         sections.extend(["", f"Requested focus: {query}"])
     if narrative_text:
-        section_title = "## Executive narrative" if narrative_mode == "executive" else "## Narrative interpretation"
+        if narrative_mode == "executive":
+            section_title = "## Executive narrative"
+        elif narrative_mode == "premium_executive":
+            section_title = "## Premium executive narrative"
+        elif narrative_mode == "premium":
+            section_title = "## Premium narrative"
+        else:
+            section_title = "## Narrative interpretation"
         sections.extend(["", section_title, narrative_text])
-    if pr_narrative_text and bool(pr_context.get("is_pr", False)):
+    if pr_narrative_text and bool(pr_context.get("is_pr", False)) and pr_narrative_text.strip() != narrative_text.strip():
         sections.extend(["", "## PR narrative impact", pr_narrative_text])
     sections.extend(
         [

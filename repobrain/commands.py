@@ -125,6 +125,8 @@ def parse_command(text: str) -> dict[str, Any]:
     if profile_override:
         base["profile"] = profile_override
     if cmd == "audit":
+        if profile_override == "premium" and not audit_narrative and not audit_executive:
+            audit_narrative = True
         if audit_narrative:
             base["narrative"] = "1"
         if audit_executive:

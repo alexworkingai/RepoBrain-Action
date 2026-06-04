@@ -4,6 +4,8 @@
 
 Sprint 92F adds controlled trusted issue LLM support for ask/explain, optional audit narrative layers, and the last compact-output cleanup items before broader selected-partner onboarding.
 
+Sprint 92G builds on this baseline to finalize help/manual structure, make `audit --profile premium` imply premium narrative semantics, remove PR narrative duplication, and finish the last partner-facing UX polish items.
+
 ## Current Branch Status
 
 - current public readiness decision on this Sprint 92F branch: `SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`

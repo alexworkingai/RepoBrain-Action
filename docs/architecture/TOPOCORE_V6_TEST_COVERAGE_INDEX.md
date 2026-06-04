@@ -416,3 +416,4 @@ See also:
 - `docs/architecture/TOPOCORE_V6_OBSERVATION_AND_V5_DEPRECATION_RUNWAY.md`
 - `docs/architecture/TOPOCORE_V6_SPRINT_57_OBSERVATION_RESULTS.md`
 - `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
+- Sprint 92G adds final help/manual structure coverage, premium audit narrative semantics coverage, PR narrative de-duplication coverage, compact default-output polish coverage, and RepoBrain-connection explain rerank coverage.

@@ -123,7 +123,9 @@ from repobrain.verification_runner import (
 from repobrain.verify import build_verify_report
 from repobrain.topocore_backend import TopoCoreBackendError, resolve_backend
 
-HELP_TEXT = """RepoBrain supported commands:
+HELP_TEXT = """## 1. Command list
+
+RepoBrain commands:
 - `/repobrain help`
 - `/repobrain ask`
 - `/repobrain locate`
@@ -136,51 +138,154 @@ HELP_TEXT = """RepoBrain supported commands:
 - `/repobrain doctor`
 - `/repobrain status`
 
-Examples:
-- `/repobrain ask --profile balanced Analyze this repository as a product.`
-- `/repobrain ask --profile premium Explain the architecture and risks.`
-- `/repobrain explain --profile balanced How is this repo connected to RepoBrain?`
-- `/repobrain audit --narrative Focus on product readiness.`
-- `/repobrain audit --executive Focus on partner pilot readiness.`
-- `/repobrain audit --profile premium Focus on a large PR readiness review.`
-- `/repobrain score Focus on repository readiness for partner testing.`
-- `/repobrain locate TKYProvider`
-- `/repobrain explain retrieve_topk`
-- `/repobrain review --profile balanced`
-- `/repobrain fix --profile premium Clarify the guarded no-mutation policy in github_flow`
-- `/repobrain verify`
+## 2. Command reference
 
-Command notes:
-- `/repobrain help` shows the active command surface, examples, and safety boundaries.
-- `/repobrain ask` answers repository questions and should analyze the current target repository, not the RepoBrain implementation, unless RepoBrain is the target repo.
-- `/repobrain ask` may use controlled issue or PR LLM when policy and quota allow.
-- `/repobrain locate` finds the most relevant repository locations for a symbol, path, or workflow question.
-- `/repobrain explain` explains repository behavior, workflow connection, or code paths using repository evidence.
-- `/repobrain explain` may use controlled issue or PR LLM when policy and quota allow.
-- `/repobrain review` is a PR-only review summary and keeps mutation disabled.
-- `/repobrain verify` is informational only and reports checks/status truth without merge approval.
-- `/repobrain fix` is proposal/governance only and stays no-patch/no-mutation.
-- `/repobrain audit` is the full repository audit; default scoring stays TopoCore-first, while `--narrative`, `--executive`, and `--profile premium` add an optional LLM explanation layer only.
-- `/repobrain score` is the compact score summary view of the same guarded audit engine.
-- `/repobrain doctor` reports setup and workflow diagnostics in partner-facing language.
-- `/repobrain status` reports current runtime, command surface, and safety posture in partner-facing language.
+### /repobrain help
+- Purpose: shows the active command surface, examples, environment policy, and safety boundaries.
+- Base behavior: report-only; no LLM required; no mutation.
+- Options / extensions: none.
+- How options change the command: no options in this sprint.
+- LLM behavior: not required.
+- Examples:
+  - `/repobrain help`
 
-Execution profiles:
-- Use `--profile cheap|balanced|premium` with ask, explain, review, and fix.
-- `/repobrain audit --profile premium` enables the premium narrative/explanation layer when requested with audit narrative flags.
+### /repobrain ask
+- Purpose: answers repository or PR questions using target-repository evidence.
+- Base behavior: issue context analyzes the target repository; PR context analyzes changed files plus relevant target-repository context.
+- Options / extensions:
+  - `--profile cheap`: retrieval-first behavior where supported; may use deterministic fallback.
+  - `--profile balanced`: balanced synthesis behavior; in trusted issue/PR contexts may call LLM when policy and quota allow.
+  - `--profile premium`: stronger synthesis/model policy when available; falls back safely if unavailable or quota-exhausted.
+- How options change the command: `cheap` prefers bounded retrieval, `balanced` enables normal synthesis, and `premium` requests the strongest safe synthesis path.
+- LLM behavior: controlled by policy and quota. `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1` enables trusted issue ask by default.
+- Examples:
+  - `/repobrain ask --profile balanced Analyze this repository as a product.`
+  - `/repobrain ask --profile premium Explain architecture, risks, and next steps.`
+  - `/repobrain ask --profile balanced Assess this PR impact.`
+
+### /repobrain locate
+- Purpose: finds relevant target-repository locations for symbols, files, workflows, or concepts.
+- Base behavior: retrieval-only by default; no LLM required; no mutation.
+- Options / extensions: none.
+- How options change the command: no options in this sprint.
+- LLM behavior: not required.
+- Examples:
+  - `/repobrain locate TKYProvider`
+  - `/repobrain locate Where is the GitHub Actions workflow that connects this repository to RepoBrain?`
+
+### /repobrain explain
+- Purpose: explains repository behavior, workflow connection, or code paths using target-repository evidence.
+- Base behavior: uses retrieval with optional synthesis; should explain target repo behavior, not RepoBrain internals, unless explicitly requested and relevant.
+- Options / extensions:
+  - `--profile cheap`: prefer deterministic/retrieval explanation.
+  - `--profile balanced`: may use controlled LLM for clearer explanation when policy and quota allow.
+  - `--profile premium`: may use stronger model/premium explanation when available.
+- How options change the command: `cheap` keeps explanation retrieval-first, `balanced` enables normal synthesis, and `premium` requests the strongest safe explanation path.
+- LLM behavior: controlled issue/PR LLM may be used; deterministic fallback is reported when quota is exhausted.
+- Examples:
+  - `/repobrain explain retrieve_topk`
+  - `/repobrain explain --profile balanced How is this repo connected to RepoBrain?`
+
+### /repobrain review
+- Purpose: reviews a PR and summarizes risk, changed files, findings, and recommendations.
+- Base behavior: PR-only; LLM synthesis may be used; no mutation.
+- Options / extensions:
+  - `--profile cheap`: may be normalized to balanced for safety.
+  - `--profile balanced`: balanced PR review synthesis.
+  - `--profile premium`: stronger review synthesis when available.
+- How options change the command: `cheap` may normalize upward for safety, `balanced` is the standard review mode, and `premium` requests stronger synthesis.
+- LLM behavior: PR review may use LLM; fallback remains truthful if unavailable or quota-exhausted.
+- Examples:
+  - `/repobrain review --profile balanced`
+  - `/repobrain review --profile premium`
+
+### /repobrain verify
+- Purpose: reports PR checks/status truth.
+- Base behavior: informational only; does not approve merge; does not use TopoCore scoring; no LLM required.
+- Options / extensions: none.
+- How options change the command: no options in this sprint.
+- LLM behavior: not required.
+- Examples:
+  - `/repobrain verify`
+
+### /repobrain fix
+- Purpose: produces a proposal/governance response for a requested fix.
+- Base behavior: no patch; no mutation; no branch/commit/PR creation; safe `no_patch` when no localized target exists.
+- Options / extensions:
+  - `--profile cheap`: may be normalized to balanced for safety.
+  - `--profile balanced`: balanced fix-governance reasoning.
+  - `--profile premium`: stronger proposal reasoning when available.
+- How options change the command: `cheap` may normalize upward for safety, `balanced` is the standard proposal mode, and `premium` requests stronger reasoning only.
+- LLM behavior: may use LLM only for safe, localized, evidence-backed synthesis; never applies changes.
+- Examples:
+  - `/repobrain fix --profile balanced Improve wording in the manual PR smoke document.`
+  - `/repobrain fix --profile premium Clarify the guarded no-mutation policy.`
+
+### /repobrain audit
+- Purpose: runs a full repository or PR-context readiness audit.
+- Base behavior: TopoCore-first scoring; `v6`-enriched when available; LLM not required for default audit; score authority is the TopoCore contract.
+- Options / extensions:
+  - `--narrative`: adds explanatory interpretation after TopoCore scoring; does not change scores or evidence truth.
+  - `--executive`: adds concise decision-maker summary after TopoCore scoring; does not change scores.
+  - `--profile premium`: by itself implies a premium narrative/explanation layer after TopoCore scoring; with `--narrative` it requests a premium detailed explanation; with `--executive` it requests a premium executive summary.
+- How options change the command: default audit stays TopoCore-only; `--narrative` adds detailed explanation; `--executive` adds concise partner-facing summary; `--profile premium` upgrades the optional narrative layer and implies it even without other audit flags.
+- LLM behavior: optional narrative layer only; LLM never modifies final score, category scores, blockers, backend result, fallback state, or contract truth.
+- Examples:
+  - `/repobrain audit`
+  - `/repobrain audit Focus on repository readiness.`
+  - `/repobrain audit --narrative Focus on product readiness.`
+  - `/repobrain audit --executive Focus on partner pilot readiness.`
+  - `/repobrain audit --profile premium Focus on a large PR readiness review.`
+  - `/repobrain audit --narrative --profile premium Focus on production readiness risks.`
+  - `/repobrain audit --executive --profile premium Summarize this PR for partner readiness.`
+
+### /repobrain score
+- Purpose: shows compact score summary from the guarded audit engine.
+- Base behavior: TopoCore-first; no LLM required; compact view of audit score.
+- Options / extensions: none in this sprint.
+- How options change the command: no options in this sprint.
+- LLM behavior: not required.
+- Examples:
+  - `/repobrain score`
+  - `/repobrain score Focus on repository readiness for partner testing.`
+
+### /repobrain doctor
+- Purpose: reports setup, workflow, permissions, and runtime diagnostics.
+- Base behavior: report-only; partner-facing language; no LLM required; no mutation.
+- Options / extensions: none.
+- How options change the command: no options in this sprint.
+- LLM behavior: not required.
+- Examples:
+  - `/repobrain doctor`
+
+### /repobrain status
+- Purpose: reports current runtime, command surface, and safety posture.
+- Base behavior: report-only; partner-facing language; no LLM required; no mutation.
+- Options / extensions: none.
+- How options change the command: no options in this sprint.
+- LLM behavior: not required.
+- Examples:
+  - `/repobrain status`
+
+## 3. Environment / policy
+
+- Shared profile syntax: `--profile cheap|balanced|premium` for ask/explain/review/fix; audit supports `--profile premium`.
 - Default is `balanced` when `--profile` is omitted.
 - For review/fix safety, requested `cheap` may be normalized to `balanced`.
-
-Environment / policy:
 - `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1` enables controlled issue ask/explain and issue audit narrative LLM by default.
-- `RB_REPOBRAIN_ENABLE_ISSUE_LLM=0` disables issue ask/explain and issue audit narrative LLM while keeping deterministic fallback available.
+- `RB_REPOBRAIN_ENABLE_ISSUE_LLM=0` disables issue ask/explain and issue audit narrative LLM while deterministic fallback remains available.
 - If LLM quota is exhausted, RepoBrain falls back to deterministic output and reports the exhausted state in the LLM block.
-- TopoCore remains the audit score authority; any optional LLM narrative does not change scores.
+- TopoCore remains the audit score authority.
+- LLM narrative does not change audit scores.
+- Partners consume RepoBrain-Action as a public action; they do not need write/admin access to RepoBrain-Action.
 
-Safety notes:
+## 4. Safety notes
+
 - No patch/autofix.
 - No RepoBrain-created branch, commit, or PR.
 - No merge, security, legal, or production approval is implied.
+- Private runtime source is not exposed.
+- Target repository remains distinct from RepoBrain-Action and private runtime.
 """
 
 BOT_MARKER = "[bot]"
@@ -5896,6 +6001,8 @@ def _read_public_readiness_status(control_plane_root: Path) -> str:
     if match:
         return str(match.group(1) or "UNKNOWN").strip().upper() or "UNKNOWN"
     for token in (
+        "SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING",
+        "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_HELP_AUDIT_PREMIUM_AND_UX_POLISH",
         "SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING",
         "SELECTED_PARTNER_PILOT_READY_AFTER_CONTROLLED_ISSUE_LLM_AND_AUDIT_NARRATIVE",
         "SPRINT_92D_READY_PENDING_PROTECTED_MAIN_PR_APPROVAL",
@@ -6269,6 +6376,10 @@ def _build_product_analysis_answer(
 
 def _public_readiness_next_step(status: str) -> str:
     normalized = str(status or "UNKNOWN").strip().upper()
+    if normalized == "SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING":
+        return "Run the Sprint 92G live issue/PR retest, then update partner-readiness evidence and selected partner onboarding status."
+    if normalized == "SELECTED_PARTNER_PILOT_READY_AFTER_FINAL_HELP_AUDIT_PREMIUM_AND_UX_POLISH":
+        return "Proceed with selected partner onboarding using the public action surface, final help/manual structure, and premium audit narrative options."
     if normalized == "SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING":
         return "Run the Sprint 92F live issue/PR retest, then update partner-readiness evidence and selected partner onboarding status."
     if normalized == "SELECTED_PARTNER_PILOT_READY_AFTER_CONTROLLED_ISSUE_LLM_AND_AUDIT_NARRATIVE":
@@ -6344,7 +6455,6 @@ def _maybe_refine_operational_ask_answer(
     fallback_reason = str(audit_summary.get("fallback_reason", "not_applicable") or "not_applicable")
     dependency_mode = str(status_report.get("topocore_dependency_mode", "auto_not_detected") or "auto_not_detected")
     runtime_requested = str(status_report.get("topocore_runtime_mode_requested", "auto") or "auto")
-    runtime_effective = str(status_report.get("topocore_runtime_mode_effective", "auto") or "auto")
 
     if dependency_mode == "installed_private_package":
         dependency_summary = "installed private package active; private TopoCore source checkout is not used."
@@ -6390,15 +6500,23 @@ def _maybe_refine_operational_ask_answer(
             llm_used=llm_used,
         )
     elif cmd == "explain":
+        runtime_resolution_line = (
+            "RepoBrain resolved an installed private package for this run."
+            if dependency_mode == "installed_private_package"
+            else "RepoBrain resolved a controlled private runtime path for this run while keeping the runtime source private."
+            if dependency_mode == "private_checkout_beta_only"
+            else "RepoBrain resolved a local development runtime path for this run."
+            if dependency_mode == "local_path_dev_only"
+            else "RepoBrain kept the runtime summary bounded and partner-facing for this run."
+        )
         answer_lines = [
             "RepoBrain is connected through the repository workflow.",
             f"The workflow entrypoint is `{workflow_location}` and it currently references `{action_source}` as the action source.",
-            (
-            "In this issue context, the workflow runs RepoBrain in a report-only, no-mutation mode."
-            ),
+            "In this issue context, the workflow runs RepoBrain in a report-only, no-mutation mode.",
             "The private runtime boundary is configured and remains separate from the target product code.",
-            f"For this run, RepoBrain requested runtime `{runtime_requested}` and resolved `{runtime_effective}`.",
-            f"The dependency mode is `{dependency_mode}`, which means {dependency_summary}",
+            f"Runtime policy requested for this run: `{runtime_requested}`.",
+            runtime_resolution_line,
+            f"Runtime summary: {dependency_summary}",
             f"Installed-package live proof status is `{installed_package_proof_status}` and the current public-readiness state is `{public_readiness_status}`.",
             (
                 f"Backend evidence for this run stayed at requested `{requested_backend}` -> resolved `{resolved_backend}` "
@@ -7085,6 +7203,59 @@ def _build_audit_markdown(
     return body
 
 
+def _resolve_audit_narrative_mode(
+    *,
+    narrative_requested: bool,
+    executive_requested: bool,
+) -> tuple[bool, str]:
+    profile = _normalize_execution_profile(_runtime_env_cfg().llm.execution_profile)
+    premium_requested = profile == "premium"
+    requested = bool(narrative_requested or executive_requested or premium_requested)
+    if not requested:
+        return False, "none"
+    if executive_requested and premium_requested:
+        return True, "premium_executive"
+    if executive_requested:
+        return True, "executive"
+    if premium_requested:
+        return True, "premium"
+    return True, "narrative"
+
+
+def _split_pr_audit_narrative_sections(text: str, *, mode: str) -> tuple[str, str]:
+    raw = str(text or "").strip()
+    if not raw:
+        return "", ""
+    heading_options = [
+        "## pr impact",
+        "### pr impact",
+        "pr impact:",
+        "pr narrative impact:",
+    ]
+    lowered = raw.lower()
+    match_index = -1
+    matched_heading = ""
+    for heading in heading_options:
+        idx = lowered.find(heading)
+        if idx != -1 and (match_index == -1 or idx < match_index):
+            match_index = idx
+            matched_heading = heading
+    if match_index == -1:
+        return raw, ""
+
+    main = raw[:match_index].strip()
+    pr = raw[match_index:].strip()
+    if matched_heading.endswith(":"):
+        pr = pr.split(":", 1)[1].strip() if ":" in pr else pr
+    else:
+        pr_lines = pr.splitlines()
+        if pr_lines:
+            pr = "\n".join(pr_lines[1:]).strip() if len(pr_lines) > 1 else ""
+    if pr.strip() == main.strip():
+        pr = ""
+    return main, pr
+
+
 def _build_score_markdown(
     *,
     repo_root: Path,
@@ -7178,14 +7349,36 @@ def _build_audit_narrative_messages(
         "audit_engine": str(audit_summary.get("backend_mode", "n/a") or "n/a"),
         "score_authority": "TopoCore contract",
     }
-    style = "executive summary" if mode == "executive" else "narrative interpretation"
+    is_premium = mode.startswith("premium")
+    is_executive = mode.endswith("executive") or mode == "executive"
+    style = (
+        "premium executive summary"
+        if is_premium and is_executive
+        else "executive summary"
+        if is_executive
+        else "premium narrative interpretation"
+        if is_premium
+        else "narrative interpretation"
+    )
     extra_instruction = (
         "Return 5-8 concise bullets for partner-facing leadership review."
-        if mode == "executive"
+        if is_executive
         else "Explain why the score landed where it did, the main engineering priorities, and 30/60/90-day implications."
     )
+    if is_premium and not is_executive:
+        extra_instruction += " Go one layer deeper on architecture, runtime, validation, and decision tradeoffs without changing any audit truth."
+    if is_premium and is_executive:
+        extra_instruction += " Keep it concise but sharper and more decision-oriented than the default executive mode."
+    pr_instruction = ""
     if bool(payload["pr_context"].get("is_pr", False)):
-        extra_instruction += " Include PR impact on changed files, architecture/runtime implications, security/CI implications, and partner-pilot effect."
+        pr_instruction = (
+            " For PR context, return two distinct sections in Markdown: `## "
+            + ("Executive narrative" if is_executive else "Narrative interpretation")
+            + "` and `## PR impact`."
+            " The PR impact section must cover changed files, change type, docs-only vs behavior-affecting impact, "
+            "architecture/runtime/security implications, validation requirements, production-readiness effect, partner-pilot effect, and risk summary."
+            " Do not repeat the same paragraph in both sections."
+        )
     system_text = (
         "You are RepoBrain's narrative explainer. Use only the provided audit payload. "
         "Do not change scores, category scores, blockers, improvements, evidence truth, backend result, or fallback state. "
@@ -7193,7 +7386,7 @@ def _build_audit_narrative_messages(
         "Do not expose secrets, private runtime source paths, or `.topocore-v6`."
     )
     user_text = (
-        f"Produce a {style} for this RepoBrain audit. {extra_instruction}\n\n"
+        f"Produce a {style} for this RepoBrain audit. {extra_instruction}{pr_instruction}\n\n"
         "Mandatory truth constraints:\n"
         "- TopoCore remains the score authority.\n"
         "- Score modified by LLM: no.\n"
@@ -7224,8 +7417,10 @@ def _maybe_attach_audit_narrative(
     narrative_requested: bool,
     executive_requested: bool,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    requested = bool(narrative_requested or executive_requested)
-    mode = "executive" if executive_requested else "narrative"
+    requested, mode = _resolve_audit_narrative_mode(
+        narrative_requested=narrative_requested,
+        executive_requested=executive_requested,
+    )
     report["audit_narrative_requested"] = requested
     report["audit_narrative_mode"] = mode if requested else "none"
     report["audit_narrative_text"] = ""
@@ -7248,15 +7443,23 @@ def _maybe_attach_audit_narrative(
         query=query or f"audit {mode}",
         route="DEEP",
         execution_mode="retrieval_plus_llm",
-        llm_intent_decision="summarize" if mode == "executive" else "explain",
+        llm_intent_decision="summarize" if mode in {"executive", "premium_executive"} else "explain",
         llm_decision_reason_short=(
-            "LLM used: audit executive narrative requested after TopoCore scoring."
+            "LLM used: premium executive audit narrative requested after TopoCore scoring."
+            if mode == "premium_executive"
+            else "LLM used: audit executive narrative requested after TopoCore scoring."
             if mode == "executive"
+            else "LLM used: premium audit narrative requested after TopoCore scoring."
+            if mode == "premium"
             else "LLM used: audit narrative requested after TopoCore scoring."
         ),
         llm_decision_reason_code=(
-            "AUDIT_EXECUTIVE_NARRATIVE_REQUESTED"
+            "AUDIT_PREMIUM_EXECUTIVE_NARRATIVE_REQUESTED"
+            if mode == "premium_executive"
+            else "AUDIT_EXECUTIVE_NARRATIVE_REQUESTED"
             if mode == "executive"
+            else "AUDIT_PREMIUM_NARRATIVE_REQUESTED"
+            if mode == "premium"
             else "AUDIT_NARRATIVE_REQUESTED"
         ),
         github_context=dict(github_context_seed or {}),
@@ -7272,14 +7475,26 @@ def _maybe_attach_audit_narrative(
         governor=governor,
     )
     if llm_text:
-        report["audit_narrative_text"] = str(llm_text).strip()
+        text = str(llm_text).strip()
         if bool((report.get("pr_context", {}) or {}).get("is_pr", False)):
-            report["audit_pr_narrative_text"] = str(llm_text).strip()
+            main_text, pr_text = _split_pr_audit_narrative_sections(text, mode=mode)
+            report["audit_narrative_text"] = main_text or text
+            report["audit_pr_narrative_text"] = pr_text
+        else:
+            report["audit_narrative_text"] = text
     _merge_llm_meta(audit_summary, llm_meta)
     llm_limit_state = classify_llm_limit_state(llm_meta)
     if llm_limit_state == "exhausted":
         audit_summary["llm_runtime_override_reason"] = (
-            "LLM quota/limit exhausted; audit score is available and narrative layer was skipped until limits reset."
+            "LLM quota/limit exhausted; premium narrative skipped, TopoCore score preserved."
+            if mode.startswith("premium")
+            else "LLM quota/limit exhausted; audit score is available and narrative layer was skipped until limits reset."
+        )
+    elif str(llm_meta.get("llm_provider_error_type", "n/a") or "n/a").strip().lower() == "provider_unavailable":
+        audit_summary["llm_runtime_override_reason"] = (
+            "LLM provider unavailable; premium narrative skipped, TopoCore score preserved."
+            if mode.startswith("premium")
+            else "LLM provider unavailable; audit score is available and the narrative layer was skipped."
         )
     elif not bool(llm_meta.get("llm_used", False)) and str(llm_meta.get("llm_skip_reason", "n/a")).lower() == "issue_llm_policy_disabled":
         audit_summary["llm_runtime_override_reason"] = (
