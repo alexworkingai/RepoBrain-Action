@@ -65,7 +65,7 @@ def test_pr_ask_markdown_renders_topocore_backend_evidence() -> None:
     )
 
     assert "### 🛡️ Runtime and safety" in markdown
-    assert "- Backend: `auto -> v6`" in markdown
+    assert "- Backend: `private runtime resolved successfully`" in markdown
     assert "TopoCore backend requested" not in markdown
 
 
@@ -103,7 +103,7 @@ def test_pr_review_markdown_renders_topocore_backend_evidence() -> None:
     )
 
     assert "### 🛡️ Runtime and safety" in markdown
-    assert "- Backend: `auto -> v6`" in markdown
+    assert "- Backend: `private runtime resolved successfully`" in markdown
     assert "TopoCore backend requested" not in markdown
 
 

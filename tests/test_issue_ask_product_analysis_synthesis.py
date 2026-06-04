@@ -37,7 +37,7 @@ def test_issue_ask_product_analysis_stays_on_target_repo(
     _write(control_plane_root / "pyproject.toml", "[project]\nname = 'repobrain-control'\n")
     _write(
         control_plane_root / "docs" / "release" / "PUBLIC_READINESS_ASSESSMENT.md",
-        "- current public readiness decision: `SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`\n",
+        "- current public readiness decision: `SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`\n",
     )
     _write(
         control_plane_root / "docs" / "release" / "INSTALLED_PACKAGE_LIVE_PROOF.md",
@@ -86,4 +86,4 @@ def test_issue_ask_product_analysis_stays_on_target_repo(
     assert "Route: REVIEW" not in answer_text
     assert audit_summary["route_final"] == "ASK"
     assert audit_summary["operational_ask_kind"] == "product_analysis"
-    assert next_steps.startswith("Run the Sprint 92G live issue/PR retest")
+    assert next_steps.startswith("Run the Sprint 92H live issue/PR retest")

@@ -96,7 +96,7 @@ def test_backend_evidence_is_rendered_in_issue_comment_safe_output() -> None:
     )
 
     assert "### 🛡️ Runtime and safety" in markdown
-    assert "- Backend: `auto -> v6`" in markdown
+    assert "- Backend: `private runtime resolved successfully`" in markdown
     assert "TopoCore backend requested" not in markdown
     assert "safe-to-merge" not in markdown.lower()
     assert "security-approved" not in markdown.lower()

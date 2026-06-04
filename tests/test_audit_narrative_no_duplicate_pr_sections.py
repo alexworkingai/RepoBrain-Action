@@ -43,9 +43,9 @@ def test_pr_audit_narrative_sections_are_distinct(monkeypatch) -> None:
     )
 
     assert "## Narrative interpretation" in markdown
-    assert "## PR narrative impact" in markdown
+    assert "## PR impact summary" in markdown
     overall = _section(markdown, "## Narrative interpretation")
-    pr_impact = _section(markdown, "## PR narrative impact")
+    pr_impact = _section(markdown, "## PR impact summary")
     assert overall != pr_impact
     assert "Changed files" in markdown or "documentation-heavy" in pr_impact.lower()
 
@@ -79,7 +79,7 @@ def test_pr_audit_executive_sections_are_distinct(monkeypatch) -> None:
     )
 
     assert "## Executive narrative" in markdown
-    assert "## PR narrative impact" in markdown
+    assert "## PR impact summary" in markdown
     overall = _section(markdown, "## Executive narrative")
-    pr_impact = _section(markdown, "## PR narrative impact")
+    pr_impact = _section(markdown, "## PR impact summary")
     assert overall != pr_impact

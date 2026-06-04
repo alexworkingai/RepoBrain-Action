@@ -1222,6 +1222,8 @@ def _compact_backend_label(audit_summary: dict[str, Any]) -> str:
     resolved = str(audit_summary.get("resolved_backend", "not_applicable") or "not_applicable").strip()
     if requested.lower() == "not_applicable" and resolved.lower() == "not_applicable":
         return "not applicable"
+    if resolved.lower() == "v6":
+        return "private runtime resolved successfully"
     return f"{requested} -> {resolved}"
 
 
@@ -1229,11 +1231,11 @@ def _compact_fallback_label(audit_summary: dict[str, Any]) -> str:
     used = str(audit_summary.get("fallback_used", "not_applicable") or "not_applicable").strip().lower()
     reason = str(audit_summary.get("fallback_reason", "none") or "none").strip()
     if used in {"no", "false"} and reason.lower() in {"none", "n/a", "not_applicable"}:
-        return "no"
+        return "no fallback used"
     if used in {"not_applicable", "n/a"}:
         return "not applicable"
     if used in {"no", "false"}:
-        return "no"
+        return "no fallback used"
     if reason.lower() in {"", "n/a", "none", "not_applicable"}:
         return "yes"
     return f"yes ({reason})"
@@ -2618,6 +2620,7 @@ def render_answer_markdown(
             or audit_summary.get("pr_metadata_used")
             or audit_summary.get("is_pr")
         )
+        hide_default_counters = command in {"ask", "explain"} or pr_compact_default
         run_summary_lines = [
             f"- Route: `{route}`",
             f"- Grounding: `{grounding_mode}`",
@@ -2651,7 +2654,7 @@ def render_answer_markdown(
             *evidence_block,
             "",
         ]
-        if not pr_compact_default:
+        if not hide_default_counters:
             detail_lines.extend(
                 [
                     *_evidence_context_summary_lines(audit_summary),
@@ -2665,7 +2668,7 @@ def render_answer_markdown(
             "",
             ]
         )
-        if not pr_compact_default:
+        if not hide_default_counters:
             detail_lines.extend(
                 [
                     *_verification_lines(audit_summary),
@@ -3039,7 +3042,8 @@ def render_review_markdown(
             _audit_note(),
         ]
     if _verbose_diagnostics_enabled() or _show_default_review_details(audit_summary):
-        sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
+        detail_title = "Evidence and diagnostics" if _verbose_diagnostics_enabled() else "Changed files"
+        sections.extend(_render_runtime_details_block(title=detail_title, lines=detail_lines))
     return "\n".join(sections)
 
 
@@ -3288,7 +3292,8 @@ def render_patch_markdown(
             _audit_note(),
         ]
     if _verbose_diagnostics_enabled() or _show_default_fix_details(audit_summary):
-        sections.extend(_render_runtime_details_block(title="Evidence and diagnostics", lines=detail_lines))
+        detail_title = "Evidence and diagnostics" if _verbose_diagnostics_enabled() else "Affected files"
+        sections.extend(_render_runtime_details_block(title=detail_title, lines=detail_lines))
     return "\n".join(sections)
 
 
@@ -3623,7 +3628,7 @@ def render_audit_markdown(
             section_title = "## Narrative interpretation"
         sections.extend(["", section_title, narrative_text])
     if pr_narrative_text and bool(pr_context.get("is_pr", False)) and pr_narrative_text.strip() != narrative_text.strip():
-        sections.extend(["", "## PR narrative impact", pr_narrative_text])
+        sections.extend(["", "## PR impact summary", pr_narrative_text])
     sections.extend(
         [
             "",

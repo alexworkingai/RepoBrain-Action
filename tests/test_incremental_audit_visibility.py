@@ -537,5 +537,5 @@ def test_review_repeated_run_shows_snapshot_miss_then_hit(tmp_path: Path, monkey
     assert "Runtime provenance" not in second_markdown
     assert "Review delta" not in first_markdown
     assert "Review delta" not in second_markdown
-    assert "<summary>Evidence and diagnostics</summary>" in first_markdown
-    assert "<summary>Evidence and diagnostics</summary>" in second_markdown
+    assert "<summary>Changed files</summary>" in first_markdown
+    assert "<summary>Changed files</summary>" in second_markdown

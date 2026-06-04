@@ -70,6 +70,7 @@ RepoBrain is a guarded repository-intelligence action that reviews repository st
 - ask and explain may use an LLM when safe policy, `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`, provider access, and quota allow, but they can also answer from deterministic retrieval and TopoCore-backed evidence when no LLM call occurs
 - `/repobrain audit --narrative` and `/repobrain audit --executive` may add an LLM explanation layer after TopoCore scoring
 - `/repobrain audit --profile premium` implies a premium narrative/explanation layer after TopoCore scoring
+- PR audit narrative modes remain explanation-only and must not override canonical PR change classification or TopoCore score authority
 - `/repobrain score` remains compact TopoCore-first output and does not require an LLM
 - route labels reflect the typed command even when internal analysis mode differs
 - default GitHub comments stay compact and developer-facing

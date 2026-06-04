@@ -69,7 +69,7 @@ def test_pr_ask_output_uses_compact_runtime_and_llm_blocks_by_default() -> None:
     )
 
     assert "### 🛡️ Runtime and safety" in markdown
-    assert "- Backend: `auto -> v6`" in markdown
+    assert "- Backend: `private runtime resolved successfully`" in markdown
     assert "- Runtime: `retrieval-only`" in markdown
     assert "- LLM: not called" in markdown
     assert "TKY mode requested" not in markdown
@@ -93,7 +93,7 @@ def test_pr_review_output_stays_compact_without_merge_claims() -> None:
     )
 
     assert "### 🛡️ Runtime and safety" in markdown
-    assert "- Backend: `auto -> v6`" in markdown
+    assert "- Backend: `private runtime resolved successfully`" in markdown
     assert "TKY mode requested" not in markdown
     assert "safe-to-merge" not in markdown.lower()
     assert "security-approved" not in markdown.lower()

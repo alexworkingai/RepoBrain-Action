@@ -5,13 +5,13 @@ from pathlib import Path
 from repobrain.github_flow import _build_audit_markdown
 
 
-def test_pr_audit_narrative_renders_pr_impact_summary(monkeypatch) -> None:
+def test_pr_audit_narrative_falls_back_to_canonical_pr_facts_on_contradiction(monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[1]
 
     monkeypatch.setattr(
         "repobrain.github_flow._maybe_generate_llm_text",
         lambda **_kwargs: (
-            "## Narrative interpretation\n- Overall score remains strong.\n- Main drivers are documentation maturity and workflow clarity.\n\n## PR impact\n- Changed-file summary.\n- Runtime implications.\n- Reviewer-friendly risk summary.",
+            "## Narrative interpretation\n- Repo remains solid.\n\n## PR impact summary\n- This PR is likely behavior-affecting.\n- Risk is moderate.\n- Security impact should be reviewed.",
             {
                 "llm_used": True,
                 "llm_skip_reason": "n/a",
@@ -21,7 +21,6 @@ def test_pr_audit_narrative_renders_pr_impact_summary(monkeypatch) -> None:
                 "llm_runtime_override_reason": "n/a",
                 "llm_model_used": "openai/gpt-4.1-mini",
                 "llm_tokens_total": 111,
-                "llm_model_downgrade_reason": "n/a",
             },
         ),
     )
@@ -34,16 +33,15 @@ def test_pr_audit_narrative_renders_pr_impact_summary(monkeypatch) -> None:
             "event_name": "issue_comment",
             "is_pr": True,
             "pr_number": 41,
-            "changed_files": ["docs/manual-smoke.md", "README.md"],
-            "files": [
-                {"filename": "docs/manual-smoke.md", "status": "modified"},
-                {"filename": "README.md", "status": "modified"},
-            ],
+            "changed_files": ["docs/repobrain_manual_pr_smoke.md"],
         },
         narrative_requested=True,
     )
 
     assert "## PR impact summary" in markdown
-    assert "## Narrative interpretation" in markdown
-    assert "Runtime implications" in markdown
-    assert "- Score modified by LLM: `no`" in markdown
+    assert "Change type: `docs-only`" in markdown
+    assert "Behavior-affecting: `no`" in markdown
+    assert "Risk level: `LOW`" in markdown
+    assert "likely behavior-affecting" not in markdown.lower()
+    assert "moderate" not in markdown.lower()
+

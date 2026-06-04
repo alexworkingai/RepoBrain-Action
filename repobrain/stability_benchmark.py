@@ -321,7 +321,10 @@ def _review_async_subsection_contract(entries: list[AuditEntry]) -> dict[str, An
         audit_summary=dict(latest.audit),
     )
     ok = (
-        "<summary>Evidence and diagnostics</summary>" in rendered
+        (
+            "<summary>Changed files</summary>" in rendered
+            or "<summary>Evidence and diagnostics</summary>" in rendered
+        )
         and "### Async batch orchestration" not in rendered
     )
     return {

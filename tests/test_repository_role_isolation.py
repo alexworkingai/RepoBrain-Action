@@ -24,7 +24,7 @@ def test_consumer_repo_ask_does_not_describe_action_repo_modules(
     _write(control_plane_root / "pyproject.toml", "[project]\nname='repobrain-control'\n")
     _write(
         control_plane_root / "docs" / "release" / "PUBLIC_READINESS_ASSESSMENT.md",
-        "- current public readiness decision: `SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`\n",
+        "- current public readiness decision: `SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`\n",
     )
     _write(control_plane_root / "docs" / "release" / "INSTALLED_PACKAGE_LIVE_PROOF.md", "- `INSTALLED_PACKAGE_LIVE_PROOF_PASSED`\n")
     _write(control_plane_root / "docs" / "security" / "REPO_GOVERNANCE_MODEL.md", "- `PROTECTED_MAIN_BASELINE_ENABLED`\n")

@@ -21,9 +21,9 @@ def test_verification_block_not_run_is_consistent_without_counters() -> None:
         command="ask",
     )
 
-    assert "Status: **NOT_RUN**" in md
-    assert "checks were not run." in md
-    assert "Counters: n/a" in md
+    assert "### 🔎 Verification" not in md
+    assert "checks were not run." not in md
+    assert "Counters: n/a" not in md
 
 
 def test_verification_block_with_results_shows_real_counters() -> None:
@@ -43,6 +43,5 @@ def test_verification_block_with_results_shows_real_counters() -> None:
         command="ask",
     )
 
-    assert "Status: **WARN**" in md
-    assert "PASS: 2, WARN: 1, NOT_RUN: 0" in md
-    assert "Counters: n/a" not in md
+    assert "### 🔎 Verification" not in md
+    assert "PASS: 2, WARN: 1, NOT_RUN: 0" not in md
