@@ -37,7 +37,7 @@ def test_review_default_omits_detailed_verification_counters() -> None:
     assert "dynamic_verify" not in _primary(md)
     assert "pytest" not in _primary(md)
     assert "Verification summary" in _primary(md)
-    assert "trusted_context" not in _details(md)
+    assert "<summary>Evidence and diagnostics</summary>" not in md
 
 
 def test_fix_default_omits_patch_validation_and_artifact_noise() -> None:
@@ -67,4 +67,4 @@ def test_fix_default_omits_patch_validation_and_artifact_noise() -> None:
     assert "Patch artifact" not in primary
     assert "Apply status" not in primary
     assert "Verification summary" in primary
-    assert "Patch validation" not in _details(md)
+    assert "<summary>Evidence and diagnostics</summary>" not in md

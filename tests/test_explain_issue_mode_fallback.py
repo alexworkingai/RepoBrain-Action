@@ -65,10 +65,11 @@ def test_operational_explain_produces_real_explanation(
     assert 'RepoBrain is connected through the repository workflow.' in answer_text
     assert '`.github/workflows/repobrain.yml`' in answer_text
     assert '`alexworkingai/RepoBrain-Action@main`' in answer_text
-    assert 'requested runtime `installed_package` and resolved `installed_package_unavailable`' in answer_text
-    assert 'installed_private_package_unavailable' in answer_text
+    assert 'Runtime policy requested for this run: `installed_package`.' in answer_text
+    assert 'installed private package was requested, but no importable runtime package is available in this run.' in answer_text
     assert 'INSTALLED_PACKAGE_LIVE_PROOF_PASSED' in answer_text
     assert '.topocore-v6' not in answer_text
+    assert 'private_checkout' not in answer_text
     assert 'Key modules likely involved' not in answer_text
     assert next_steps
     assert audit_summary['route_final'] == 'EXPLAIN'

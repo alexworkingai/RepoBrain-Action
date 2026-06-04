@@ -123,7 +123,7 @@ User text such as "use LLM" does not bypass that policy.
 
 ### Meaning
 
-`/repobrain audit --narrative`, `/repobrain audit --executive`, and `/repobrain audit --profile premium` keep TopoCore as score authority and add an optional LLM explanation layer only when policy and quota allow.
+`/repobrain audit --narrative` and `/repobrain audit --executive` keep TopoCore as score authority and add an optional LLM explanation layer only when policy and quota allow. `/repobrain audit --profile premium` implies that premium explanation layer by itself while preserving the same score authority.
 
 ### What to check
 

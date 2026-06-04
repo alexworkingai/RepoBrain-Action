@@ -32,6 +32,6 @@ def test_sprint88_public_readiness_docs_retain_owner_action_history() -> None:
 def test_operational_readiness_parser_now_reports_public_switch_complete() -> None:
     status = _read_public_readiness_status(ROOT)
 
-    assert status == "SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING"
+    assert status == "SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING"
     next_step = _public_readiness_next_step(status)
     assert "live retest" in next_step.lower() or "partner onboarding" in next_step.lower()

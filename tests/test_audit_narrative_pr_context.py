@@ -11,7 +11,7 @@ def test_pr_audit_narrative_renders_pr_narrative_impact(monkeypatch) -> None:
     monkeypatch.setattr(
         "repobrain.github_flow._maybe_generate_llm_text",
         lambda **_kwargs: (
-            "PR narrative impact: changed-file summary, runtime implications, and reviewer-friendly risk summary.",
+            "## Narrative interpretation\n- Overall score remains strong.\n- Main drivers are documentation maturity and workflow clarity.\n\n## PR impact\n- Changed-file summary.\n- Runtime implications.\n- Reviewer-friendly risk summary.",
             {
                 "llm_used": True,
                 "llm_skip_reason": "n/a",
@@ -44,5 +44,6 @@ def test_pr_audit_narrative_renders_pr_narrative_impact(monkeypatch) -> None:
     )
 
     assert "## PR narrative impact" in markdown
-    assert "runtime implications" in markdown
+    assert "## Narrative interpretation" in markdown
+    assert "Runtime implications" in markdown
     assert "- Score modified by LLM: `no`" in markdown

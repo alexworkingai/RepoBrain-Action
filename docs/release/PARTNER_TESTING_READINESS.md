@@ -25,9 +25,10 @@ This document defines the selected-partner testing state after the Sprint 91 pub
 - dependency review passed on PR `#119`.
 - the public RepoBrain repository currently runs under a solo-owner protected-main baseline with force-push/deletion blocking and linear-history protection.
 - required status checks and CODEOWNERS review enforcement remain intentionally deferred while stable check names are locked.
-- current public readiness status on the Sprint 92F branch: `SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`.
+- current public readiness status on the Sprint 92G branch: `SPRINT_92G_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`.
 - controlled issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`.
 - audit narrative modes are now implemented for `/repobrain audit --narrative`, `/repobrain audit --executive`, and `/repobrain audit --profile premium`.
+- `/repobrain help` now uses a command-reference structure that documents every supported command and supported extension for partners.
 - Sprint 92A manual issue smoke hotfix passed for help, doctor, status, ask, locate, explain, audit, score, and the deprecated lite-alias regression.
 - historical Sprint 91 post-switch status remains recorded as: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`.
 - historical Sprint 90 readiness remains recorded as: `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF`.
@@ -80,6 +81,11 @@ Current truth:
   - issue ask should analyze the consumer repository being tested, not RepoBrain-Action internals
   - PR ask should stay PR-scoped and assess change impact
   - doctor/status/review/fix defaults should remain compact and partner-facing
+- Sprint 92G polish target:
+  - help should stay command-reference oriented and partner-readable
+  - `/repobrain audit --profile premium` should imply premium narrative semantics
+  - explain should keep RepoBrain connection answers free of unrelated workflow padding
+  - default review/fix/PR ask comments should stay compact without empty diagnostics shells
 
 Honest limitation:
 - a normal Python package artifact can still contain readable implementation files

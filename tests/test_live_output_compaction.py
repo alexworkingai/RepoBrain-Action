@@ -35,6 +35,8 @@ def test_ask_primary_output_is_compact_and_segment_visible() -> None:
     assert "### Embeddings" not in primary
     assert "Route details" not in primary
     assert "Runtime diagnostics" not in primary
+    assert "Selected evidence" not in primary
+    assert "Verification:" not in primary
     assert "<summary>Evidence and diagnostics</summary>" in md
 
 
@@ -157,8 +159,7 @@ def test_review_primary_hides_audit_anchors_but_keeps_them_in_details() -> None:
     )
     primary = _primary(md)
     assert "Audit anchors" not in primary
-    assert "<summary>Evidence and diagnostics</summary>" in md
-    assert "Audit anchors" in md
+    assert "<summary>Evidence and diagnostics</summary>" not in md
 
 
 def test_fix_primary_hides_audit_anchors_but_keeps_them_in_details() -> None:
@@ -183,8 +184,7 @@ def test_fix_primary_hides_audit_anchors_but_keeps_them_in_details() -> None:
     )
     primary = _primary(md)
     assert "Audit anchors" not in primary
-    assert "<summary>Evidence and diagnostics</summary>" in md
-    assert "Audit anchors" in md
+    assert "<summary>Evidence and diagnostics</summary>" not in md
 
 
 def test_primary_surfaces_do_not_show_ultra_large_pr_mode_block() -> None:
@@ -295,7 +295,7 @@ def test_review_delta_block_stays_in_details_not_primary() -> None:
     )
     assert "Review delta" not in _primary(md)
     assert "Review delta" not in md
-    assert "<summary>Evidence and diagnostics</summary>" in md
+    assert "<summary>Evidence and diagnostics</summary>" not in md
 
 def test_runtime_provenance_and_decision_cards_render_in_details_only(monkeypatch) -> None:
     monkeypatch.setenv("RB_REPOBRAIN_VERBOSE_DIAGNOSTICS", "1")

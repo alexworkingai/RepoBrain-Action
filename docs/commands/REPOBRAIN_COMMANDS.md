@@ -134,7 +134,8 @@ Optional narrative modes:
   - keeps TopoCore as score authority
   - adds a concise partner-facing executive layer only when LLM policy and quota allow
 - `--profile premium`
-  - may upgrade the optional audit narrative layer
+  - implies a premium narrative/explanation layer after TopoCore scoring even when used by itself
+  - may combine with `--narrative` or `--executive` for premium detailed vs premium executive style
   - does not change the TopoCore score authority
 
 Audit narrative truth:
@@ -240,6 +241,7 @@ Visible no-mutation expectations:
 - `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1` enables controlled issue ask/explain and issue audit narrative LLM by default
 - `RB_REPOBRAIN_ENABLE_ISSUE_LLM=0` disables issue ask/explain and issue audit narrative LLM while preserving deterministic fallback
 - audit narrative flags may use LLM for explanation only; `/repobrain score` remains compact TopoCore-only output
+- `/repobrain help` is structured as a four-block command manual: command list, command reference, environment/policy, and safety notes
 - quota exhaustion falls back to deterministic output and must be reported explicitly in the LLM block
 - when policy or provider availability blocks the LLM path, RepoBrain can still answer from deterministic retrieval, workflow/runtime inspection, evidence extraction, and TopoCore v6 signals
 - route labels always reflect the user command; internal analysis mode is separate from the visible route
