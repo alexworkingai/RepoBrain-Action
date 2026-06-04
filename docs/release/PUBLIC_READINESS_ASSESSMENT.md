@@ -88,6 +88,14 @@ Sprint 92E implementation target:
 - dependency review passed on PR `#119`
 - governance currently follows a solo-owner protected-main model rather than review-enforced branch protection
 
+Sprint 92F implementation target:
+- controlled trusted issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`
+- issue ask/explain must fall back deterministically when policy, provider availability, or quota blocks LLM use
+- `/repobrain audit --narrative` and `/repobrain audit --executive` add optional LLM explanation layers while keeping TopoCore as score authority
+- `/repobrain audit --profile premium` may upgrade that optional narrative layer
+- `/repobrain score` stays TopoCore-first and does not require an LLM
+- remaining review/fix default-output noise is removed from compact comments
+
 ## Current Operating Conditions
 
 Public visibility is now switched, but the operating model remains constrained:
@@ -110,7 +118,7 @@ Now that RepoBrain-Action is public:
 
 ## Decision
 
-- current public readiness decision on the Sprint 92E branch: `SPRINT_92D_IMPLEMENTATION_MERGED_LIVE_RETEST_FINDINGS_PENDING_FIX`
+- current public readiness decision on the Sprint 92F branch: `SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`
 - historical Sprint 91 post-switch decision: `PUBLIC_VISIBILITY_SWITCHED_PARTNER_PILOT_READY`
 - private beta decision: `PRIVATE_BETA_RC_CONFIRMED`
 - TopoCore security decision: `TOPOCORE_SECURITY_POLICY_ADOPTED`

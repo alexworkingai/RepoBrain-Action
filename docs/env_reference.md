@@ -69,6 +69,7 @@ This file is generated from `repobrain/config.py` by `scripts/gen_env_reference.
 | `RB_LLM_PATCH_MAX_TARGET_HUNKS` | int | `12` | 1..300 | Maximum hunks selected for localized patch generation. |
 | `RB_LLM_PATCH_REQUIRE_LOCALIZED_EVIDENCE` | bool | `1` | - | Require localized evidence before running patch generation. |
 | `RB_LLM_PROVIDER` | str | `` | - | LLM provider name (github_models). |
+| `RB_REPOBRAIN_ENABLE_ISSUE_LLM` | bool | `1` | - | Enable controlled LLM for trusted issue ask/explain and issue audit narrative flows. |
 | `RB_REQUIRE_VERIFY_FOR_PATCH` | bool | `0` | - | Require verification pass for patch success. |
 | `RB_RETRIEVAL_VECTOR_TOPK` | int | `30` | 1..500 | Vector candidate top-k. |
 | `RB_RETRIEVAL_W_LEX` | float | `0.55` | 0.0..1.0 | Hybrid lexical weight. |

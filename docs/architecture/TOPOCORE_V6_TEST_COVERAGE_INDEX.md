@@ -32,6 +32,14 @@ Sprint 92E adds focused partner-surface coverage for:
 - PR `#119` merged-state public-readiness status
 - dependency graph and dependency-review governance evidence
 
+Sprint 92F adds focused partner-surface coverage for:
+
+- controlled trusted issue LLM default enablement
+- quota-aware deterministic issue fallback reporting
+- audit narrative and executive modes in issue and PR contexts
+- explicit TopoCore score-authority preservation under audit narrative
+- final compact review/fix default-output cleanup
+
 ## 2. Current Test Baseline
 
 Current test baseline:

@@ -98,6 +98,45 @@ Expected behavior after the fix:
 - issue ask describes the consumer repository product/modules/integrations
 - PR ask stays PR-scoped and reports change impact rather than a generic product overview
 
+## 3C. Issue LLM did not run
+
+### Meaning
+
+Issue ask/explain LLM is controlled by repository policy, provider availability, and quota.
+User text such as "use LLM" does not bypass that policy.
+
+### What to check
+
+- `RB_REPOBRAIN_ENABLE_ISSUE_LLM`
+- `RB_LLM_ENABLED`
+- `RB_LLM_PROVIDER`
+- `GITHUB_TOKEN`
+- whether the LLM block reports `Limit status: exhausted`
+
+### Safe guidance
+
+- `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1` enables controlled issue ask/explain and issue audit narrative LLM by default
+- `RB_REPOBRAIN_ENABLE_ISSUE_LLM=0` disables that path and keeps deterministic fallback available
+- if quota is exhausted, rerun later; RepoBrain should still return a deterministic answer instead of failing
+
+## 3D. Audit narrative did not run
+
+### Meaning
+
+`/repobrain audit --narrative`, `/repobrain audit --executive`, and `/repobrain audit --profile premium` keep TopoCore as score authority and add an optional LLM explanation layer only when policy and quota allow.
+
+### What to check
+
+- issue or PR context is trusted
+- LLM provider access is configured
+- quota is not exhausted
+- the LLM block explains whether narrative was used or skipped
+
+### Safe guidance
+
+- the base TopoCore audit score is still valid even when the narrative layer is skipped
+- `/repobrain score` remains compact TopoCore-only output in the current product path
+
 ## 4. Verify returns `NOT_RUN`
 
 ### Meaning

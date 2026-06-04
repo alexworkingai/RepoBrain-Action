@@ -52,6 +52,28 @@ def test_parse_fix_with_profile_flag_and_query() -> None:
     }
 
 
+def test_parse_explain_with_profile_flag_and_query() -> None:
+    assert parse_command("/repobrain explain --profile premium explain runtime policy") == {
+        "cmd": "explain",
+        "query": "explain runtime policy",
+        "profile": "premium",
+    }
+
+
+def test_parse_audit_with_narrative_flags_and_profile() -> None:
+    assert parse_command("/repobrain audit --narrative --profile premium Focus on product readiness.") == {
+        "cmd": "audit",
+        "query": "Focus on product readiness.",
+        "profile": "premium",
+        "narrative": "1",
+    }
+    assert parse_command("/repobrain audit --executive Focus on partner pilot readiness.") == {
+        "cmd": "audit",
+        "query": "Focus on partner pilot readiness.",
+        "executive": "1",
+    }
+
+
 def test_parse_invalid_profile_value_returns_parse_error() -> None:
     parsed = parse_command("/repobrain ask --profile ultra provider selection")
     assert parsed["cmd"] == "ask"

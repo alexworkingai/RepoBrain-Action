@@ -209,6 +209,7 @@ class LLMConfig:
     max_output_tokens_fix: int = 2000
     max_output_tokens_patch: int = 900
     allow_locate: bool = False
+    enable_issue_llm: bool = True
     enable_issue_comment: bool = True
     enable_pr_comments: bool = True
     enable_issue_only: bool = False
@@ -445,6 +446,12 @@ class RepoBrainConfig:
                 warnings=warnings,
             ),
             allow_locate=env_bool("RB_LLM_ALLOW_LOCATE", False, source=env_source, warnings=warnings),
+            enable_issue_llm=env_bool(
+                "RB_REPOBRAIN_ENABLE_ISSUE_LLM",
+                True,
+                source=env_source,
+                warnings=warnings,
+            ),
             enable_issue_comment=env_bool(
                 "RB_LLM_ENABLE_ISSUE_COMMENT",
                 True,
@@ -1034,6 +1041,7 @@ RB_ENV_SPECS: tuple[EnvVarSpec, ...] = (
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_FIX", "int", "2000", "Fix max output tokens.", min_value=200, max_value=16000),
     EnvVarSpec("RB_LLM_MAX_OUTPUT_TOKENS_PATCH", "int", "900", "Patch max output tokens.", min_value=64, max_value=16000),
     EnvVarSpec("RB_LLM_ALLOW_LOCATE", "bool", "0", "Allow LLM for locate command."),
+    EnvVarSpec("RB_REPOBRAIN_ENABLE_ISSUE_LLM", "bool", "1", "Enable controlled LLM for trusted issue ask/explain and issue audit narrative flows."),
     EnvVarSpec("RB_LLM_ENABLE_ISSUE_COMMENT", "bool", "1", "Allow LLM for issue_comment event path."),
     EnvVarSpec("RB_LLM_ENABLE_PR_COMMENTS", "bool", "1", "Allow LLM for issue_comment on PR discussions."),
     EnvVarSpec("RB_LLM_ENABLE_ISSUE_ONLY", "bool", "0", "Allow LLM for issue_comment on non-PR issues."),

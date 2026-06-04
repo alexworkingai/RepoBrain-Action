@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
 
-def parse_command(text: str) -> dict[str, str]:
+
+def parse_command(text: str) -> dict[str, Any]:
     """Parse `/repobrain ...` issue comment commands into command fields."""
     raw = (text or "").strip()
     if not raw:
@@ -32,7 +34,7 @@ def parse_command(text: str) -> dict[str, str]:
         return {"cmd": "unsupported", "query": ""}
 
     if cmd in {"help", "review", "verify"}:
-        base: dict[str, str] = {"cmd": cmd, "query": ""}
+        base: dict[str, Any] = {"cmd": cmd, "query": ""}
     elif cmd in {"fix", "audit", "doctor", "status", "score"}:
         if len(parts) >= 3:
             base = {"cmd": cmd, "query": parts[2].strip()}
@@ -43,16 +45,18 @@ def parse_command(text: str) -> dict[str, str]:
             return {"cmd": "help", "query": ""}
         base = {"cmd": cmd, "query": parts[2].strip()}
 
-    if cmd not in {"ask", "review", "fix"}:
+    if cmd not in {"ask", "explain", "review", "fix", "audit"}:
         return base
 
     query = base.get("query", "")
-    if not query and cmd in {"review", "fix"} and len(parts) >= 3:
+    if not query and cmd in {"review", "fix", "audit"} and len(parts) >= 3:
         query = parts[2].strip()
 
     tokens = query.split() if query else []
     out_tokens: list[str] = []
     profile_override = ""
+    audit_narrative = False
+    audit_executive = False
     idx = 0
     while idx < len(tokens):
         token = tokens[idx]
@@ -97,10 +101,17 @@ def parse_command(text: str) -> dict[str, str]:
             profile_override = profile_value
             idx += 1
             continue
+        if cmd == "audit" and lower in {"--narrative", "--executive"}:
+            if lower == "--narrative":
+                audit_narrative = True
+            if lower == "--executive":
+                audit_executive = True
+            idx += 1
+            continue
         out_tokens.append(token)
         idx += 1
 
-    if cmd in {"ask"} and not out_tokens:
+    if cmd in {"ask", "explain"} and not out_tokens:
         return {"cmd": "help", "query": ""}
 
     if cmd == "fix":
@@ -113,5 +124,10 @@ def parse_command(text: str) -> dict[str, str]:
 
     if profile_override:
         base["profile"] = profile_override
+    if cmd == "audit":
+        if audit_narrative:
+            base["narrative"] = "1"
+        if audit_executive:
+            base["executive"] = "1"
 
     return base

@@ -11,6 +11,8 @@ Current product runtime is v6-only:
 - private TopoCore v6 is a separate proprietary dependency
 - external users bring and pay for their own LLM or model provider access
 - ask and explain can still answer through deterministic retrieval and TopoCore-backed evidence when an LLM call is not used
+- trusted issue ask and explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`
+- when LLM quota is exhausted, RepoBrain falls back to deterministic output and reports the exhausted state without failing the command
 - current product behavior remains no-patch and no-mutation
 
 ## Quick Start
@@ -88,6 +90,15 @@ Sprint 92D branch truth:
 - route labels reflect the typed command rather than internal analysis mode
 - protected main baseline is enabled on the public RepoBrain repository
 - required status checks remain intentionally deferred until stable check names are locked
+
+Sprint 92F implementation truth:
+
+- controlled trusted issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`
+- `/repobrain audit --narrative` adds an optional explanatory LLM layer after TopoCore scoring
+- `/repobrain audit --executive` adds an optional executive/partner-facing LLM layer after TopoCore scoring
+- `/repobrain audit --profile premium` upgrades the optional narrative layer when available
+- `/repobrain score` remains a compact TopoCore-first summary and does not require an LLM
+- current readiness status on the Sprint 92F branch is `SPRINT_92F_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`
 
 RepoBrain is not an LLM reseller.
 TopoCore v6 remains private.
