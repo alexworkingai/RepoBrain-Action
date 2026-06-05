@@ -21,14 +21,20 @@ def test_issue_ask_product_analysis_stays_on_target_repo(
         "name: RepoBrain\npermissions:\n  contents: read\n  issues: write\n",
     )
     _write(tmp_path / "src" / "mcpServer.ts", "export const mcpServer = true;\n")
+    _write(tmp_path / "src" / "index.ts", "export const bootstrap = true;\n")
     _write(tmp_path / "src" / "runtimePaths.ts", "export const runtimePaths = true;\n")
+    _write(tmp_path / "src" / "auth" / "index.ts", "export const auth = true;\n")
+    _write(tmp_path / "src" / "admin" / "routes.ts", "export const adminRoutes = true;\n")
     _write(tmp_path / "apps" / "console" / "src" / "main.tsx", "export const app = true;\n")
+    _write(tmp_path / "prisma" / "schema.prisma", "datasource db { provider = 'postgresql' }\n")
+    _write(tmp_path / "k8s" / "deployment.yaml", "apiVersion: apps/v1\n")
     _write(
         tmp_path / "README.md",
         "# Elen MCP Server\n\nQdrant GitHub GitLab Jenkins Argo OAuth JWKS Prometheus OpenTelemetry Grafana\n",
     )
     _write(tmp_path / "docs" / "ARCHITECTURE.md", "# Architecture\n")
     _write(tmp_path / "docs" / "API_ENDPOINTS.md", "# APIs\n")
+    _write(tmp_path / "docs" / "ENTERPRISE_READINESS.md", "# Enterprise readiness\n")
     _write(tmp_path / "SECURITY.md", "# Security\n")
     _write(tmp_path / "Dockerfile", "FROM node:20\n")
     _write(tmp_path / "docs" / "release" / "PUBLIC_READINESS_ASSESSMENT.md", "")
@@ -80,8 +86,14 @@ def test_issue_ask_product_analysis_stays_on_target_repo(
     assert "RepoBrain-Action currently looks like" not in answer_text
     assert "repobrain/ command and runtime modules" not in answer_text
     assert "`src/mcpServer.ts`" in answer_text
+    assert "`src/index.ts`" in answer_text
     assert "`src/runtimePaths.ts`" in answer_text
+    assert "`src/auth/`" in answer_text
+    assert "`src/admin/`" in answer_text
     assert "`apps/console/src/main.tsx`" in answer_text
+    assert "`prisma/`" in answer_text
+    assert "`k8s/`" in answer_text
+    assert "`docs/ENTERPRISE_READINESS.md`" in answer_text
     assert ".github/workflows/repobrain.yml" in answer_text
     assert "Route: REVIEW" not in answer_text
     assert audit_summary["route_final"] == "ASK"
