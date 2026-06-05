@@ -6085,6 +6085,55 @@ def _existing_relative_paths(repo_root: Path, candidates: tuple[tuple[str, str],
     return [(path, label) for path, label in candidates if (repo_root / path).exists()]
 
 
+def _build_evidence_items_from_paths(paths: list[str]) -> list[EvidenceItem]:
+    evidence_items: list[EvidenceItem] = []
+    score = 1.0
+    for path in paths:
+        normalized = str(path or "").strip().replace("\\", "/")
+        if not normalized:
+            continue
+        evidence_items.append(
+            EvidenceItem(
+                file_path=normalized,
+                line_start=1,
+                line_end=1,
+                score=score,
+            )
+        )
+        score = max(0.1, score - 0.05)
+    return evidence_items
+
+
+def _target_repo_product_analysis_evidence_paths(repo_root: Path) -> list[str]:
+    candidates = (
+        ".github/workflows/repobrain.yml",
+        "src/mcpServer.ts",
+        "src/index.ts",
+        "src/main.ts",
+        "src/server.ts",
+        "src/runtimePaths.ts",
+        "apps/console/src/main.tsx",
+        "src/auth",
+        "src/admin",
+        "prisma",
+        "migrations",
+        "docs/ENTERPRISE_READINESS.md",
+        "docs/ARCHITECTURE.md",
+        "docs/API_ENDPOINTS.md",
+        "docs/repobrain_pilot.md",
+        "SECURITY.md",
+        "README.md",
+        "Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "docker-compose.dev.yml",
+        "k8s",
+        "helm",
+    )
+    paths = [path for path in candidates if (repo_root / path).exists()]
+    return list(dict.fromkeys(paths))[:10]
+
+
 def _read_target_repo_text(repo_root: Path) -> str:
     snippets: list[str] = []
     for rel_path in (
@@ -6582,6 +6631,7 @@ def _maybe_refine_operational_ask_answer(
         refined_summary["installed_package_proof_status"] = installed_package_proof_status
         refined_summary["route_final"] = "ASK"
         return "\n".join(answer_lines), "Review the changed files and partner-facing docs for accuracy before merge.", refined_summary
+    evidence_override: list[EvidenceItem] | None = None
     if operational_kind == "product_analysis":
         answer_lines = _target_repo_product_analysis_sections(
             repo_root=repo_root,
@@ -6591,6 +6641,7 @@ def _maybe_refine_operational_ask_answer(
             runtime_note=runtime_note,
             llm_used=llm_used,
         )
+        evidence_override = _build_evidence_items_from_paths(_target_repo_product_analysis_evidence_paths(repo_root))
     elif cmd == "explain":
         runtime_resolution_line = (
             "RepoBrain resolved the installed private package path successfully for this run."
@@ -6648,6 +6699,9 @@ def _maybe_refine_operational_ask_answer(
     refined_summary["action_source"] = action_source
     refined_summary["public_readiness_status"] = public_readiness_status
     refined_summary["installed_package_proof_status"] = installed_package_proof_status
+    refined_summary["operational_evidence_override_paths"] = (
+        [item.file_path for item in evidence_override] if evidence_override else []
+    )
     if cmd == "explain":
         refined_summary["route_final"] = "EXPLAIN"
     elif cmd == "ask":
@@ -7013,6 +7067,14 @@ def _build_qa_markdown(
         audit_summary=audit_summary,
         github_context=qa_github_context,
     )
+    override_paths_raw = audit_summary.get("operational_evidence_override_paths", [])
+    override_paths = (
+        [str(item).strip() for item in override_paths_raw if str(item).strip()]
+        if isinstance(override_paths_raw, list)
+        else []
+    )
+    if override_paths:
+        evidence_out = _dedupe_evidence_by_file(_build_evidence_items_from_paths(override_paths), max_files=8)
     audit_summary["command"] = cmd
     if cmd == "ask":
         route_after_refinement = str(audit_summary.get("route_final", "ASK") or "ASK").strip().upper()

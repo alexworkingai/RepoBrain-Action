@@ -98,4 +98,7 @@ def test_issue_ask_product_analysis_stays_on_target_repo(
     assert "Route: REVIEW" not in answer_text
     assert audit_summary["route_final"] == "ASK"
     assert audit_summary["operational_ask_kind"] == "product_analysis"
+    override_paths = audit_summary["operational_evidence_override_paths"]
+    assert "src/mcpServer.ts" in override_paths
+    assert "docs/ENTERPRISE_READINESS.md" in override_paths
     assert next_steps.startswith("Run the Sprint 92H live issue/PR retest")

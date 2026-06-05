@@ -290,8 +290,14 @@ def merge_audit_report_with_v6(
         for item in validated_response["categories"]
     ]
     merged["critical_blockers"] = list(validated_response["critical_blockers"])
-    merged["top_improvements"] = list(validated_response["top_improvements"])
-    merged["roadmap"] = dict(validated_response["roadmap"])
+    merged["top_improvements"] = _filter_renderable_top_improvements(
+        validated_response["top_improvements"],
+        categories=validated_response["categories"],
+    )
+    merged["roadmap"] = _filter_renderable_roadmap(
+        validated_response["roadmap"],
+        categories=validated_response["categories"],
+    )
     merged["confidence"] = str(validated_response["confidence"])
     merged["limitations"] = _unique_text(
         [
@@ -638,6 +644,87 @@ def _normalize_category_key(value: Any) -> str:
         if text == title.lower():
             return key
     raise AuditContractError("v6 audit category key was invalid.")
+
+
+def _normalize_category_title(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _maxed_category_titles(categories: Sequence[Mapping[str, Any]] | Any) -> set[str]:
+    maxed: set[str] = set()
+    if not isinstance(categories, Sequence) or isinstance(categories, (str, bytes)):
+        return maxed
+    for item in categories:
+        if not isinstance(item, Mapping):
+            continue
+        title = _normalize_category_title(item.get("title", ""))
+        if not title:
+            continue
+        try:
+            score = int(item.get("score", 0))
+            max_score = int(item.get("max_score", 0))
+        except (TypeError, ValueError):
+            continue
+        if max_score > 0 and score >= max_score:
+            maxed.add(title)
+    return maxed
+
+
+def _is_advisory_maintenance_item(text: Any) -> bool:
+    normalized = " ".join(str(text or "").strip().lower().split())
+    if not normalized:
+        return False
+    advisory_markers = ("maintain", "monitor", "preserve", "keep", "watch", "guard", "drift")
+    return any(marker in normalized for marker in advisory_markers)
+
+
+def _filter_renderable_top_improvements(
+    improvements: Sequence[Mapping[str, Any]] | Any,
+    *,
+    categories: Sequence[Mapping[str, Any]] | Any,
+) -> list[dict[str, Any]]:
+    if not isinstance(improvements, Sequence) or isinstance(improvements, (str, bytes)):
+        return []
+    maxed_titles = _maxed_category_titles(categories)
+    filtered: list[dict[str, Any]] = []
+    for item in improvements:
+        if not isinstance(item, Mapping):
+            continue
+        category = _normalize_category_title(item.get("category", ""))
+        title = str(item.get("title", "") or "").strip()
+        if category in maxed_titles and not _is_advisory_maintenance_item(title):
+            continue
+        filtered.append(dict(item))
+    return filtered
+
+
+def _extract_roadmap_category(item_text: str) -> str:
+    match = re.search(r"\(([^()]+)\)\s*$", str(item_text or "").strip())
+    if not match:
+        return ""
+    return _normalize_category_title(match.group(1))
+
+
+def _filter_renderable_roadmap(
+    roadmap: Mapping[str, Any] | Any,
+    *,
+    categories: Sequence[Mapping[str, Any]] | Any,
+) -> dict[str, list[str]]:
+    if not isinstance(roadmap, Mapping):
+        return {"30_days": [], "60_days": [], "90_days": []}
+    maxed_titles = _maxed_category_titles(categories)
+    filtered: dict[str, list[str]] = {}
+    for phase in ("30_days", "60_days", "90_days"):
+        raw_items = roadmap.get(phase, [])
+        items = [str(item).strip() for item in raw_items if str(item).strip()] if isinstance(raw_items, Sequence) and not isinstance(raw_items, (str, bytes)) else []
+        filtered_phase: list[str] = []
+        for item_text in items:
+            category = _extract_roadmap_category(item_text)
+            if category in maxed_titles and not _is_advisory_maintenance_item(item_text):
+                continue
+            filtered_phase.append(item_text)
+        filtered[phase] = filtered_phase
+    return filtered
 
 
 def _split_repository_name(value: str) -> tuple[str, str]:

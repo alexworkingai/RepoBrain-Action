@@ -4,7 +4,13 @@ import os
 import re
 from typing import Any
 
-from repobrain.audit_contract import AUDIT_V6_CONTRACT_VERSION, _sanitize_repo_path, _sanitize_text
+from repobrain.audit_contract import (
+    AUDIT_V6_CONTRACT_VERSION,
+    _filter_renderable_roadmap,
+    _filter_renderable_top_improvements,
+    _sanitize_repo_path,
+    _sanitize_text,
+)
 from repobrain.evidence import EvidenceItem
 from repobrain.links import make_line_link
 from repobrain.patch_governance import build_patch_governance_contract
@@ -3392,6 +3398,78 @@ def _audit_roadmap_lines(roadmap: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _guard_audit_narrative_text(text: str, categories: list[dict[str, Any]]) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    maxed_titles = {
+        " ".join(str(item.get("title", "") or "").strip().lower().split())
+        for item in categories
+        if isinstance(item, dict)
+        and int(item.get("max_score", 0) or 0) > 0
+        and int(item.get("score", 0) or 0) >= int(item.get("max_score", 0) or 0)
+    }
+    if not maxed_titles:
+        return raw
+    advisory_markers = ("maintain", "monitor", "preserve", "keep", "watch", "guard", "drift")
+    recommendation_markers = ("improve", "raise", "strengthen", "expand", "increase", "add")
+    kept_lines: list[str] = []
+    changed = False
+    for line in raw.splitlines():
+        normalized = " ".join(line.strip().lower().split())
+        if normalized and any(title in normalized for title in maxed_titles):
+            if any(marker in normalized for marker in recommendation_markers) and not any(
+                marker in normalized for marker in advisory_markers
+            ):
+                changed = True
+                continue
+        kept_lines.append(line)
+    guarded = "\n".join(kept_lines).strip()
+    if guarded:
+        return guarded
+    if changed:
+        return "Narrative remained bounded after removing unsupported maxed-category recommendation lines."
+    return raw
+
+
+def _looks_incomplete_premium_narrative(text: str) -> bool:
+    stripped = str(text or "").strip()
+    if not stripped:
+        return True
+    if stripped.endswith((".", "!", "?", "`", "*")):
+        return False
+    last_line = next((line.strip() for line in reversed(stripped.splitlines()) if line.strip()), "")
+    if not last_line:
+        return True
+    lowered = last_line.lower()
+    if lowered.endswith((" and", " or", " but", " with", " without", " for", " to", " of", " in", " on")):
+        return True
+    if last_line.startswith("- ") and (":" in last_line or last_line.endswith(("no", "yes"))):
+        return False
+    last_word = re.sub(r"[^a-zA-Z]+", "", lowered.split()[-1]) if lowered.split() else ""
+    if last_word and len(last_word) <= 4:
+        return True
+    return False
+
+
+def _deterministic_bounded_premium_summary(
+    *,
+    report: dict[str, Any],
+    blockers: list[dict[str, Any]],
+    improvements: list[dict[str, Any]],
+) -> str:
+    overall_score = _int(report.get("overall_score", 0))
+    readiness_band = str(report.get("readiness_band", "UNKNOWN") or "UNKNOWN").strip().upper()
+    top_blocker = str(blockers[0].get("title", "No critical blocker identified.") or "No critical blocker identified.").strip() if blockers else "No critical blocker identified."
+    top_improvement = str(improvements[0].get("title", "No additional non-maxed improvement target was identified.") or "No additional non-maxed improvement target was identified.").strip() if improvements else "No additional non-maxed improvement target was identified."
+    return (
+        f"Premium narrative fallback: score remains **{overall_score} / 100** with readiness **{readiness_band}**. "
+        f"Top blocker: {top_blocker}. "
+        f"Highest-priority non-maxed improvement: {top_improvement}. "
+        "Use the scorecard, blockers, filtered improvements, and limitations below as the authoritative bounded summary."
+    )
+
+
 def _audit_evidence_summary_lines(evidence_summary: dict[str, Any], pr_context: dict[str, Any]) -> list[str]:
     key_files_raw = evidence_summary.get("key_files", [])
     key_files = (
@@ -3599,15 +3677,36 @@ def render_audit_markdown(
     blockers_raw = report.get("critical_blockers", [])
     blockers = [item for item in blockers_raw if isinstance(item, dict)] if isinstance(blockers_raw, list) else []
     improvements_raw = report.get("top_improvements", [])
-    improvements = [item for item in improvements_raw if isinstance(item, dict)] if isinstance(improvements_raw, list) else []
+    improvements = (
+        [item for item in improvements_raw if isinstance(item, dict)]
+        if isinstance(improvements_raw, list)
+        else []
+    )
+    improvements = _filter_renderable_top_improvements(improvements, categories=categories)
     roadmap = report.get("roadmap", {}) if isinstance(report.get("roadmap", {}), dict) else {}
+    roadmap = _filter_renderable_roadmap(roadmap, categories=categories)
     evidence_summary = (
         report.get("evidence_summary", {}) if isinstance(report.get("evidence_summary", {}), dict) else {}
     )
     pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
-    narrative_text = str(report.get("audit_narrative_text", "") or "").strip()
-    pr_narrative_text = str(report.get("audit_pr_narrative_text", "") or "").strip()
+    narrative_text = _guard_audit_narrative_text(str(report.get("audit_narrative_text", "") or "").strip(), categories)
+    pr_narrative_text = _guard_audit_narrative_text(
+        str(report.get("audit_pr_narrative_text", "") or "").strip(),
+        categories,
+    )
     narrative_mode = str(report.get("audit_narrative_mode", "none") or "none").strip().lower()
+    if narrative_mode in {"premium", "premium_executive"} and _looks_incomplete_premium_narrative(narrative_text):
+        narrative_text = _deterministic_bounded_premium_summary(
+            report=report,
+            blockers=blockers,
+            improvements=improvements,
+        )
+    if narrative_mode in {"premium", "premium_executive"} and _looks_incomplete_premium_narrative(pr_narrative_text):
+        pr_narrative_text = _deterministic_bounded_premium_summary(
+            report=report,
+            blockers=blockers,
+            improvements=improvements,
+        )
     query = str(report.get("query", "") or "").strip()
     sections = [
         "# RepoBrain Repository Audit",
@@ -3686,7 +3785,12 @@ def render_score_markdown(
     blockers_raw = report.get("critical_blockers", [])
     blockers = [item for item in blockers_raw if isinstance(item, dict)] if isinstance(blockers_raw, list) else []
     improvements_raw = report.get("top_improvements", [])
-    improvements = [item for item in improvements_raw if isinstance(item, dict)] if isinstance(improvements_raw, list) else []
+    improvements = (
+        [item for item in improvements_raw if isinstance(item, dict)]
+        if isinstance(improvements_raw, list)
+        else []
+    )
+    improvements = _filter_renderable_top_improvements(improvements, categories=categories)
     query = str(report.get("query", "") or "").strip()
 
     sections = [

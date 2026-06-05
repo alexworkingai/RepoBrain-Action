@@ -72,3 +72,4 @@ def test_broad_identity_query_expands_across_multiple_repository_surface_familie
     assert "`docs/ENTERPRISE_READINESS.md`" in answer_text
     assert "RepoBrain-Action currently looks like" not in answer_text
     assert audit_summary["operational_ask_kind"] == "product_analysis"
+    assert "docs/ENTERPRISE_READINESS.md" in audit_summary["operational_evidence_override_paths"]
