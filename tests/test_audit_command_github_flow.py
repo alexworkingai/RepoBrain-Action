@@ -55,7 +55,8 @@ def test_issue_scope_audit_is_supported_and_includes_required_sections() -> None
     assert "## Category scores" in markdown
     assert "## Critical blockers" in markdown
     assert "## Top improvements" in markdown
-    assert "## 30/60/90-day roadmap" in markdown
+    assert "## Recommended next priorities" in markdown
+    assert "30/60/90-day roadmap" not in markdown
     assert "## Evidence summary" in markdown
     assert "## Confidence and limitations" in markdown
     assert "## Runtime and safety" in markdown

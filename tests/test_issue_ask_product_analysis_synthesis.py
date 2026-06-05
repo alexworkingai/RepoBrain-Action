@@ -101,4 +101,5 @@ def test_issue_ask_product_analysis_stays_on_target_repo(
     override_paths = audit_summary["operational_evidence_override_paths"]
     assert "src/mcpServer.ts" in override_paths
     assert "docs/ENTERPRISE_READINESS.md" in override_paths
-    assert next_steps.startswith("Run the Sprint 92H live issue/PR retest")
+    assert next_steps.startswith("Validate the retrieved runtime, auth/admin, data, UI, and deployment-relevant surfaces")
+    assert "SPRINT_92H_" not in answer_text

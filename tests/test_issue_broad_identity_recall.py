@@ -71,5 +71,7 @@ def test_broad_identity_query_expands_across_multiple_repository_surface_familie
     assert "`Dockerfile`" in answer_text
     assert "`docs/ENTERPRISE_READINESS.md`" in answer_text
     assert "RepoBrain-Action currently looks like" not in answer_text
+    assert "SPRINT_92H_" not in answer_text
+    assert "Run the Sprint 92H live issue/PR retest" not in answer_text
     assert audit_summary["operational_ask_kind"] == "product_analysis"
     assert "docs/ENTERPRISE_READINESS.md" in audit_summary["operational_evidence_override_paths"]

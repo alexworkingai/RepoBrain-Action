@@ -90,6 +90,11 @@ def test_final_audit_markdown_filters_v6_maxed_category_leakage() -> None:
         audit_summary={"route_final": "AUDIT", "resolved_backend": "v6", "fallback_used": "no", "fallback_reason": "none"},
     )
 
+    assert "30/60/90-day roadmap" not in md
+    assert "30 days" not in md
+    assert "60 days" not in md
+    assert "90 days" not in md
+    assert "## Recommended next priorities" in md
     assert "Improve dependency hygiene coverage" not in md
     assert "Improve branch and review governance" in md
     assert "Keep dependency hygiene drift monitored" in md
@@ -207,6 +212,10 @@ def test_final_issue_premium_markdown_uses_bounded_fallback_when_text_is_incompl
         audit_summary={"route_final": "AUDIT", "resolved_backend": "v6", "fallback_used": "no", "fallback_reason": "none"},
     )
 
+    assert "30/60/90-day decisions" not in md
+    assert "30 days" not in md
+    assert "60 days" not in md
+    assert "90 days" not in md
     assert "improve ai-readiness / repository intelligence" not in md.lower()
     assert "without pres" not in md
     assert "Premium narrative fallback:" in md
@@ -265,6 +274,11 @@ def test_final_pr_premium_markdown_preserves_docs_only_facts_and_filters_maxed_t
         audit_summary={"route_final": "AUDIT", "resolved_backend": "v6", "fallback_used": "no", "fallback_reason": "none"},
     )
 
+    assert "30/60/90-day roadmap" not in md
+    assert "30/60/90-day decisions" not in md
+    assert "30 days" not in md
+    assert "60 days" not in md
+    assert "90 days" not in md
     assert "docs-only" in md
     assert "behavior-affecting: no" in md
     assert "architecture/runtime impact: no direct impact" in md
@@ -331,8 +345,10 @@ def test_final_product_analysis_markdown_uses_evidence_grounded_identity(tmp_pat
     )
 
     assert "Main runtime/application surfaces:" in md
-    assert "### 📍 Evidence used" in md
+    assert "Evidence used" in md
     assert "src/mcpServer.ts" in md
     assert "docs/ENTERPRISE_READINESS.md" in md
     assert ".github/workflows/repobrain.yml" in md
+    assert "SPRINT_92H_" not in md
+    assert "Run the Sprint 92H live issue/PR retest" not in md
     assert "repobrain/github_flow.py" not in md

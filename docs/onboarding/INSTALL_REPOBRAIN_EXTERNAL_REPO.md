@@ -236,7 +236,7 @@ Expected healthy audit behavior:
 - static baseline plus live mode truth shown
 - all 10 categories shown
 - evidence summary shown with safe repo-relative paths
-- critical blockers, top improvements, and 30/60/90-day roadmap shown
+- critical blockers, top improvements, and non-timeboxed recommended priorities shown
 - no patch/autofix
 - no mutation
 - repository-level informational output

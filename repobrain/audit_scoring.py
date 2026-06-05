@@ -1149,10 +1149,7 @@ def _build_roadmap(
         lowered = str(title or "").strip().lower()
         return lowered.startswith(("maintain ", "keep ", "continue ", "document and monitor ", "monitor "))
 
-    blockers_lines = [
-        _roadmap_line(item["title"], item["category"])
-        for item in critical_blockers[:3]
-    ]
+    blockers_lines = [_roadmap_line(item["title"], item["category"]) for item in critical_blockers[:3]]
     ordered_improvements = sorted(
         [
             item
@@ -1175,16 +1172,14 @@ def _build_roadmap(
         _roadmap_line(item["title"], item["category"])
         for item in ordered_improvements[:6]
     ]
-    prioritized_lines = _unique_lines([*blockers_lines, *improvement_lines])
-    thirty = prioritized_lines[:3] or ["No immediate non-maxed improvement target was identified from the current scorecard."]
-    sixty = prioritized_lines[3:6] or prioritized_lines[:2] or ["Keep governance, testing, and release-readiness evidence aligned as the repository evolves."]
-    ninety = [
-        "Institutionalize governance, release hygiene, and evidence refresh routines.",
-    ]
+    prioritized_lines = _unique_lines([*blockers_lines, *improvement_lines])[:6]
+    if not prioritized_lines:
+        prioritized_lines = ["No additional non-maxed follow-up priorities were identified from the current scorecard."]
     return {
-        "30_days": thirty[:3],
-        "60_days": sixty[:3],
-        "90_days": ninety[:3],
+        "30_days": prioritized_lines[:3],
+        "60_days": prioritized_lines[3:6],
+        "90_days": [],
+        "priorities": prioritized_lines,
     }
 
 

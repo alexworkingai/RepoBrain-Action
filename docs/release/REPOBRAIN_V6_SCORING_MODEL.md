@@ -47,7 +47,7 @@ A full audit output should include:
 - critical blockers
 - evidence references
 - top improvements
-- 30/60/90-day roadmap
+- non-timeboxed recommended priorities
 - confidence level
 - limitations
 - no-mutation safety statement
@@ -65,7 +65,7 @@ A full audit output should include:
   - overall score
   - category breakdown
   - blockers and improvements
-  - 30/60/90-day roadmap
+  - non-timeboxed recommended priorities
   - confidence and limitations
   - explicit no-mutation safety statement
 
