@@ -3356,7 +3356,7 @@ def _audit_blocker_lines(blockers: list[dict[str, Any]], *, limit: int = 5) -> l
 
 def _audit_improvement_lines(improvements: list[dict[str, Any]], *, limit: int = 8) -> list[str]:
     if not improvements:
-        return ["- No improvement plan was generated from the current evidence sample."]
+        return ["- No additional non-maxed improvement targets were identified from the current scorecard."]
     lines: list[str] = []
     for item in improvements[:limit]:
         category = str(item.get("category", "Repository health") or "Repository health").strip()

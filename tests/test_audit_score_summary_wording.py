@@ -18,3 +18,19 @@ def test_v6_executive_summary_reports_final_score_before_static_baseline() -> No
     assert "Static baseline was `84 / 100` (`GOOD`)" in text
     assert "current score" not in text.lower()
 
+
+def test_v6_executive_summary_reports_zero_delta_without_false_change_language() -> None:
+    text = _build_v6_executive_summary(
+        static_score=85,
+        static_band="STRONG",
+        merged_score=85,
+        merged_band="STRONG",
+        adjustments=[],
+        existing_summary="The static RepoBrain baseline score is 85/100 (`STRONG`).",
+        pr_context={"is_pr": True},
+    )
+
+    assert text.startswith("The final RepoBrain score with PR context is `85 / 100` (`STRONG`).")
+    assert "Static baseline was `85 / 100` (`STRONG`)" in text
+    assert "retained the same final score" in text
+    assert "no changes to the overall score were needed" not in text.lower()

@@ -196,7 +196,11 @@ def score_repository_audit(
     confidence = _resolve_confidence(inventory=inventory, categories=categories)
     critical_blockers = _build_critical_blockers(inventory=inventory, categories=categories)
     top_improvements = _build_top_improvements(inventory=inventory, categories=categories)
-    roadmap = _build_roadmap(critical_blockers=critical_blockers, top_improvements=top_improvements)
+    roadmap = _build_roadmap(
+        critical_blockers=critical_blockers,
+        top_improvements=top_improvements,
+        categories=categories,
+    )
     evidence_summary = _build_evidence_summary(inventory=inventory, github_context=github_context)
     limitations = _build_limitations(inventory=inventory, github_context=github_context)
     executive_summary = _build_executive_summary(
@@ -946,6 +950,28 @@ def _build_top_improvements(*, inventory: dict[str, Any], categories: list[dict[
         score, max_score = category_scores.get(str(category_name or "").strip().lower(), (0, 0))
         return max_score > 0 and score >= max_score
 
+    def _is_advisory_exception(item: dict[str, Any]) -> bool:
+        title = str(item.get("title", "") or "").strip().lower()
+        rationale = str(item.get("rationale", "") or "").strip().lower()
+        return title.startswith(("maintain ", "keep ", "continue ", "document and monitor ", "monitor ")) and any(
+            marker in rationale
+            for marker in ("monitor", "maintain", "routine", "scope", "permission", "advisory", "governance")
+        )
+
+    def _category_ratio(category_name: str) -> float:
+        score, max_score = category_scores.get(str(category_name or "").strip().lower(), (0, 1))
+        return score / max(max_score, 1)
+
+    def _category_priority(category_name: str) -> int:
+        normalized = str(category_name or "").strip().lower()
+        priority_map = {
+            "github governance": 0,
+            "testing and validation": 1,
+            "release and operations readiness": 2,
+            "ci/cd and automation": 3,
+        }
+        return priority_map.get(normalized, 99)
+
     def _impact_rank(level: str) -> int:
         return {"high": 0, "medium": 1, "low": 2}.get(str(level or "medium").strip().lower(), 1)
 
@@ -1055,27 +1081,14 @@ def _build_top_improvements(*, inventory: dict[str, Any], categories: list[dict[
     filtered: list[dict[str, Any]] = []
     for item in improvements:
         category = str(item.get("category", "") or "").strip()
-        title = str(item.get("title", "") or "").strip().lower()
-        if _is_maxed_category(category) and not title.startswith("maintain"):
+        if _is_maxed_category(category) and not _is_advisory_exception(item):
             continue
         filtered.append(item)
     improvements = filtered
-    if not improvements:
-        improvements.append(
-            _improvement(
-                category="Repository health",
-                title="Keep validation, docs, and permissions aligned as the repository grows.",
-                affected_files=[],
-                rationale="No single dominant improvement surfaced from the current evidence sample.",
-                expected_score_impact="low",
-            )
-        )
     improvements.sort(
         key=lambda item: (
-            (
-                category_scores.get(str(item.get("category", "") or "").strip().lower(), (0, 1))[0]
-                / max(category_scores.get(str(item.get("category", "") or "").strip().lower(), (0, 1))[1], 1)
-            ),
+            _category_ratio(str(item.get("category", "") or "")),
+            _category_priority(str(item.get("category", "") or "")),
             _impact_rank(str(item.get("expected_score_impact", "medium") or "medium")),
             str(item.get("category", "") or ""),
         )
@@ -1104,17 +1117,67 @@ def _build_roadmap(
     *,
     critical_blockers: list[dict[str, Any]],
     top_improvements: list[dict[str, Any]],
+    categories: list[dict[str, Any]],
 ) -> dict[str, list[str]]:
+    category_scores = {
+        str(item.get("title", "") or "").strip().lower(): (
+            int(item.get("score", 0) or 0),
+            int(item.get("max_score", 0) or 0),
+        )
+        for item in categories
+        if isinstance(item, dict)
+    }
+
+    def _category_ratio(category_name: str) -> float:
+        score, max_score = category_scores.get(str(category_name or "").strip().lower(), (0, 1))
+        return score / max(max_score, 1)
+
+    def _category_priority(category_name: str) -> int:
+        normalized = str(category_name or "").strip().lower()
+        priority_map = {
+            "github governance": 0,
+            "testing and validation": 1,
+            "release and operations readiness": 2,
+            "ci/cd and automation": 3,
+        }
+        return priority_map.get(normalized, 99)
+
+    def _unique_lines(items: list[str]) -> list[str]:
+        return list(dict.fromkeys([str(item).strip() for item in items if str(item).strip()]))
+
+    def _is_advisory_exception(title: str) -> bool:
+        lowered = str(title or "").strip().lower()
+        return lowered.startswith(("maintain ", "keep ", "continue ", "document and monitor ", "monitor "))
+
     blockers_lines = [
         _roadmap_line(item["title"], item["category"])
         for item in critical_blockers[:3]
     ]
+    ordered_improvements = sorted(
+        [
+            item
+            for item in top_improvements
+            if not (
+                category_scores.get(str(item.get("category", "") or "").strip().lower(), (0, 0))[1] > 0
+                and category_scores.get(str(item.get("category", "") or "").strip().lower(), (0, 0))[0]
+                >= category_scores.get(str(item.get("category", "") or "").strip().lower(), (0, 0))[1]
+                and not _is_advisory_exception(str(item.get("title", "") or ""))
+            )
+        ],
+        key=lambda item: (
+            _category_priority(str(item.get("category", "") or "")),
+            _category_ratio(str(item.get("category", "") or "")),
+            str(item.get("category", "") or ""),
+            str(item.get("title", "") or ""),
+        ),
+    )
     improvement_lines = [
         _roadmap_line(item["title"], item["category"])
-        for item in top_improvements[:6]
+        for item in ordered_improvements[:6]
     ]
-    thirty = blockers_lines or improvement_lines[:3] or ["No immediate blocker-level action surfaced from the current evidence."]
-    sixty = improvement_lines[3:6] or improvement_lines[:2] or ["Stabilize structure, docs, and validation after immediate fixes land."]
+    prioritized_lines = _unique_lines([*blockers_lines, *improvement_lines])
+    thirty = prioritized_lines[:3] or ["No immediate non-maxed improvement target was identified from the current scorecard."]
+    sixty = prioritized_lines[3:6] or prioritized_lines[:2] or ["Keep governance, testing, and release-readiness evidence aligned as the repository evolves."]
     ninety = [
         "Institutionalize governance, release hygiene, and evidence refresh routines.",
     ]

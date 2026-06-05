@@ -5893,12 +5893,20 @@ _OPERATIONAL_ASK_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("release_status", ("release tag", "rc tag", "pinning", "release status")),
     ("safety_status", ("no-mutation", "no mutation", "patch/autofix", "patch autofix", "safety status")),
     ("permissions_status", ("permissions", "least privilege", "permission model")),
-    (
-        "product_analysis",
         (
-            "analyze this repository",
-            "analyze this repo",
-            "mcp product",
+            "product_analysis",
+            (
+                "what is this repository",
+                "what does this repository do",
+                "main runtime surfaces",
+                "what should a partner understand before pilot testing",
+                "partner understand before pilot testing",
+                "summarize the product/runtime architecture",
+                "product/runtime architecture",
+                "repository overview",
+                "analyze this repository",
+                "analyze this repo",
+                "mcp product",
             "functions/modules",
             "functions and modules",
             "external integrations",
@@ -6081,8 +6089,11 @@ def _read_target_repo_text(repo_root: Path) -> str:
     snippets: list[str] = []
     for rel_path in (
         "README.md",
+        "SECURITY.md",
         "docs/ARCHITECTURE.md",
         "docs/API_ENDPOINTS.md",
+        "docs/ENTERPRISE_READINESS.md",
+        "docs/repobrain_pilot.md",
     ):
         path = repo_root / rel_path
         if path.exists():
@@ -6101,17 +6112,66 @@ def _target_repo_product_analysis_sections(
 ) -> list[str]:
     repo_name = _target_repo_name(repo_root=repo_root, github_context=github_context)
     target_text = _read_target_repo_text(repo_root)
-    module_candidates = (
-        ("src/mcpServer.ts", "`src/mcpServer.ts`: MCP server and request orchestration layer."),
-        ("src/index.ts", "`src/index.ts`: application bootstrap and runtime entrypoint."),
-        ("src/runtimePaths.ts", "`src/runtimePaths.ts`: runtime path and environment resolution."),
-        ("src/auth", "`src/auth/`: authentication, JWT/OAuth, and access-control surface."),
-        ("src/admin", "`src/admin/`: admin/API-key/session/user management routes."),
-        ("apps/console/src/main.tsx", "`apps/console/src/main.tsx`: console/UI entrypoint."),
-        ("prisma", "`prisma/`: persistence and schema layer."),
-        ("k8s", "`k8s/`: Kubernetes deployment and cluster runtime manifests."),
+
+    def _family_lines(candidates: tuple[tuple[str, str], ...], *, limit: int = 2) -> list[str]:
+        return [label for _, label in _existing_relative_paths(repo_root, candidates)][:limit]
+
+    runtime_surface_lines = _family_lines(
+        (
+            ("src/mcpServer.ts", "`src/mcpServer.ts`: MCP server and request orchestration layer."),
+            ("src/index.ts", "`src/index.ts`: application bootstrap and runtime entrypoint."),
+            ("src/main.ts", "`src/main.ts`: main runtime bootstrap surface."),
+            ("src/server.ts", "`src/server.ts`: server/runtime entrypoint."),
+            ("src/runtimePaths.ts", "`src/runtimePaths.ts`: runtime path and environment resolution."),
+        ),
+        limit=4,
     )
-    module_lines = [label for _, label in _existing_relative_paths(repo_root, module_candidates)]
+    ui_surface_lines = _family_lines(
+        (
+            ("apps/console/src/main.tsx", "`apps/console/src/main.tsx`: operator/console UI entrypoint."),
+            ("apps/console", "`apps/console/`: operator-facing application surface."),
+            ("apps", "`apps/`: application surface family."),
+        ),
+        limit=2,
+    )
+    security_admin_data_lines = _family_lines(
+        (
+            ("src/auth", "`src/auth/`: authentication, JWT/OAuth, and access-control surface."),
+            ("src/admin", "`src/admin/`: admin/API-key/session/user-management surface."),
+            ("prisma", "`prisma/`: persistence and schema layer."),
+            ("migrations", "`migrations/`: database migration surface."),
+            ("SECURITY.md", "`SECURITY.md`: security and disclosure policy surface."),
+        ),
+        limit=4,
+    )
+    deployment_surface_lines = _family_lines(
+        (
+            ("Dockerfile", "`Dockerfile`: container runtime definition."),
+            ("docker-compose.yml", "`docker-compose.yml`: local/dev deployment surface."),
+            ("docker-compose.yaml", "`docker-compose.yaml`: local/dev deployment surface."),
+            ("docker-compose.dev.yml", "`docker-compose.dev.yml`: local/dev deployment surface."),
+            ("k8s", "`k8s/`: Kubernetes deployment and cluster-runtime manifests."),
+            ("helm", "`helm/`: Helm deployment packaging surface."),
+        ),
+        limit=4,
+    )
+    documentation_surface_lines = _family_lines(
+        (
+            ("docs/ARCHITECTURE.md", "`docs/ARCHITECTURE.md`: architecture and module-boundary documentation."),
+            ("docs/API_ENDPOINTS.md", "`docs/API_ENDPOINTS.md`: API/integration contract documentation."),
+            ("docs/ENTERPRISE_READINESS.md", "`docs/ENTERPRISE_READINESS.md`: enterprise/pilot-readiness documentation."),
+            ("docs/repobrain_pilot.md", "`docs/repobrain_pilot.md`: partner-pilot/process guidance."),
+        ),
+        limit=4,
+    )
+
+    module_lines = [
+        *runtime_surface_lines[:3],
+        *ui_surface_lines[:2],
+        *security_admin_data_lines[:3],
+        *deployment_surface_lines[:2],
+        *documentation_surface_lines[:2],
+    ]
     if not module_lines and (repo_root / "repobrain").exists():
         module_lines = [
             "`repobrain/`: command, runtime, and output orchestration modules for the action repository itself."
@@ -6140,12 +6200,27 @@ def _target_repo_product_analysis_sections(
         runtime_workflows.append(
             f"`{workflow_location}` connects the repository to RepoBrain for analysis; it is not part of the target product runtime."
         )
-    if (repo_root / "Dockerfile").exists():
-        runtime_workflows.append("`Dockerfile` indicates a containerized runtime path.")
-    if any((repo_root / name).exists() for name in ("docker-compose.yml", "docker-compose.yaml", "docker-compose.dev.yml")):
-        runtime_workflows.append("Docker Compose files indicate local/dev deployment workflows.")
-    if (repo_root / "k8s").exists():
-        runtime_workflows.append("`k8s/` indicates Kubernetes deployment support.")
+    runtime_workflows.extend(
+        [
+            "Container/runtime packaging is visible from deployment artifacts."
+            for _ in [0]
+            if (repo_root / "Dockerfile").exists()
+        ]
+    )
+    runtime_workflows.extend(
+        [
+            "Docker Compose files indicate local/dev deployment workflows."
+            for _ in [0]
+            if any((repo_root / name).exists() for name in ("docker-compose.yml", "docker-compose.yaml", "docker-compose.dev.yml"))
+        ]
+    )
+    runtime_workflows.extend(
+        [
+            "`k8s/` indicates Kubernetes deployment support."
+            for _ in [0]
+            if (repo_root / "k8s").exists()
+        ]
+    )
     if not runtime_workflows:
         runtime_workflows.append("No strong deployment workflow beyond repository code layout was detected from the current evidence set.")
 
@@ -6185,6 +6260,18 @@ def _target_repo_product_analysis_sections(
     if not quality_signals:
         quality_signals.append("The repository has enough visible structure to support a bounded product analysis.")
 
+    partner_checks: list[str] = []
+    if runtime_surface_lines:
+        partner_checks.append("Confirm the main runtime entrypoints and request/orchestration layer against live environment behavior.")
+    if deployment_surface_lines:
+        partner_checks.append("Check container/deployment surfaces against the intended pilot environment before partner rollout.")
+    if security_admin_data_lines:
+        partner_checks.append("Review auth, admin, and data-layer boundaries for tenant/admin safety before pilot testing.")
+    if documentation_surface_lines:
+        partner_checks.append("Keep architecture, API, and enterprise-readiness docs aligned with the visible code paths.")
+    if not partner_checks:
+        partner_checks.append("Confirm the highest-risk runtime and deployment paths through environment-backed smoke tests, not docs alone.")
+
     risks = [
         "This answer is limited to repository evidence; live environment readiness still needs runtime validation outside the repo snapshot.",
         "Security and deployment surface appear broad, so configuration drift across auth, CI/CD, and runtime integrations is a likely operational risk.",
@@ -6204,6 +6291,16 @@ def _target_repo_product_analysis_sections(
         if llm_used
         else "LLM was not called; answer generated by deterministic product-analysis fallback from target repository evidence."
     )
+    runtime_application_lines = [*runtime_surface_lines, *ui_surface_lines][:6] or [
+        "No broad runtime/application surface was confirmed from the retrieved repository evidence."
+    ]
+    security_data_lines = security_admin_data_lines[:6] or [
+        "No distinct security/admin/data surface was confirmed from the retrieved repository evidence."
+    ]
+    documentation_lines = documentation_surface_lines[:6] or [
+        "No distinct enterprise/readiness documentation surface was confirmed from the retrieved repository evidence."
+    ]
+    deployment_lines = [*runtime_workflows[:6], *deployment_surface_lines[:4]]
     return [
         llm_line,
         "",
@@ -6213,8 +6310,17 @@ def _target_repo_product_analysis_sections(
         "Major target-repo modules/layers:",
         *(f"- {item}" for item in module_lines[:8]),
         "",
+        "Main runtime/application surfaces:",
+        *(f"- {item}" for item in runtime_application_lines),
+        "",
+        "Security/admin/data surfaces:",
+        *(f"- {item}" for item in security_data_lines),
+        "",
+        "Documentation/readiness surfaces:",
+        *(f"- {item}" for item in documentation_lines),
+        "",
         "Runtime/deployment workflows:",
-        *(f"- {item}" for item in runtime_workflows[:6]),
+        *(f"- {item}" for item in deployment_lines),
         "",
         "Visible integrations/APIs:",
         *(f"- {item}" for item in integrations[:8]),
@@ -6228,6 +6334,9 @@ def _target_repo_product_analysis_sections(
         "",
         "Main blockers/risks:",
         *(f"- {item}" for item in risks),
+        "",
+        "What a partner should check during pilot:",
+        *(f"- {item}" for item in partner_checks[:5]),
         "",
         "Next 5 practical engineering steps:",
         *(f"- {item}" for item in next_steps),
@@ -7330,6 +7439,74 @@ def _apply_premium_narrative_length_guard(text: str) -> tuple[str, bool]:
     return shortened, True
 
 
+def _maxed_category_names(report: dict[str, Any]) -> list[str]:
+    categories_raw = report.get("categories", [])
+    maxed: list[str] = []
+    if not isinstance(categories_raw, list):
+        return maxed
+    for item in categories_raw:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title", "") or "").strip()
+        score = int(item.get("score", 0) or 0)
+        max_score = int(item.get("max_score", 0) or 0)
+        if title and max_score > 0 and score >= max_score:
+            maxed.append(title)
+    return list(dict.fromkeys(maxed))
+
+
+def _unsupported_maxed_category_recommendations(text: str, maxed_categories: list[str]) -> list[str]:
+    lines = [str(line).strip() for line in str(text or "").splitlines() if str(line).strip()]
+    if not lines or not maxed_categories:
+        return []
+    flagged: list[str] = []
+    prohibited_verbs = ("improve", "raise", "strengthen", "expand", "deepen", "increase")
+    advisory_prefixes = ("maintain", "keep", "continue", "document and monitor", "monitor")
+    for line in lines:
+        lowered = line.lower()
+        for category in maxed_categories:
+            normalized_category = category.lower()
+            if normalized_category not in lowered:
+                continue
+            if any(lowered.lstrip("-* ").startswith(prefix) for prefix in advisory_prefixes):
+                continue
+            if any(verb in lowered for verb in prohibited_verbs):
+                flagged.append(line)
+                break
+    return flagged
+
+
+def _remove_unsupported_maxed_category_recommendations(text: str, maxed_categories: list[str]) -> tuple[str, bool]:
+    lines = str(text or "").splitlines()
+    if not lines or not maxed_categories:
+        return str(text or "").strip(), False
+    prohibited_verbs = ("improve", "raise", "strengthen", "expand", "deepen", "increase")
+    advisory_prefixes = ("maintain", "keep", "continue", "document and monitor", "monitor")
+    kept: list[str] = []
+    removed = False
+    for raw_line in lines:
+        line = str(raw_line).strip()
+        lowered = line.lower()
+        should_remove = False
+        for category in maxed_categories:
+            normalized_category = category.lower()
+            if normalized_category not in lowered:
+                continue
+            if any(lowered.lstrip("-* ").startswith(prefix) for prefix in advisory_prefixes):
+                continue
+            if any(verb in lowered for verb in prohibited_verbs):
+                should_remove = True
+                break
+        if should_remove:
+            removed = True
+            continue
+        kept.append(raw_line)
+    sanitized = "\n".join(kept).strip()
+    if removed and not sanitized:
+        sanitized = "Narrative recommendations were limited to non-maxed categories from the current scorecard."
+    return sanitized, removed
+
+
 def _build_score_markdown(
     *,
     repo_root: Path,
@@ -7384,6 +7561,7 @@ def _build_audit_narrative_messages(
     improvements = [item for item in improvements_raw if isinstance(item, dict)]
     pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
     pr_facts = report.get("pr_impact_facts", {}) if isinstance(report.get("pr_impact_facts", {}), dict) else {}
+    maxed_categories = _maxed_category_names(report)
     payload = {
         "focus": str(query or "").strip() or "repository readiness",
         "overall_score": int(report.get("overall_score", 0) or 0),
@@ -7422,6 +7600,7 @@ def _build_audit_narrative_messages(
             "summary": str(pr_context.get("summary", "") or "").strip(),
         },
         "pr_facts": pr_facts,
+        "maxed_categories": maxed_categories,
         "audit_engine": str(audit_summary.get("backend_mode", "n/a") or "n/a"),
         "score_authority": "TopoCore contract",
     }
@@ -7482,6 +7661,10 @@ def _build_audit_narrative_messages(
         "- Do not contradict change_type, docs_only, behavior_affecting, runtime impact, security impact, or risk_level.\n"
         "- If PR facts say docs-only and behavior_affecting=no, do not say the PR may affect behavior or carries moderate risk.\n"
         "- If impact is not visible from changed-file evidence, say that explicitly instead of guessing.\n\n"
+        "Improvement-target constraints:\n"
+        "- Do not recommend score/confidence improvement for maxed categories.\n"
+        "- If a maxed category appears at all, keep it maintenance-oriented and only when explicitly justified by evidence.\n"
+        "- Prefer the provided non-maxed improvement targets and roadmap items instead of inventing new generic targets.\n\n"
         f"Audit payload:\n{json.dumps(payload, ensure_ascii=True, indent=2)}"
     )
     messages = [
@@ -7567,6 +7750,7 @@ def _maybe_attach_audit_narrative(
     )
     if llm_text:
         text = str(llm_text).strip()
+        maxed_categories = _maxed_category_names(report)
         if bool((report.get("pr_context", {}) or {}).get("is_pr", False)):
             main_text, pr_text = _split_pr_audit_narrative_sections(text, mode=mode)
             main_headings = (
@@ -7584,6 +7768,13 @@ def _maybe_attach_audit_narrative(
                 pr_text = "\n".join(render_pr_impact_summary_lines(pr_facts))
                 audit_summary["audit_pr_narrative_guard"] = "deterministic_pr_facts_fallback"
                 audit_summary["audit_pr_narrative_guard_reason"] = ",".join(contradiction_markers)
+            main_text, removed_main = _remove_unsupported_maxed_category_recommendations(main_text or text, maxed_categories)
+            pr_text, removed_pr = _remove_unsupported_maxed_category_recommendations(pr_text, maxed_categories)
+            if removed_main or removed_pr:
+                audit_summary["audit_narrative_recommendation_guard"] = "maxed_category_recommendations_removed"
+                audit_summary["audit_narrative_recommendation_guard_reason"] = ",".join(
+                    _unsupported_maxed_category_recommendations(text, maxed_categories)
+                )[:240]
             if mode.startswith("premium"):
                 main_text, shortened = _apply_premium_narrative_length_guard(main_text or text)
                 report["audit_narrative_shortened"] = bool(shortened)
@@ -7604,6 +7795,12 @@ def _maybe_attach_audit_narrative(
                     "## Narrative interpretation",
                 ),
             )
+            main_text, removed_main = _remove_unsupported_maxed_category_recommendations(main_text or text, maxed_categories)
+            if removed_main:
+                audit_summary["audit_narrative_recommendation_guard"] = "maxed_category_recommendations_removed"
+                audit_summary["audit_narrative_recommendation_guard_reason"] = ",".join(
+                    _unsupported_maxed_category_recommendations(text, maxed_categories)
+                )[:240]
             if mode.startswith("premium"):
                 main_text, shortened = _apply_premium_narrative_length_guard(main_text or text)
                 report["audit_narrative_shortened"] = bool(shortened)
