@@ -8,6 +8,8 @@ from repobrain.audit_contract import (
     AUDIT_V6_CONTRACT_VERSION,
     _filter_renderable_roadmap,
     _filter_renderable_top_improvements,
+    _mentioned_category_titles,
+    _normalize_category_title,
     _sanitize_repo_path,
     _sanitize_text,
 )
@@ -3408,7 +3410,7 @@ def _guard_audit_narrative_text(text: str, categories: list[dict[str, Any]]) -> 
     if not raw:
         return ""
     maxed_titles = {
-        " ".join(str(item.get("title", "") or "").strip().lower().split())
+        _normalize_category_title(item.get("title", ""))
         for item in categories
         if isinstance(item, dict)
         and int(item.get("max_score", 0) or 0) > 0
@@ -3417,7 +3419,28 @@ def _guard_audit_narrative_text(text: str, categories: list[dict[str, Any]]) -> 
     if not maxed_titles:
         return raw
     advisory_markers = ("maintain", "monitor", "preserve", "keep", "watch", "guard", "drift")
-    recommendation_markers = ("improve", "raise", "strengthen", "expand", "increase", "add", "enhance", "advance")
+    recommendation_markers = (
+        "improve",
+        "improving",
+        "raise",
+        "raising",
+        "strengthen",
+        "strengthening",
+        "expand",
+        "expanding",
+        "increase",
+        "increasing",
+        "add",
+        "adding",
+        "enhance",
+        "enhancing",
+        "advance",
+        "advancing",
+        "capabilities",
+        "improvements",
+        "initiatives",
+        "confidence",
+    )
     timebox_markers = (
         "30/60/90-day",
         "30 days",
@@ -3436,6 +3459,51 @@ def _guard_audit_narrative_text(text: str, categories: list[dict[str, Any]]) -> 
         "selected_partner_pilot_ready_after",
         "run the sprint 92h live issue/pr retest",
     )
+
+    def _strip_forbidden_maxed_phrase(line: str, maxed_title: str) -> str:
+        stripped = line
+        if maxed_title == "ai-readiness / repository intelligence":
+            forbidden_patterns = (
+                r"\s*,?\s*(?:and|alongside|plus|with)\s+repository intelligence capabilities\b",
+                r"\s*,?\s*(?:and|alongside|plus|with)\s+repository intelligence (?:improvements|initiatives|enhancements)\b",
+                r"\s*,?\s*(?:and|alongside|plus|with)\s+ai[- ]readiness (?:capabilities|improvements|initiatives|enhancements)\b",
+                r"\b(?:repository|repo)\s+intelligence (?:capabilities|improvements|initiatives|enhancements)\b",
+                r"\bai[- ]readiness (?:capabilities|improvements|initiatives|enhancements)\b",
+                r"\b(?:improve|improving|raise|raising|strengthen|strengthening|enhance|enhancing|advance|advancing|begin integrating|begin enhancing)\s+(?:the\s+)?(?:ai[- ]readiness|repository intelligence|repo intelligence)(?:\s*/\s*repository intelligence)?(?:\s+(?:confidence|capabilities|improvements|initiatives|enhancements))?\b",
+            )
+            for pattern in forbidden_patterns:
+                stripped = re.sub(pattern, "", stripped, flags=re.IGNORECASE)
+            stripped = re.sub(r"\bautomation\s+and\s*(?:,?\s*)$", "automation", stripped, flags=re.IGNORECASE)
+            stripped = re.sub(r"\b(?:and|alongside|plus|with)\s+[,.]", ".", stripped, flags=re.IGNORECASE)
+        elif maxed_title == "documentation and onboarding":
+            forbidden_patterns = (
+                r"\s*,?\s*(?:and|alongside|plus|with)\s+documentation(?:\s+and\s+onboarding)?\b",
+                r"\s*,?\s*(?:and|alongside|plus|with)\s+onboarding\b",
+                r"\bdocumentation(?:\s+and\s+onboarding)?\b",
+                r"\bonboarding\b",
+            )
+            for pattern in forbidden_patterns:
+                stripped = re.sub(pattern, "", stripped, flags=re.IGNORECASE)
+        elif maxed_title == "dependency hygiene":
+            forbidden_patterns = (
+                r"\s*,?\s*(?:and|alongside|plus|with)\s+dependency hygiene\b",
+                r"\s*,?\s*(?:and|alongside|plus|with)\s+dependency (?:management|review)\b",
+                r"\bdependency hygiene\b",
+                r"\bdependency management\b",
+                r"\bdependency review\b",
+                r"\bsupply chain hygiene\b",
+            )
+            for pattern in forbidden_patterns:
+                stripped = re.sub(pattern, "", stripped, flags=re.IGNORECASE)
+        stripped = re.sub(r"\s+,", ",", stripped)
+        stripped = re.sub(r",\s*,+", ", ", stripped)
+        stripped = re.sub(r"\s{2,}", " ", stripped)
+        stripped = re.sub(r"\s+([.,;:])", r"\1", stripped)
+        stripped = re.sub(r",\s*(\.)", r"\1", stripped)
+        stripped = re.sub(r"\band\s*\.$", ".", stripped, flags=re.IGNORECASE)
+        stripped = re.sub(r"\balongside\s*\.$", ".", stripped, flags=re.IGNORECASE)
+        return stripped.strip(" ,")
+
     kept_lines: list[str] = []
     changed = False
     for line in raw.splitlines():
@@ -3446,15 +3514,24 @@ def _guard_audit_narrative_text(text: str, categories: list[dict[str, Any]]) -> 
         if normalized and any(marker in normalized for marker in stale_status_markers):
             changed = True
             continue
-        if normalized and any(title in normalized for title in maxed_titles):
+        mentioned_titles = _mentioned_category_titles(line)
+        if normalized and mentioned_titles.intersection(maxed_titles):
+            stripped_line = line
+            for title in sorted(mentioned_titles.intersection(maxed_titles), key=len, reverse=True):
+                stripped_line = _strip_forbidden_maxed_phrase(stripped_line, title)
+            normalized_stripped = " ".join(stripped_line.strip().lower().split())
             if (
                 any(marker in normalized for marker in recommendation_markers)
                 or "begin integrating ai-readiness" in normalized
                 or "begin enhancing ai-readiness" in normalized
                 or "repository intelligence tools" in normalized
             ) and not any(marker in normalized for marker in advisory_markers):
-                changed = True
-                continue
+                if not normalized_stripped or _mentioned_category_titles(stripped_line).intersection(maxed_titles):
+                    changed = True
+                    continue
+                if stripped_line != line:
+                    changed = True
+                    line = stripped_line
         kept_lines.append(line)
     guarded = "\n".join(kept_lines).strip()
     if guarded:

@@ -39,6 +39,7 @@ Current truth:
 - Sprint 90 verifies the owner-issued artifact token, completes decisive installed-package proof with real external `v6` enrichment, and moves public readiness to `PUBLIC_SWITCH_READY_AFTER_RUNTIME_PROOF` without switching visibility
 - Sprint 91 executes the owner-approved public visibility switch for RepoBrain-Action, preserves private TopoCore boundaries, and finalizes the selected partner pilot kickoff pack with post-switch smoke evidence
 - Sprint 92A hotfixes partner-facing issue-comment output by removing private checkout evidence leaks, cleaning the public command surface, aligning LLM diagnostics with actual execution, and compacting default diagnostics
+- Sprint 92H.4 closes the final live-output gaps in recommended priorities, premium AI-readiness guards, and broad identity evidence alignment without changing score authority or mutation policy
 
 This index exists to reduce documentation fragmentation and make the current migration track easy to navigate from baseline runtime through the latest checkpoint state.
 
@@ -178,6 +179,7 @@ Phase 7:
 - `docs/architecture/SPRINT_89_OWNER_TOKEN_INSTALLED_PACKAGE_PROOF.md`
 - `docs/architecture/SPRINT_90_DECISIVE_INSTALLED_PACKAGE_PROOF.md`
 - `docs/architecture/HOTFIX_PRIVATE_CHECKOUT_EVIDENCE_LLM_DIAGNOSTICS.md`
+- `docs/architecture/SPRINT_92H4_FINAL_LIVE_OUTPUT_CLEANUP.md`
 - `docs/architecture/STRUCTURAL_MAINTAINABILITY_PLAN.md`
 
 ## 5. Recommended Reading Paths
