@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, replace
 import hashlib
 import json
@@ -50,6 +51,8 @@ from repobrain.github_publisher import (
 )
 from repobrain.index_store import build_index, load_index, load_index_embeddings
 from repobrain.output_md import (
+    MAX_COMMENT_BYTES,
+    _deterministic_bounded_premium_summary,
     enforce_comment_limit,
     render_audit_markdown,
     render_doctor_markdown,
@@ -7271,6 +7274,14 @@ def _build_audit_markdown(
     t0 = time.perf_counter()
     full_body = render_audit_markdown(report=report, audit_summary=audit_summary)
     body, was_truncated = enforce_comment_limit(full_body)
+    if was_truncated:
+        rebuilt = _rebuild_audit_markdown_preserving_deterministic_sections(
+            report=report,
+            audit_summary=audit_summary,
+        )
+        if rebuilt is not None:
+            full_body = rebuilt
+            body, was_truncated = enforce_comment_limit(full_body)
     if audit is not None:
         audit.update(audit_summary)
         audit["diagnostic_summary_artifact"] = diagnostic_path.as_posix()
@@ -7380,6 +7391,20 @@ def _build_canonical_pr_impact_facts_for_audit(
     )
 
 
+def _build_canonical_pr_impact_summary_lines_for_audit(
+    *,
+    report: dict[str, Any],
+    audit_summary: dict[str, Any],
+    github_context_seed: dict[str, Any] | None,
+) -> list[str]:
+    facts = _build_canonical_pr_impact_facts_for_audit(
+        report=report,
+        audit_summary=audit_summary,
+        github_context_seed=github_context_seed,
+    )
+    return render_pr_impact_summary_lines(facts)
+
+
 def _pr_narrative_contradictions(text: str, facts: dict[str, Any]) -> list[str]:
     lowered = str(text or "").strip().lower()
     if not lowered:
@@ -7420,6 +7445,43 @@ def _apply_premium_narrative_length_guard(text: str) -> tuple[str, bool]:
         shortened += "."
     shortened += "\n\nNote: Premium narrative shortened to stay within response budget."
     return shortened, True
+
+
+def _rebuild_audit_markdown_preserving_deterministic_sections(
+    *,
+    report: dict[str, Any],
+    audit_summary: dict[str, Any],
+) -> str | None:
+    narrative_mode = str(report.get("audit_narrative_mode", "none") or "none").strip().lower()
+    narrative_text = str(report.get("audit_narrative_text", "") or "").strip()
+    pr_notes_text = str(report.get("audit_pr_narrative_text", "") or "").strip()
+    if not narrative_text and not pr_notes_text:
+        return None
+
+    blockers_raw = report.get("critical_blockers", [])
+    blockers = [item for item in blockers_raw if isinstance(item, dict)] if isinstance(blockers_raw, list) else []
+    improvements_raw = report.get("top_improvements", [])
+    improvements = [item for item in improvements_raw if isinstance(item, dict)] if isinstance(improvements_raw, list) else []
+
+    rebuilt_report = copy.deepcopy(report)
+    if narrative_mode.startswith("premium"):
+        rebuilt_report["audit_narrative_text"] = _deterministic_bounded_premium_summary(
+            report=rebuilt_report,
+            blockers=blockers,
+            improvements=improvements,
+        )
+    else:
+        rebuilt_report["audit_narrative_text"] = narrative_text
+    rebuilt_report["audit_pr_narrative_text"] = ""
+    compact_body = render_audit_markdown(report=rebuilt_report, audit_summary=audit_summary)
+    if len(compact_body.encode("utf-8")) <= MAX_COMMENT_BYTES:
+        return compact_body
+
+    rebuilt_report["audit_narrative_text"] = ""
+    compact_body = render_audit_markdown(report=rebuilt_report, audit_summary=audit_summary)
+    if len(compact_body.encode("utf-8")) <= MAX_COMMENT_BYTES:
+        return compact_body
+    return None
 
 
 def _maxed_category_names(report: dict[str, Any]) -> list[str]:
@@ -7694,9 +7756,16 @@ def _maybe_attach_audit_narrative(
     report["audit_narrative_mode"] = mode if requested else "none"
     report["audit_narrative_text"] = ""
     report["audit_pr_narrative_text"] = ""
+    report["audit_pr_impact_summary_lines"] = []
     audit_summary["audit_narrative_requested"] = requested
     audit_summary["audit_narrative_mode"] = mode if requested else "none"
     audit_summary["audit_score_modified_by_llm"] = False
+    if bool((report.get("pr_context", {}) or {}).get("is_pr", False)):
+        report["audit_pr_impact_summary_lines"] = _build_canonical_pr_impact_summary_lines_for_audit(
+            report=report,
+            audit_summary=audit_summary,
+            github_context_seed=github_context_seed,
+        )
     if not requested:
         return report, audit_summary
 
@@ -7760,9 +7829,9 @@ def _maybe_attach_audit_narrative(
             pr_facts = report.get("pr_impact_facts", {}) if isinstance(report.get("pr_impact_facts", {}), dict) else {}
             contradiction_markers = _pr_narrative_contradictions(pr_text or main_text, pr_facts)
             if contradiction_markers:
-                pr_text = "\n".join(render_pr_impact_summary_lines(pr_facts))
                 audit_summary["audit_pr_narrative_guard"] = "deterministic_pr_facts_fallback"
                 audit_summary["audit_pr_narrative_guard_reason"] = ",".join(contradiction_markers)
+                pr_text = ""
             main_text, removed_main = _remove_unsupported_maxed_category_recommendations(main_text or text, maxed_categories)
             pr_text, removed_pr = _remove_unsupported_maxed_category_recommendations(pr_text, maxed_categories)
             if removed_main or removed_pr:

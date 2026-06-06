@@ -3798,6 +3798,12 @@ def render_audit_markdown(
         report.get("evidence_summary", {}) if isinstance(report.get("evidence_summary", {}), dict) else {}
     )
     pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
+    pr_impact_summary_lines_raw = report.get("audit_pr_impact_summary_lines", [])
+    pr_impact_summary_lines = (
+        [str(item).strip() for item in pr_impact_summary_lines_raw if str(item).strip()]
+        if isinstance(pr_impact_summary_lines_raw, list)
+        else []
+    )
     narrative_text = _guard_audit_narrative_text(str(report.get("audit_narrative_text", "") or "").strip(), categories)
     pr_narrative_text = _guard_audit_narrative_text(
         str(report.get("audit_pr_narrative_text", "") or "").strip(),
@@ -3835,8 +3841,10 @@ def render_audit_markdown(
         else:
             section_title = "## Narrative interpretation"
         sections.extend(["", section_title, narrative_text])
+    if pr_impact_summary_lines and bool(pr_context.get("is_pr", False)):
+        sections.extend(["", "## PR impact summary", *pr_impact_summary_lines])
     if pr_narrative_text and bool(pr_context.get("is_pr", False)) and pr_narrative_text.strip() != narrative_text.strip():
-        sections.extend(["", "## PR impact summary", pr_narrative_text])
+        sections.extend(["", "### Reviewer notes", pr_narrative_text])
     sections.extend(
         [
             "",
