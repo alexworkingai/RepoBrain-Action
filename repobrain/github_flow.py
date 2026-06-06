@@ -6104,34 +6104,60 @@ def _build_evidence_items_from_paths(paths: list[str]) -> list[EvidenceItem]:
     return evidence_items
 
 
+_PRODUCT_ANALYSIS_FAMILIES: dict[str, tuple[tuple[str, str], ...]] = {
+    "repo_connection": (
+        (".github/workflows/repobrain.yml", "`.github/workflows/repobrain.yml`: RepoBrain workflow connection boundary for this repository."),
+    ),
+    "runtime_application": (
+        ("src/mcpServer.ts", "`src/mcpServer.ts`: MCP server and request orchestration layer."),
+        ("src/index.ts", "`src/index.ts`: application bootstrap and runtime entrypoint."),
+        ("src/main.ts", "`src/main.ts`: main runtime bootstrap surface."),
+        ("src/server.ts", "`src/server.ts`: server/runtime entrypoint."),
+        ("src/runtimePaths.ts", "`src/runtimePaths.ts`: runtime path and environment resolution."),
+    ),
+    "ui_operator": (
+        ("apps/console/src/main.tsx", "`apps/console/src/main.tsx`: operator/console UI entrypoint."),
+        ("apps/console", "`apps/console/`: operator-facing application surface."),
+        ("apps", "`apps/`: application surface family."),
+    ),
+    "security_admin_data": (
+        ("src/auth", "`src/auth/`: authentication and access-control surface."),
+        ("src/admin", "`src/admin/`: admin/session/user-management surface."),
+        ("prisma", "`prisma/`: persistence and schema layer."),
+        ("migrations", "`migrations/`: database migration surface."),
+        ("SECURITY.md", "`SECURITY.md`: security and disclosure policy surface."),
+    ),
+    "deployment": (
+        ("Dockerfile", "`Dockerfile`: container runtime definition."),
+        ("docker-compose.yml", "`docker-compose.yml`: local/dev deployment surface."),
+        ("docker-compose.yaml", "`docker-compose.yaml`: local/dev deployment surface."),
+        ("docker-compose.dev.yml", "`docker-compose.dev.yml`: local/dev deployment surface."),
+        ("k8s", "`k8s/`: Kubernetes deployment surface."),
+        ("helm", "`helm/`: Helm deployment packaging surface."),
+    ),
+    "documentation": (
+        ("docs/ARCHITECTURE.md", "`docs/ARCHITECTURE.md`: architecture and module-boundary documentation."),
+        ("docs/API_ENDPOINTS.md", "`docs/API_ENDPOINTS.md`: API or integration contract documentation."),
+        ("docs/ENTERPRISE_READINESS.md", "`docs/ENTERPRISE_READINESS.md`: enterprise/pilot-readiness documentation."),
+        ("docs/repobrain_pilot.md", "`docs/repobrain_pilot.md`: partner-pilot/process guidance."),
+        ("README.md", "`README.md`: top-level repository description."),
+    ),
+}
+
+
 def _target_repo_product_analysis_evidence_paths(repo_root: Path) -> list[str]:
     candidates = (
         ".github/workflows/repobrain.yml",
         "src/mcpServer.ts",
         "src/index.ts",
-        "src/main.ts",
-        "src/server.ts",
         "src/runtimePaths.ts",
         "apps/console/src/main.tsx",
         "src/auth",
         "src/admin",
         "prisma",
-        "migrations",
-        "docs/ENTERPRISE_READINESS.md",
-        "docs/ARCHITECTURE.md",
-        "docs/API_ENDPOINTS.md",
-        "docs/repobrain_pilot.md",
-        "SECURITY.md",
-        "README.md",
-        "Dockerfile",
-        "docker-compose.yml",
-        "docker-compose.yaml",
-        "docker-compose.dev.yml",
-        "k8s",
-        "helm",
     )
     paths = [path for path in candidates if (repo_root / path).exists()]
-    return list(dict.fromkeys(paths))[:10]
+    return list(dict.fromkeys(paths))[:8]
 
 
 def _read_target_repo_text(repo_root: Path) -> str:
@@ -6154,186 +6180,69 @@ def _target_repo_product_analysis_sections(
     *,
     repo_root: Path,
     github_context: dict[str, Any] | None,
+    selected_evidence_paths: list[str],
     workflow_location: str,
     public_readiness_status: str,
     runtime_note: str,
     llm_used: bool,
 ) -> list[str]:
     repo_name = _target_repo_name(repo_root=repo_root, github_context=github_context)
-    target_text = _read_target_repo_text(repo_root)
+    selected_paths = [path for path in selected_evidence_paths if str(path or "").strip()]
+    selected_set = set(selected_paths)
 
-    def _family_lines(candidates: tuple[tuple[str, str], ...], *, limit: int = 2) -> list[str]:
-        return [label for _, label in _existing_relative_paths(repo_root, candidates)][:limit]
+    def _selected_family_lines(family: str) -> list[str]:
+        labels: list[str] = []
+        for path, label in _PRODUCT_ANALYSIS_FAMILIES.get(family, ()):
+            if path in selected_set:
+                labels.append(label)
+        return labels
 
-    runtime_surface_lines = _family_lines(
-        (
-            ("src/mcpServer.ts", "`src/mcpServer.ts`: MCP server and request orchestration layer."),
-            ("src/index.ts", "`src/index.ts`: application bootstrap and runtime entrypoint."),
-            ("src/main.ts", "`src/main.ts`: main runtime bootstrap surface."),
-            ("src/server.ts", "`src/server.ts`: server/runtime entrypoint."),
-            ("src/runtimePaths.ts", "`src/runtimePaths.ts`: runtime path and environment resolution."),
-        ),
-        limit=4,
-    )
-    ui_surface_lines = _family_lines(
-        (
-            ("apps/console/src/main.tsx", "`apps/console/src/main.tsx`: operator/console UI entrypoint."),
-            ("apps/console", "`apps/console/`: operator-facing application surface."),
-            ("apps", "`apps/`: application surface family."),
-        ),
-        limit=2,
-    )
-    security_admin_data_lines = _family_lines(
-        (
-            ("src/auth", "`src/auth/`: authentication, JWT/OAuth, and access-control surface."),
-            ("src/admin", "`src/admin/`: admin/API-key/session/user-management surface."),
-            ("prisma", "`prisma/`: persistence and schema layer."),
-            ("migrations", "`migrations/`: database migration surface."),
-            ("SECURITY.md", "`SECURITY.md`: security and disclosure policy surface."),
-        ),
-        limit=4,
-    )
-    deployment_surface_lines = _family_lines(
-        (
-            ("Dockerfile", "`Dockerfile`: container runtime definition."),
-            ("docker-compose.yml", "`docker-compose.yml`: local/dev deployment surface."),
-            ("docker-compose.yaml", "`docker-compose.yaml`: local/dev deployment surface."),
-            ("docker-compose.dev.yml", "`docker-compose.dev.yml`: local/dev deployment surface."),
-            ("k8s", "`k8s/`: Kubernetes deployment and cluster-runtime manifests."),
-            ("helm", "`helm/`: Helm deployment packaging surface."),
-        ),
-        limit=4,
-    )
-    documentation_surface_lines = _family_lines(
-        (
-            ("docs/ARCHITECTURE.md", "`docs/ARCHITECTURE.md`: architecture and module-boundary documentation."),
-            ("docs/API_ENDPOINTS.md", "`docs/API_ENDPOINTS.md`: API/integration contract documentation."),
-            ("docs/ENTERPRISE_READINESS.md", "`docs/ENTERPRISE_READINESS.md`: enterprise/pilot-readiness documentation."),
-            ("docs/repobrain_pilot.md", "`docs/repobrain_pilot.md`: partner-pilot/process guidance."),
-        ),
-        limit=4,
-    )
+    runtime_surface_lines = _selected_family_lines("runtime_application")
+    ui_surface_lines = _selected_family_lines("ui_operator")
+    security_admin_data_lines = _selected_family_lines("security_admin_data")
+    repo_connection_lines = _selected_family_lines("repo_connection")
+    deployment_surface_lines = _selected_family_lines("deployment")
+    documentation_surface_lines = _selected_family_lines("documentation")
 
-    module_lines = [
-        *runtime_surface_lines[:3],
-        *ui_surface_lines[:2],
-        *security_admin_data_lines[:3],
-        *deployment_surface_lines[:2],
-        *documentation_surface_lines[:2],
-    ]
-    if not module_lines and (repo_root / "repobrain").exists():
-        module_lines = [
-            "`repobrain/`: command, runtime, and output orchestration modules for the action repository itself."
-        ]
-    if not module_lines:
-        module_lines = ["Visible modules are limited from the current repository snapshot; the answer stays scoped to repository evidence only."]
-
-    product_purpose_lines: list[str] = []
-    if (repo_root / "src" / "mcpServer.ts").exists():
-        product_purpose_lines.append(
-            f"`{repo_name}` appears to implement an MCP server/runtime rather than an analysis tool."
+    what_repo_lines: list[str] = []
+    if "src/mcpServer.ts" in selected_set:
+        what_repo_lines.append(
+            f"`{repo_name}` appears to implement an MCP or service runtime surface, while RepoBrain remains the external analysis workflow."
         )
-    if "vector" in target_text or "qdrant" in target_text:
-        product_purpose_lines.append("Repository evidence points to vector-search or retrieval integrations.")
-    if "gitlab" in target_text or "github" in target_text or "jenkins" in target_text or "argo" in target_text:
-        product_purpose_lines.append("Repository evidence points to CI/CD and developer-tool integrations.")
-    if "console" in target_text or (repo_root / "apps" / "console").exists():
-        product_purpose_lines.append("Repository includes an operator or console-facing UI surface.")
-    if not product_purpose_lines:
-        product_purpose_lines.append(
-            f"`{repo_name}` appears to be the target product repository being analyzed; RepoBrain is only the external analysis workflow."
+    else:
+        what_repo_lines.append(
+            f"`{repo_name}` appears to be the target product repository under analysis; this answer stays bounded to the selected repository evidence."
         )
-
-    runtime_workflows: list[str] = []
-    if (repo_root / ".github" / "workflows" / "repobrain.yml").exists():
-        runtime_workflows.append(
-            f"`{workflow_location}` connects the repository to RepoBrain for analysis; it is not part of the target product runtime."
-        )
-    runtime_workflows.extend(
-        [
-            "Container/runtime packaging is visible from deployment artifacts."
-            for _ in [0]
-            if (repo_root / "Dockerfile").exists()
-        ]
-    )
-    runtime_workflows.extend(
-        [
-            "Docker Compose files indicate local/dev deployment workflows."
-            for _ in [0]
-            if any((repo_root / name).exists() for name in ("docker-compose.yml", "docker-compose.yaml", "docker-compose.dev.yml"))
-        ]
-    )
-    runtime_workflows.extend(
-        [
-            "`k8s/` indicates Kubernetes deployment support."
-            for _ in [0]
-            if (repo_root / "k8s").exists()
-        ]
-    )
-    if not runtime_workflows:
-        runtime_workflows.append("No strong deployment workflow beyond repository code layout was detected from the current evidence set.")
-
-    integrations: list[str] = []
-    integration_map = (
-        ("qdrant", "Qdrant / vector-store integration is visible from repository evidence."),
-        ("jwks", "JWKS-based authentication or key discovery is documented."),
-        ("oauth", "OAuth-based authorization or identity integration is documented."),
-        ("prometheus", "Prometheus metrics/monitoring are visible."),
-        ("opentelemetry", "OpenTelemetry tracing/observability is visible."),
-        ("grafana", "Grafana/dashboard support is visible."),
-        ("gitlab", "GitLab integration is visible."),
-        ("github", "GitHub integration is visible."),
-        ("jenkins", "Jenkins integration is visible."),
-        ("argo", "Argo or GitOps-style deployment integration is visible."),
-    )
-    for needle, line in integration_map:
-        if needle in target_text:
-            integrations.append(line)
-    integrations = list(dict.fromkeys(integrations)) or [
-        "Visible integrations are limited to what is exposed in the repository docs, workflows, and source tree."
-    ]
-
-    quality_signals: list[str] = []
-    if (repo_root / "tests").exists():
-        quality_signals.append("Repository has a dedicated test surface.")
-    if (repo_root / "SECURITY.md").exists():
-        quality_signals.append("Repository publishes a security policy.")
-    if (repo_root / "docs" / "ARCHITECTURE.md").exists():
-        quality_signals.append("Architecture documentation is present.")
-    if (repo_root / ".github" / "workflows").exists():
-        quality_signals.append("GitHub workflow automation is present.")
-    if (repo_root / "sbom.json").exists():
-        quality_signals.append("SBOM or supply-chain evidence is present in the repository.")
-    if (repo_root / "apps" / "console").exists():
-        quality_signals.append("Repository spans both service/runtime code and operator-facing UI.")
-    if not quality_signals:
-        quality_signals.append("The repository has enough visible structure to support a bounded product analysis.")
+    if ui_surface_lines:
+        what_repo_lines.append("Selected evidence shows an operator-facing or console-facing application surface.")
+    if security_admin_data_lines:
+        what_repo_lines.append("Selected evidence also shows explicit auth/admin or persistence boundaries.")
 
     partner_checks: list[str] = []
     if runtime_surface_lines:
-        partner_checks.append("Confirm the main runtime entrypoints and request/orchestration layer against live environment behavior.")
-    if deployment_surface_lines:
-        partner_checks.append("Check container/deployment surfaces against the intended pilot environment before partner rollout.")
+        partner_checks.append("Confirm the visible runtime entrypoints and request/orchestration layer against live pilot behavior.")
     if security_admin_data_lines:
-        partner_checks.append("Review auth, admin, and data-layer boundaries for tenant/admin safety before pilot testing.")
+        partner_checks.append("Review the auth, admin, and data-layer boundaries for tenant/admin safety before pilot testing.")
+    if ui_surface_lines:
+        partner_checks.append("Validate the visible operator-facing UI surfaces against the intended pilot workflow.")
+    if repo_connection_lines:
+        partner_checks.append("Keep the RepoBrain workflow boundary clearly separate from the target product runtime during partner testing.")
+    if deployment_surface_lines:
+        partner_checks.append("Check the selected deployment surfaces against the intended pilot environment before rollout.")
     if documentation_surface_lines:
-        partner_checks.append("Keep architecture, API, and enterprise-readiness docs aligned with the visible code paths.")
+        partner_checks.append("Keep selected architecture, API, and security documents aligned with the visible code paths.")
     if not partner_checks:
-        partner_checks.append("Confirm the highest-risk runtime and deployment paths through environment-backed smoke tests, not docs alone.")
+        partner_checks.append("Confirm the highest-risk visible runtime paths through environment-backed smoke tests, not docs alone.")
 
-    risks = [
-        "This answer is limited to repository evidence; live environment readiness still needs runtime validation outside the repo snapshot.",
-        "Security and deployment surface appear broad, so configuration drift across auth, CI/CD, and runtime integrations is a likely operational risk.",
-        "RepoBrain workflow integration should stay clearly separated from target product architecture in future docs and smoke prompts.",
+    limitations: list[str] = [
+        "This answer is grounded only in the selected evidence shown below and does not claim unselected repository surfaces as confirmed.",
     ]
-
-    next_steps = [
-        "Validate the retrieved runtime, auth/admin, data, UI, and deployment-relevant surfaces against a live pilot environment.",
-        "Lock the most important architecture and API docs to current code paths and remove stale wording quickly.",
-        "Expand CI and readiness checks around the most exposed integrations and operational flows.",
-        "Review security and secrets boundaries around auth, admin routes, and external service connectors.",
-        "Use partner-pilot feedback to prioritize the next product-quality and operability improvements.",
-    ]
+    if not deployment_surface_lines:
+        limitations.append("Additional deployment or infrastructure surfaces were not confirmed by the selected evidence in this run.")
+    if not documentation_surface_lines:
+        limitations.append("Additional documentation or readiness surfaces were not confirmed by the selected evidence in this run.")
+    limitations.append("External integrations, observability tooling, and API providers were not confirmed unless they appear directly in the selected evidence.")
+    limitations.append("Live environment readiness still needs runtime validation outside the repository snapshot.")
 
     llm_line = (
         "LLM synthesis was used, but the answer below is constrained to target-repository evidence and repository-role boundaries."
@@ -6346,53 +6255,56 @@ def _target_repo_product_analysis_sections(
     security_data_lines = security_admin_data_lines[:6] or [
         "No distinct security/admin/data surface was confirmed from the retrieved repository evidence."
     ]
-    documentation_lines = documentation_surface_lines[:6] or [
-        "No distinct enterprise/readiness documentation surface was confirmed from the retrieved repository evidence."
+    ui_lines = ui_surface_lines[:6] or [
+        "No distinct UI/operator surface was confirmed from the selected repository evidence."
     ]
-    deployment_lines = [*runtime_workflows[:6], *deployment_surface_lines[:4]]
     return [
         llm_line,
         "",
-        "Product purpose / functions:",
-        *(f"- {item}" for item in product_purpose_lines),
+        "What this repository appears to be:",
+        *(f"- {item}" for item in what_repo_lines),
         "",
-        "Major target-repo modules/layers:",
-        *(f"- {item}" for item in module_lines[:8]),
-        "",
-        "Main runtime/application surfaces:",
+        "Evidence-backed runtime/application surfaces:",
         *(f"- {item}" for item in runtime_application_lines),
         "",
-        "Security/admin/data surfaces:",
+        "Evidence-backed security/admin/data surfaces:",
         *(f"- {item}" for item in security_data_lines),
         "",
-        "Documentation/readiness surfaces:",
-        *(f"- {item}" for item in documentation_lines),
+        "Evidence-backed UI/operator surfaces:",
+        *(f"- {item}" for item in ui_lines),
         "",
-        "Runtime/deployment workflows:",
-        *(f"- {item}" for item in deployment_lines),
-        "",
-        "Visible integrations/APIs:",
-        *(f"- {item}" for item in integrations[:8]),
-        "",
-        "Production readiness:",
-        "- The target repository shows meaningful production-oriented structure, but repository evidence alone is not merge, security, or production approval.",
-        "- Additional delivery timing, staffing, or roadmap assumptions were not inferred from repository evidence in this run.",
-        "",
-        "Strongest quality signals:",
-        *(f"- {item}" for item in quality_signals[:6]),
-        "",
-        "Main blockers/risks:",
-        *(f"- {item}" for item in risks),
-        "",
-        "What a partner should check during pilot:",
+        *(
+            [
+                "Evidence-backed RepoBrain connection boundary:",
+                *(f"- {item}" for item in repo_connection_lines),
+                "",
+            ]
+            if repo_connection_lines
+            else []
+        ),
+        *(
+            [
+                "Additional evidence-backed deployment surfaces:",
+                *(f"- {item}" for item in deployment_surface_lines[:6]),
+                "",
+            ]
+            if deployment_surface_lines
+            else []
+        ),
+        *(
+            [
+                "Additional evidence-backed documentation/readiness surfaces:",
+                *(f"- {item}" for item in documentation_surface_lines[:6]),
+                "",
+            ]
+            if documentation_surface_lines
+            else []
+        ),
+        "Partner pilot checks based only on selected evidence:",
         *(f"- {item}" for item in partner_checks[:5]),
         "",
-        "Next 5 practical engineering steps:",
-        *(f"- {item}" for item in next_steps),
-        "",
-        "Limitations:",
-        "- This analysis is grounded in the target repository checkout and visible repo metadata only.",
-        "- RepoBrain-Action is the analysis tool and should not be treated as the target product unless the target repository actually is RepoBrain-Action.",
+        "Limitations / not confirmed in selected evidence:",
+        *(f"- {item}" for item in limitations),
         "",
         "Runtime/safety note:",
         f"- {runtime_note}",
@@ -6496,6 +6408,7 @@ def _build_product_analysis_answer(
     dependency_mode: str,
     dependency_summary: str,
 ) -> str:
+    selected_paths = _target_repo_product_analysis_evidence_paths(repo_root)
     runtime_note = (
         f"Repository is connected to RepoBrain through `{workflow_location}` using `{action_source}`. "
         f"Current runtime summary: {dependency_summary} "
@@ -6506,6 +6419,7 @@ def _build_product_analysis_answer(
         _target_repo_product_analysis_sections(
             repo_root=repo_root,
             github_context=None,
+            selected_evidence_paths=selected_paths,
             workflow_location=workflow_location,
             public_readiness_status=public_readiness_status,
             runtime_note=runtime_note,
@@ -6633,15 +6547,17 @@ def _maybe_refine_operational_ask_answer(
         return "\n".join(answer_lines), "Review the changed files and partner-facing docs for accuracy before merge.", refined_summary
     evidence_override: list[EvidenceItem] | None = None
     if operational_kind == "product_analysis":
+        selected_product_analysis_paths = _target_repo_product_analysis_evidence_paths(repo_root)
         answer_lines = _target_repo_product_analysis_sections(
             repo_root=repo_root,
             github_context=github_context,
+            selected_evidence_paths=selected_product_analysis_paths,
             workflow_location=workflow_location,
             public_readiness_status=public_readiness_status,
             runtime_note=runtime_note,
             llm_used=llm_used,
         )
-        evidence_override = _build_evidence_items_from_paths(_target_repo_product_analysis_evidence_paths(repo_root))
+        evidence_override = _build_evidence_items_from_paths(selected_product_analysis_paths)
     elif cmd == "explain":
         runtime_resolution_line = (
             "RepoBrain resolved the installed private package path successfully for this run."

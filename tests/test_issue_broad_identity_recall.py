@@ -58,20 +58,23 @@ def test_broad_identity_query_expands_across_multiple_repository_surface_familie
         github_context={"repository": "owner/consumer-repo"},
     )
 
-    assert "Main runtime/application surfaces:" in answer_text
-    assert "Security/admin/data surfaces:" in answer_text
-    assert "What a partner should check during pilot:" in answer_text
+    assert "Evidence-backed runtime/application surfaces:" in answer_text
+    assert "Evidence-backed security/admin/data surfaces:" in answer_text
+    assert "Partner pilot checks based only on selected evidence:" in answer_text
     assert "`src/mcpServer.ts`" in answer_text
     assert "`src/index.ts`" in answer_text
     assert "`src/auth/`" in answer_text
     assert "`src/admin/`" in answer_text
     assert "`apps/console/src/main.tsx`" in answer_text
     assert "`prisma/`" in answer_text
-    assert "`k8s/`" in answer_text
-    assert "`Dockerfile`" in answer_text
-    assert "`docs/ENTERPRISE_READINESS.md`" in answer_text
+    assert "`k8s/`" not in answer_text
+    assert "`Dockerfile`" not in answer_text
+    assert "`docs/ENTERPRISE_READINESS.md`" not in answer_text
+    assert "Qdrant" not in answer_text
+    assert "OAuth" not in answer_text
+    assert "Prometheus" not in answer_text
     assert "RepoBrain-Action currently looks like" not in answer_text
     assert "SPRINT_92H_" not in answer_text
     assert "Run the Sprint 92H live issue/PR retest" not in answer_text
     assert audit_summary["operational_ask_kind"] == "product_analysis"
-    assert "docs/ENTERPRISE_READINESS.md" in audit_summary["operational_evidence_override_paths"]
+    assert "docs/ENTERPRISE_READINESS.md" not in audit_summary["operational_evidence_override_paths"]

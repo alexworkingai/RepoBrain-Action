@@ -40,6 +40,13 @@ Sprint 92F adds focused partner-surface coverage for:
 - explicit TopoCore score-authority preservation under audit narrative
 - final compact review/fix default-output cleanup
 
+Sprint 92H.4 adds final live-output boundary coverage for:
+
+- maxed-category filtering in `Recommended next priorities`
+- premium mixed-phrase cleanup when AI-readiness is already maxed
+- broad identity claim/evidence alignment from selected visible evidence
+- final GitHub markdown assertions rather than helper-only object assertions
+
 ## 2. Current Test Baseline
 
 Current test baseline:
@@ -418,3 +425,4 @@ See also:
 - `docs/architecture/TOPOCORE_V6_V5_RUNTIME_REMOVAL.md`
 - Sprint 92G adds final help/manual structure coverage, premium audit narrative semantics coverage, PR narrative de-duplication coverage, compact default-output polish coverage, and RepoBrain-connection explain rerank coverage.
 - Sprint 92H adds canonical PR impact fact coverage, PR audit classifier-consistency coverage, score-summary wording coverage, top-improvement consistency coverage, and premium narrative completion guard coverage.
+- Sprint 92H.4 adds final GitHub markdown coverage for recommended-priority leakage, premium repository-intelligence phrase stripping, and evidence-grounded broad identity output.

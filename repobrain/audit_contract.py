@@ -650,6 +650,106 @@ def _normalize_category_title(value: Any) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
 
+def _normalize_loose_category_text(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower()).strip()
+
+
+_CATEGORY_ALIAS_GROUPS: dict[str, tuple[str, ...]] = {
+    "ai-readiness / repository intelligence": (
+        "ai-readiness",
+        "ai readiness",
+        "repository intelligence",
+        "repo intelligence",
+        "repository-intelligence",
+        "repository_intelligence",
+        "ai-readiness / repository intelligence",
+        "ai readiness / repo intelligence",
+        "repository intelligence capabilities",
+        "ai-readiness capabilities",
+        "ai readiness capabilities",
+        "ai-readiness enhancements",
+        "ai readiness enhancements",
+        "repository intelligence enhancements",
+        "ai-readiness initiatives",
+        "ai readiness initiatives",
+        "repository intelligence initiatives",
+        "ai-readiness improvements",
+        "ai readiness improvements",
+        "repository intelligence improvements",
+        "raise ai-readiness confidence",
+        "raise ai readiness confidence",
+        "repository intelligence confidence",
+    ),
+    "dependency hygiene": (
+        "dependency hygiene",
+        "dependencies",
+        "dependency management",
+        "dependency review",
+        "supply chain hygiene",
+    ),
+    "documentation and onboarding": (
+        "documentation",
+        "docs",
+        "onboarding",
+        "documentation and onboarding",
+    ),
+    "ci/cd and automation": (
+        "ci/cd",
+        "ci cd",
+        "automation",
+        "pipeline",
+        "pipelines",
+        "workflow automation",
+        "continuous integration",
+        "continuous delivery",
+    ),
+}
+
+
+def _category_alias_map() -> dict[str, set[str]]:
+    alias_map: dict[str, set[str]] = {}
+    for title in _CATEGORY_TITLES_BY_KEY.values():
+        normalized = _normalize_category_title(title)
+        aliases = {
+            _normalize_loose_category_text(title),
+            _normalize_loose_category_text(normalized),
+        }
+        extra_aliases = _CATEGORY_ALIAS_GROUPS.get(normalized, ())
+        aliases.update(
+            _normalize_loose_category_text(alias)
+            for alias in extra_aliases
+            if _normalize_loose_category_text(alias)
+        )
+        alias_map[normalized] = aliases
+    return alias_map
+
+
+_CATEGORY_ALIAS_MAP = _category_alias_map()
+
+
+def _mentioned_category_titles(text: Any) -> set[str]:
+    normalized_title = _normalize_category_title(text)
+    loose_text = _normalize_loose_category_text(text)
+    if not normalized_title and not loose_text:
+        return set()
+    mentioned: set[str] = set()
+    if normalized_title in _CATEGORY_ALIAS_MAP:
+        mentioned.add(normalized_title)
+    suffix_match = re.search(r"\(([^()]+)\)\s*$", str(text or "").strip())
+    if suffix_match:
+        suffix_title = _normalize_category_title(suffix_match.group(1))
+        if suffix_title in _CATEGORY_ALIAS_MAP:
+            mentioned.add(suffix_title)
+    if not loose_text:
+        return mentioned
+    for title, aliases in _CATEGORY_ALIAS_MAP.items():
+        for alias in aliases:
+            if alias and alias in loose_text:
+                mentioned.add(title)
+                break
+    return mentioned
+
+
 def _maxed_category_titles(categories: Sequence[Mapping[str, Any]] | Any) -> set[str]:
     maxed: set[str] = set()
     if not isinstance(categories, Sequence) or isinstance(categories, (str, bytes)):
@@ -699,10 +799,8 @@ def _filter_renderable_top_improvements(
 
 
 def _extract_roadmap_category(item_text: str) -> str:
-    match = re.search(r"\(([^()]+)\)\s*$", str(item_text or "").strip())
-    if not match:
-        return ""
-    return _normalize_category_title(match.group(1))
+    mentioned = sorted(_mentioned_category_titles(item_text), key=len, reverse=True)
+    return mentioned[0] if mentioned else ""
 
 
 def _filter_renderable_roadmap(
@@ -720,8 +818,8 @@ def _filter_renderable_roadmap(
         items = [str(item).strip() for item in raw_items if str(item).strip()] if isinstance(raw_items, Sequence) and not isinstance(raw_items, (str, bytes)) else []
         filtered_phase: list[str] = []
         for item_text in items:
-            category = _extract_roadmap_category(item_text)
-            if category in maxed_titles and not _is_advisory_maintenance_item(item_text):
+            mentioned = _mentioned_category_titles(item_text)
+            if mentioned.intersection(maxed_titles) and not _is_advisory_maintenance_item(item_text):
                 continue
             filtered_phase.append(item_text)
         filtered[phase] = filtered_phase
@@ -729,8 +827,8 @@ def _filter_renderable_roadmap(
     extra_priorities = roadmap.get("priorities", [])
     if isinstance(extra_priorities, Sequence) and not isinstance(extra_priorities, (str, bytes)):
         for item_text in [str(item).strip() for item in extra_priorities if str(item).strip()]:
-            category = _extract_roadmap_category(item_text)
-            if category in maxed_titles and not _is_advisory_maintenance_item(item_text):
+            mentioned = _mentioned_category_titles(item_text)
+            if mentioned.intersection(maxed_titles) and not _is_advisory_maintenance_item(item_text):
                 continue
             combined_priorities.append(item_text)
     filtered["priorities"] = _unique_text(combined_priorities)[:6]

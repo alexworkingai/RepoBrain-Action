@@ -63,5 +63,6 @@ def test_audit_narrative_modes_remove_unsupported_maxed_category_recommendations
     lowered = markdown.lower()
     assert "improve ai-readiness / repository intelligence" not in lowered
     assert "improve dependency hygiene" not in lowered
-    assert "improve github governance controls and documentation" in lowered
+    assert "improve github governance controls" in lowered
+    assert "improve github governance controls and documentation" not in lowered
     assert "score modified by llm: `no`" in lowered
