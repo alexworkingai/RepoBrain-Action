@@ -28,7 +28,7 @@ RepoBrain provides:
 - evidence references
 - critical blockers
 - top improvements
-- a 30/60/90-day roadmap
+- evidence-backed recommended next priorities without default calendar horizons
 - `/repobrain score` compact score summary
 - `/repobrain doctor` and `/repobrain status` diagnostics
 - `/repobrain verify` informational checks

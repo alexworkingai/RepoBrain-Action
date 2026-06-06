@@ -2644,7 +2644,11 @@ def render_answer_markdown(
                 answer_text.strip() or "No answer generated.",
                 "",
                 "### 📍 Evidence used",
-                *_compact_evidence_path_lines(evidence, audit_summary=audit_summary, max_items=5),
+                *_compact_evidence_path_lines(
+                    evidence,
+                    audit_summary=audit_summary,
+                    max_items=8 if str(audit_summary.get("operational_ask_kind", "") or "") == "product_analysis" else 5,
+                ),
                 "",
                 "### 🧭 Run summary",
                 *run_summary_lines,
@@ -3383,19 +3387,20 @@ def _audit_improvement_lines(improvements: list[dict[str, Any]], *, limit: int =
 
 
 def _audit_roadmap_lines(roadmap: dict[str, Any]) -> list[str]:
-    def _phase_lines(key: str, title: str) -> list[str]:
-        raw_items = roadmap.get(key, [])
-        items = [str(item).strip() for item in raw_items if str(item).strip()] if isinstance(raw_items, list) else []
-        if not items:
-            items = ["No specific roadmap item emitted for this phase."]
-        return [f"**{title}**", *(f"- {item}" for item in items)]
-
-    lines = _phase_lines("30_days", "30 days")
-    lines.append("")
-    lines.extend(_phase_lines("60_days", "60 days"))
-    lines.append("")
-    lines.extend(_phase_lines("90_days", "90 days"))
-    return lines
+    prioritized: list[str] = []
+    if isinstance(roadmap, dict):
+        for key in ("30_days", "60_days", "90_days", "priorities"):
+            raw_items = roadmap.get(key, [])
+            items = (
+                [str(item).strip() for item in raw_items if str(item).strip()]
+                if isinstance(raw_items, list)
+                else []
+            )
+            prioritized.extend(items)
+    unique_priorities = list(dict.fromkeys(prioritized))
+    if not unique_priorities:
+        return ["- No additional non-maxed follow-up priorities were identified from the current scorecard."]
+    return [f"- {item}" for item in unique_priorities[:6]]
 
 
 def _guard_audit_narrative_text(text: str, categories: list[dict[str, Any]]) -> str:
@@ -3412,15 +3417,42 @@ def _guard_audit_narrative_text(text: str, categories: list[dict[str, Any]]) -> 
     if not maxed_titles:
         return raw
     advisory_markers = ("maintain", "monitor", "preserve", "keep", "watch", "guard", "drift")
-    recommendation_markers = ("improve", "raise", "strengthen", "expand", "increase", "add")
+    recommendation_markers = ("improve", "raise", "strengthen", "expand", "increase", "add", "enhance", "advance")
+    timebox_markers = (
+        "30/60/90-day",
+        "30 days",
+        "60 days",
+        "90 days",
+        "within 30 days",
+        "within 60 days",
+        "within 90 days",
+        "monthly roadmap",
+        "quarterly roadmap",
+        "30/60/90-day decisions",
+        "30/60/90-day implications",
+    )
+    stale_status_markers = (
+        "sprint_92h",
+        "selected_partner_pilot_ready_after",
+        "run the sprint 92h live issue/pr retest",
+    )
     kept_lines: list[str] = []
     changed = False
     for line in raw.splitlines():
         normalized = " ".join(line.strip().lower().split())
+        if normalized and any(marker in normalized for marker in timebox_markers):
+            changed = True
+            continue
+        if normalized and any(marker in normalized for marker in stale_status_markers):
+            changed = True
+            continue
         if normalized and any(title in normalized for title in maxed_titles):
-            if any(marker in normalized for marker in recommendation_markers) and not any(
-                marker in normalized for marker in advisory_markers
-            ):
+            if (
+                any(marker in normalized for marker in recommendation_markers)
+                or "begin integrating ai-readiness" in normalized
+                or "begin enhancing ai-readiness" in normalized
+                or "repository intelligence tools" in normalized
+            ) and not any(marker in normalized for marker in advisory_markers):
                 changed = True
                 continue
         kept_lines.append(line)
@@ -3752,7 +3784,7 @@ def render_audit_markdown(
             "## Top improvements",
             *_audit_improvement_lines(improvements),
             "",
-            "## 30/60/90-day roadmap",
+            "## Recommended next priorities",
             *_audit_roadmap_lines(roadmap),
             "",
             "## Evidence summary",

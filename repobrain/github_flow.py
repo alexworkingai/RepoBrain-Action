@@ -6328,7 +6328,7 @@ def _target_repo_product_analysis_sections(
     ]
 
     next_steps = [
-        "Confirm the highest-risk runtime and deployment paths through environment-backed smoke tests, not docs alone.",
+        "Validate the retrieved runtime, auth/admin, data, UI, and deployment-relevant surfaces against a live pilot environment.",
         "Lock the most important architecture and API docs to current code paths and remove stale wording quickly.",
         "Expand CI and readiness checks around the most exposed integrations and operational flows.",
         "Review security and secrets boundaries around auth, admin routes, and external service connectors.",
@@ -6375,8 +6375,8 @@ def _target_repo_product_analysis_sections(
         *(f"- {item}" for item in integrations[:8]),
         "",
         "Production readiness:",
-        f"- Current public readiness state recorded by RepoBrain control-plane docs: `{public_readiness_status}`.",
         "- The target repository shows meaningful production-oriented structure, but repository evidence alone is not merge, security, or production approval.",
+        "- Additional delivery timing, staffing, or roadmap assumptions were not inferred from repository evidence in this run.",
         "",
         "Strongest quality signals:",
         *(f"- {item}" for item in quality_signals[:6]),
@@ -6686,7 +6686,12 @@ def _maybe_refine_operational_ask_answer(
             ),
             "- Safety: no patch/autofix, no RepoBrain-created branch/commit/PR, no TopoCore source exposure in user-facing output.",
         ]
-    operational_next_step = _public_readiness_next_step(public_readiness_status)
+    if operational_kind == "product_analysis":
+        operational_next_step = (
+            "Validate the retrieved runtime, auth/admin, data, UI, and deployment-relevant surfaces against a live pilot environment."
+        )
+    else:
+        operational_next_step = _public_readiness_next_step(public_readiness_status)
     if cmd == "explain":
         answer_lines.append(f"Next step: {operational_next_step}")
     else:
@@ -7621,9 +7626,17 @@ def _build_audit_narrative_messages(
     blockers = [item for item in blockers_raw if isinstance(item, dict)]
     improvements_raw = report.get("top_improvements", [])
     improvements = [item for item in improvements_raw if isinstance(item, dict)]
+    roadmap_raw = report.get("roadmap", {})
     pr_context = report.get("pr_context", {}) if isinstance(report.get("pr_context", {}), dict) else {}
     pr_facts = report.get("pr_impact_facts", {}) if isinstance(report.get("pr_impact_facts", {}), dict) else {}
     maxed_categories = _maxed_category_names(report)
+    recommended_priorities: list[str] = []
+    if isinstance(roadmap_raw, dict):
+        for key in ("30_days", "60_days", "90_days", "priorities"):
+            raw_items = roadmap_raw.get(key, [])
+            if isinstance(raw_items, list):
+                recommended_priorities.extend(str(item).strip() for item in raw_items if str(item).strip())
+    recommended_priorities = list(dict.fromkeys(recommended_priorities))[:6]
     payload = {
         "focus": str(query or "").strip() or "repository readiness",
         "overall_score": int(report.get("overall_score", 0) or 0),
@@ -7655,7 +7668,7 @@ def _build_audit_narrative_messages(
             }
             for item in improvements[:6]
         ],
-        "roadmap": report.get("roadmap", {}),
+        "recommended_priorities": recommended_priorities,
         "pr_context": {
             "is_pr": bool(pr_context.get("is_pr", False)),
             "changed_files_count": int(pr_context.get("changed_files_count", 0) or 0),
@@ -7680,14 +7693,18 @@ def _build_audit_narrative_messages(
     extra_instruction = (
         "Return 5-8 concise bullets for partner-facing leadership review."
         if is_executive
-        else "Explain why the score landed where it did, the main engineering priorities, and 30/60/90-day implications."
+        else "Explain why the score landed where it did, the main engineering priorities, and non-timeboxed recommended next priorities."
     )
     if is_premium and not is_executive:
         extra_instruction += (
             " Structure the response into: 1. Premium interpretation, 2. Why the score landed here, "
-            "3. Highest-confidence strengths, 4. Main readiness gaps, 5. 30/60/90-day decisions, 6. Limitations. "
+            "3. Highest-confidence strengths, 4. Main readiness gaps, 5. Recommended next priorities without dates, 6. Limitations. "
             "Keep the total response bounded and complete."
         )
+    extra_instruction += (
+        " Provide non-timeboxed recommended next priorities based only on non-maxed scorecard gaps and explicit evidence. "
+        "Do not infer delivery dates, durations, staffing assumptions, team capacity, or calendar horizons."
+    )
     if is_premium and is_executive:
         extra_instruction += " Keep it concise but sharper and more decision-oriented than the default executive mode."
     pr_instruction = ""

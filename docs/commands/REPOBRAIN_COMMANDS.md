@@ -8,7 +8,7 @@ Current external GitHub command surface is intentionally bounded.
 |---|---|---|---|---|---|
 | `/repobrain help` | supported | supported | none | not applicable | lists supported commands |
 | `/repobrain ask <query>` | supported | supported | none | resolved backend: `v6` when available; compact runtime/LLM block by default | issue ask analyzes the target repository; PR ask stays PR-scoped; route label stays `ASK`; issue LLM is controlled by `RB_REPOBRAIN_ENABLE_ISSUE_LLM` |
-| `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; optional LLM narrative layer only when requested | full repository-level 100-point audit with evidence and roadmap |
+| `/repobrain audit` | supported | supported as repository audit with PR context | none | static baseline plus contract-validated private `v6` enrichment when available; optional LLM narrative layer only when requested | full repository-level 100-point audit with evidence and non-timeboxed recommended priorities |
 | `/repobrain score` | supported | supported as compact repository score with PR context | none | same guarded audit engine as `/repobrain audit`; default comments stay compact | compact summary view of the same audit engine |
 | `/repobrain doctor` | supported | supported | none | report-only diagnostics; backend remains explicit | installation/runtime diagnostic command |
 | `/repobrain locate <query>` | supported | supported when parser routes it | none | resolved backend: `v6` when invoked | returns likely files and evidence |
@@ -119,7 +119,7 @@ It provides:
 - all 10 scoring categories with bounded weights totaling 100
 - critical blockers
 - top improvements
-- a 30/60/90-day roadmap
+- evidence-backed recommended next priorities without default time estimates
 - evidence references
 - confidence and limitations
 - compact runtime/safety diagnostics by default

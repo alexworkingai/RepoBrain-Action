@@ -711,9 +711,10 @@ def _filter_renderable_roadmap(
     categories: Sequence[Mapping[str, Any]] | Any,
 ) -> dict[str, list[str]]:
     if not isinstance(roadmap, Mapping):
-        return {"30_days": [], "60_days": [], "90_days": []}
+        return {"30_days": [], "60_days": [], "90_days": [], "priorities": []}
     maxed_titles = _maxed_category_titles(categories)
     filtered: dict[str, list[str]] = {}
+    combined_priorities: list[str] = []
     for phase in ("30_days", "60_days", "90_days"):
         raw_items = roadmap.get(phase, [])
         items = [str(item).strip() for item in raw_items if str(item).strip()] if isinstance(raw_items, Sequence) and not isinstance(raw_items, (str, bytes)) else []
@@ -724,6 +725,15 @@ def _filter_renderable_roadmap(
                 continue
             filtered_phase.append(item_text)
         filtered[phase] = filtered_phase
+        combined_priorities.extend(filtered_phase)
+    extra_priorities = roadmap.get("priorities", [])
+    if isinstance(extra_priorities, Sequence) and not isinstance(extra_priorities, (str, bytes)):
+        for item_text in [str(item).strip() for item in extra_priorities if str(item).strip()]:
+            category = _extract_roadmap_category(item_text)
+            if category in maxed_titles and not _is_advisory_maintenance_item(item_text):
+                continue
+            combined_priorities.append(item_text)
+    filtered["priorities"] = _unique_text(combined_priorities)[:6]
     return filtered
 
 
