@@ -13,4 +13,4 @@ jobs:
     if: github.event.repository.visibility == 'public' || vars.RB_ENABLE_PRIVATE_DEPENDENCY_REVIEW == '1'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/dependency-review-action@v5
