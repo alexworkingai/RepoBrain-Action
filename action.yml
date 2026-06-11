@@ -27,7 +27,7 @@ inputs:
     required: false
     default: "true"
   profile:
-    description: "Reserved optional execution profile for future self-service onboarding surface; not enforced in Sprint 93A"
+    description: "Optional self-service onboarding profile metadata for the GitHub OIDC identity envelope; does not activate hosted provisioning by itself"
     required: false
     default: "partner-pilot"
   issue_number:
@@ -43,19 +43,19 @@ inputs:
     required: false
     default: "auto"
   terms_accepted:
-    description: "Reserved optional self-service terms acknowledgement for future Phase 1 onboarding; not enforced in Sprint 93A"
+    description: "Optional self-service terms acknowledgement; required only when self_service_mode is enabled"
     required: false
     default: "false"
   api_url:
-    description: "Reserved optional hosted RepoBrain API URL for future Phase 1 server-side runtime routing; not required in Sprint 93A"
+    description: "Optional hosted RepoBrain API URL reserved for later Phase 1 server-side routing; not called automatically in Sprint 93B"
     required: false
     default: ""
   oidc_audience:
-    description: "Reserved optional OIDC audience for future Sprint 93B identity envelope support; not required in Sprint 93A"
+    description: "Optional GitHub OIDC audience for the Sprint 93B action-side identity envelope"
     required: false
     default: "repobrain-api"
   self_service_mode:
-    description: "Reserved optional Phase 1 self-service mode flag; not active in Sprint 93A"
+    description: "Optional Phase 1 self-service mode flag; enables OIDC/terms gating for the action-side identity envelope only"
     required: false
     default: "false"
 
@@ -79,6 +79,11 @@ runs:
         RB_TKYA_STRICT: "0"
         RB_DISABLE_INTERNAL_REACTIONS: "1"
         RB_INDEX_CACHE_RESTORED: ${{ env.RB_INDEX_CACHE_RESTORED }}
+        RB_SELF_SERVICE_PROFILE: ${{ inputs.profile }}
+        RB_SELF_SERVICE_TERMS_ACCEPTED: ${{ inputs.terms_accepted }}
+        RB_SELF_SERVICE_API_URL: ${{ inputs.api_url }}
+        RB_SELF_SERVICE_OIDC_AUDIENCE: ${{ inputs.oidc_audience }}
+        RB_SELF_SERVICE_MODE: ${{ inputs.self_service_mode }}
         GITHUB_TOKEN: ${{ github.token }}
       run: >
         python "${GITHUB_ACTION_PATH}/scripts/run_github.py"

@@ -29,7 +29,8 @@ Sprint 93A direction only:
 - future partner identity should be derived from verified GitHub claims and repository metadata
 - future partner metadata should be auto-provisioned server-side
 
-Sprint 93A does not claim that this identity envelope is already implemented.
+Sprint 93A itself did not claim that this identity envelope was already implemented.
+Sprint 93B now implements the public action-side OIDC token acquisition and sanitized identity envelope.
 
 ## Reserved public action surface
 
@@ -95,11 +96,11 @@ Still deferred after trusted partner testing:
 
 ## Follow-up sprint handoff
 
-Sprint 93B should implement:
+Sprint 93B now provides:
 - GitHub OIDC identity acquisition in the public action
 - default OIDC audience behavior
-- signed request envelope
-- clear failure path when `id-token: write` is missing
+- sanitized identity envelope construction
+- clear failure path when `id-token: write` is missing in `self_service_mode`
 
 Sprint 93C should implement:
 - hosted API contract

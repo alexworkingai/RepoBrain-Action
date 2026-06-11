@@ -89,6 +89,12 @@ from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
 from repobrain.patch_targeting import select_patch_targets
 from repobrain.patch_governance import build_patch_governance_contract
+from repobrain.oidc import GitHubOidcTokenProvider
+from repobrain.self_service_identity import (
+    SelfServiceConfig,
+    build_github_identity_envelope,
+    validate_self_service_requirements,
+)
 from repobrain.ultra_large_pr_mode import (
     build_ultra_large_pr_mode_contract,
     ultra_large_mode_precheck,
@@ -10710,6 +10716,28 @@ def _publish_pr_check_run(
         print("Check-run publish unavailable, using comment fallback only.")
 
 
+def _apply_self_service_audit_fields(
+    *,
+    audit: dict[str, Any],
+    self_service_cfg: SelfServiceConfig,
+    oidc_result: Any,
+    identity_envelope: dict[str, Any],
+) -> None:
+    audit["self_service_enabled"] = bool(self_service_cfg.enabled)
+    audit["self_service_terms_accepted"] = bool(self_service_cfg.terms_accepted)
+    audit["self_service_profile"] = self_service_cfg.profile
+    audit["self_service_api_url_configured"] = bool(self_service_cfg.api_url)
+    audit["self_service_oidc_audience"] = self_service_cfg.oidc_audience
+    audit["self_service_identity_envelope_version"] = str(
+        identity_envelope.get("version", "n/a") or "n/a"
+    )
+    audit["self_service_identity_envelope"] = identity_envelope
+    audit["github_oidc"] = oidc_result.redacted_dict()
+    audit["github_oidc_available"] = bool(oidc_result.available)
+    audit["github_oidc_token_present"] = bool(oidc_result.token_present)
+    audit["github_oidc_error_code"] = str(oidc_result.error_code or "n/a")
+
+
 def run_github_flow(
     *,
     repo_root: Path,
@@ -10822,6 +10850,31 @@ def run_github_flow(
     else:
         audit["llm_execution_profile_command_override"] = "none"
 
+    self_service_cfg = SelfServiceConfig.from_env()
+    oidc_result = GitHubOidcTokenProvider().get_token(audience=self_service_cfg.oidc_audience)
+    identity_envelope = build_github_identity_envelope(
+        event_payload=event_payload,
+        command_context={
+            "name": cmd,
+            "raw": source_text,
+            "execution_profile_override": profile_override or "none",
+        },
+        self_service=self_service_cfg,
+        oidc_result=oidc_result,
+    )
+    _apply_self_service_audit_fields(
+        audit=audit,
+        self_service_cfg=self_service_cfg,
+        oidc_result=oidc_result,
+        identity_envelope=identity_envelope,
+    )
+    self_service_ok, self_service_error, self_service_status = validate_self_service_requirements(
+        self_service=self_service_cfg,
+        oidc_result=oidc_result,
+        identity_envelope=identity_envelope,
+    )
+    audit["self_service_status"] = self_service_status
+
     verification_context_seed = _build_verification_context_seed(time_budget_s=30, env_cfg=env_cfg)
 
     audit["command"] = cmd
@@ -10836,6 +10889,43 @@ def run_github_flow(
         audit["route_final"] = "HELP"
         audit["pass_count"] = 1
         audit["index_source"] = "n/a"
+        print(f"Mode={mode_label}")
+        print(f"Cmd={cmd}")
+        print(f"Query={query}")
+        if dry_run:
+            print(body_markdown)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "DRY_RUN_OK"
+        if resolved_issue_number is None:
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            raise ValueError("issue_number is required when dry_run=False")
+        client = _build_post_client()
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+            client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        t0 = time.perf_counter()
+        client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+        add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+        audit["posted"] = True
+        print(f"Posted comment to issue #{resolved_issue_number}")
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+        return "POSTED_OK"
+
+    if not self_service_ok:
+        audit["route_final"] = "SELF_SERVICE_BLOCKED"
+        audit["pass_count"] = 1
+        audit["index_source"] = "n/a"
+        body_markdown = render_error_markdown(
+            message=self_service_error or "RepoBrain self-service mode is not ready for this workflow run.",
+            audit_summary={
+                "route_final": "SELF_SERVICE_BLOCKED",
+                "retrieved": 0,
+                "selected": 0,
+                "requested_backend": "n/a",
+                "resolved_backend": "not_applicable",
+                "fallback_used": "not_applicable",
+                "fallback_reason": "self_service_gate",
+            },
+        )
         print(f"Mode={mode_label}")
         print(f"Cmd={cmd}")
         print(f"Query={query}")

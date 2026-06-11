@@ -17,8 +17,9 @@ def test_partner_self_service_quickstart_exists_and_marks_phase1_as_foundation_o
 
     assert "phase 1" in text
     assert "foundation" in text
-    assert "upcoming" in text or "not a completed production path yet" in text
-    assert "not a completed production path yet" in text or "does not claim that this identity envelope is already implemented" in text
+    assert "not a completed production path yet" in text or "not yet fully live" in text
+    assert "sprint 93b implements" in text
+    assert "sprint 93c" in text
 
 
 def test_partner_self_service_quickstart_does_not_require_owner_token_or_manual_registration() -> None:
@@ -69,7 +70,7 @@ def test_architecture_note_states_thin_client_and_private_server_side_runtime() 
 def test_architecture_note_lists_93b_to_93e_handoff_and_defers_later_phases() -> None:
     text = _read("docs/architecture/SPRINT_93A_SELF_SERVICE_PARTNER_FOUNDATION.md").lower()
 
-    assert "sprint 93b should implement" in text
+    assert "sprint 93b now provides" in text
     assert "sprint 93c should implement" in text
     assert "sprint 93d should implement" in text
     assert "sprint 93e should implement" in text
@@ -94,7 +95,7 @@ def test_action_yml_exposes_optional_non_breaking_self_service_inputs() -> None:
 def test_readme_surfaces_self_service_foundation_without_overclaim() -> None:
     text = _read("README.md").lower()
 
-    assert "phase 1 self-service foundation" in text
+    assert "phase 1 self-service" in text
     assert "thin public client direction" in text
     assert "private hosted/server-side runtime direction" in text
-    assert "not claimed as live" in text
+    assert "not claimed as fully live" in text or "not yet claimed as fully live" in text

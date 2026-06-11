@@ -2,13 +2,14 @@
 
 Purpose:
 - describe the intended Phase 1 partner self-service onboarding shape for the public RepoBrain action
-- keep current product truth honest while Sprint 93B-Sprint 93E finish the remaining identity and hosted-runtime work
+- keep current product truth honest while Sprint 93C-Sprint 93E finish the remaining hosted verification and rollout work
 
 Current truth:
 - RepoBrain-Action is public
 - TopoCore v6 remains private and server-side
-- Sprint 93A prepares the self-service foundation only
-- full OIDC-backed self-service onboarding is an upcoming Phase 1 implementation, not a completed production path yet
+- Sprint 93A prepared the self-service foundation
+- Sprint 93B implements the public action-side GitHub OIDC identity envelope
+- full hosted self-service onboarding is still not a completed production path yet
 
 ## Intended Phase 1 partner flow
 
@@ -22,7 +23,7 @@ Current truth:
 
 ## Example workflow shape
 
-Use the upcoming self-service workflow shape as a foundation:
+Use the current self-service workflow shape as a foundation:
 
 - `docs/examples/repobrain_partner_self_service_workflow.yml`
 
@@ -41,19 +42,23 @@ Current action reference truth:
 
 ## Why `id-token: write` appears now
 
-`id-token: write` is included as a future-ready permission for Sprint 93B.
+`id-token: write` is now required for the Sprint 93B action-side OIDC envelope path.
 
-Sprint 93B will implement:
+Sprint 93B now implements:
 - GitHub OIDC identity acquisition in the public action
 - a default OIDC audience
-- a signed request envelope
+- a sanitized identity envelope
 - a clear failure path when `id-token: write` is missing
 
-Sprint 93A does not claim that OIDC-backed onboarding is already live.
+Current truth remains:
+- hosted API verification is not live in Sprint 93B
+- automatic tenant provisioning is not live in Sprint 93B
+- partner self-service public action is not yet fully live
+- Sprint 93C is still required for hosted trust verification and provisioning
 
-## Reserved action inputs prepared in Sprint 93A
+## Action inputs carried forward from Sprint 93A into Sprint 93B
 
-The public action can now document these optional reserved inputs without making them mandatory:
+The public action now exposes these optional inputs without making them mandatory for legacy operation:
 - `profile`
 - `terms_accepted`
 - `api_url`
@@ -62,8 +67,9 @@ The public action can now document these optional reserved inputs without making
 
 Current truth:
 - they are optional and non-breaking
-- they are not enforced as a production self-service path in Sprint 93A
-- they exist to stabilize the public surface before Sprint 93B and Sprint 93C
+- `self_service_mode` now enables action-side OIDC and terms gating
+- they still do not create a full hosted self-service production path by themselves
+- hosted verification and auto-provisioning still belong to Sprint 93C
 
 ## Data boundary for later Phase 1 hosted flow
 
@@ -72,6 +78,11 @@ Intended data sent to the hosted RepoBrain API in later Phase 1:
 - requested RepoBrain command such as `/repobrain score` or `/repobrain audit`
 - bounded repository evidence needed for the requested analysis
 - workflow or run metadata needed for request validation and safe reporting
+
+What Sprint 93B adds now:
+- GitHub OIDC token acquisition in the action when available
+- a sanitized `repobrain.github_oidc_identity.v1` envelope for future hosted verification
+- safe refusal when `self_service_mode: "true"` is enabled without `terms_accepted: "true"` or `id-token: write`
 
 Data not sent by default:
 - full repository archive
@@ -103,14 +114,14 @@ Partner self-service means:
 Still required from the partner side:
 - repository admin or workflow-maintainer access to add the workflow
 - GitHub Actions permissions that allow the workflow to run
-- future OIDC-compatible runner permissions through `id-token: write`
+- `id-token: write` when validating the action-side OIDC identity envelope
 - acceptance that RepoBrain may apply automatic quotas and abuse protection server-side in later Phase 1
 
-## What Sprint 93A does not do
+## What Sprint 93B still does not do
 
-Sprint 93A does not implement:
-- live OIDC token exchange
+Sprint 93B does not implement:
 - hosted backend auto-provisioning
+- hosted OIDC JWT verification
 - automatic tenant registration
 - a dashboard
 - an owner/admin panel
