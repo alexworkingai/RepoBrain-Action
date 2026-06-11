@@ -109,6 +109,8 @@ Sprint 93C should implement:
 - quota profile
 - public-safe response contract
 
+Sprint 93C is now the implemented trust/provisioning boundary.
+
 Sprint 93D should implement:
 - end-to-end partner self-service workflow
 

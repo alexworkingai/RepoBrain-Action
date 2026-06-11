@@ -138,13 +138,16 @@ def test_action_yml_maps_self_service_inputs_into_runtime_env() -> None:
 def test_self_service_docs_reflect_93b_without_overclaim() -> None:
     quickstart = _read("docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md").lower()
     architecture = _read("docs/architecture/SPRINT_93B_OIDC_IDENTITY_ENVELOPE.md").lower()
+    architecture_93c = _read("docs/architecture/SPRINT_93C_HOSTED_API_TRUST_AND_PROVISIONING.md").lower()
     workflow = _read("docs/examples/repobrain_partner_self_service_workflow.yml").lower()
 
     assert "sprint 93b implements" in quickstart
-    assert "hosted api verification is not live" in quickstart
-    assert "automatic tenant provisioning is not live" in quickstart
+    assert "hosted api verification is implemented as a sprint 93c boundary" in quickstart
+    assert "automatic tenant provisioning is implemented as a sprint 93c boundary" in quickstart
     assert "fully live" in quickstart
     assert "oidc token acquisition" in architecture
+    assert "tenant provisioning boundaries" in architecture or "hosted verification and tenant provisioning boundaries" in architecture
+    assert "automatic tenant provisioning" in architecture_93c
     assert "repobrain.github_oidc_identity.v1" in architecture
     assert "not yet fully live" in quickstart or "not yet fully live" in architecture
     assert "id-token: write" in workflow

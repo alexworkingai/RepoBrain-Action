@@ -89,6 +89,11 @@ from repobrain.review_validator import validate_review_findings
 from repobrain.patch_validator import validate_patch_grounding
 from repobrain.patch_targeting import select_patch_targets
 from repobrain.patch_governance import build_patch_governance_contract
+from repobrain.hosted_api_contract import (
+    BOUNDED_EVIDENCE_VERSION,
+    build_github_action_audit_request,
+    sanitize_request_for_logs,
+)
 from repobrain.oidc import GitHubOidcTokenProvider
 from repobrain.self_service_identity import (
     SelfServiceConfig,
@@ -10738,6 +10743,32 @@ def _apply_self_service_audit_fields(
     audit["github_oidc_error_code"] = str(oidc_result.error_code or "n/a")
 
 
+def _build_self_service_request_preview(
+    *,
+    identity_envelope: dict[str, Any],
+    oidc_token: str,
+    cmd: str,
+    raw_command: str,
+    self_service_cfg: SelfServiceConfig,
+) -> dict[str, Any]:
+    request_payload = build_github_action_audit_request(
+        identity=identity_envelope,
+        oidc_jwt=oidc_token,
+        command={
+            "route": cmd,
+            "profile": self_service_cfg.profile,
+            "raw": raw_command,
+        },
+        evidence={
+            "version": BOUNDED_EVIDENCE_VERSION,
+            "items": [],
+            "limits": {},
+            "redaction": {},
+        },
+    )
+    return sanitize_request_for_logs(request_payload)
+
+
 def run_github_flow(
     *,
     repo_root: Path,
@@ -10868,6 +10899,17 @@ def run_github_flow(
         oidc_result=oidc_result,
         identity_envelope=identity_envelope,
     )
+    if bool(self_service_cfg.enabled) and bool(oidc_result.token_present):
+        audit["self_service_hosted_api_request_preview"] = _build_self_service_request_preview(
+            identity_envelope=identity_envelope,
+            oidc_token=oidc_result.token,
+            cmd=cmd,
+            raw_command=source_text,
+            self_service_cfg=self_service_cfg,
+        )
+        audit["self_service_hosted_api_contract_ready"] = True
+    else:
+        audit["self_service_hosted_api_contract_ready"] = False
     self_service_ok, self_service_error, self_service_status = validate_self_service_requirements(
         self_service=self_service_cfg,
         oidc_result=oidc_result,
