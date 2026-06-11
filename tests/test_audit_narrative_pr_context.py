@@ -45,5 +45,9 @@ def test_pr_audit_narrative_renders_pr_impact_summary(monkeypatch) -> None:
 
     assert "## PR impact summary" in markdown
     assert "## Narrative interpretation" in markdown
-    assert "Runtime implications" in markdown
+    assert "### Reviewer notes" not in markdown
+    assert "- Changed files: `docs/manual-smoke.md`, `README.md`" in markdown
+    assert "- Change type: `docs-only`" in markdown
+    assert "- Behavior-affecting: `no`" in markdown
+    assert "- Runtime implications." not in markdown
     assert "- Score modified by LLM: `no`" in markdown

@@ -21,10 +21,12 @@ Current product runtime is v6-only:
 
 For a new external repository install, start here:
 
+- Phase 1 self-service foundation: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
 - Install guide: `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
 - Command guide: `docs/commands/REPOBRAIN_COMMANDS.md`
 - Troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
 - Example workflow: `docs/examples/repobrain_external_pilot_workflow.yml`
+- Self-service workflow shape: `docs/examples/repobrain_partner_self_service_workflow.yml`
 - Partner readiness: `docs/release/PARTNER_TESTING_READINESS.md`
 - Public approval checklist: `docs/release/PUBLIC_VISIBILITY_APPROVAL_CHECKLIST.md`
 - Partner setup pack: `docs/partner/PARTNER_TESTING_SETUP.md`
@@ -103,6 +105,14 @@ Sprint 92F-92H implementation truth:
 - premium audit narrative is bounded and explicitly reports when it was shortened to stay within response budget
 - `/repobrain score` remains a compact TopoCore-first summary and does not require an LLM
 - current readiness status on the Sprint 92H branch is `SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`
+
+Sprint 93A foundation truth:
+
+- public Phase 1 self-service foundation is being prepared
+- RepoBrain-Action is the intended thin public client direction
+- TopoCore v6 remains the private hosted/server-side runtime direction
+- no owner-generated onboarding token path is the intended Phase 1 model
+- full OIDC and hosted API onboarding are not claimed as live in this sprint
 
 RepoBrain is not an LLM reseller.
 TopoCore v6 remains private.
