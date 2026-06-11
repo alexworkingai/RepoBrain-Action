@@ -24,7 +24,8 @@ Phase 1 self-service note:
 - this install guide still documents the currently authorized runtime-dependent external setup surface
 - Sprint 93B implements the public action-side OIDC identity envelope
 - Sprint 93C implements the hosted verification and auto-provisioning boundary
-- Sprint 93D still owns the end-to-end action request/response flow
+- Sprint 93D now owns and wires the end-to-end action request/response flow for supported self-service commands
+- Sprint 93E still owns final hardening and trusted-partner validation
 
 ## Repository Model
 

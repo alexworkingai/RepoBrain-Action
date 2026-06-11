@@ -130,6 +130,14 @@ Sprint 93C hosted-boundary truth:
 - end-to-end action-to-hosted-api request sending and GitHub response posting remain deferred to Sprint 93D
 - trusted partner hardening and live validation remain deferred to Sprint 93E
 
+Sprint 93D end-to-end self-service truth:
+
+- `self_service_mode` now wires supported `ask`, `audit`, and `score` commands through the hosted API client path when `api_url` is configured
+- the public action now sends the versioned hosted request contract and renders public-safe hosted responses back into the GitHub comment flow
+- public-safe hosted error rendering now covers missing `api_url`, hosted API unavailability, quota/public-safe server errors, and other redacted failures
+- existing non-self-service local/private runtime behavior remains unchanged
+- final trusted partner hardening and validation remain deferred to Sprint 93E
+
 RepoBrain is not an LLM reseller.
 TopoCore v6 remains private.
 `repobrain-community` is retired from the working product architecture and is not required.

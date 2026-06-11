@@ -47,7 +47,7 @@ inputs:
     required: false
     default: "false"
   api_url:
-    description: "Optional hosted RepoBrain API URL for the Sprint 93C hosted contract boundary; outbound sending remains deferred until Sprint 93D"
+    description: "Optional hosted RepoBrain API URL; required when Sprint 93D self-service routing is enabled for hosted ask/audit/score commands"
     required: false
     default: ""
   oidc_audience:
@@ -55,7 +55,7 @@ inputs:
     required: false
     default: "repobrain-api"
   self_service_mode:
-    description: "Optional Phase 1 self-service mode flag; enables OIDC/terms gating for the action-side identity envelope only"
+    description: "Optional Phase 1 self-service mode flag; enables OIDC/terms gating plus hosted API request/response routing for supported commands"
     required: false
     default: "false"
 

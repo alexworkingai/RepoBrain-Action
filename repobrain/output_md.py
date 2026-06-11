@@ -2795,6 +2795,63 @@ def render_error_markdown(
     )
 
 
+def render_hosted_response_markdown(
+    *,
+    response: dict[str, Any],
+    audit_summary: dict[str, Any],
+) -> str:
+    report = response.get("report", {})
+    tenant = response.get("tenant", {})
+    quota = response.get("quota", {})
+    runtime = response.get("runtime", {})
+    markdown = str(report.get("markdown", "") or "").strip()
+    if not markdown:
+        markdown = "\n".join(
+            [
+                "### RepoBrain hosted self-service result",
+                f"- Score: `{report.get('score', 'n/a')}`",
+                f"- Band: `{report.get('band', 'UNKNOWN')}`",
+            ]
+        )
+    lines = [
+        markdown,
+        "",
+        "### 🔐 Hosted self-service",
+        f"- Tenant plan: `{tenant.get('plan', 'partner_pilot_auto')}`",
+        f"- Quota status: `{quota.get('status', 'ok')}`",
+        f"- Quota remaining: `{quota.get('remaining', 'n/a')}`",
+        f"- Score authority: `{runtime.get('score_authority', 'TopoCore')}`",
+        f"- Runtime: `{runtime.get('topocore_runtime', 'private_server_side')}`",
+        f"- Mutation: `{runtime.get('mutation', 'disabled')}`",
+        "",
+        *_compact_safety_lines(audit_summary),
+        "",
+        _audit_note(),
+    ]
+    return "\n".join(lines)
+
+
+def render_hosted_error_markdown(
+    *,
+    message: str,
+    error_code: str,
+    retryable: bool,
+    audit_summary: dict[str, Any],
+) -> str:
+    lines = [
+        "### 🛑 RepoBrain self-service error",
+        message.strip() or "Hosted self-service request failed.",
+        "",
+        f"- Error code: `{str(error_code or 'INTERNAL_ERROR_REDACTED').strip()}`",
+        f"- Retryable: `{'yes' if retryable else 'no'}`",
+        "",
+        *_compact_safety_lines(audit_summary),
+        "",
+        _audit_note(),
+    ]
+    return "\n".join(lines)
+
+
 def render_scoped_command_markdown(
     *,
     title: str,

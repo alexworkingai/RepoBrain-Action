@@ -1,4 +1,4 @@
-name: RepoBrain Self-Service OIDC Envelope
+name: RepoBrain Partner Self-Service
 
 on:
   issue_comment:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   repobrain:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/repobrain')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/repobrain')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -23,7 +23,8 @@ jobs:
         with:
           profile: partner-pilot
           terms_accepted: "true"
+          api_url: https://repobrain.example.invalid
           oidc_audience: repobrain-api
-          # Sprint 93C defines the hosted trust/provisioning boundary.
-          # Keep action-side sending disabled until Sprint 93D wires the end-to-end flow.
-          # self_service_mode: "true"
+          # Sprint 93D wires the end-to-end self-service request/response path.
+          # Keep a placeholder URL here until a trusted-partner endpoint is assigned.
+          self_service_mode: "true"

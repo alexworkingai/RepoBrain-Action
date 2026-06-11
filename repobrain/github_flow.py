@@ -59,6 +59,8 @@ from repobrain.output_md import (
     render_diagnostic_summary_markdown,
     render_answer_markdown,
     render_error_markdown,
+    render_hosted_error_markdown,
+    render_hosted_response_markdown,
     render_patch_markdown,
     render_refuse_markdown,
     render_review_markdown,
@@ -94,6 +96,7 @@ from repobrain.hosted_api_contract import (
     build_github_action_audit_request,
     sanitize_request_for_logs,
 )
+from repobrain.hosted_api_client import HostedApiClient, HostedApiClientConfig, HostedApiClientError
 from repobrain.oidc import GitHubOidcTokenProvider
 from repobrain.self_service_identity import (
     SelfServiceConfig,
@@ -10769,6 +10772,63 @@ def _build_self_service_request_preview(
     return sanitize_request_for_logs(request_payload)
 
 
+_SELF_SERVICE_HOSTED_COMMANDS = {"ask", "audit", "score"}
+
+
+def _self_service_hosted_command_enabled(cmd: str) -> bool:
+    return str(cmd or "").strip().lower() in _SELF_SERVICE_HOSTED_COMMANDS
+
+
+def _build_self_service_bounded_evidence(
+    *,
+    github_context_seed: dict[str, Any],
+    query: str,
+    cmd: str,
+    raw_command: str,
+    resolved_issue_number: int | None,
+) -> dict[str, Any]:
+    changed_files_raw = github_context_seed.get("changed_files", [])
+    changed_files = (
+        [str(item).strip() for item in changed_files_raw if str(item).strip()]
+        if isinstance(changed_files_raw, list)
+        else []
+    )
+    items: list[dict[str, Any]] = [
+        {
+            "kind": "command_context",
+            "command": str(cmd or "").strip().lower(),
+            "raw": str(raw_command or "").strip(),
+            "query": str(query or "").strip()[:600],
+            "event_name": str(github_context_seed.get("event_name", "unknown") or "unknown"),
+            "is_pr": bool(github_context_seed.get("is_pr", False)),
+            "issue_number": resolved_issue_number,
+            "pr_number": github_context_seed.get("pr_number"),
+        }
+    ]
+    if changed_files:
+        items.append(
+            {
+                "kind": "changed_files",
+                "count": len(changed_files),
+                "files": changed_files[:20],
+            }
+        )
+    return {
+        "version": BOUNDED_EVIDENCE_VERSION,
+        "items": items,
+        "limits": {
+            "max_items": 64,
+            "max_bytes": 200000,
+            "changed_files_included": min(len(changed_files), 20),
+        },
+        "redaction": {
+            "raw_event_payload_included": False,
+            "raw_oidc_logged": False,
+            "secrets_scrubbed": True,
+        },
+    }
+
+
 def run_github_flow(
     *,
     repo_root: Path,
@@ -10968,6 +11028,114 @@ def run_github_flow(
                 "fallback_reason": "self_service_gate",
             },
         )
+        print(f"Mode={mode_label}")
+        print(f"Cmd={cmd}")
+        print(f"Query={query}")
+        if dry_run:
+            print(body_markdown)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "DRY_RUN_OK"
+        if resolved_issue_number is None:
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            raise ValueError("issue_number is required when dry_run=False")
+        client = _build_post_client()
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+            client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        t0 = time.perf_counter()
+        client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+        add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+        audit["posted"] = True
+        print(f"Posted comment to issue #{resolved_issue_number}")
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+        return "POSTED_OK"
+
+    if bool(self_service_cfg.enabled) and _self_service_hosted_command_enabled(cmd):
+        evidence_packet = _build_self_service_bounded_evidence(
+            github_context_seed=github_context_seed,
+            query=query,
+            cmd=cmd,
+            raw_command=source_text,
+            resolved_issue_number=resolved_issue_number,
+        )
+        request_payload = build_github_action_audit_request(
+            identity=identity_envelope,
+            oidc_jwt=oidc_result.token,
+            command={
+                "route": cmd,
+                "profile": self_service_cfg.profile,
+                "raw": source_text,
+            },
+            evidence=evidence_packet,
+        )
+        audit["self_service_hosted_api_request_preview"] = sanitize_request_for_logs(request_payload)
+        audit["self_service_hosted_api_contract_ready"] = True
+        audit["self_service_hosted_api_send_attempted"] = False
+        audit["self_service_hosted_api_response_status"] = "n/a"
+        audit["self_service_hosted_api_error_code"] = "none"
+        try:
+            hosted_result = HostedApiClient(
+                HostedApiClientConfig(api_url=self_service_cfg.api_url)
+            ).send_audit_request(request_payload)
+            audit["self_service_hosted_api_send_attempted"] = True
+            audit["self_service_hosted_api_http_status"] = hosted_result.http_status
+            audit["self_service_hosted_api_endpoint"] = hosted_result.sanitized_endpoint
+            audit["self_service_hosted_api_response_status"] = hosted_result.status
+            if hosted_result.status == "ok":
+                audit["route_final"] = "SELF_SERVICE_HOSTED"
+                audit["pass_count"] = 1
+                audit["index_source"] = "hosted_api"
+                audit["retrieved"] = 0
+                audit["selected"] = 0
+                audit["requested_backend"] = "hosted_api"
+                audit["resolved_backend"] = "private_server_side"
+                audit["fallback_used"] = "not_applicable"
+                audit["fallback_reason"] = "hosted_self_service"
+                body_markdown = render_hosted_response_markdown(
+                    response=hosted_result.response,
+                    audit_summary=audit,
+                )
+            else:
+                error = hosted_result.response.get("error", {})
+                audit["route_final"] = "SELF_SERVICE_HOSTED_ERROR"
+                audit["pass_count"] = 1
+                audit["index_source"] = "hosted_api"
+                audit["retrieved"] = 0
+                audit["selected"] = 0
+                audit["requested_backend"] = "hosted_api"
+                audit["resolved_backend"] = "not_applicable"
+                audit["fallback_used"] = "not_applicable"
+                audit["fallback_reason"] = "hosted_self_service_error"
+                audit["self_service_hosted_api_error_code"] = str(
+                    error.get("code", "INTERNAL_ERROR_REDACTED") or "INTERNAL_ERROR_REDACTED"
+                )
+                body_markdown = render_hosted_error_markdown(
+                    message=str(error.get("message", "") or "RepoBrain hosted self-service request failed."),
+                    error_code=audit["self_service_hosted_api_error_code"],
+                    retryable=bool(error.get("retryable", False)),
+                    audit_summary=audit,
+                )
+        except HostedApiClientError as exc:
+            audit["route_final"] = "SELF_SERVICE_HOSTED_ERROR"
+            audit["pass_count"] = 1
+            audit["index_source"] = "hosted_api"
+            audit["retrieved"] = 0
+            audit["selected"] = 0
+            audit["requested_backend"] = "hosted_api"
+            audit["resolved_backend"] = "not_applicable"
+            audit["fallback_used"] = "not_applicable"
+            audit["fallback_reason"] = "hosted_self_service_client_error"
+            audit["self_service_hosted_api_error_code"] = exc.code
+            audit["self_service_hosted_api_http_status"] = (
+                exc.http_status if exc.http_status is not None else "n/a"
+            )
+            audit["self_service_hosted_api_endpoint"] = exc.sanitized_endpoint or "n/a"
+            body_markdown = render_hosted_error_markdown(
+                message=exc.message,
+                error_code=exc.code,
+                retryable=exc.retryable,
+                audit_summary=audit,
+            )
+
         print(f"Mode={mode_label}")
         print(f"Cmd={cmd}")
         print(f"Query={query}")

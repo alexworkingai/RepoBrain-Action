@@ -199,6 +199,69 @@ def build_error_response(
     return payload
 
 
+def validate_github_action_audit_response(response_json: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(response_json, Mapping):
+        raise HostedApiContractError(
+            "INVALID_RESPONSE_SHAPE",
+            "Hosted audit response must be a JSON object.",
+        )
+    version = str(response_json.get("version", "") or "").strip()
+    if version != GITHUB_ACTION_AUDIT_RESPONSE_VERSION:
+        raise HostedApiContractError(
+            "INVALID_RESPONSE_SHAPE",
+            "Hosted audit response version is invalid.",
+        )
+
+    status = str(response_json.get("status", "") or "").strip().lower()
+    if status not in {"ok", "error"}:
+        raise HostedApiContractError(
+            "INVALID_RESPONSE_SHAPE",
+            "Hosted audit response status is invalid.",
+        )
+
+    normalized: dict[str, Any] = {
+        "version": GITHUB_ACTION_AUDIT_RESPONSE_VERSION,
+        "status": status,
+        "safety": dict(response_json.get("safety", {}))
+        if isinstance(response_json.get("safety"), Mapping)
+        else {},
+    }
+
+    if status == "ok":
+        tenant = response_json.get("tenant", {})
+        quota = response_json.get("quota", {})
+        report = response_json.get("report", {})
+        runtime = response_json.get("runtime", {})
+        if not all(isinstance(block, Mapping) for block in (tenant, quota, report, runtime)):
+            raise HostedApiContractError(
+                "INVALID_RESPONSE_SHAPE",
+                "Hosted audit success response is missing required blocks.",
+            )
+        normalized["tenant"] = dict(tenant)
+        normalized["quota"] = dict(quota)
+        normalized["report"] = {
+            "format": str(report.get("format", "") or "").strip() or "repobrain.audit_report.v1",
+            "score": int(report.get("score", 0) or 0),
+            "band": str(report.get("band", "") or "").strip() or "UNKNOWN",
+            "markdown": _safe_text(report.get("markdown", ""), max_length=MAX_MARKDOWN_CHARS),
+        }
+        normalized["runtime"] = dict(runtime)
+    else:
+        error = response_json.get("error", {})
+        if not isinstance(error, Mapping):
+            raise HostedApiContractError(
+                "INVALID_RESPONSE_SHAPE",
+                "Hosted audit error response is missing the error block.",
+            )
+        normalized["error"] = {
+            "code": str(error.get("code", "") or "").strip() or "INTERNAL_ERROR_REDACTED",
+            "message": _safe_text(error.get("message", ""), max_length=240),
+            "retryable": bool(error.get("retryable", False)),
+        }
+    _assert_public_safe(normalized)
+    return normalized
+
+
 def _validate_bounded_evidence(evidence: Mapping[str, Any]) -> None:
     version = str(evidence.get("version", "") or "").strip()
     if version and version != BOUNDED_EVIDENCE_VERSION:
