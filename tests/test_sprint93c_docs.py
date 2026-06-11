@@ -17,7 +17,7 @@ def test_quickstart_preserves_no_owner_token_and_no_manual_registration() -> Non
     assert "no manual partner registration" in text
     assert "do not install or download topocore" in text
     assert "fully live" in text
-    assert "sprint 93d" in text
+    assert "sprint 93d now wires" in text or "sprint 93d now wires the end-to-end" in text
     assert "sprint 93e" in text
 
 
@@ -37,5 +37,5 @@ def test_readme_reflects_93c_without_full_live_claim() -> None:
 
     assert "sprint 93c hosted-boundary truth" in text
     assert "tenant auto-provisioning" in text
-    assert "deferred to sprint 93d" in text
-    assert "deferred to sprint 93e" in text
+    assert "sprint 93d end-to-end self-service truth" in text
+    assert "deferred to sprint 93e" in text or "remain deferred to sprint 93e" in text
