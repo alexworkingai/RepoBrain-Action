@@ -9,6 +9,7 @@ Current truth:
 - TopoCore v6 remains private and server-side
 - Sprint 93A prepared the self-service foundation
 - Sprint 93B implements the public action-side GitHub OIDC identity envelope
+- Sprint 93C implements the hosted trust verification and auto-provisioning boundary
 - full hosted self-service onboarding is still not a completed production path yet
 
 ## Intended Phase 1 partner flow
@@ -51,10 +52,11 @@ Sprint 93B now implements:
 - a clear failure path when `id-token: write` is missing
 
 Current truth remains:
-- hosted API verification is not live in Sprint 93B
-- automatic tenant provisioning is not live in Sprint 93B
+- hosted API verification is implemented as a Sprint 93C boundary
+- automatic tenant provisioning is implemented as a Sprint 93C boundary
 - partner self-service public action is not yet fully live
-- Sprint 93C is still required for hosted trust verification and provisioning
+- Sprint 93D is still required for the end-to-end action-to-hosted flow
+- Sprint 93E is still required for trusted partner hardening/live validation
 
 ## Action inputs carried forward from Sprint 93A into Sprint 93B
 
@@ -68,8 +70,9 @@ The public action now exposes these optional inputs without making them mandator
 Current truth:
 - they are optional and non-breaking
 - `self_service_mode` now enables action-side OIDC and terms gating
+- the action-side payload now matches the Sprint 93C hosted contract boundary
 - they still do not create a full hosted self-service production path by themselves
-- hosted verification and auto-provisioning still belong to Sprint 93C
+- end-to-end sending/rendering still belongs to Sprint 93D
 
 ## Data boundary for later Phase 1 hosted flow
 
@@ -83,6 +86,14 @@ What Sprint 93B adds now:
 - GitHub OIDC token acquisition in the action when available
 - a sanitized `repobrain.github_oidc_identity.v1` envelope for future hosted verification
 - safe refusal when `self_service_mode: "true"` is enabled without `terms_accepted: "true"` or `id-token: write`
+
+What Sprint 93C adds now:
+- hosted request/response contract for `POST /v1/github/actions/audit`
+- server-side GitHub OIDC JWT verification boundary
+- claim consistency checks between verified JWT claims and the action identity envelope
+- automatic tenant/repository provisioning boundary
+- default partner-pilot quota boundary
+- private hosted TopoCore adapter boundary
 
 Data not sent by default:
 - full repository archive
@@ -117,11 +128,11 @@ Still required from the partner side:
 - `id-token: write` when validating the action-side OIDC identity envelope
 - acceptance that RepoBrain may apply automatic quotas and abuse protection server-side in later Phase 1
 
-## What Sprint 93B still does not do
+## What Sprint 93C still does not do
 
-Sprint 93B does not implement:
-- hosted backend auto-provisioning
-- hosted OIDC JWT verification
+Sprint 93C does not implement:
+- end-to-end hosted request sending from the public action
+- GitHub comment rendering from hosted API responses
 - automatic tenant registration
 - a dashboard
 - an owner/admin panel

@@ -24,6 +24,6 @@ jobs:
           profile: partner-pilot
           terms_accepted: "true"
           oidc_audience: repobrain-api
-          # Enable this after Sprint 93C hosted verification/provisioning is available
-          # or when you explicitly want Sprint 93B action-side OIDC gating now.
+          # Sprint 93C defines the hosted trust/provisioning boundary.
+          # Keep action-side sending disabled until Sprint 93D wires the end-to-end flow.
           # self_service_mode: "true"

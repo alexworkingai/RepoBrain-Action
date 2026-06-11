@@ -122,6 +122,14 @@ Sprint 93B identity-envelope truth:
 - hosted API verification and automatic tenant provisioning remain deferred to Sprint 93C
 - partner self-service public action is not yet claimed as fully live
 
+Sprint 93C hosted-boundary truth:
+
+- the hosted RepoBrain API trust contract is now defined as `repobrain.github_action_audit_request.v1`
+- server-side GitHub OIDC verification, claim consistency checks, tenant auto-provisioning, and default quota policy are now implemented as pure service boundaries
+- the action now prepares a redacted hosted request preview when `self_service_mode` and OIDC are both available
+- end-to-end action-to-hosted-api request sending and GitHub response posting remain deferred to Sprint 93D
+- trusted partner hardening and live validation remain deferred to Sprint 93E
+
 RepoBrain is not an LLM reseller.
 TopoCore v6 remains private.
 `repobrain-community` is retired from the working product architecture and is not required.

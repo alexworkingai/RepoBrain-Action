@@ -47,7 +47,7 @@ inputs:
     required: false
     default: "false"
   api_url:
-    description: "Optional hosted RepoBrain API URL reserved for later Phase 1 server-side routing; not called automatically in Sprint 93B"
+    description: "Optional hosted RepoBrain API URL for the Sprint 93C hosted contract boundary; outbound sending remains deferred until Sprint 93D"
     required: false
     default: ""
   oidc_audience:

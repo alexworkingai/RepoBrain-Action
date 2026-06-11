@@ -59,4 +59,5 @@ The public action does not log:
 
 - Sprint status: `SPRINT_93B_OIDC_IDENTITY_ENVELOPE_READY` after validation
 - Not claimed: `PARTNER_SELF_SERVICE_PUBLIC_ACTION_FULLY_LIVE`
-- Next required sprint: Sprint 93C for hosted verification and tenant provisioning
+- Sprint 93C now provides hosted verification and tenant provisioning boundaries
+- Next required sprint: Sprint 93D for the end-to-end action-to-hosted partner workflow
