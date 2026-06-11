@@ -21,7 +21,7 @@ Current product runtime is v6-only:
 
 For a new external repository install, start here:
 
-- Phase 1 self-service foundation: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
+- Phase 1 self-service / OIDC envelope quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
 - Install guide: `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
 - Command guide: `docs/commands/REPOBRAIN_COMMANDS.md`
 - Troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
@@ -113,6 +113,14 @@ Sprint 93A foundation truth:
 - TopoCore v6 remains the private hosted/server-side runtime direction
 - no owner-generated onboarding token path is the intended Phase 1 model
 - full OIDC and hosted API onboarding are not claimed as live in this sprint
+
+Sprint 93B identity-envelope truth:
+
+- the public action now supports GitHub Actions OIDC token acquisition when the workflow grants `id-token: write`
+- the public action now builds a sanitized `repobrain.github_oidc_identity.v1` envelope for future hosted verification
+- `self_service_mode` enforces `terms_accepted` and GitHub OIDC availability when explicitly enabled
+- hosted API verification and automatic tenant provisioning remain deferred to Sprint 93C
+- partner self-service public action is not yet claimed as fully live
 
 RepoBrain is not an LLM reseller.
 TopoCore v6 remains private.

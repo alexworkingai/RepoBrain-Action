@@ -1,4 +1,4 @@
-name: RepoBrain Self-Service Foundation
+name: RepoBrain Self-Service OIDC Envelope
 
 on:
   issue_comment:
@@ -23,5 +23,7 @@ jobs:
         with:
           profile: partner-pilot
           terms_accepted: "true"
-          self_service_mode: "true"
           oidc_audience: repobrain-api
+          # Enable this after Sprint 93C hosted verification/provisioning is available
+          # or when you explicitly want Sprint 93B action-side OIDC gating now.
+          # self_service_mode: "true"

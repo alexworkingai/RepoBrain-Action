@@ -22,7 +22,8 @@ Phase 1 self-service note:
 
 - `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md` documents the intended thin-client self-service direction
 - this install guide still documents the currently authorized runtime-dependent external setup surface
-- Sprint 93A does not claim that OIDC-backed hosted self-service onboarding is already live
+- Sprint 93B implements the public action-side OIDC identity envelope only
+- hosted verification and auto-provisioning are still deferred to Sprint 93C
 
 ## Repository Model
 
