@@ -295,6 +295,18 @@ def test_final_pr_premium_markdown_preserves_docs_only_facts_and_filters_maxed_t
         "pr_context": {"is_pr": True, "pr_number": 41},
         "audit_narrative_mode": "premium",
         "audit_narrative_text": "General premium narrative.",
+        "audit_pr_impact_summary_lines": [
+            "- Changed files: `docs/repobrain_manual_pr_smoke.md`",
+            "- Change type: `docs-only`",
+            "- Behavior-affecting: `no`",
+            "- Architecture/runtime impact: no direct impact",
+            "- Security impact: no direct impact",
+            "- Validation needed: docs accuracy review plus optional docs checks",
+            "- Production readiness effect: neutral or minor positive documentation polish",
+            "- Partner-pilot effect: neutral or minor positive documentation clarity",
+            "- Risk level: `LOW`",
+            "- Limitations: PR-scoped assessment only; not a merge, security, legal, or production approval.",
+        ],
         "audit_pr_narrative_text": (
             "- change type: docs-only\n"
             "- behavior-affecting: no\n"
@@ -324,15 +336,15 @@ def test_final_pr_premium_markdown_preserves_docs_only_facts_and_filters_maxed_t
     assert "30 days" not in md
     assert "60 days" not in md
     assert "90 days" not in md
-    assert "docs-only" in md
-    assert "behavior-affecting: no" in md
-    assert "architecture/runtime impact: no direct impact" in md
-    assert "security impact: no direct impact" in md
-    assert "risk level: LOW" in md
-    assert "Score modified by LLM: no" in md
+    assert "docs-only" in md.lower()
+    assert "Behavior-affecting: `no`" in md
+    assert "Architecture/runtime impact: no direct impact" in md
+    assert "Security impact: no direct impact" in md
+    assert "Risk level: `LOW`" in md
+    assert "Score modified by LLM: `no`" in md
+    assert "### Reviewer notes" not in md
     assert "Improve ai-readiness / repository intelligence" not in md
     assert "repository intelligence capabilities" not in md.lower()
-    assert "improving automation" in md.lower() or "ci/cd automation" in md.lower()
     assert "Improve branch and review governance" in md
 
 

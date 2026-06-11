@@ -26,6 +26,10 @@ inputs:
     description: "If true, print comment instead of publishing to GitHub"
     required: false
     default: "true"
+  profile:
+    description: "Reserved optional execution profile for future self-service onboarding surface; not enforced in Sprint 93A"
+    required: false
+    default: "partner-pilot"
   issue_number:
     description: "Issue number to post comment to (digits only; # prefix also accepted)"
     required: false
@@ -38,6 +42,22 @@ inputs:
     description: "TopoCore backend for lab/runtime selection: auto or v6 (legacy v5/lite envs are unsupported)"
     required: false
     default: "auto"
+  terms_accepted:
+    description: "Reserved optional self-service terms acknowledgement for future Phase 1 onboarding; not enforced in Sprint 93A"
+    required: false
+    default: "false"
+  api_url:
+    description: "Reserved optional hosted RepoBrain API URL for future Phase 1 server-side runtime routing; not required in Sprint 93A"
+    required: false
+    default: ""
+  oidc_audience:
+    description: "Reserved optional OIDC audience for future Sprint 93B identity envelope support; not required in Sprint 93A"
+    required: false
+    default: "repobrain-api"
+  self_service_mode:
+    description: "Reserved optional Phase 1 self-service mode flag; not active in Sprint 93A"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"

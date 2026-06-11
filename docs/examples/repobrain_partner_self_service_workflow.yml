@@ -1,0 +1,27 @@
+name: RepoBrain Self-Service Foundation
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  repobrain:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/repobrain')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: alexworkingai/RepoBrain-Action@main
+        with:
+          profile: partner-pilot
+          terms_accepted: "true"
+          self_service_mode: "true"
+          oidc_audience: repobrain-api

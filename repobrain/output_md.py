@@ -3843,8 +3843,6 @@ def render_audit_markdown(
         sections.extend(["", section_title, narrative_text])
     if pr_impact_summary_lines and bool(pr_context.get("is_pr", False)):
         sections.extend(["", "## PR impact summary", *pr_impact_summary_lines])
-    if pr_narrative_text and bool(pr_context.get("is_pr", False)) and pr_narrative_text.strip() != narrative_text.strip():
-        sections.extend(["", "### Reviewer notes", pr_narrative_text])
     sections.extend(
         [
             "",

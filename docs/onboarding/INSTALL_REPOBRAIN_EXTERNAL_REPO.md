@@ -18,6 +18,12 @@ Current distribution stage:
 - not a public Marketplace install flow yet
 - selected partner testing should prefer installed private package mode when authorized
 
+Phase 1 self-service note:
+
+- `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md` documents the intended thin-client self-service direction
+- this install guide still documents the currently authorized runtime-dependent external setup surface
+- Sprint 93A does not claim that OIDC-backed hosted self-service onboarding is already live
+
 ## Repository Model
 
 Current external pilot shape:

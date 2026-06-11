@@ -58,6 +58,7 @@ def test_pr_premium_output_renders_complete_deterministic_pr_impact_block(monkey
     assert "- Limitations: PR-scoped assessment only; not a merge, security, legal, or production approval." in markdown
     assert markdown.index("## PR impact summary") < markdown.index("## Executive summary")
     assert "Changed files: 1 (`docs/repobrain_manual_pr" not in markdown
+    assert "### Reviewer notes" not in markdown
     assert "- Score modified by LLM: `no`" in markdown
 
 
@@ -103,6 +104,7 @@ def test_pr_premium_overlong_llm_narrative_fallback_preserves_deterministic_pr_b
     assert "- Change type: `docs-only`" in markdown
     assert "- Risk level: `LOW`" in markdown
     assert markdown.index("## PR impact summary") < markdown.index("## Executive summary")
+    assert "### Reviewer notes" not in markdown
     assert "might affect behavior" not in markdown.lower()
     assert "moderate" not in markdown.lower()
     assert "- Score modified by LLM: `no`" in markdown
