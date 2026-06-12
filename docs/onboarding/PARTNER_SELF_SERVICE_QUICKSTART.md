@@ -10,8 +10,10 @@ Current truth:
 - Sprints 93A-93E produced useful self-service identity, contract, hosted client, and public-safe rendering foundations
 - the `hosted_api` path requires a real external runtime and is not the default GitHub-native beta path
 - the near-term trusted beta target is a GitHub-native control plane
+- Sprint 94B adds the GitHub App installation foundation for that control-plane path
 - GitHub Marketplace is not the immediate route
 - trusted partners should wait for GitHub App and control-worker beta instructions from Sprints 94B-94E
+- trusted partner beta is not ready until Sprint 94E validation
 
 Historical Phase 1 truth:
 - this remains a Phase 1 foundation
@@ -28,10 +30,11 @@ Historical Phase 1 truth:
 Current beta path:
 1. RepoBrain team prepares the GitHub App installation foundation.
 2. Trusted partner installs the RepoBrain GitHub App when invited.
-3. Partner adds the public `RepoBrain-Action` workflow.
-4. Partner runs `/repobrain score`, `/repobrain audit`, or `/repobrain audit --profile premium`.
-5. A private control worker processes the request through private TopoCore.
-6. The result is posted back to GitHub as a public-safe comment.
+3. Partner grants selected repository access to that GitHub App.
+4. Partner adds the public `RepoBrain-Action` workflow.
+5. Partner runs `/repobrain score`, `/repobrain audit`, or `/repobrain audit --profile premium`.
+6. A private control worker processes the request through private TopoCore.
+7. The result is posted back to GitHub as a public-safe comment.
 
 This flow is being implemented in Sprints 94B-94E.
 
@@ -39,6 +42,8 @@ This flow is being implemented in Sprints 94B-94E.
 
 Use these documents as the current truthful entrypoints:
 - architecture correction: `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`
+- GitHub App foundation: `docs/architecture/SPRINT_94B_GITHUB_APP_INSTALLATION_FOUNDATION.md`
+- private control repo setup: `docs/control-plane/GITHUB_APP_PRIVATE_CONTROL_REPO_SETUP.md`
 - install guide: `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
 - command guide: `docs/commands/REPOBRAIN_COMMANDS.md`
 - troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
@@ -78,6 +83,17 @@ Always preserve these rules:
 - RepoBrain integrates TopoCore through stable contracts and capability responses
 - partners must not receive TopoCore source rights from RepoBrain onboarding
 - public RepoBrain output must remain public-safe
+
+## GitHub App Notice
+
+GitHub App is the intended beta identity layer.
+
+Current truth:
+- GitHub App is used for installation identity and scoped access
+- it is not Marketplace billing
+- it does not expose TopoCore
+- it does not require partner-repo TopoCore secrets
+- the GitHub App private key belongs only in the private control repo
 
 ## What This Quickstart Does Not Claim
 

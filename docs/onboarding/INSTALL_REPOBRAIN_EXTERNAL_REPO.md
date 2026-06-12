@@ -17,20 +17,23 @@ Current truth:
 - the action surface is public
 - Marketplace is not the current onboarding route
 - the default trusted beta direction is moving to a GitHub-native control plane
+- Sprint 94B adds the GitHub App installation foundation for that direction
 - experimental `hosted_api` mode exists, but it requires a real external runtime and is not the default beta path
 - installed private runtime distribution remains a legacy and owner-managed path, not the target self-service beta architecture
 - private TopoCore v6 may still be accessed through legacy credentials such as `TOPOCORE_V6_REPO_TOKEN` in owner-managed paths
 - installed private package remains the preferred legacy runtime wording when that owner-managed path is explicitly authorized
+- trusted partner beta is not ready until Sprint 94E validation
 
 ## Current Beta Path
 
 Current beta path:
 1. RepoBrain team prepares the GitHub App installation foundation.
 2. Trusted partner installs the RepoBrain GitHub App when invited.
-3. Partner adds the public `RepoBrain-Action` workflow.
-4. Partner runs `/repobrain score`, `/repobrain audit`, or `/repobrain audit --profile premium`.
-5. A private control worker executes the request through private TopoCore.
-6. A public-safe result is posted back to GitHub.
+3. Trusted partner grants selected repository access to that GitHub App.
+4. Partner adds the public `RepoBrain-Action` workflow.
+5. Partner runs `/repobrain score`, `/repobrain audit`, or `/repobrain audit --profile premium`.
+6. A private control worker executes the request through private TopoCore.
+7. A public-safe result is posted back to GitHub.
 
 This flow is being implemented in Sprints 94B-94E.
 
@@ -43,6 +46,8 @@ Current truth:
 - do not create fake hosted endpoint values for partner onboarding
 - do not require domain registration, tunnels, or external hosting subscriptions for the near-term beta plan
 - keep hosted examples only as future transport shape references
+- partner repos must not provide TopoCore token for the default GitHub-native beta path
+- partner repos must not provide owner token for the default GitHub-native beta path
 
 ## Legacy And Internal Runtime-Dependent Path
 
@@ -56,6 +61,7 @@ This is not the default GitHub-native beta path described by Sprint 94A.
 
 Current architecture split:
 - public `RepoBrain-Action`: user-facing GitHub action surface
+- GitHub App installation identity: partner-repo install and scoped repository access layer
 - private TopoCore: private capability provider
 - future GitHub-native control worker: owner-controlled execution layer between the public action and private TopoCore
 
@@ -118,6 +124,9 @@ For the future GitHub-native beta direction, the partner workflow will remain li
 
 Current reference docs:
 - architecture correction: `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`
+- GitHub App foundation: `docs/architecture/SPRINT_94B_GITHUB_APP_INSTALLATION_FOUNDATION.md`
+- private control repo setup: `docs/control-plane/GITHUB_APP_PRIVATE_CONTROL_REPO_SETUP.md`
+- installation identity contract: `docs/contracts/GITHUB_APP_INSTALLATION_IDENTITY_V1.md`
 - quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
 - experimental hosted shape example: `docs/examples/repobrain_partner_self_service_workflow.yml`
 - legacy runtime-dependent example: `docs/examples/repobrain_external_pilot_workflow.yml`
@@ -126,6 +135,8 @@ Current truth:
 - do not use the experimental hosted example as the default trusted beta setup
 - do not set fake `api_url` values for partners
 - wait for Sprint 94B-94E GitHub-native workflow instructions for the default beta path
+- install the RepoBrain GitHub App when invited
+- do not install from Marketplace for this stage
 
 ## Step 4: Verify Permissions
 
@@ -208,7 +219,11 @@ Full troubleshooting guide:
 ## Security Notes
 
 - TopoCore remains private
+- TopoCore is a separate team and system
+- RepoBrain does not implement TopoCore internals
 - RepoBrain integrates TopoCore through contracts and public-safe results
+- GitHub App private key belongs only in the private control repo
+- partner repos must not store the GitHub App private key
 - do not use `pull_request_target` for the external pilot
 - do not expose legacy runtime credentials to untrusted fork code
 - `/repobrain verify` is informational only

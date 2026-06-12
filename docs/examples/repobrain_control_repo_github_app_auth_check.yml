@@ -1,0 +1,40 @@
+name: RepoBrain GitHub App auth check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  github-app-auth-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          if [ -z "${REPOBRAIN_GITHUB_APP_ID_VALUE}" ]; then
+            echo "GITHUB_APP_ID_MISSING"
+            exit 1
+          fi
+          if [ -z "${REPOBRAIN_GITHUB_APP_PRIVATE_KEY_VALUE}" ]; then
+            echo "GITHUB_APP_PRIVATE_KEY_MISSING"
+            exit 1
+          fi
+          echo "GitHub App configuration markers are present."
+        env:
+          REPOBRAIN_GITHUB_APP_ID_VALUE: ${{ vars.REPOBRAIN_GITHUB_APP_ID || secrets.REPOBRAIN_GITHUB_APP_ID }}
+          REPOBRAIN_GITHUB_APP_PRIVATE_KEY_VALUE: ${{ secrets.REPOBRAIN_GITHUB_APP_PRIVATE_KEY }}
+
+      - name: Future token minting placeholder
+        shell: bash
+        run: |
+          echo "Token minting is deferred to the private control repo implementation."
+          echo "Do not print tokens."
+          echo "Do not write tokens to artifacts."
+
+      - name: Future installation discovery placeholder
+        shell: bash
+        run: |
+          echo "Installation discovery is deferred."
+          echo "Later checks may list installations or repositories after auth is implemented."
