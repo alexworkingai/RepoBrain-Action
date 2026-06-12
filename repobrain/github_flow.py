@@ -10753,13 +10753,14 @@ def _build_self_service_request_preview(
     cmd: str,
     raw_command: str,
     self_service_cfg: SelfServiceConfig,
+    command_profile: str,
 ) -> dict[str, Any]:
     request_payload = build_github_action_audit_request(
         identity=identity_envelope,
         oidc_jwt=oidc_token,
         command={
             "route": cmd,
-            "profile": self_service_cfg.profile,
+            "profile": command_profile,
             "raw": raw_command,
         },
         evidence={
@@ -10947,6 +10948,7 @@ def run_github_flow(
         event_payload=event_payload,
         command_context={
             "name": cmd,
+            "profile": profile_override or self_service_cfg.profile,
             "raw": source_text,
             "execution_profile_override": profile_override or "none",
         },
@@ -10966,6 +10968,7 @@ def run_github_flow(
             cmd=cmd,
             raw_command=source_text,
             self_service_cfg=self_service_cfg,
+            command_profile=profile_override or self_service_cfg.profile,
         )
         audit["self_service_hosted_api_contract_ready"] = True
     else:
@@ -11062,7 +11065,7 @@ def run_github_flow(
             oidc_jwt=oidc_result.token,
             command={
                 "route": cmd,
-                "profile": self_service_cfg.profile,
+                "profile": profile_override or self_service_cfg.profile,
                 "raw": source_text,
             },
             evidence=evidence_packet,

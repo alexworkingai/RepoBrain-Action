@@ -11,7 +11,8 @@ Current truth:
 - Sprint 93B implements the public action-side GitHub OIDC identity envelope
 - Sprint 93C implements the hosted trust verification and auto-provisioning boundary
 - Sprint 93D now wires the end-to-end action-to-hosted self-service path for supported commands
-- final trusted-partner hardening and validation still remain for Sprint 93E
+- Sprint 93E adds the trusted-partner validation runbook and evidence template
+- final trusted-partner live validation still remains pending for Sprint 93E
 
 ## Intended Phase 1 partner flow
 
@@ -41,6 +42,30 @@ Key properties of this shape:
 Current action reference truth:
 - the example uses `alexworkingai/RepoBrain-Action@main` because Sprint 93A does not introduce a new release alias or onboarding tag
 - immutable tag or alias decisions remain future release-management work
+
+## Validation before final Phase 1 PASS
+
+Trusted-partner self-service is close to the intended Phase 1 shape, but the final PASS state is still gated on live validation.
+
+Use these documents before describing the flow as fully trusted-partner ready:
+
+- runbook: `docs/release/SPRINT_93E_TRUSTED_PARTNER_VALIDATION_RUNBOOK.md`
+- evidence template: `docs/release/SPRINT_93E_PHASE1_VALIDATION_EVIDENCE.md`
+- primary smoke checklist: `docs/repobrain_93e_self_service_smoke.md`
+- secondary smoke checklist: `docs/repobrain_93e_community_self_service_smoke.md`
+
+Current status remains:
+
+- `SPRINT_93E_HARDENING_READY_LIVE_VALIDATION_PENDING`
+
+Do not claim from this quickstart alone:
+
+- unrestricted public launch
+- Marketplace readiness
+- enterprise readiness
+- production certification
+- security certification
+- final trusted-partner PASS without live Issue and PR validation on both selected repositories
 
 ## Why `id-token: write` appears now
 

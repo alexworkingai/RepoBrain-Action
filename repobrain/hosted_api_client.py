@@ -134,6 +134,7 @@ class HostedApiClient:
                     "Content-Type": "application/json",
                 },
                 timeout=float(self._config.timeout_s),
+                allow_redirects=False,
             )
         except requests.RequestException as exc:
             raise HostedApiClientError(
@@ -144,6 +145,14 @@ class HostedApiClient:
             ) from exc
 
         status_code = int(getattr(response, "status_code", 0) or 0)
+        if 300 <= status_code < 400:
+            raise HostedApiClientError(
+                "HOSTED_API_INVALID_RESPONSE",
+                "RepoBrain hosted API returned an unexpected redirect response.",
+                retryable=False,
+                http_status=status_code,
+                sanitized_endpoint=sanitized_endpoint,
+            )
         try:
             payload = response.json()
         except ValueError as exc:

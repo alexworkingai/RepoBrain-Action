@@ -78,6 +78,7 @@ def build_github_identity_envelope(
     command = command_context if isinstance(command_context, dict) else {}
     command_name = _clean_optional(command.get("name")) or "unknown"
     command_raw = _clean_optional(command.get("raw"))
+    command_profile = _clean_optional(command.get("profile")) or self_service.profile
     execution_profile_override = _clean_optional(command.get("execution_profile_override")) or "none"
 
     return {
@@ -113,7 +114,7 @@ def build_github_identity_envelope(
         },
         "command": {
             "name": command_name,
-            "profile": self_service.profile,
+            "profile": command_profile,
             "raw": command_raw,
             "execution_profile_override": execution_profile_override,
         },

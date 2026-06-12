@@ -27,6 +27,8 @@ For a new external repository install, start here:
 - Troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
 - Example workflow: `docs/examples/repobrain_external_pilot_workflow.yml`
 - Self-service workflow shape: `docs/examples/repobrain_partner_self_service_workflow.yml`
+- Trusted-partner validation runbook: `docs/release/SPRINT_93E_TRUSTED_PARTNER_VALIDATION_RUNBOOK.md`
+- Validation evidence template: `docs/release/SPRINT_93E_PHASE1_VALIDATION_EVIDENCE.md`
 - Partner readiness: `docs/release/PARTNER_TESTING_READINESS.md`
 - Public approval checklist: `docs/release/PUBLIC_VISIBILITY_APPROVAL_CHECKLIST.md`
 - Partner setup pack: `docs/partner/PARTNER_TESTING_SETUP.md`
@@ -137,6 +139,14 @@ Sprint 93D end-to-end self-service truth:
 - public-safe hosted error rendering now covers missing `api_url`, hosted API unavailability, quota/public-safe server errors, and other redacted failures
 - existing non-self-service local/private runtime behavior remains unchanged
 - final trusted partner hardening and validation remain deferred to Sprint 93E
+
+Sprint 93E final-hardening truth:
+
+- hosted self-service client now rejects unexpected redirect responses instead of following them
+- requested audit execution profiles such as `/repobrain audit --profile premium` are now preserved end-to-end in the hosted request payload and redacted request preview
+- trusted-partner validation runbook and evidence template now exist for `alexworkingai/Elen-MCP-v.2.2.0` and `alexworkingai/repobrain-community`
+- the final Phase 1 status remains `SPRINT_93E_HARDENING_READY_LIVE_VALIDATION_PENDING` until live issue and PR validation pass on both trusted validation repositories
+- no owner-generated onboarding token, manual registration, or TopoCore install/download path is introduced by the self-service flow
 
 RepoBrain is not an LLM reseller.
 TopoCore v6 remains private.
