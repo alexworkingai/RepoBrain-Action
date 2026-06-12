@@ -22,17 +22,25 @@ jobs:
       - uses: alexworkingai/RepoBrain-Action@main
         with:
           profile: partner-pilot
-          terms_accepted: "true"
-          # Experimental and future external-runtime mode only.
-          # Do not use this hosted path as the default trusted beta setup.
-          # A real external runtime is required before self_service_mode can be used live.
-          api_url: https://repobrain.example.invalid
-          oidc_audience: repobrain-api
-          self_service_mode: "true"
+          # Planned GitHub-native beta path:
+          # - install RepoBrain GitHub App when invited
+          # - grant selected repository access
+          # - future queue/control-worker transport arrives in Sprint 94C and Sprint 94D
+          # This action reference is safe to add, but trusted beta is not yet live until Sprint 94E validation.
 
-# Planned GitHub-native beta path after Sprint 94A:
+# Experimental hosted external-runtime mode retained for documentation only:
+# terms_accepted: "true"
+# api_url: https://repobrain.example.invalid
+# oidc_audience: repobrain-api
+# self_service_mode: "true"
+# A real external runtime is required before hosted mode can be used live.
+# Do not use this hosted path as the default trusted beta setup.
+# Do not use the hosted path as the default trusted beta setup.
+
+# Planned GitHub-native beta path after Sprint 94B:
 # - partner repo uses the public RepoBrain action surface
+# - GitHub App provides installation identity and scoped repo access
 # - RepoBrain request is queued through GitHub-native control-plane plumbing
 # - a private control worker executes through private TopoCore
 # - a public-safe response is posted back to GitHub
-# This planned path is being implemented in Sprints 94B-94E.
+# This planned path is being implemented in Sprints 94C-94E.

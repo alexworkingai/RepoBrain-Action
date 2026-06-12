@@ -22,17 +22,22 @@ Current product runtime is v6-only:
 - RepoBrain-Action supports legacy and internal audit modes plus experimental `hosted_api` self-service foundations
 - `hosted_api` mode requires a real external runtime and is not the default GitHub-native beta path
 - the next implementation stage is a GitHub-native beta control plane
+- Sprint 94B adds the GitHub App installation foundation for that control-plane path
 - GitHub Marketplace is not the immediate route
 - trusted and developer beta are expected to use GitHub App installation identity plus a private control worker
+- trusted partner beta is not ready until Sprint 94E validation
 - TopoCore remains private and is integrated through stable contracts rather than public runtime distribution
 - RepoBrain integrates TopoCore capabilities and does not implement TopoCore internals
-- current architecture-correction status is `SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION_READY`
+- current GitHub App foundation status is `SPRINT_94B_GITHUB_APP_INSTALLATION_FOUNDATION_READY`
 
 ## Quick Start
 
 For a new external repository install, start here:
 
 - Self-service architecture correction and roadmap: `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`
+- GitHub App installation foundation: `docs/architecture/SPRINT_94B_GITHUB_APP_INSTALLATION_FOUNDATION.md`
+- Private control repo setup: `docs/control-plane/GITHUB_APP_PRIVATE_CONTROL_REPO_SETUP.md`
+- Installation identity contract: `docs/contracts/GITHUB_APP_INSTALLATION_IDENTITY_V1.md`
 - Current beta-path quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
 - Install guide: `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
 - Command guide: `docs/commands/REPOBRAIN_COMMANDS.md`
@@ -114,6 +119,7 @@ Useful historical foundations remain in place:
 - Sprint 93D wired the hosted client send path for supported commands
 - Sprint 93E hardened hosted request and response handling and documented trusted validation
 - Sprint 94A reclassifies the hosted path as experimental and future-facing because no real external runtime exists yet
+- Sprint 94B establishes GitHub App installation identity without Marketplace or partner tokens
 
 Historical sprint truth markers:
 - Sprint 93C hosted-boundary truth remains preserved as documentation lineage
