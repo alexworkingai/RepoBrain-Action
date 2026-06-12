@@ -1,13 +1,18 @@
-# Sprint 93B OIDC Identity Envelope
+﻿# Sprint 93B OIDC Identity Envelope
 
 ## Purpose
 
-Sprint 93B implements the public action side of the GitHub OIDC identity flow for Phase 1 partner self-service.
+Sprint 93B implemented the public action side of the GitHub OIDC identity flow.
 
-This sprint does not make partner self-service fully live.
-It adds action-side token acquisition, a sanitized identity envelope, and safe gating while preserving the private TopoCore boundary.
+This sprint did not make partner self-service fully live.
+It added action-side token acquisition, a sanitized identity envelope, and safe gating while preserving the private TopoCore boundary.
 
-## Implemented in Sprint 93B
+## Sprint 94A Correction Notice
+
+After Sprint 93E live validation, the hosted path was reclassified as experimental and future external-runtime mode because it still requires a real deployed runtime.
+The default trusted beta direction is now the GitHub-native control plane documented in `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`.
+
+## Implemented In Sprint 93B
 
 - GitHub Actions OIDC token acquisition through the action runtime when `id-token: write` is available
 - default OIDC audience handling with `repobrain-api`
@@ -18,46 +23,17 @@ It adds action-side token acquisition, a sanitized identity envelope, and safe g
   - GitHub OIDC availability
 - backward-compatible non-self-service behavior when `self_service_mode` is disabled
 
-## Deferred to Sprint 93C
+## Foundation Value After 94A
 
-Sprint 93B does not implement:
-- hosted API contract
-- OIDC JWT trust verification
-- issuer, audience, expiration, or claim enforcement in a backend
-- automatic tenant provisioning
-- quota profile activation through hosted policy
-- public-safe hosted response contract
+These identity foundations remain reusable for:
+- future hosted runtimes
+- GitHub-native control-plane verification
+- GitHub App and worker-side trust checks
+- hosted verification and tenant provisioning boundaries defined later in Sprint 93C
 
-## Envelope contract
+## Current Status
 
-The action now builds a sanitized envelope with:
-- repository identity metadata
-- workflow and run metadata
-- action identity metadata
-- command metadata
-- self-service config metadata
-- OIDC availability and redacted token status
-
-The public action does not log:
-- raw OIDC JWT
-- `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
-- authorization headers
-- private runtime paths
-
-## Safety invariants preserved
-
-- RepoBrain-Action remains a thin public client
-- TopoCore v6 remains private and server-side
-- no owner-generated onboarding token path
-- no manual partner registration path
-- no patch/autofix
-- no RepoBrain-created branch/commit/PR behavior
-- no score authority change
-- no governance overclaim beyond current script truth
-
-## Current status
-
-- Sprint status: `SPRINT_93B_OIDC_IDENTITY_ENVELOPE_READY` after validation
+- Sprint status: `SPRINT_93B_OIDC_IDENTITY_ENVELOPE_READY`
 - Not claimed: `PARTNER_SELF_SERVICE_PUBLIC_ACTION_FULLY_LIVE`
-- Sprint 93C now provides hosted verification and tenant provisioning boundaries
-- Next required sprint: Sprint 93D for the end-to-end action-to-hosted partner workflow
+- Hosted runtime path is now experimental and future-facing
+- Next architecture stage: Sprint 94B for GitHub App installation foundation

@@ -1,4 +1,4 @@
-name: RepoBrain Partner Self-Service
+﻿name: RepoBrain Partner Self-Service
 
 on:
   issue_comment:
@@ -23,8 +23,16 @@ jobs:
         with:
           profile: partner-pilot
           terms_accepted: "true"
+          # Experimental and future external-runtime mode only.
+          # Do not use this hosted path as the default trusted beta setup.
+          # A real external runtime is required before self_service_mode can be used live.
           api_url: https://repobrain.example.invalid
           oidc_audience: repobrain-api
-          # Sprint 93D wires the end-to-end self-service request/response path.
-          # Keep a placeholder URL here until a trusted-partner endpoint is assigned.
           self_service_mode: "true"
+
+# Planned GitHub-native beta path after Sprint 94A:
+# - partner repo uses the public RepoBrain action surface
+# - RepoBrain request is queued through GitHub-native control-plane plumbing
+# - a private control worker executes through private TopoCore
+# - a public-safe response is posted back to GitHub
+# This planned path is being implemented in Sprints 94B-94E.

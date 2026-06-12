@@ -6,78 +6,60 @@ RepoBrain is a GitHub-native Repository Intelligence and Quality Scoring Platfor
 Today it ships as a governed GitHub workflow action for repository questions, review guidance, informational verify reporting, and safe no-patch fix proposals.
 
 Current product runtime is v6-only:
-
 - `RepoBrain-Action` is the product action repository
 - private TopoCore v6 is a separate dependency
 - the consumer repository owns the caller workflow and secret configuration
 - `repobrain-community` is retired and not required
 
-Current distribution stage:
-
-- public action surface with selected partner pilot path
-- not a public Marketplace install flow yet
-- selected partner testing should prefer installed private package mode when authorized
-
-Phase 1 self-service note:
-
-- `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md` documents the intended thin-client self-service direction
-- this install guide still documents the currently authorized runtime-dependent external setup surface
-- Sprint 93B implements the public action-side OIDC identity envelope
-- Sprint 93C implements the hosted verification and auto-provisioning boundary
-- Sprint 93D now owns and wires the end-to-end action request/response flow for supported self-service commands
-- Sprint 93E adds the trusted-partner validation runbook and evidence template
-- final trusted-partner self-service live validation still remains pending in Sprint 93E
-
-## Trusted Partner Self-Service Path
-
-Preferred Phase 1 direction for trusted partners:
-
-- use `docs/examples/repobrain_partner_self_service_workflow.yml`
-- set `self_service_mode: "true"`
-- set `terms_accepted: "true"`
-- provide a trusted hosted `api_url`
-- grant `id-token: write`
-- do not request or paste a RepoBrain owner-generated token
-- do not wait for manual partner registration
-- do not install or download TopoCore in the partner repository
+## Current Distribution And Beta Truth
 
 Current truth:
+- the action surface is public
+- Marketplace is not the current onboarding route
+- the default trusted beta direction is moving to a GitHub-native control plane
+- experimental `hosted_api` mode exists, but it requires a real external runtime and is not the default beta path
+- installed private runtime distribution remains a legacy and owner-managed path, not the target self-service beta architecture
+- private TopoCore v6 may still be accessed through legacy credentials such as `TOPOCORE_V6_REPO_TOKEN` in owner-managed paths
+- installed private package remains the preferred legacy runtime wording when that owner-managed path is explicitly authorized
 
-- this path is implemented for supported `ask`, `audit`, and `score` commands
-- final trusted-partner PASS still requires live validation on the selected repositories
-- follow `docs/release/SPRINT_93E_TRUSTED_PARTNER_VALIDATION_RUNBOOK.md`
-- record outcomes in `docs/release/SPRINT_93E_PHASE1_VALIDATION_EVIDENCE.md`
+## Current Beta Path
 
-## Runtime-Dependent External Pilot Path
+Current beta path:
+1. RepoBrain team prepares the GitHub App installation foundation.
+2. Trusted partner installs the RepoBrain GitHub App when invited.
+3. Partner adds the public `RepoBrain-Action` workflow.
+4. Partner runs `/repobrain score`, `/repobrain audit`, or `/repobrain audit --profile premium`.
+5. A private control worker executes the request through private TopoCore.
+6. A public-safe result is posted back to GitHub.
 
-The numbered install steps below document the older runtime-dependent partner path for explicitly approved pilots:
+This flow is being implemented in Sprints 94B-94E.
 
+## Experimental Hosted Mode
+
+Hosted self-service is now classified as experimental and future external-runtime mode.
+
+Current truth:
+- do not treat `REPOBRAIN_HOSTED_API_URL` as a required current beta setup step
+- do not create fake hosted endpoint values for partner onboarding
+- do not require domain registration, tunnels, or external hosting subscriptions for the near-term beta plan
+- keep hosted examples only as future transport shape references
+
+## Legacy And Internal Runtime-Dependent Path
+
+The numbered install steps below still document the older runtime-dependent path for explicitly approved internal or owner-managed pilots:
 - `installed_private_package` or approved artifact delivery when authorized
 - `private_checkout` only as a beta fallback
 
-If you are validating the Sprint 93E thin-client self-service path, use the self-service workflow example and runbook instead of the runtime credential steps below.
+This is not the default GitHub-native beta path described by Sprint 94A.
 
 ## Repository Model
 
-Current external pilot shape:
-
-- `RepoBrain-Action`: product action and user-facing workflow surface
-- private TopoCore v6: private runtime dependency
-- external consumer repository: owns `.github/workflows/repobrain.yml`, secrets, and command entry
-
-Preferred near-term partner-testing shape:
-
-- `RepoBrain-Action`: public action surface
-- private TopoCore v6 runtime: installed private package or approved runtime artifact
-- consumer repository: no TopoCore source checkout in the normal partner path
-
-Current beta-only fallback shape:
-
-- `private_checkout`
-- controlled pilot repositories only
+Current architecture split:
+- public `RepoBrain-Action`: user-facing GitHub action surface
+- private TopoCore: private capability provider
+- future GitHub-native control worker: owner-controlled execution layer between the public action and private TopoCore
 
 Do not use:
-
 - `repobrain-community`
 - `v5`
 - `lite`
@@ -86,17 +68,13 @@ Do not use:
 ## Prerequisites
 
 Before installation, confirm all of the following:
-
 - you can resolve `alexworkingai/RepoBrain-Action@main`
 - the consumer repository Actions policy allows external action resolution
-- you have the correct private runtime credential for the mode you are using
-- you understand which runtime mode you are using:
-  - `installed_private_package` preferred for selected partner testing
-  - `private_checkout` beta-only
-- you understand that model/API costs are paid through your own provider accounts
+- you understand whether you are using the current GitHub-native beta direction or a legacy owner-managed runtime path
+- you understand that model or API costs are paid through your own provider accounts where applicable
+- secret values such as `TOPOCORE_V6_REPO_TOKEN` must not appear in logs, comments, or committed files
 
 Reference docs:
-
 - permissions: `docs/onboarding/permissions.md`
 - support policy: `docs/release/SUPPORT_POLICY.md`
 - version pinning: `docs/release/VERSIONING_AND_PINNING_STRATEGY.md`
@@ -104,117 +82,72 @@ Reference docs:
 
 ## Step 1: Confirm Public Action Resolution
 
-`RepoBrain-Action` is public, but the consumer repository still needs to allow external action resolution.
+`RepoBrain-Action` must resolve from the consumer repository.
 
 Check:
-
 - the consumer repository does not stay on `allowed_actions=local_only`
 - if the consumer repository uses selected actions, allow `alexworkingai/RepoBrain-Action`
 
-If this is wrong, GitHub may fail during setup with:
+## Step 2: Choose The Installation Shape
 
-- `Unable to resolve action ... repository not found`
+Preferred near-term beta direction:
+- GitHub-native control plane
+- GitHub App installation identity
+- no TopoCore on the partner runner
+- no hosted external API requirement
 
-That message can mean private-action access or Actions policy trouble, not only a typo.
-
-## Step 2: Choose The Runtime Distribution Mode
-
-Preferred near-term partner mode:
-
+Legacy owner-managed path when explicitly approved:
 - install a private TopoCore runtime package or approved runtime artifact
 - set `RB_TOPOCORE_V6_RUNTIME_MODE=installed_package`
 - avoid source checkout in the consumer workspace
+- a controlled private-checkout path may still use `TOPOCORE_V6_REPO_TOKEN`
 
-Controlled beta-only mode:
-
+Controlled beta-only fallback:
 - use private source checkout
 - set `RB_TOPOCORE_V6_RUNTIME_MODE=private_checkout`
-- keep this mode to owner-controlled or explicitly approved pilots
+- keep this to owner-controlled or explicitly approved pilots
+- do not expose that credential to untrusted fork execution
 
 Honest caveat:
-
 - a standard Python wheel can still contain readable implementation files
-- this is safer than source checkout, but it is not the same as strong source secrecy
+- that is safer than source checkout, but it is not the same as strong source secrecy
 
-## Step 3: Create Or Configure The TopoCore v6 Runtime Credential
+## Step 3: Add The Workflow
 
-Create the credential that matches your runtime mode.
+For the future GitHub-native beta direction, the partner workflow will remain lightweight and public-facing.
 
-Preferred installed-package path:
+Current reference docs:
+- architecture correction: `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`
+- quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
+- experimental hosted shape example: `docs/examples/repobrain_partner_self_service_workflow.yml`
+- legacy runtime-dependent example: `docs/examples/repobrain_external_pilot_workflow.yml`
 
-- use an artifact or package credential equivalent in scope to `TOPOCORE_V6_ARTIFACT_TOKEN`
-- keep it read-only, scoped, expiring, and revocable
+Current truth:
+- do not use the experimental hosted example as the default trusted beta setup
+- do not set fake `api_url` values for partners
+- wait for Sprint 94B-94E GitHub-native workflow instructions for the default beta path
 
-Controlled `private_checkout` fallback:
+## Step 4: Verify Permissions
 
-- use `TOPOCORE_V6_REPO_TOKEN`
-- keep it read-only and limited to the private TopoCore repository
-
-Do not print, commit, or paste the token into docs, comments, or workflow logs.
-Private runtime access does not grant any TopoCore v6 source rights.
-
-## Step 4: Add The Repository Secret
-
-In the consumer repository, add the secret that matches your runtime mode:
-
-- preferred: partner-specific equivalent of `TOPOCORE_V6_ARTIFACT_TOKEN`
-- controlled fallback: `TOPOCORE_V6_REPO_TOKEN`
-
-Expected behavior:
-
-- the secret name may appear in setup guidance
-- the secret value must not appear
-
-## Step 5: Add The Workflow
-
-Copy the workflow example into the consumer repository.
-That example remains the controlled-pilot `private_checkout` shape and is not the preferred partner-testing path:
-
-- source: `docs/examples/repobrain_external_pilot_workflow.yml`
-- destination: `.github/workflows/repobrain.yml`
-
-The current controlled-pilot workflow uses this action ref:
-
-- `alexworkingai/RepoBrain-Action@main`
-
-For controlled private beta this is acceptable.
-For stronger reproducibility, prefer an immutable SHA pin when you operate your own rollout.
-Public release tag strategy is documented in `docs/release/VERSIONING_AND_PINNING_STRATEGY.md` and is not finalized by this guide.
-
-Optional repository guidance file:
-
-- source: `docs/examples/repobrain.instructions.md`
-- destination: `.github/repobrain.instructions.md`
-
-## Step 6: Verify Permissions
-
-Current external pilot baseline is read-mostly:
-
+Current external baseline remains read-mostly:
 - `contents: read`
-- `models: read`
 - `issues: write`
 - `pull-requests: read`
 - `checks: read`
 - `statuses: read`
 - `actions: read`
 
-Not required for the current external product path:
+Additional identity permission used by the historical and future trust layers:
+- `id-token: write`
 
+Not required for the current external product path:
 - `contents: write`
 - `pull-requests: write`
 - `checks: write`
 - `pull_request_target`
-- deployment/package write permissions
+- deployment or package write permissions
 
-Why this matters:
-
-- comments still need write access to issues
-- verify needs read access to PR metadata, checks, statuses, and workflow runs
-- current product mode does not mutate repository content
-
-## Step 7: Run The First Doctor Check
-
-This is the recommended first setup check after setup.
+## Step 5: Run The First Doctor Check
 
 Open a safe issue comment and run:
 
@@ -223,15 +156,15 @@ Open a safe issue comment and run:
 ```
 
 Expected healthy doctor behavior:
-
 - overall diagnostic status shown as `PASS`, `WARN`, or `UNKNOWN`
-- workflow/action context shown
-- runtime credential discussed by name without exposing any value
-- v6-only / no-v5 policy shown
-- no patch/autofix
+- workflow and action context shown
+- runtime mode or control-plane context discussed without exposing secret values
+- v6-only and no-v5 policy shown
+- no patch or autofix
 - no mutation
+- this is the recommended first setup check after setup
 
-## Step 8: Run The First Issue Ask
+## Step 6: Run The First Issue Ask
 
 Open a safe issue comment and run:
 
@@ -239,118 +172,58 @@ Open a safe issue comment and run:
 /repobrain ask Summarize current RepoBrain backend status.
 ```
 
-Expected healthy backend evidence:
-
-- requested backend: `auto`
+Expected backend truth:
 - resolved backend: `v6`
-- fallback used: `no`
-- fallback reason: `none`
+- no patch/autofix
 
-## Step 9: Run The First PR Ask
-
-Open a safe PR comment and run:
-
-```text
-/repobrain ask Summarize this PR with RepoBrain backend diagnostics.
-```
-
-Expected healthy backend evidence:
-
-- requested backend: `auto`
-- resolved backend: `v6`
-- fallback used: `no`
-- fallback reason: `none`
-
-## Step 10: Run The First Repository Audit
+## Step 7: Run The First Repository Audit
 
 Open a safe issue comment and run:
 
 ```text
-/repobrain audit Focus on repository readiness for a Microsoft/GitHub-facing demo.
+/repobrain audit Focus on repository readiness for trusted beta onboarding.
 ```
 
-Expected healthy audit behavior:
-
-- overall score between `0` and `100`
-- static baseline plus live mode truth shown
-- all 10 categories shown
-- evidence summary shown with safe repo-relative paths
-- critical blockers, top improvements, and non-timeboxed recommended priorities shown
-- no patch/autofix
-- no mutation
-- repository-level informational output
-
-## Step 11: Run The Compact Score Summary
+## Step 8: Run The Compact Score Summary
 
 Open a safe issue comment and run:
 
 ```text
-/repobrain score Focus on partner-demo readiness.
+/repobrain score Focus on trusted beta readiness.
 ```
-
-Expected healthy score behavior:
-
-- compact score summary
-- same guarded audit engine as `/repobrain audit`
-- static baseline shown
-- `v6`-enriched mode shown when private capability is available
-- all 10 categories shown compactly
-- points back to `/repobrain audit` for the full evidence report
-
-## Expected Backend Evidence
-
-In a healthy external install, backend-invoking commands should show:
-
-- requested backend: `auto` or `v6`
-- resolved backend: `v6`
-- fallback used: `no`
-- fallback reason: `none`
-
-Current product truth:
-
-- no `repobrain-community` dependency
-- no `v5` fallback
-- no patch/autofix
-- no RepoBrain-created branch/commit/PR behavior
 
 ## Troubleshooting Quick Table
 
 | Failure | Likely cause | Fix |
 |---|---|---|
-| `Unable to resolve action ... repository not found` | Actions policy blocks external actions, repository slug/ref is wrong, or GitHub resolution is stale | allow external actions, confirm `alexworkingai/RepoBrain-Action@main`, and retry |
-| `TOPOCORE_V6_REPO_TOKEN` missing | consumer secret not configured | add the repository secret |
-| private checkout failed | token lacks access, token expired, wrong repo/ref, token approval incomplete | reissue token with read access and update the secret |
-| verify returns `NOT_RUN` | no concrete checks/statuses/workflow runs observed | treat as informational absence, not pass/fail |
-| fix returns `BLOCKED_BY_SAFETY` | request asked for mutation | use proposal/governance requests only |
-| review/verify/fix unsupported in issue | command needs PR context | run on an open PR |
+| `Unable to resolve action ... repository not found` | Actions policy blocks external actions, repository slug or ref is wrong, or GitHub resolution is stale | allow external actions, confirm `alexworkingai/RepoBrain-Action@main`, and retry |
+| hosted mode placeholder error | `api_url` points to a placeholder or no real external runtime exists | do not use hosted mode for the current default beta path |
+| verify returns `NOT_RUN` | no concrete checks, statuses, or workflow runs observed | treat as informational absence, not pass or fail |
+| fix returns `BLOCKED_BY_SAFETY` | request asked for mutation | use proposal and governance requests only |
+| review, verify, or fix unsupported in issue | command needs PR context | run on an open PR |
 
 Full troubleshooting guide:
-
 - `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
 
 ## Security Notes
 
-- TopoCore v6 remains private
-- RepoBrain-Action is public for the selected partner pilot
+- TopoCore remains private
+- RepoBrain integrates TopoCore through contracts and public-safe results
 - do not use `pull_request_target` for the external pilot
-- do not expose `TOPOCORE_V6_REPO_TOKEN` to untrusted fork code
-- do not checkout untrusted fork head code with the private TopoCore token by default
+- do not expose legacy runtime credentials to untrusted fork code
 - `/repobrain verify` is informational only
-- `/repobrain fix` is no-patch proposal/governance only
-- TopoCore v6 source is not licensed through RepoBrain-Action
+- `/repobrain fix` is no-patch proposal and governance only
+- RepoBrain does not grant TopoCore source rights
 
 ## Current Limitations
 
-Current supported commands are documented in:
-
-- `docs/commands/REPOBRAIN_COMMANDS.md`
-
 Important current limitations:
-
+- GitHub-native control-plane beta is still being implemented in Sprints 94B-94E
+- experimental hosted mode is not the default trusted beta path
 - `/repobrain audit` is implemented as an MVP repository-level audit
-- `/repobrain doctor` is implemented as a report-only installation/runtime diagnostic
+- `/repobrain doctor` is report-only installation and runtime diagnostics
 - `/repobrain status` is implemented as a lightweight runtime snapshot
 - `/repobrain score` is implemented as a compact summary of the same guarded audit engine
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
-- there is no patch/autofix mode in the current external product path
-- public or Marketplace distribution requires separate approval and a finalized private TopoCore distribution strategy
+- there is no patch or autofix mode in the current external product path
+- Marketplace distribution remains a separate future decision

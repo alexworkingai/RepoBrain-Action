@@ -1,11 +1,15 @@
-# Sprint 93E Phase 1 Validation Evidence
+﻿# Sprint 93E Phase 1 Validation Evidence
 
 Status:
-- `SPRINT_93E_HARDENING_READY_LIVE_VALIDATION_PENDING`
+- `SPRINT_93E_HARDENING_MERGED`
+- `HOSTED_API_RUNTIME_GAP_IDENTIFIED`
+- `GITHUB_NATIVE_ARCHITECTURE_CORRECTION_REQUIRED`
+- `PHASE_1_TRUSTED_PARTNER_SELF_SERVICE_READY_NOT_CLAIMED`
 
 Purpose:
-- capture the final PASS/FAIL evidence matrix for trusted partner self-service onboarding
-- preserve only public-safe evidence
+- preserve the historical evidence template from the hosted validation line
+- record the exact blocker truthfully without claiming a final hosted PASS
+- redirect future trusted beta evidence to Sprint 94E on the GitHub-native control-plane path
 
 Do not record:
 - raw OIDC JWT
@@ -15,13 +19,13 @@ Do not record:
 - raw TopoCore traces
 - private package paths
 
-## Repository matrix
+## Historical repository matrix
 
 ### Primary
 - repository: `alexworkingai/Elen-MCP-v.2.2.0`
 - workflow file:
-- RepoBrain-Action ref/SHA:
-- sanitized hosted API endpoint:
+- RepoBrain-Action ref or SHA:
+- sanitized hosted API endpoint identity:
 - issue URL:
 - PR URL:
 
@@ -32,21 +36,20 @@ Command evidence:
 
 Safety evidence:
 - OIDC acquired:
-- tenant auto-provisioned or updated:
+- hosted request shape accepted:
 - quota status:
 - token leakage check:
 - TopoCore boundary check:
 - no owner token check:
 - no manual registration check:
-- no mutation/autofix check:
+- no mutation or autofix check:
 - PR impact summary check:
 
 ### Secondary
 - repository: `alexworkingai/repobrain-community`
-- local validation worktree: operator-local path intentionally omitted from tracked docs
 - workflow file:
-- RepoBrain-Action ref/SHA:
-- sanitized hosted API endpoint:
+- RepoBrain-Action ref or SHA:
+- sanitized hosted API endpoint identity:
 - issue URL:
 - PR URL:
 
@@ -57,32 +60,33 @@ Command evidence:
 
 Safety evidence:
 - OIDC acquired:
-- tenant auto-provisioned or updated:
+- hosted request shape accepted:
 - quota status:
 - token leakage check:
 - TopoCore boundary check:
 - no owner token check:
 - no manual registration check:
-- no mutation/autofix check:
+- no mutation or autofix check:
 - PR impact summary check:
 - no duplicate responder check:
 
-## Final evidence statuses
+## Historical evidence statuses
 
-- `MCP_ISSUE_PASS`:
-- `MCP_PR_PASS`:
-- `COMMUNITY_ISSUE_PASS`:
-- `COMMUNITY_PR_PASS`:
+- `MCP_ISSUE_FOUNDATION_PASS`:
+- `MCP_PR_FOUNDATION_PASS`:
+- `COMMUNITY_ISSUE_FOUNDATION_PASS`:
+- `COMMUNITY_PR_FOUNDATION_PASS`:
 - `TOKEN_LEAKAGE_PASS`:
 - `TOPOCORE_BOUNDARY_PASS`:
 - `NO_MANUAL_TOKEN_PASS`:
 - `NO_MANUAL_REGISTRATION_PASS`:
 - `NO_DUPLICATE_RESPONDER_PASS`:
-- `PHASE_1_FINAL_PASS`:
+- `FINAL_HOSTED_PHASE1_PASS_CLAIMED`: no
 
-## Current blocker / decision
+## Current Blocker And Decision
 
-- hosted API endpoint/partner workflow readiness: pending assignment of a trusted hosted `api_url` to the validation workflows
-- Elen-MCP workflow readiness: current repo workflow still uses private TopoCore checkout/runtime wiring and does not yet expose the Sprint 93E self-service inputs
-- repobrain-community duplicate responder decision: current public repo still exposes a legacy community workflow surface and needs a dedicated validation workflow or branch before `/repobrain score` and `/repobrain audit` can be tested safely
-- final trusted partner validation result: keep `SPRINT_93E_HARDENING_READY_LIVE_VALIDATION_PENDING` until both repositories complete Issue and PR validation on the self-service path
+- hosted runtime status: unavailable for real external validation
+- hosted API endpoint issue: placeholder or non-existent runtime behind the path
+- workflow transport proof: useful but not sufficient for final trusted beta readiness
+- final decision: keep hosted validation historical and superseded by Sprint 94A architecture correction
+- next validation target: Sprint 94E GitHub-native control-plane beta validation

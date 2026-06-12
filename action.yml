@@ -27,7 +27,7 @@ inputs:
     required: false
     default: "true"
   profile:
-    description: "Optional self-service onboarding profile metadata for the GitHub OIDC identity envelope; does not activate hosted provisioning by itself"
+    description: "Optional self-service profile metadata for the GitHub OIDC identity envelope; does not activate hosted provisioning by itself"
     required: false
     default: "partner-pilot"
   issue_number:
@@ -43,19 +43,19 @@ inputs:
     required: false
     default: "auto"
   terms_accepted:
-    description: "Optional self-service terms acknowledgement; required only when self_service_mode is enabled"
+    description: "Optional self-service terms acknowledgement; required only when explicit experimental self_service_mode is enabled"
     required: false
     default: "false"
   api_url:
-    description: "Optional hosted RepoBrain API URL; required when Sprint 93D self-service routing is enabled for hosted ask/audit/score commands"
+    description: "Optional hosted RepoBrain API URL for experimental and future external-runtime mode; not the default GitHub-native beta path"
     required: false
     default: ""
   oidc_audience:
-    description: "Optional GitHub OIDC audience for the Sprint 93B action-side identity envelope"
+    description: "Optional GitHub OIDC audience for the action-side identity envelope"
     required: false
     default: "repobrain-api"
   self_service_mode:
-    description: "Optional Phase 1 self-service mode flag; enables OIDC/terms gating plus hosted API request/response routing for supported commands"
+    description: "Optional experimental hosted self-service mode; enables OIDC and terms gating plus hosted request routing for supported commands when a real external runtime exists"
     required: false
     default: "false"
 

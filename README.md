@@ -1,4 +1,4 @@
-# RepoBrain Action
+﻿# RepoBrain Action
 
 Current release candidate: `0.5.0-rc.1`
 
@@ -17,18 +17,30 @@ Current product runtime is v6-only:
 - `/repobrain help` now uses a four-block command-reference manual structure for partners
 - PR audit narrative modes now obey canonical PR impact classifier facts so docs-only PRs are not narrated as behavior-affecting or moderate-risk
 
+## Current Status
+
+- RepoBrain-Action supports legacy and internal audit modes plus experimental `hosted_api` self-service foundations
+- `hosted_api` mode requires a real external runtime and is not the default GitHub-native beta path
+- the next implementation stage is a GitHub-native beta control plane
+- GitHub Marketplace is not the immediate route
+- trusted and developer beta are expected to use GitHub App installation identity plus a private control worker
+- TopoCore remains private and is integrated through stable contracts rather than public runtime distribution
+- RepoBrain integrates TopoCore capabilities and does not implement TopoCore internals
+- current architecture-correction status is `SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION_READY`
+
 ## Quick Start
 
 For a new external repository install, start here:
 
-- Phase 1 self-service / OIDC envelope quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
+- Self-service architecture correction and roadmap: `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`
+- Current beta-path quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
 - Install guide: `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
 - Command guide: `docs/commands/REPOBRAIN_COMMANDS.md`
 - Troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
 - Example workflow: `docs/examples/repobrain_external_pilot_workflow.yml`
-- Self-service workflow shape: `docs/examples/repobrain_partner_self_service_workflow.yml`
-- Trusted-partner validation runbook: `docs/release/SPRINT_93E_TRUSTED_PARTNER_VALIDATION_RUNBOOK.md`
-- Validation evidence template: `docs/release/SPRINT_93E_PHASE1_VALIDATION_EVIDENCE.md`
+- Experimental hosted workflow shape: `docs/examples/repobrain_partner_self_service_workflow.yml`
+- Sprint 93E historical runbook: `docs/release/SPRINT_93E_TRUSTED_PARTNER_VALIDATION_RUNBOOK.md`
+- Sprint 93E historical evidence template: `docs/release/SPRINT_93E_PHASE1_VALIDATION_EVIDENCE.md`
 - Partner readiness: `docs/release/PARTNER_TESTING_READINESS.md`
 - Public approval checklist: `docs/release/PUBLIC_VISIBILITY_APPROVAL_CHECKLIST.md`
 - Partner setup pack: `docs/partner/PARTNER_TESTING_SETUP.md`
@@ -63,90 +75,51 @@ Current external product behavior remains intentionally conservative:
 - `/repobrain verify` is informational only
 - `/repobrain status` is report-only runtime status
 - `/repobrain review` is not merge approval and not safe to merge guidance
-- `/repobrain fix` is no-patch proposal/governance only
+- `/repobrain fix` is no-patch proposal and governance only
 
-## Current Pilot Model
+## Beta Direction
 
-The current external pilot uses:
+The current beta direction is split into two tracks:
 
-- public `alexworkingai/RepoBrain-Action@main` in controlled pilot repositories
-- preferred partner runtime path: private installed package / runtime artifact
-- `private_checkout` only as a controlled beta fallback in owner-managed environments
-- a caller-owned workflow in the consumer repository
-- a bring-your-own-LLM or user-paid model provider model
+- GitHub-native beta control plane as the intended trusted and developer beta path
+- experimental `hosted_api` mode kept as a future external-runtime transport
 
-Sprint 84 public-ready gate truth:
+GitHub-native beta control plane target:
+- partner repository
+- public `RepoBrain-Action`
+- GitHub-native request marker or queue item
+- private RepoBrain control worker
+- GitHub App installation token
+- private TopoCore entrypoint
+- public-safe GitHub response
 
-- `private_checkout` remains beta-only
-- selected partner testing should prefer installed private package mode when authorized
-- plain Python package artifacts still need honest handling because they can contain readable implementation files
+What this does not require right now:
+- Marketplace
+- public SaaS hosting
+- domain registration
+- TopoCore on partner runners
+- owner-generated onboarding tokens
 
-Sprint 91 public-switch truth:
+## Sprint Foundations Preserved
 
-- owner approval for the RepoBrain-Action public visibility switch was recorded and executed
-- RepoBrain-Action is now public
-- selected partner pilot kickoff pack is ready from the public action surface
-- RC tag creation remains approval-gated and is not executed automatically
-- Marketplace remains not started
+Useful historical foundations remain in place:
 
-Sprint 92D branch truth:
+- Phase 1 self-service remains a historical foundation rather than a completed launch state
+- the thin public client direction remains useful
+- the private hosted/server-side runtime direction remains a historical hosted foundation
+- hosted self-service is not claimed as fully live
+- Sprint 93A prepared the public self-service foundation
+- Sprint 93B added the GitHub OIDC action-side identity envelope
+- Sprint 93C defined the hosted trust, quota, and provisioning boundary
+- Sprint 93D wired the hosted client send path for supported commands
+- Sprint 93E hardened hosted request and response handling and documented trusted validation
+- Sprint 94A reclassifies the hosted path as experimental and future-facing because no real external runtime exists yet
 
-- issue ask may use an LLM only when safe policy allows
-- deterministic fallback remains available for operational and product-analysis questions
-- route labels reflect the typed command rather than internal analysis mode
-- protected main baseline is enabled on the public RepoBrain repository
-- required status checks remain intentionally deferred until stable check names are locked
-
-Sprint 92F-92H implementation truth:
-
-- controlled trusted issue ask/explain LLM is enabled by default through `RB_REPOBRAIN_ENABLE_ISSUE_LLM=1`
-- `/repobrain audit --narrative` adds an optional explanatory LLM layer after TopoCore scoring
-- `/repobrain audit --executive` adds an optional executive/partner-facing LLM layer after TopoCore scoring
-- `/repobrain audit --profile premium` implies a premium narrative/explanation layer after TopoCore scoring
-- PR audit narrative, executive, and premium modes now consume canonical PR classifier facts and keep docs-only PR impact grounded
-- premium audit narrative is bounded and explicitly reports when it was shortened to stay within response budget
-- `/repobrain score` remains a compact TopoCore-first summary and does not require an LLM
-- current readiness status on the Sprint 92H branch is `SPRINT_92H_IMPLEMENTATION_MERGED_LIVE_RETEST_PENDING`
-
-Sprint 93A foundation truth:
-
-- public Phase 1 self-service foundation is being prepared
-- RepoBrain-Action is the intended thin public client direction
-- TopoCore v6 remains the private hosted/server-side runtime direction
-- no owner-generated onboarding token path is the intended Phase 1 model
-- full OIDC and hosted API onboarding are not claimed as live in this sprint
-
-Sprint 93B identity-envelope truth:
-
-- the public action now supports GitHub Actions OIDC token acquisition when the workflow grants `id-token: write`
-- the public action now builds a sanitized `repobrain.github_oidc_identity.v1` envelope for future hosted verification
-- `self_service_mode` enforces `terms_accepted` and GitHub OIDC availability when explicitly enabled
-- hosted API verification and automatic tenant provisioning remain deferred to Sprint 93C
-- partner self-service public action is not yet claimed as fully live
-
-Sprint 93C hosted-boundary truth:
-
-- the hosted RepoBrain API trust contract is now defined as `repobrain.github_action_audit_request.v1`
-- server-side GitHub OIDC verification, claim consistency checks, tenant auto-provisioning, and default quota policy are now implemented as pure service boundaries
-- the action now prepares a redacted hosted request preview when `self_service_mode` and OIDC are both available
-- end-to-end action-to-hosted-api request sending and GitHub response posting remain deferred to Sprint 93D
-- trusted partner hardening and live validation remain deferred to Sprint 93E
-
-Sprint 93D end-to-end self-service truth:
-
-- `self_service_mode` now wires supported `ask`, `audit`, and `score` commands through the hosted API client path when `api_url` is configured
-- the public action now sends the versioned hosted request contract and renders public-safe hosted responses back into the GitHub comment flow
-- public-safe hosted error rendering now covers missing `api_url`, hosted API unavailability, quota/public-safe server errors, and other redacted failures
-- existing non-self-service local/private runtime behavior remains unchanged
-- final trusted partner hardening and validation remain deferred to Sprint 93E
-
-Sprint 93E final-hardening truth:
-
-- hosted self-service client now rejects unexpected redirect responses instead of following them
-- requested audit execution profiles such as `/repobrain audit --profile premium` are now preserved end-to-end in the hosted request payload and redacted request preview
-- trusted-partner validation runbook and evidence template now exist for `alexworkingai/Elen-MCP-v.2.2.0` and `alexworkingai/repobrain-community`
-- the final Phase 1 status remains `SPRINT_93E_HARDENING_READY_LIVE_VALIDATION_PENDING` until live issue and PR validation pass on both trusted validation repositories
-- no owner-generated onboarding token, manual registration, or TopoCore install/download path is introduced by the self-service flow
+Historical sprint truth markers:
+- Sprint 93C hosted-boundary truth remains preserved as documentation lineage
+- tenant auto-provisioning remains a hosted-boundary concept from Sprint 93C
+- Sprint 93D end-to-end self-service truth remains preserved as hosted transport lineage
+- final hosted validation remained deferred to Sprint 93E and is now superseded by Sprint 94A
 
 RepoBrain is not an LLM reseller.
 TopoCore v6 remains private.

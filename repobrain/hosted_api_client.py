@@ -16,6 +16,11 @@ from repobrain.hosted_api_contract import (
 
 
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+_PLACEHOLDER_HOST_MARKERS = {
+    "<trusted-repobrain-hosted-api>",
+    "example.com",
+    "example.invalid",
+}
 
 
 @dataclass(frozen=True)
@@ -65,6 +70,7 @@ def validate_hosted_api_url(api_url: str) -> str:
     parsed = urlparse(raw)
     scheme = str(parsed.scheme or "").strip().lower()
     hostname = str(parsed.hostname or "").strip().lower()
+    lowered_raw = raw.lower()
     if scheme not in {"https", "http"}:
         raise HostedApiClientError(
             "HOSTED_API_URL_INVALID",
@@ -76,6 +82,13 @@ def validate_hosted_api_url(api_url: str) -> str:
         raise HostedApiClientError(
             "HOSTED_API_URL_INVALID",
             "RepoBrain self-service mode requires a valid hosted API host name.",
+            retryable=False,
+            sanitized_endpoint=_sanitize_endpoint(raw),
+        )
+    if any(marker in lowered_raw or hostname == marker for marker in _PLACEHOLDER_HOST_MARKERS):
+        raise HostedApiClientError(
+            "HOSTED_API_URL_PLACEHOLDER_OR_UNCONFIGURED",
+            "RepoBrain hosted API URL is a placeholder or is not configured for a real external runtime.",
             retryable=False,
             sanitized_endpoint=_sanitize_endpoint(raw),
         )
