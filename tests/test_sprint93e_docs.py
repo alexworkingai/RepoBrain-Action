@@ -10,56 +10,49 @@ def _read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8").lower()
 
 
-def test_sprint93e_runbook_and_evidence_capture_pending_truth_and_both_repos() -> None:
+def test_sprint93e_runbook_and_evidence_mark_hosted_validation_historical() -> None:
     runbook = _read("docs/release/SPRINT_93E_TRUSTED_PARTNER_VALIDATION_RUNBOOK.md")
     evidence = _read("docs/release/SPRINT_93E_PHASE1_VALIDATION_EVIDENCE.md")
 
     assert "alexworkingai/elen-mcp-v.2.2.0" in runbook
     assert "alexworkingai/repobrain-community" in runbook
-    assert "/repobrain audit --profile premium" in runbook
-    assert "ensure only one workflow responds during validation" in runbook
-    assert "sprint_93e_hardening_ready_live_validation_pending" in runbook
-    assert "repobrain-93e-self-service-validation" in runbook
-    assert "repobrain-93e-community-self-service-validation" in runbook
-    assert "repobrain_hosted_api_url" in runbook
-    assert "mcp_issue_pass" in evidence
-    assert "community_pr_pass" in evidence
-    assert "no_duplicate_responder_pass" in evidence
-    assert "sprint_93e_hardening_ready_live_validation_pending" in evidence
+    assert "hosted_api_runtime_gap_identified" in runbook
+    assert "github_native_architecture_correction_required" in runbook
+    assert "phase_1_trusted_partner_self_service_ready_not_claimed" in runbook
+    assert "do not treat `repobrain_hosted_api_url` as the default trusted beta requirement" in runbook
+    assert "future trusted beta validation to sprint 94e github-native control-plane validation" in runbook
+
+    assert "hosted_api_runtime_gap_identified" in evidence
+    assert "github_native_architecture_correction_required" in evidence
+    assert "final_hosted_phase1_pass_claimed" in evidence
+    assert "next validation target: sprint 94e github-native control-plane beta validation" in evidence
 
 
-def test_sprint93e_readme_and_onboarding_reference_validation_artifacts_without_overclaim() -> None:
+def test_sprint93e_readme_and_onboarding_reference_historical_artifacts_without_overclaim() -> None:
     readme = _read("README.md")
     quickstart = _read("docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md")
     install = _read("docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md")
 
-    assert "trusted-partner validation runbook" in readme
-    assert "validation evidence template" in readme
-    assert "sprint_93e_hardening_ready_live_validation_pending" in readme
+    assert "sprint 93e historical runbook" in readme
+    assert "sprint 93e historical evidence template" in readme
+    assert "sprint 94a reclassifies the hosted path as experimental and future-facing" in readme
 
-    assert "final trusted-partner live validation still remains pending" in quickstart
-    assert "docs/release/sprint_93e_trusted_partner_validation_runbook.md" in quickstart
-    assert "docs/repobrain_93e_community_self_service_smoke.md" in quickstart
-    assert "marketplace readiness" in quickstart
-    assert "final trusted-partner pass without live issue and pr validation" in quickstart
+    assert "historical sprint 93e note" in quickstart
+    assert "superseded by sprint 94a architecture correction" in quickstart
+    assert "marketplace ready" in quickstart
+    assert "public launch ready" in quickstart
 
-    assert "trusted partner self-service path" in install
-    assert "do not request or paste a repobrain owner-generated token" in install
-    assert "do not install or download topocore in the partner repository" in install
-    assert "runtime-dependent external pilot path" in install
-    assert "if you are validating the sprint 93e thin-client self-service path" in install
+    assert "experimental hosted mode" in install
+    assert "do not treat `repobrain_hosted_api_url` as a required current beta setup step" in install
+    assert "wait for sprint 94b-94e github-native workflow instructions for the default beta path" in install
 
 
-def test_sprint93e_architecture_and_community_smoke_docs_exist_and_preserve_phase_truth() -> None:
+def test_sprint93e_architecture_note_and_alias_preserve_hardening_history_with_correction_notice() -> None:
     architecture = _read("docs/architecture/SPRINT_93E_FINAL_HARDENING_AND_TRUSTED_VALIDATION.md")
-    smoke = _read("docs/repobrain_93e_community_self_service_smoke.md")
     alias = _read("docs/architecture/SPRINT_93D_END_TO_END_SELF_SERVICE_WORKFLOW.md")
 
-    assert "sprint_93e_hardening_ready_live_validation_pending" in architecture
+    assert "correction notice" in architecture
+    assert "`hosted_api` path was reclassified as experimental and future external-runtime mode" in architecture
     assert "hosted client rejects unexpected redirect responses" in architecture
-    assert "repobrain-community" in architecture
-    assert "do not claim unrestricted public launch" in architecture
-    assert "issue commands" in smoke
-    assert "no duplicate responders" in smoke
-    assert "/repobrain audit --profile premium" in smoke
-    assert "companion alias" in alias
+    assert "future trusted beta validation is redirected to sprint 94e on the github-native control-plane architecture" in architecture
+    assert "correction notice" in alias

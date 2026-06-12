@@ -91,6 +91,18 @@ def test_validate_hosted_api_url_requires_https_outside_localhost() -> None:
     assert exc.value.code == "HOSTED_API_URL_INVALID"
 
 
+def test_validate_hosted_api_url_rejects_placeholder_or_unconfigured_values() -> None:
+    for url in (
+        "https://example.com",
+        "https://repobrain.example.invalid",
+        "https://<trusted-repobrain-hosted-api>/v1/github/actions/audit",
+    ):
+        with pytest.raises(HostedApiClientError) as exc:
+            validate_hosted_api_url(url)
+
+        assert exc.value.code == "HOSTED_API_URL_PLACEHOLDER_OR_UNCONFIGURED"
+
+
 def test_hosted_api_client_sends_request_and_validates_success_response() -> None:
     seen: dict[str, object] = {}
 
