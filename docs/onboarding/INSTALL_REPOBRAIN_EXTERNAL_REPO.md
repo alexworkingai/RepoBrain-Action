@@ -25,7 +25,37 @@ Phase 1 self-service note:
 - Sprint 93B implements the public action-side OIDC identity envelope
 - Sprint 93C implements the hosted verification and auto-provisioning boundary
 - Sprint 93D now owns and wires the end-to-end action request/response flow for supported self-service commands
-- Sprint 93E still owns final hardening and trusted-partner validation
+- Sprint 93E adds the trusted-partner validation runbook and evidence template
+- final trusted-partner self-service live validation still remains pending in Sprint 93E
+
+## Trusted Partner Self-Service Path
+
+Preferred Phase 1 direction for trusted partners:
+
+- use `docs/examples/repobrain_partner_self_service_workflow.yml`
+- set `self_service_mode: "true"`
+- set `terms_accepted: "true"`
+- provide a trusted hosted `api_url`
+- grant `id-token: write`
+- do not request or paste a RepoBrain owner-generated token
+- do not wait for manual partner registration
+- do not install or download TopoCore in the partner repository
+
+Current truth:
+
+- this path is implemented for supported `ask`, `audit`, and `score` commands
+- final trusted-partner PASS still requires live validation on the selected repositories
+- follow `docs/release/SPRINT_93E_TRUSTED_PARTNER_VALIDATION_RUNBOOK.md`
+- record outcomes in `docs/release/SPRINT_93E_PHASE1_VALIDATION_EVIDENCE.md`
+
+## Runtime-Dependent External Pilot Path
+
+The numbered install steps below document the older runtime-dependent partner path for explicitly approved pilots:
+
+- `installed_private_package` or approved artifact delivery when authorized
+- `private_checkout` only as a beta fallback
+
+If you are validating the Sprint 93E thin-client self-service path, use the self-service workflow example and runbook instead of the runtime credential steps below.
 
 ## Repository Model
 

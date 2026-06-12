@@ -270,6 +270,43 @@ def test_workflow_dispatch_self_service_ask_happy_path_uses_simulated_command(
     assert audit["route_final"] == "SELF_SERVICE_HOSTED"
 
 
+def test_self_service_audit_premium_route_preserves_requested_profile(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _configure_self_service_env(monkeypatch, event_name="issue_comment")
+
+    class _Client:
+        def __init__(self, _config) -> None:
+            pass
+
+        def send_audit_request(self, request_json):
+            assert request_json["command"]["route"] == "audit"
+            assert request_json["command"]["profile"] == "premium"
+            assert request_json["identity"]["command"]["profile"] == "premium"
+            return HostedApiSendResult(
+                response=_success_response("### Hosted premium audit\n- Premium profile accepted."),
+                http_status=200,
+                sanitized_endpoint="https://api.example.test/v1/github/actions/audit",
+            )
+
+    monkeypatch.setattr("repobrain.github_flow.HostedApiClient", _Client)
+
+    status = run_github_flow(
+        repo_root=Path.cwd(),
+        dry_run=True,
+        comment_text="/repobrain audit --profile premium Focus on partner readiness.",
+        issue_number=None,
+    )
+
+    output = capsys.readouterr().out
+    audit = get_last_audit()
+    assert status == "DRY_RUN_OK"
+    assert "Hosted premium audit" in output
+    assert audit["llm_execution_profile_command_override"] == "premium"
+    assert audit["self_service_hosted_api_request_preview"]["command"]["profile"] == "premium"
+
+
 def test_self_service_supported_command_requires_api_url(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

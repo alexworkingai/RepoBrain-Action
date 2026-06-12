@@ -94,11 +94,19 @@ def test_validate_hosted_api_url_requires_https_outside_localhost() -> None:
 def test_hosted_api_client_sends_request_and_validates_success_response() -> None:
     seen: dict[str, object] = {}
 
-    def _fake_post(url: str, *, json: dict[str, object], headers: dict[str, str], timeout: float) -> _FakeResponse:
+    def _fake_post(
+        url: str,
+        *,
+        json: dict[str, object],
+        headers: dict[str, str],
+        timeout: float,
+        allow_redirects: bool,
+    ) -> _FakeResponse:
         seen["url"] = url
         seen["json"] = json
         seen["headers"] = dict(headers)
         seen["timeout"] = timeout
+        seen["allow_redirects"] = allow_redirects
         return _FakeResponse(
             {
                 "version": "repobrain.github_action_audit_response.v1",
@@ -153,11 +161,19 @@ def test_hosted_api_client_sends_request_and_validates_success_response() -> Non
         "Accept": "application/json",
         "Content-Type": "application/json",
     }
+    assert seen["allow_redirects"] is False
     assert "header.payload.signature" == seen["json"]["oidc_jwt"]
 
 
 def test_hosted_api_client_preserves_public_safe_error_response() -> None:
-    def _fake_post(url: str, *, json: dict[str, object], headers: dict[str, str], timeout: float) -> _FakeResponse:
+    def _fake_post(
+        url: str,
+        *,
+        json: dict[str, object],
+        headers: dict[str, str],
+        timeout: float,
+        allow_redirects: bool,
+    ) -> _FakeResponse:
         return _FakeResponse(
             {
                 "version": "repobrain.github_action_audit_response.v1",
@@ -191,7 +207,14 @@ def test_hosted_api_client_rejects_invalid_non_json_response() -> None:
         def json(self) -> object:
             return ["not", "a", "dict"]
 
-    def _fake_post(url: str, *, json: dict[str, object], headers: dict[str, str], timeout: float) -> _InvalidResponse:
+    def _fake_post(
+        url: str,
+        *,
+        json: dict[str, object],
+        headers: dict[str, str],
+        timeout: float,
+        allow_redirects: bool,
+    ) -> _InvalidResponse:
         return _InvalidResponse()
 
     with pytest.raises(HostedApiClientError) as exc:
@@ -203,3 +226,23 @@ def test_hosted_api_client_rejects_invalid_non_json_response() -> None:
     assert exc.value.code == "HOSTED_API_INVALID_RESPONSE"
     assert "header.payload.signature" not in str(exc.value)
     assert "header.payload.signature" not in json.dumps({"message": exc.value.message})
+
+
+def test_hosted_api_client_rejects_redirect_responses() -> None:
+    def _fake_post(
+        url: str,
+        *,
+        json: dict[str, object],
+        headers: dict[str, str],
+        timeout: float,
+        allow_redirects: bool,
+    ) -> _FakeResponse:
+        return _FakeResponse({}, status_code=302)
+
+    with pytest.raises(HostedApiClientError) as exc:
+        HostedApiClient(
+            HostedApiClientConfig(api_url="https://api.example.test"),
+            request_post=_fake_post,
+        ).send_audit_request(_request())
+
+    assert exc.value.code == "HOSTED_API_INVALID_RESPONSE"
