@@ -116,6 +116,15 @@ The future 94D private control worker should fetch repository and PR context thr
 
 The 94C marker contains only enough public-safe metadata for discovery and correlation.
 
+## 8.5 Relationship to Sprint 94D
+
+The 94D private control worker foundation consumes this queue marker through GitHub comment discovery and contract validation.
+
+Keep the sprint boundary explicit:
+- 94C creates the queued marker
+- 94D adds the private worker processing foundation
+- 94E performs live trusted partner validation
+
 ## 9. Status values
 
 Defined values:

@@ -24,15 +24,17 @@ Current product runtime is v6-only:
 - the next implementation stage is a GitHub-native beta control plane
 - Sprint 94B adds the GitHub App installation foundation for that control-plane path
 - Sprint 94C adds `github_app_queue` request queue mode and public-safe queue markers
+- Sprint 94D adds the private control worker foundation that consumes queued markers through a private TopoCore entrypoint boundary
 - GitHub Marketplace is not the immediate route
 - trusted and developer beta are expected to use GitHub App installation identity plus a private control worker
 - trusted partner beta is not ready until Sprint 94E validation
 - final score and audit reports require the private control worker in Sprint 94D
+- final score and audit reports require the Sprint 94D private control worker to be deployed in an owner-controlled private repo
 - TopoCore remains private and is integrated through stable contracts rather than public runtime distribution
 - TopoCore remains a separate team and system
 - RepoBrain does not implement TopoCore internals
 - RepoBrain integrates TopoCore capabilities and does not implement TopoCore internals
-- current GitHub-native queue status is `SPRINT_94C_GITHUB_NATIVE_REQUEST_QUEUE_READY`
+- current GitHub-native queue status is `SPRINT_94D_PRIVATE_CONTROL_WORKER_TOPOCORE_ENTRYPOINT_READY`
 
 ## Quick Start
 
@@ -41,7 +43,11 @@ For a new external repository install, start here:
 - Self-service architecture correction and roadmap: `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`
 - GitHub App installation foundation: `docs/architecture/SPRINT_94B_GITHUB_APP_INSTALLATION_FOUNDATION.md`
 - GitHub-native request queue: `docs/architecture/SPRINT_94C_GITHUB_NATIVE_REQUEST_QUEUE.md`
+- Private control worker foundation: `docs/architecture/SPRINT_94D_PRIVATE_CONTROL_WORKER_TOPOCORE_ENTRYPOINT.md`
 - Queue contract: `docs/contracts/GITHUB_NATIVE_REQUEST_QUEUE_V1.md`
+- Control worker request contract: `docs/contracts/CONTROL_WORKER_REQUEST_V1.md`
+- Control worker result contract: `docs/contracts/CONTROL_WORKER_RESULT_V1.md`
+- TopoCore entrypoint adapter contract: `docs/contracts/TOPOCORE_ENTRYPOINT_ADAPTER_V1.md`
 - Private control repo setup: `docs/control-plane/GITHUB_APP_PRIVATE_CONTROL_REPO_SETUP.md`
 - Installation identity contract: `docs/contracts/GITHUB_APP_INSTALLATION_IDENTITY_V1.md`
 - Current beta-path quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
@@ -108,7 +114,13 @@ Current 94C queue-mode truth:
 - partners use `transport_mode: github_app_queue`
 - the public action creates a public-safe queued acknowledgement only
 - the queue marker contains no TopoCore internals, no tokens, and no hosted API dependency
-- final reports require the Sprint 94D private control worker
+
+Current 94D control-worker truth:
+- the private control worker foundation exists in `RepoBrain-Action` as contracts, parser, worker modules, and a private control repo workflow template
+- the worker runs only in an owner-controlled private repo
+- the worker uses a GitHub App installation token and a configured private TopoCore entrypoint
+- the worker does not use `hosted_api` or require `REPOBRAIN_HOSTED_API_URL`
+- live trusted partner validation is still deferred to Sprint 94E
 
 What this does not require right now:
 - Marketplace
