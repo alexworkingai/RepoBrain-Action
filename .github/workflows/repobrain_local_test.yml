@@ -1,4 +1,4 @@
-﻿name: RepoBrain Local Test
+name: RepoBrain Local Test
 
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ jobs:
   dry-run:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./. 
         env:
           RB_TOPOCORE_BACKEND: ${{ github.event.inputs.topocore_backend || 'auto' }}
