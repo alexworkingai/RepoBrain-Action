@@ -46,6 +46,19 @@ Guidance:
 - do not depend on paid third-party services
 - do not expose Authorization headers, bearer strings, JWTs, or private keys
 
+## Queue Processing Relationship
+
+Sprint 94C adds the public-side queue marker and contract only.
+
+The private control repo is where Sprint 94D should:
+- discover queued comments
+- validate GitHub App installation identity
+- load repository and PR context through the installation token
+- run private TopoCore
+- publish the final public-safe result comment
+
+Final score and audit reports do not come from Sprint 94C alone.
+
 ## Minimal Validation Target For 94B
 
 The private control repo auth layer should eventually prove:

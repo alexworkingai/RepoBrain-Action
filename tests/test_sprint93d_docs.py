@@ -20,7 +20,7 @@ def test_quickstart_and_example_reclassify_hosted_path_after_94a() -> None:
     assert "api_url: https://repobrain.example.invalid" in workflow
     assert "do not use this hosted path as the default trusted beta setup" in workflow
     assert 'self_service_mode: "true"' in workflow
-    assert "id-token: write" in workflow
+    assert "transport_mode: github_app_queue" in workflow
 
 
 def test_readme_and_93d_architecture_note_reflect_correction_without_launch_claim() -> None:

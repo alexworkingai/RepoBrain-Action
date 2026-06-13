@@ -75,6 +75,8 @@ def test_readme_onboarding_and_examples_keep_hosted_mode_experimental_and_partne
     assert "partner repos must not store the github app private key" in install
     assert "do not install from marketplace for this stage" in install
 
+    assert "transport_mode: github_app_queue" in workflow
+    assert "terms_accepted: \"true\"" in workflow
     assert "api_url: https://repobrain.example.invalid" in workflow
     assert "do not use the hosted path as the default trusted beta setup" in workflow
     assert "github app provides installation identity and scoped repo access" in workflow

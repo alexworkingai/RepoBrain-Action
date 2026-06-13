@@ -1,35 +1,37 @@
-﻿name: RepoBrain Partner Self-Service
+# RepoBrain Partner Self-Service
+
+name: RepoBrain beta
 
 on:
   issue_comment:
     types: [created]
-  pull_request:
-    types: [opened, synchronize, reopened]
-  workflow_dispatch:
 
 permissions:
   contents: read
   issues: write
   pull-requests: write
-  id-token: write
 
 jobs:
   repobrain:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/repobrain')
+    if: >
+      startsWith(github.event.comment.body, '/repobrain score') ||
+      startsWith(github.event.comment.body, '/repobrain audit')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
       - uses: alexworkingai/RepoBrain-Action@main
         with:
           profile: partner-pilot
-          # Planned GitHub-native beta path:
-          # - install RepoBrain GitHub App when invited
-          # - grant selected repository access
-          # - future queue/control-worker transport arrives in Sprint 94C and Sprint 94D
-          # This action reference is safe to add, but trusted beta is not yet live until Sprint 94E validation.
+          terms_accepted: "true"
+          transport_mode: github_app_queue
+
+# Default GitHub-native beta path in Sprint 94C:
+# - install RepoBrain GitHub App when invited
+# - grant selected repository access
+# - use github_app_queue to create a public-safe queue marker
+# - final score and audit reports require the private control worker in Sprint 94D
+# Trusted beta is not ready until Sprint 94E validation.
 
 # Experimental hosted external-runtime mode retained for documentation only:
-# terms_accepted: "true"
 # api_url: https://repobrain.example.invalid
 # oidc_audience: repobrain-api
 # self_service_mode: "true"
@@ -37,7 +39,7 @@ jobs:
 # Do not use this hosted path as the default trusted beta setup.
 # Do not use the hosted path as the default trusted beta setup.
 
-# Planned GitHub-native beta path after Sprint 94B:
+# Planned GitHub-native beta path after Sprint 94C:
 # - partner repo uses the public RepoBrain action surface
 # - GitHub App provides installation identity and scoped repo access
 # - RepoBrain request is queued through GitHub-native control-plane plumbing

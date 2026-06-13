@@ -5,6 +5,7 @@ import os
 from typing import Any, Mapping
 
 from repobrain import __version__ as REPOBRAIN_VERSION
+from repobrain.github_native_queue import TRANSPORT_MODE_AUTO, normalize_transport_mode
 from repobrain.oidc import OIDC_REQUIRED_MESSAGE, OidcTokenResult, normalize_oidc_audience
 
 
@@ -31,6 +32,7 @@ class SelfServiceConfig:
     profile: str = "default"
     api_url: str = ""
     oidc_audience: str = "repobrain-api"
+    transport_mode: str = TRANSPORT_MODE_AUTO
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "SelfServiceConfig":
@@ -42,6 +44,7 @@ class SelfServiceConfig:
             profile=profile,
             api_url=_clean_optional(env.get("RB_SELF_SERVICE_API_URL")),
             oidc_audience=normalize_oidc_audience(env.get("RB_SELF_SERVICE_OIDC_AUDIENCE")),
+            transport_mode=normalize_transport_mode(env.get("RB_TRANSPORT_MODE")),
         )
 
 
@@ -123,6 +126,7 @@ def build_github_identity_envelope(
             "terms_accepted": bool(self_service.terms_accepted),
             "mode": self_service.profile,
             "api_url_configured": bool(self_service.api_url),
+            "transport_mode": self_service.transport_mode,
         },
     }
 

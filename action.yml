@@ -27,7 +27,7 @@ inputs:
     required: false
     default: "true"
   profile:
-    description: "Optional self-service profile metadata for the GitHub OIDC identity envelope; does not activate hosted provisioning by itself"
+    description: "Optional partner or queue profile metadata for hosted identity envelopes and GitHub-native queue routing; does not activate hosted provisioning by itself"
     required: false
     default: "partner-pilot"
   issue_number:
@@ -43,19 +43,23 @@ inputs:
     required: false
     default: "auto"
   terms_accepted:
-    description: "Optional self-service terms acknowledgement; required only when explicit experimental self_service_mode is enabled"
+    description: "Optional terms acknowledgement; required for github_app_queue beta queue creation and for explicit experimental hosted self_service_mode"
     required: false
     default: "false"
+  transport_mode:
+    description: "RepoBrain transport mode. auto preserves existing behavior. hosted_api is experimental and future external-runtime mode. github_app_queue creates a GitHub-native queue marker for the beta control plane."
+    required: false
+    default: "auto"
   api_url:
     description: "Optional hosted RepoBrain API URL for experimental and future external-runtime mode; not the default GitHub-native beta path"
     required: false
     default: ""
   oidc_audience:
-    description: "Optional GitHub OIDC audience for the action-side identity envelope"
+    description: "Optional GitHub OIDC audience for the hosted action-side identity envelope"
     required: false
     default: "repobrain-api"
   self_service_mode:
-    description: "Optional experimental hosted self-service mode; enables OIDC and terms gating plus hosted request routing for supported commands when a real external runtime exists"
+    description: "Optional experimental hosted self-service mode; enables OIDC and hosted request routing for supported commands when a real external runtime exists"
     required: false
     default: "false"
 
@@ -81,6 +85,7 @@ runs:
         RB_INDEX_CACHE_RESTORED: ${{ env.RB_INDEX_CACHE_RESTORED }}
         RB_SELF_SERVICE_PROFILE: ${{ inputs.profile }}
         RB_SELF_SERVICE_TERMS_ACCEPTED: ${{ inputs.terms_accepted }}
+        RB_TRANSPORT_MODE: ${{ inputs.transport_mode }}
         RB_SELF_SERVICE_API_URL: ${{ inputs.api_url }}
         RB_SELF_SERVICE_OIDC_AUDIENCE: ${{ inputs.oidc_audience }}
         RB_SELF_SERVICE_MODE: ${{ inputs.self_service_mode }}

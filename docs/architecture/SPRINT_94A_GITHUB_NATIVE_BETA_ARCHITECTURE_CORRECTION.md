@@ -1,4 +1,4 @@
-﻿# Sprint 94A GitHub-Native Beta Architecture Correction
+# Sprint 94A GitHub-Native Beta Architecture Correction
 
 ## Correction Summary
 
@@ -85,6 +85,10 @@ Stable user command surface remains:
 - 95B: tenant policy, usage, and quota foundation
 - 95C: TopoCore capability integration layer
 - 95D: public showcase package for developer and Microsoft visibility
+
+Follow-through note:
+- Sprint 94C now materializes the request marker and queue layer described here
+- final score and audit delivery still depends on the Sprint 94D private worker
 
 ## Explicit Non-Goals
 

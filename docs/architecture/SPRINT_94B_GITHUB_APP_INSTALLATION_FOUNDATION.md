@@ -139,6 +139,10 @@ Reason:
 - `hosted_api` already remains available as experimental and future external-runtime mode
 - queue transport reservation can be added when the first non-placeholder behavior exists
 
+Historical follow-through note:
+- Sprint 94C later adds `transport_mode: github_app_queue` once the public queue marker exists
+- 94B should still be read as the installation foundation, not as the live queue layer
+
 ## Status
 
 Expected status after Sprint 94B:
