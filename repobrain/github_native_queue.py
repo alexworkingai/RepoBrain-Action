@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+import re
 from typing import Any, Mapping, Sequence
 
 
@@ -20,6 +21,8 @@ VALID_TRANSPORT_MODES = {
 }
 SUPPORTED_QUEUE_COMMANDS = {"audit", "score"}
 SUPPORTED_QUEUE_STATUSES = {"queued", "processing", "completed", "failed", "superseded"}
+QUEUE_MARKER_PREFIX = "<!-- repobrain:queue:v1"
+_QUEUE_MARKER_RE = re.compile(r"<!--\s*repobrain:queue:v1\s*(\{.*?\})\s*-->", re.DOTALL)
 
 _REDACTION_MARKER = "[redacted]"
 _UNSAFE_VALUE_SNIPPETS = (
@@ -128,6 +131,13 @@ class QueueRequest:
                 continue
             payload[key] = value
         return payload
+
+
+@dataclass(frozen=True)
+class QueueMarkerParseResult:
+    ok: bool
+    request: QueueRequest | None = None
+    error_code: str = ""
 
 
 def normalize_queue_command(command_text: str, profile_input: str | None = None) -> QueueCommand:
@@ -244,7 +254,7 @@ def validate_queue_request(request: QueueRequest) -> list[str]:
         problems.append("queue_command_unsupported")
     if not request.profile:
         problems.append("profile_missing")
-    if request.status != "queued":
+    if request.status not in SUPPORTED_QUEUE_STATUSES:
         problems.append("queue_status_invalid")
     if request.transport_mode != TRANSPORT_MODE_GITHUB_APP_QUEUE:
         problems.append("transport_mode_invalid")
@@ -262,6 +272,62 @@ def validate_queue_request(request: QueueRequest) -> list[str]:
     if TRANSPORT_MODE_HOSTED_API in serialized:
         problems.append("hosted_api_active_transport_forbidden")
     return problems
+
+
+def queue_request_from_payload(payload: Mapping[str, Any]) -> QueueRequest:
+    return QueueRequest(
+        contract_version=_clean_text(payload.get("contract_version")),
+        request_id=_clean_text(payload.get("request_id")),
+        status=_clean_text(payload.get("status")).lower(),
+        command=_clean_text(payload.get("command")).lower(),
+        profile=_clean_text(payload.get("profile")),
+        repository_full_name=_clean_text(payload.get("repository_full_name")),
+        repository_id_marker=_clean_text(payload.get("repository_id_marker")) or None,
+        event_kind=_clean_text(payload.get("event_kind")).lower(),
+        issue_number=_int_or_none(payload.get("issue_number")),
+        pull_request_number=_int_or_none(payload.get("pull_request_number")),
+        source_comment_id=_int_or_none(payload.get("source_comment_id")),
+        source_comment_url=_clean_text(payload.get("source_comment_url")) or None,
+        actor_login=_clean_text(payload.get("actor_login")) or None,
+        head_sha=_clean_text(payload.get("head_sha")) or None,
+        base_sha=_clean_text(payload.get("base_sha")) or None,
+        created_at=_clean_text(payload.get("created_at")),
+        producer=_clean_text(payload.get("producer")),
+        producer_ref=_clean_text(payload.get("producer_ref")) or None,
+        transport_mode=_clean_text(payload.get("transport_mode")).lower(),
+        workflow_run_id=_clean_text(payload.get("workflow_run_id")) or None,
+        workflow_run_attempt=_clean_text(payload.get("workflow_run_attempt")) or None,
+        changed_files_count=_int_or_none(payload.get("changed_files_count")),
+        requested_output_kind=_clean_text(payload.get("requested_output_kind")) or None,
+    )
+
+
+def extract_queue_markers(text: str) -> list[QueueMarkerParseResult]:
+    results: list[QueueMarkerParseResult] = []
+    body = str(text or "")
+    for match in _QUEUE_MARKER_RE.finditer(body):
+        payload_text = match.group(1)
+        try:
+            payload = json.loads(payload_text)
+        except json.JSONDecodeError:
+            results.append(QueueMarkerParseResult(ok=False, error_code="invalid_queue_marker_json"))
+            continue
+        if not isinstance(payload, Mapping):
+            results.append(QueueMarkerParseResult(ok=False, error_code="invalid_queue_marker_shape"))
+            continue
+        request = queue_request_from_payload(payload)
+        problems = validate_queue_request(request)
+        if request.contract_version != QUEUE_CONTRACT_VERSION:
+            results.append(QueueMarkerParseResult(ok=False, error_code="wrong_queue_contract_version"))
+            continue
+        if request.status not in SUPPORTED_QUEUE_STATUSES:
+            results.append(QueueMarkerParseResult(ok=False, error_code="invalid_queue_status"))
+            continue
+        if problems:
+            results.append(QueueMarkerParseResult(ok=False, error_code="invalid_queue_marker_payload"))
+            continue
+        results.append(QueueMarkerParseResult(ok=True, request=request))
+    return results
 
 
 def render_queue_marker(request: QueueRequest, *, visible_markdown: str | None = None) -> str:

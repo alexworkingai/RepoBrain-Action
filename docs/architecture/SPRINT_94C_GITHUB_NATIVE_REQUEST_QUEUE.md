@@ -33,6 +33,15 @@ partner comment
 - Marketplace
 - external backend
 
+## Relationship to Sprint 94D
+
+Keep the sprint boundary explicit:
+- 94C = public-side queued acknowledgement and queue marker
+- 94D = private control worker foundation that consumes the queue marker
+- 94E = live trusted partner validation
+
+94C should not be rewritten as if it already contained final private processing.
+
 ## Partner beta preview
 
 Partner will:

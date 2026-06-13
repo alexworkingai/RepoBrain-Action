@@ -1,0 +1,60 @@
+﻿name: RepoBrain control repo queue worker
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  queue-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout RepoBrain-Action worker code
+        uses: actions/checkout@v5
+        with:
+          repository: alexworkingai/RepoBrain-Action
+          ref: main
+
+      - name: Validate GitHub App configuration
+        shell: bash
+        run: |
+          if [ -z "${REPOBRAIN_GITHUB_APP_ID_VALUE}" ]; then
+            echo "GITHUB_APP_ID_MISSING"
+            exit 1
+          fi
+          if [ -z "${REPOBRAIN_GITHUB_APP_PRIVATE_KEY_VALUE}" ]; then
+            echo "GITHUB_APP_PRIVATE_KEY_MISSING"
+            exit 1
+          fi
+          echo "Private control repo configuration markers are present."
+        env:
+          REPOBRAIN_GITHUB_APP_ID_VALUE: ${{ vars.REPOBRAIN_GITHUB_APP_ID || secrets.REPOBRAIN_GITHUB_APP_ID }}
+          REPOBRAIN_GITHUB_APP_PRIVATE_KEY_VALUE: ${{ secrets.REPOBRAIN_GITHUB_APP_PRIVATE_KEY }}
+
+      - name: Mint GitHub App installation token placeholder
+        shell: bash
+        run: |
+          echo "Mint the GitHub App installation token inside the private control repo."
+          echo "Do not print the token."
+          echo "Do not write the token to artifacts."
+          echo "Set REPOBRAIN_GITHUB_INSTALLATION_TOKEN only for the worker step."
+
+      - name: Run control worker once
+        shell: bash
+        env:
+          REPOBRAIN_GITHUB_INSTALLATION_TOKEN: ${{ secrets.REPOBRAIN_GITHUB_INSTALLATION_TOKEN }}
+          REPOBRAIN_TOPOCORE_ENTRYPOINT_CMD: ${{ secrets.REPOBRAIN_TOPOCORE_ENTRYPOINT_CMD }}
+          REPOBRAIN_TOPOCORE_ENTRYPOINT_MODE: ${{ vars.REPOBRAIN_TOPOCORE_ENTRYPOINT_MODE || 'stub' }}
+          REPOBRAIN_CONTROL_REPO_MAX_REPOSITORIES: ${{ vars.REPOBRAIN_CONTROL_REPO_MAX_REPOSITORIES || '20' }}
+          REPOBRAIN_CONTROL_REPO_MAX_QUEUE_ITEMS: ${{ vars.REPOBRAIN_CONTROL_REPO_MAX_QUEUE_ITEMS || '50' }}
+          REPOBRAIN_CONTROL_WORKER_DRY_RUN: ${{ vars.REPOBRAIN_CONTROL_WORKER_DRY_RUN || 'true' }}
+        run: |
+          python scripts/run_control_worker_once.py
+
+# The actual private control repo wires the real TopoCore entrypoint.
+# This public RepoBrain-Action repo does not contain TopoCore internals.
+# Do not upload raw request or result artifacts unless they are redacted.
+# Do not use hosted_api, Marketplace, domain hosting, or an external backend for this flow.

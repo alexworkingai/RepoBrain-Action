@@ -19,12 +19,14 @@ Current truth:
 - the default trusted beta direction is moving to a GitHub-native control plane
 - Sprint 94B adds the GitHub App installation foundation for that direction
 - Sprint 94C adds the GitHub-native request queue for that direction
+- Sprint 94D adds the private control worker foundation that consumes those queue markers through a private TopoCore entrypoint boundary
 - experimental `hosted_api` mode exists, but it requires a real external runtime and is not the default beta path
 - installed private runtime distribution remains a legacy and owner-managed path, not the target self-service beta architecture
 - private TopoCore v6 may still be accessed through legacy credentials such as `TOPOCORE_V6_REPO_TOKEN` in owner-managed paths
 - installed private package remains the preferred legacy runtime wording when that owner-managed path is explicitly authorized
 - trusted partner beta is not ready until Sprint 94E validation
 - final score and audit reports require the private control worker in Sprint 94D
+- final score and audit reports require the Sprint 94D private control worker to be deployed in an owner-controlled private repo
 
 ## Current Beta Path
 
@@ -35,8 +37,8 @@ Current beta path:
 4. Partner adds the public `RepoBrain-Action` workflow.
 5. Partner runs `/repobrain score`, `/repobrain audit`, or `/repobrain audit --profile premium`.
 6. `RepoBrain-Action` creates a public-safe queue marker and queued acknowledgement through `github_app_queue`.
-7. A future private control worker executes the request through private TopoCore in Sprint 94D.
-8. A public-safe final result is posted back to GitHub only after that private worker exists.
+7. The Sprint 94D private control worker foundation executes the request through a private TopoCore entrypoint when deployed in the owner-controlled private repo.
+8. A public-safe final result is posted back to GitHub only by that private control worker.
 
 This flow is being implemented in Sprints 94B-94E.
 
@@ -67,7 +69,7 @@ Current architecture split:
 - GitHub App installation identity: partner-repo install and scoped repository access layer
 - GitHub-native request queue: public-safe marker and acknowledgement layer in Sprint 94C
 - private TopoCore: private capability provider
-- future GitHub-native control worker: owner-controlled execution layer between the public action and private TopoCore
+- private GitHub-native control worker foundation: owner-controlled execution layer between the public action and private TopoCore
 
 Do not use:
 - `repobrain-community`
@@ -107,6 +109,8 @@ Preferred near-term beta direction:
 - no TopoCore on the partner runner
 - no hosted external API requirement
 - no partner secret requirement for the queue-only step
+- no TopoCore token in the partner repository
+- no GitHub App private key in the partner repository
 
 Legacy owner-managed path when explicitly approved:
 - install a private TopoCore runtime package or approved runtime artifact
@@ -132,7 +136,11 @@ Current reference docs:
 - architecture correction: `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`
 - GitHub App foundation: `docs/architecture/SPRINT_94B_GITHUB_APP_INSTALLATION_FOUNDATION.md`
 - GitHub-native request queue: `docs/architecture/SPRINT_94C_GITHUB_NATIVE_REQUEST_QUEUE.md`
+- private control worker foundation: `docs/architecture/SPRINT_94D_PRIVATE_CONTROL_WORKER_TOPOCORE_ENTRYPOINT.md`
 - queue contract: `docs/contracts/GITHUB_NATIVE_REQUEST_QUEUE_V1.md`
+- control worker request contract: `docs/contracts/CONTROL_WORKER_REQUEST_V1.md`
+- control worker result contract: `docs/contracts/CONTROL_WORKER_RESULT_V1.md`
+- TopoCore entrypoint adapter contract: `docs/contracts/TOPOCORE_ENTRYPOINT_ADAPTER_V1.md`
 - private control repo setup: `docs/control-plane/GITHUB_APP_PRIVATE_CONTROL_REPO_SETUP.md`
 - installation identity contract: `docs/contracts/GITHUB_APP_INSTALLATION_IDENTITY_V1.md`
 - quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
@@ -144,7 +152,8 @@ Current truth:
 - do not set fake `api_url` values for partners
 - do not require `REPOBRAIN_HOSTED_API_URL` for the default beta queue path
 - wait for Sprint 94B-94E GitHub-native workflow instructions for the default beta path
-- wait for Sprint 94D private worker execution before expecting final reports from the queue path
+- use the Sprint 94B-94D GitHub-native workflow and private control-plane docs for the default beta path
+- do not expect final reports until the owner deploys the Sprint 94D private worker in the private control repo
 - install the RepoBrain GitHub App when invited
 - do not install from Marketplace for this stage
 
@@ -248,6 +257,7 @@ Full troubleshooting guide:
 - RepoBrain integrates TopoCore through contracts and public-safe results
 - GitHub App private key belongs only in the private control repo
 - partner repos must not store the GitHub App private key
+- partner repos must not store TopoCore tokens for the GitHub-native beta path
 - do not use `pull_request_target` for the external pilot
 - do not expose legacy runtime credentials to untrusted fork code
 - `/repobrain verify` is informational only
@@ -258,9 +268,10 @@ Full troubleshooting guide:
 
 Important current limitations:
 - GitHub-native control-plane beta is still being implemented in Sprints 94B-94E
+- Sprint 94D adds only the private worker foundation and workflow template, not the final trusted partner validation
 - experimental hosted mode is not the default trusted beta path
 - Sprint 94C queue mode only creates a public-safe queued acknowledgement and marker
-- final score and audit reports require the private control worker in Sprint 94D
+- final score and audit reports require the private control worker to be deployed in the owner-controlled private repo
 - `/repobrain audit` is implemented as an MVP repository-level audit outside the queue-only partner path
 - `/repobrain doctor` is report-only installation and runtime diagnostics
 - `/repobrain status` is implemented as a lightweight runtime snapshot
