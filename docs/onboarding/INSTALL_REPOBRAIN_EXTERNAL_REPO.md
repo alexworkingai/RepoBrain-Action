@@ -1,4 +1,4 @@
-﻿# Install RepoBrain In An External Repository
+# Install RepoBrain In An External Repository
 
 ## What RepoBrain Is
 
@@ -18,11 +18,13 @@ Current truth:
 - Marketplace is not the current onboarding route
 - the default trusted beta direction is moving to a GitHub-native control plane
 - Sprint 94B adds the GitHub App installation foundation for that direction
+- Sprint 94C adds the GitHub-native request queue for that direction
 - experimental `hosted_api` mode exists, but it requires a real external runtime and is not the default beta path
 - installed private runtime distribution remains a legacy and owner-managed path, not the target self-service beta architecture
 - private TopoCore v6 may still be accessed through legacy credentials such as `TOPOCORE_V6_REPO_TOKEN` in owner-managed paths
 - installed private package remains the preferred legacy runtime wording when that owner-managed path is explicitly authorized
 - trusted partner beta is not ready until Sprint 94E validation
+- final score and audit reports require the private control worker in Sprint 94D
 
 ## Current Beta Path
 
@@ -32,8 +34,9 @@ Current beta path:
 3. Trusted partner grants selected repository access to that GitHub App.
 4. Partner adds the public `RepoBrain-Action` workflow.
 5. Partner runs `/repobrain score`, `/repobrain audit`, or `/repobrain audit --profile premium`.
-6. A private control worker executes the request through private TopoCore.
-7. A public-safe result is posted back to GitHub.
+6. `RepoBrain-Action` creates a public-safe queue marker and queued acknowledgement through `github_app_queue`.
+7. A future private control worker executes the request through private TopoCore in Sprint 94D.
+8. A public-safe final result is posted back to GitHub only after that private worker exists.
 
 This flow is being implemented in Sprints 94B-94E.
 
@@ -55,13 +58,14 @@ The numbered install steps below still document the older runtime-dependent path
 - `installed_private_package` or approved artifact delivery when authorized
 - `private_checkout` only as a beta fallback
 
-This is not the default GitHub-native beta path described by Sprint 94A.
+This is not the default GitHub-native beta path described by Sprint 94A and Sprint 94C.
 
 ## Repository Model
 
 Current architecture split:
 - public `RepoBrain-Action`: user-facing GitHub action surface
 - GitHub App installation identity: partner-repo install and scoped repository access layer
+- GitHub-native request queue: public-safe marker and acknowledgement layer in Sprint 94C
 - private TopoCore: private capability provider
 - future GitHub-native control worker: owner-controlled execution layer between the public action and private TopoCore
 
@@ -99,8 +103,10 @@ Check:
 Preferred near-term beta direction:
 - GitHub-native control plane
 - GitHub App installation identity
+- `transport_mode: github_app_queue`
 - no TopoCore on the partner runner
 - no hosted external API requirement
+- no partner secret requirement for the queue-only step
 
 Legacy owner-managed path when explicitly approved:
 - install a private TopoCore runtime package or approved runtime artifact
@@ -120,21 +126,25 @@ Honest caveat:
 
 ## Step 3: Add The Workflow
 
-For the future GitHub-native beta direction, the partner workflow will remain lightweight and public-facing.
+For the current GitHub-native beta direction, the partner workflow remains lightweight and public-facing.
 
 Current reference docs:
 - architecture correction: `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`
 - GitHub App foundation: `docs/architecture/SPRINT_94B_GITHUB_APP_INSTALLATION_FOUNDATION.md`
+- GitHub-native request queue: `docs/architecture/SPRINT_94C_GITHUB_NATIVE_REQUEST_QUEUE.md`
+- queue contract: `docs/contracts/GITHUB_NATIVE_REQUEST_QUEUE_V1.md`
 - private control repo setup: `docs/control-plane/GITHUB_APP_PRIVATE_CONTROL_REPO_SETUP.md`
 - installation identity contract: `docs/contracts/GITHUB_APP_INSTALLATION_IDENTITY_V1.md`
 - quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
-- experimental hosted shape example: `docs/examples/repobrain_partner_self_service_workflow.yml`
+- beta queue example: `docs/examples/repobrain_partner_self_service_workflow.yml`
 - legacy runtime-dependent example: `docs/examples/repobrain_external_pilot_workflow.yml`
 
 Current truth:
 - do not use the experimental hosted example as the default trusted beta setup
 - do not set fake `api_url` values for partners
+- do not require `REPOBRAIN_HOSTED_API_URL` for the default beta queue path
 - wait for Sprint 94B-94E GitHub-native workflow instructions for the default beta path
+- wait for Sprint 94D private worker execution before expecting final reports from the queue path
 - install the RepoBrain GitHub App when invited
 - do not install from Marketplace for this stage
 
@@ -148,15 +158,19 @@ Current external baseline remains read-mostly:
 - `statuses: read`
 - `actions: read`
 
-Additional identity permission used by the historical and future trust layers:
+Not required for the current default queue-only path:
 - `id-token: write`
+- `contents: write`
+- `pull-requests: write`
+- `checks: write`
+- `pull_request_target`
+- deployment or package write permissions
 
 Not required for the current external product path:
 - `contents: write`
 - `pull-requests: write`
 - `checks: write`
 - `pull_request_target`
-- deployment or package write permissions
 
 ## Step 5: Run The First Doctor Check
 
@@ -195,6 +209,11 @@ Open a safe issue comment and run:
 /repobrain audit Focus on repository readiness for trusted beta onboarding.
 ```
 
+Expected queue-path truth:
+- `RepoBrain-Action` posts a queued acknowledgement only
+- a machine-readable GitHub queue marker is embedded in the comment
+- no final audit report is produced until Sprint 94D private worker execution exists
+
 ## Step 8: Run The Compact Score Summary
 
 Open a safe issue comment and run:
@@ -203,12 +222,17 @@ Open a safe issue comment and run:
 /repobrain score Focus on trusted beta readiness.
 ```
 
+Expected queue-path truth:
+- `RepoBrain-Action` posts a queued acknowledgement only
+- no final score report is produced until Sprint 94D private worker execution exists
+
 ## Troubleshooting Quick Table
 
 | Failure | Likely cause | Fix |
 |---|---|---|
 | `Unable to resolve action ... repository not found` | Actions policy blocks external actions, repository slug or ref is wrong, or GitHub resolution is stale | allow external actions, confirm `alexworkingai/RepoBrain-Action@main`, and retry |
 | hosted mode placeholder error | `api_url` points to a placeholder or no real external runtime exists | do not use hosted mode for the current default beta path |
+| queue mode unsupported event | workflow is not running from `issue_comment` | use the documented issue-comment beta queue workflow |
 | verify returns `NOT_RUN` | no concrete checks, statuses, or workflow runs observed | treat as informational absence, not pass or fail |
 | fix returns `BLOCKED_BY_SAFETY` | request asked for mutation | use proposal and governance requests only |
 | review, verify, or fix unsupported in issue | command needs PR context | run on an open PR |
@@ -235,10 +259,12 @@ Full troubleshooting guide:
 Important current limitations:
 - GitHub-native control-plane beta is still being implemented in Sprints 94B-94E
 - experimental hosted mode is not the default trusted beta path
-- `/repobrain audit` is implemented as an MVP repository-level audit
+- Sprint 94C queue mode only creates a public-safe queued acknowledgement and marker
+- final score and audit reports require the private control worker in Sprint 94D
+- `/repobrain audit` is implemented as an MVP repository-level audit outside the queue-only partner path
 - `/repobrain doctor` is report-only installation and runtime diagnostics
 - `/repobrain status` is implemented as a lightweight runtime snapshot
-- `/repobrain score` is implemented as a compact summary of the same guarded audit engine
+- `/repobrain score` is implemented as a compact summary of the same guarded audit engine outside the queue-only partner path
 - issue-scope `review`, `verify`, and `fix` remain scoped unsupported or safe guidance
 - there is no patch or autofix mode in the current external product path
 - Marketplace distribution remains a separate future decision

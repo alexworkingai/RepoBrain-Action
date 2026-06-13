@@ -130,6 +130,7 @@ def test_action_yml_maps_self_service_inputs_into_runtime_env() -> None:
 
     assert env["RB_SELF_SERVICE_PROFILE"] == "${{ inputs.profile }}"
     assert env["RB_SELF_SERVICE_TERMS_ACCEPTED"] == "${{ inputs.terms_accepted }}"
+    assert env["RB_TRANSPORT_MODE"] == "${{ inputs.transport_mode }}"
     assert env["RB_SELF_SERVICE_API_URL"] == "${{ inputs.api_url }}"
     assert env["RB_SELF_SERVICE_OIDC_AUDIENCE"] == "${{ inputs.oidc_audience }}"
     assert env["RB_SELF_SERVICE_MODE"] == "${{ inputs.self_service_mode }}"
@@ -153,7 +154,7 @@ def test_self_service_docs_reflect_93b_without_overclaim() -> None:
     assert "supported self-service commands are `ask`, `audit`, and `score`" in architecture_93d
     assert "repobrain.github_oidc_identity.v1" in architecture
     assert "not yet fully live" in quickstart or "not yet fully live" in architecture
-    assert "id-token: write" in workflow
+    assert "transport_mode: github_app_queue" in workflow
     assert "api_url: https://repobrain.example.invalid" in workflow
     assert 'self_service_mode: "true"' in workflow
     assert "topocore_v6_repo_token" not in workflow

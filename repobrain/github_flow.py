@@ -44,6 +44,16 @@ from repobrain.fix.patch_extract import (
 )
 from repobrain.fix.patch_guard import evaluate_patch_payload
 from repobrain.formatting import format_refusal_comment, format_verify_comment
+from repobrain.github_native_queue import (
+    QUEUE_CONTRACT_VERSION,
+    TRANSPORT_MODE_GITHUB_APP_QUEUE,
+    VALID_TRANSPORT_MODES,
+    build_queue_request,
+    normalize_queue_command,
+    redact_queue_payload,
+    render_queue_marker,
+    validate_queue_request,
+)
 from repobrain.github_publisher import (
     build_check_run_payload,
     publish_check_run,
@@ -62,6 +72,8 @@ from repobrain.output_md import (
     render_hosted_error_markdown,
     render_hosted_response_markdown,
     render_patch_markdown,
+    render_queue_acknowledgement_markdown,
+    render_queue_error_markdown,
     render_refuse_markdown,
     render_review_markdown,
     render_score_markdown,
@@ -97,7 +109,7 @@ from repobrain.hosted_api_contract import (
     sanitize_request_for_logs,
 )
 from repobrain.hosted_api_client import HostedApiClient, HostedApiClientConfig, HostedApiClientError
-from repobrain.oidc import GitHubOidcTokenProvider
+from repobrain.oidc import GitHubOidcTokenProvider, OidcTokenResult
 from repobrain.self_service_identity import (
     SelfServiceConfig,
     build_github_identity_envelope,
@@ -10734,6 +10746,7 @@ def _apply_self_service_audit_fields(
     audit["self_service_enabled"] = bool(self_service_cfg.enabled)
     audit["self_service_terms_accepted"] = bool(self_service_cfg.terms_accepted)
     audit["self_service_profile"] = self_service_cfg.profile
+    audit["transport_mode"] = self_service_cfg.transport_mode
     audit["self_service_api_url_configured"] = bool(self_service_cfg.api_url)
     audit["self_service_oidc_audience"] = self_service_cfg.oidc_audience
     audit["self_service_identity_envelope_version"] = str(
@@ -10778,6 +10791,91 @@ _SELF_SERVICE_HOSTED_COMMANDS = {"ask", "audit", "score"}
 
 def _self_service_hosted_command_enabled(cmd: str) -> bool:
     return str(cmd or "").strip().lower() in _SELF_SERVICE_HOSTED_COMMANDS
+
+
+_GITHUB_APP_QUEUE_COMMANDS = {"audit", "score"}
+
+
+def _github_app_queue_command_enabled(cmd: str) -> bool:
+    return str(cmd or "").strip().lower() in _GITHUB_APP_QUEUE_COMMANDS
+
+
+def _empty_oidc_result(*, audience: str) -> OidcTokenResult:
+    return OidcTokenResult(
+        available=False,
+        audience=audience,
+        token_present=False,
+        token_redacted=True,
+        error_code="oidc_not_requested",
+        message="GitHub OIDC was not requested for github_app_queue transport mode.",
+        token="",
+    )
+
+
+def _queue_comment_context(
+    *,
+    event_payload: dict[str, Any],
+    event_ctx: EventContext,
+    resolved_issue_number: int | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    event_name = str(os.environ.get("GITHUB_EVENT_NAME", "") or "").strip().lower()
+    if event_name != "issue_comment":
+        return None, "GITHUB_QUEUE_UNSUPPORTED_EVENT"
+    repository = event_payload.get("repository", {})
+    repo_full_name = str(os.environ.get("GITHUB_REPOSITORY", "") or "").strip()
+    repo_id = str(os.environ.get("GITHUB_REPOSITORY_ID", "") or "").strip()
+    if isinstance(repository, dict):
+        repo_full_name = repo_full_name or str(repository.get("full_name", "") or "").strip()
+        repo_id = repo_id or str(repository.get("id", "") or "").strip()
+    if not repo_full_name or resolved_issue_number is None:
+        return None, "GITHUB_QUEUE_UNSUPPORTED_EVENT"
+
+    comment = event_payload.get("comment", {})
+    pull_request = event_payload.get("pull_request", {})
+    workflow_ref = str(os.environ.get("GITHUB_ACTION_REF", "") or "").strip()
+    action_repository = str(os.environ.get("GITHUB_ACTION_REPOSITORY", "") or "").strip()
+    producer_ref = workflow_ref or (f"{action_repository}@{REPOBRAIN_VERSION}" if action_repository else REPOBRAIN_VERSION)
+    source_comment_url = ""
+    created_at = ""
+    if isinstance(comment, dict):
+        source_comment_url = str(comment.get("html_url", "") or "").strip()
+        created_at = str(comment.get("created_at", "") or "").strip()
+
+    head_sha = ""
+    base_sha = ""
+    if isinstance(pull_request, dict):
+        head = pull_request.get("head", {})
+        base = pull_request.get("base", {})
+        if isinstance(head, dict):
+            head_sha = str(head.get("sha", "") or "").strip()
+        if isinstance(base, dict):
+            base_sha = str(base.get("sha", "") or "").strip()
+    head_sha = head_sha or str(os.environ.get("GITHUB_SHA", "") or "").strip()
+
+    changed_files_count = 0
+    if isinstance(event_payload.get("changed_files"), list):
+        changed_files_count = len(event_payload.get("changed_files", []))
+    elif isinstance(event_payload.get("files"), list):
+        changed_files_count = len(event_payload.get("files", []))
+
+    return {
+        "repository_full_name": repo_full_name,
+        "repository_id_marker": repo_id or None,
+        "event_kind": "pull_request" if event_ctx.is_pull_request else "issue",
+        "issue_number": resolved_issue_number,
+        "pull_request_number": resolved_issue_number if event_ctx.is_pull_request else None,
+        "source_comment_id": event_ctx.comment_id,
+        "source_comment_url": source_comment_url or None,
+        "actor_login": event_ctx.comment_user_login or str(os.environ.get("GITHUB_ACTOR", "") or "").strip() or None,
+        "head_sha": head_sha or None,
+        "base_sha": base_sha or None,
+        "created_at": created_at or None,
+        "producer": "RepoBrain-Action",
+        "producer_ref": producer_ref,
+        "workflow_run_id": str(os.environ.get("GITHUB_RUN_ID", "") or "").strip() or None,
+        "workflow_run_attempt": str(os.environ.get("GITHUB_RUN_ATTEMPT", "") or "").strip() or None,
+        "changed_files_count": changed_files_count or None,
+    }, None
 
 
 def _build_self_service_bounded_evidence(
@@ -10934,6 +11032,8 @@ def run_github_flow(
     audit_executive_requested = bool(str(parsed.get("executive", "") or "").strip())
     parse_error_code = str(parsed.get("error_code", "") or "").strip().lower()
     parse_error_message = str(parsed.get("error_message", "") or "").strip()
+    audit["command"] = cmd
+    audit["task_type"] = cmd
 
     if profile_override and cmd in {"ask", "explain", "review", "fix", "audit"}:
         env_cfg = replace(env_cfg, llm=replace(env_cfg.llm, execution_profile=profile_override))
@@ -10943,7 +11043,52 @@ def run_github_flow(
         audit["llm_execution_profile_command_override"] = "none"
 
     self_service_cfg = SelfServiceConfig.from_env()
-    oidc_result = GitHubOidcTokenProvider().get_token(audience=self_service_cfg.oidc_audience)
+    transport_mode = self_service_cfg.transport_mode
+    audit["transport_mode"] = transport_mode
+    if transport_mode not in VALID_TRANSPORT_MODES:
+        audit["route_final"] = "SELF_SERVICE_QUEUE_ERROR"
+        audit["pass_count"] = 1
+        audit["index_source"] = "github_native_queue"
+        audit["requested_backend"] = "github_native_queue"
+        audit["resolved_backend"] = "not_applicable"
+        audit["fallback_used"] = "not_applicable"
+        audit["fallback_reason"] = "invalid_transport_mode"
+        audit["scope_status"] = "queue_error"
+        audit["self_service_status"] = "invalid_transport_mode"
+        body_markdown = render_queue_error_markdown(
+            message=(
+                "RepoBrain transport mode is invalid. Use `auto`, `hosted_api`, or "
+                "`github_app_queue`."
+            ),
+            error_code="INVALID_TRANSPORT_MODE",
+            audit_summary=audit,
+        )
+        print(f"Mode={mode_label}")
+        print(f"Cmd={cmd}")
+        print(f"Query={query}")
+        if dry_run:
+            print(body_markdown)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "DRY_RUN_OK"
+        if resolved_issue_number is None:
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            raise ValueError("issue_number is required when dry_run=False")
+        client = _build_post_client()
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+            client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        t0 = time.perf_counter()
+        client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+        add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+        audit["posted"] = True
+        print(f"Posted comment to issue #{resolved_issue_number}")
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+        return "POSTED_OK"
+
+    queue_mode_active = transport_mode == TRANSPORT_MODE_GITHUB_APP_QUEUE
+    if queue_mode_active:
+        oidc_result = _empty_oidc_result(audience=self_service_cfg.oidc_audience)
+    else:
+        oidc_result = GitHubOidcTokenProvider().get_token(audience=self_service_cfg.oidc_audience)
     identity_envelope = build_github_identity_envelope(
         event_payload=event_payload,
         command_context={
@@ -10961,6 +11106,276 @@ def run_github_flow(
         oidc_result=oidc_result,
         identity_envelope=identity_envelope,
     )
+
+    if queue_mode_active and _github_app_queue_command_enabled(cmd):
+        if not self_service_cfg.terms_accepted:
+            audit["route_final"] = "SELF_SERVICE_QUEUE_ERROR"
+            audit["pass_count"] = 1
+            audit["index_source"] = "github_native_queue"
+            audit["requested_backend"] = "github_native_queue"
+            audit["resolved_backend"] = "not_applicable"
+            audit["fallback_used"] = "not_applicable"
+            audit["fallback_reason"] = "terms_not_accepted_for_github_queue"
+            audit["scope_status"] = "queue_error"
+            audit["self_service_status"] = "terms_not_accepted_for_github_queue"
+            body_markdown = render_queue_error_markdown(
+                message=(
+                    "RepoBrain github_app_queue mode requires `terms_accepted: \"true\"` in "
+                    "the workflow."
+                ),
+                error_code="TERMS_NOT_ACCEPTED_FOR_GITHUB_QUEUE",
+                audit_summary=audit,
+            )
+            print(f"Mode={mode_label}")
+            print(f"Cmd={cmd}")
+            print(f"Query={query}")
+            if dry_run:
+                print(body_markdown)
+                _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+                return "DRY_RUN_OK"
+            if resolved_issue_number is None:
+                _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+                raise ValueError("issue_number is required when dry_run=False")
+            client = _build_post_client()
+            if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+                client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+            t0 = time.perf_counter()
+            client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+            add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+            audit["posted"] = True
+            print(f"Posted comment to issue #{resolved_issue_number}")
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "POSTED_OK"
+
+        queue_context, queue_error = _queue_comment_context(
+            event_payload=event_payload,
+            event_ctx=event_ctx,
+            resolved_issue_number=resolved_issue_number,
+        )
+        if queue_error is not None:
+            audit["route_final"] = "SELF_SERVICE_QUEUE_ERROR"
+            audit["pass_count"] = 1
+            audit["index_source"] = "github_native_queue"
+            audit["requested_backend"] = "github_native_queue"
+            audit["resolved_backend"] = "not_applicable"
+            audit["fallback_used"] = "not_applicable"
+            audit["fallback_reason"] = "unsupported_event"
+            audit["scope_status"] = "queue_error"
+            audit["self_service_status"] = "github_queue_unsupported_event"
+            body_markdown = render_queue_error_markdown(
+                message=(
+                    "RepoBrain github_app_queue mode currently supports GitHub issue_comment "
+                    "events only."
+                ),
+                error_code=queue_error,
+                audit_summary=audit,
+            )
+            print(f"Mode={mode_label}")
+            print(f"Cmd={cmd}")
+            print(f"Query={query}")
+            if dry_run:
+                print(body_markdown)
+                _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+                return "DRY_RUN_OK"
+            if resolved_issue_number is None:
+                _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+                raise ValueError("issue_number is required when dry_run=False")
+            client = _build_post_client()
+            if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+                client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+            t0 = time.perf_counter()
+            client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+            add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+            audit["posted"] = True
+            print(f"Posted comment to issue #{resolved_issue_number}")
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "POSTED_OK"
+
+        try:
+            queue_command = normalize_queue_command(
+                source_text,
+                profile_override or self_service_cfg.profile,
+            )
+        except ValueError:
+            audit["route_final"] = "SELF_SERVICE_QUEUE_ERROR"
+            audit["pass_count"] = 1
+            audit["index_source"] = "github_native_queue"
+            audit["requested_backend"] = "github_native_queue"
+            audit["resolved_backend"] = "not_applicable"
+            audit["fallback_used"] = "not_applicable"
+            audit["fallback_reason"] = "unsupported_queue_command"
+            audit["scope_status"] = "queue_error"
+            audit["self_service_status"] = "github_queue_unsupported_command"
+            body_markdown = render_queue_error_markdown(
+                message=(
+                    "RepoBrain github_app_queue mode supports `/repobrain audit` and "
+                    "`/repobrain score` only."
+                ),
+                error_code="GITHUB_QUEUE_UNSUPPORTED_COMMAND",
+                audit_summary=audit,
+            )
+            print(f"Mode={mode_label}")
+            print(f"Cmd={cmd}")
+            print(f"Query={query}")
+            if dry_run:
+                print(body_markdown)
+                _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+                return "DRY_RUN_OK"
+            if resolved_issue_number is None:
+                _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+                raise ValueError("issue_number is required when dry_run=False")
+            client = _build_post_client()
+            if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+                client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+            t0 = time.perf_counter()
+            client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+            add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+            audit["posted"] = True
+            print(f"Posted comment to issue #{resolved_issue_number}")
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "POSTED_OK"
+
+        queue_request = build_queue_request(queue_context, queue_command)
+        queue_problems = validate_queue_request(queue_request)
+        if queue_problems:
+            audit["route_final"] = "SELF_SERVICE_QUEUE_ERROR"
+            audit["pass_count"] = 1
+            audit["index_source"] = "github_native_queue"
+            audit["requested_backend"] = "github_native_queue"
+            audit["resolved_backend"] = "not_applicable"
+            audit["fallback_used"] = "not_applicable"
+            audit["fallback_reason"] = "queue_request_invalid"
+            audit["scope_status"] = "queue_error"
+            audit["self_service_status"] = "github_queue_request_invalid"
+            audit["github_native_queue_validation_errors"] = queue_problems
+            body_markdown = render_queue_error_markdown(
+                message=(
+                    "RepoBrain could not create a public-safe GitHub queue marker for this "
+                    "request."
+                ),
+                error_code="GITHUB_QUEUE_MARKER_POST_FAILED",
+                audit_summary=audit,
+            )
+            print(f"Mode={mode_label}")
+            print(f"Cmd={cmd}")
+            print(f"Query={query}")
+            if dry_run:
+                print(body_markdown)
+                _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+                return "DRY_RUN_OK"
+            if resolved_issue_number is None:
+                _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+                raise ValueError("issue_number is required when dry_run=False")
+            client = _build_post_client()
+            if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+                client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+            t0 = time.perf_counter()
+            client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+            add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+            audit["posted"] = True
+            print(f"Posted comment to issue #{resolved_issue_number}")
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "POSTED_OK"
+
+        audit["route_final"] = "SELF_SERVICE_GITHUB_QUEUE"
+        audit["pass_count"] = 1
+        audit["index_source"] = "github_native_queue"
+        audit["retrieved"] = 0
+        audit["selected"] = 0
+        audit["requested_backend"] = "github_app_queue"
+        audit["resolved_backend"] = "pending_private_control_worker"
+        audit["fallback_used"] = "not_applicable"
+        audit["fallback_reason"] = "github_native_request_queue"
+        audit["scope_status"] = "queue_enqueued"
+        audit["self_service_status"] = "github_native_queue_ready"
+        audit["github_native_queue_contract_version"] = QUEUE_CONTRACT_VERSION
+        audit["github_native_queue_request_id"] = queue_request.request_id
+        audit["github_native_queue_payload"] = redact_queue_payload(queue_request.to_payload())
+        body_markdown = render_queue_marker(
+            queue_request,
+            visible_markdown=render_queue_acknowledgement_markdown(
+                command_text=queue_command.raw,
+                transport_mode=TRANSPORT_MODE_GITHUB_APP_QUEUE,
+                request_id=queue_request.request_id,
+                audit_summary=audit,
+            ),
+        )
+        print(f"Mode={mode_label}")
+        print(f"Cmd={cmd}")
+        print(f"Query={query}")
+        if dry_run:
+            print(body_markdown)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "DRY_RUN_OK"
+        if resolved_issue_number is None:
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            raise ValueError("issue_number is required when dry_run=False")
+        client = _build_post_client()
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+            client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        try:
+            t0 = time.perf_counter()
+            client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+            add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+        except Exception:
+            audit["route_final"] = "SELF_SERVICE_QUEUE_ERROR"
+            audit["requested_backend"] = "github_app_queue"
+            audit["resolved_backend"] = "not_applicable"
+            audit["fallback_reason"] = "queue_marker_post_failed"
+            audit["scope_status"] = "queue_error"
+            audit["self_service_status"] = "github_queue_marker_post_failed"
+            body_markdown = render_queue_error_markdown(
+                message="RepoBrain could not post the GitHub-native queue marker comment.",
+                error_code="GITHUB_QUEUE_MARKER_POST_FAILED",
+                audit_summary=audit,
+            )
+            print(body_markdown)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "GITHUB_QUEUE_MARKER_POST_FAILED"
+        audit["posted"] = True
+        print(f"Posted comment to issue #{resolved_issue_number}")
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+        return "POSTED_OK"
+
+    if queue_mode_active and not _github_app_queue_command_enabled(cmd):
+        audit["route_final"] = "SELF_SERVICE_QUEUE_ERROR"
+        audit["pass_count"] = 1
+        audit["index_source"] = "github_native_queue"
+        audit["requested_backend"] = "github_native_queue"
+        audit["resolved_backend"] = "not_applicable"
+        audit["fallback_used"] = "not_applicable"
+        audit["fallback_reason"] = "unsupported_queue_command"
+        audit["scope_status"] = "queue_error"
+        audit["self_service_status"] = "github_queue_unsupported_command"
+        body_markdown = render_queue_error_markdown(
+            message=(
+                "RepoBrain github_app_queue mode supports `/repobrain audit` and "
+                "`/repobrain score` only."
+            ),
+            error_code="GITHUB_QUEUE_UNSUPPORTED_COMMAND",
+            audit_summary=audit,
+        )
+        print(f"Mode={mode_label}")
+        print(f"Cmd={cmd}")
+        print(f"Query={query}")
+        if dry_run:
+            print(body_markdown)
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            return "DRY_RUN_OK"
+        if resolved_issue_number is None:
+            _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+            raise ValueError("issue_number is required when dry_run=False")
+        client = _build_post_client()
+        if _internal_reactions_enabled() and event_ctx.comment_id is not None:
+            client.add_reaction_to_issue_comment(comment_id=event_ctx.comment_id, content="eyes")
+        t0 = time.perf_counter()
+        client.create_issue_comment(issue_number=resolved_issue_number, body_markdown=body_markdown)
+        add_timing(audit, "post", (time.perf_counter() - t0) * 1000.0)
+        audit["posted"] = True
+        print(f"Posted comment to issue #{resolved_issue_number}")
+        _finalize_run(repo_root=repo_root, audit=audit, governor=governor)
+        return "POSTED_OK"
+
     if bool(self_service_cfg.enabled) and bool(oidc_result.token_present):
         audit["self_service_hosted_api_request_preview"] = _build_self_service_request_preview(
             identity_envelope=identity_envelope,
@@ -10982,8 +11397,6 @@ def run_github_flow(
 
     verification_context_seed = _build_verification_context_seed(time_budget_s=30, env_cfg=env_cfg)
 
-    audit["command"] = cmd
-    audit["task_type"] = cmd
     if parse_error_code:
         audit["command_parse_error_code"] = parse_error_code
         audit["command_parse_error_message"] = parse_error_message or "Invalid command syntax."

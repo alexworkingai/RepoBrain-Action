@@ -1,4 +1,4 @@
-﻿# RepoBrain Action
+# RepoBrain Action
 
 Current release candidate: `0.5.0-rc.1`
 
@@ -23,12 +23,16 @@ Current product runtime is v6-only:
 - `hosted_api` mode requires a real external runtime and is not the default GitHub-native beta path
 - the next implementation stage is a GitHub-native beta control plane
 - Sprint 94B adds the GitHub App installation foundation for that control-plane path
+- Sprint 94C adds `github_app_queue` request queue mode and public-safe queue markers
 - GitHub Marketplace is not the immediate route
 - trusted and developer beta are expected to use GitHub App installation identity plus a private control worker
 - trusted partner beta is not ready until Sprint 94E validation
+- final score and audit reports require the private control worker in Sprint 94D
 - TopoCore remains private and is integrated through stable contracts rather than public runtime distribution
+- TopoCore remains a separate team and system
+- RepoBrain does not implement TopoCore internals
 - RepoBrain integrates TopoCore capabilities and does not implement TopoCore internals
-- current GitHub App foundation status is `SPRINT_94B_GITHUB_APP_INSTALLATION_FOUNDATION_READY`
+- current GitHub-native queue status is `SPRINT_94C_GITHUB_NATIVE_REQUEST_QUEUE_READY`
 
 ## Quick Start
 
@@ -36,14 +40,16 @@ For a new external repository install, start here:
 
 - Self-service architecture correction and roadmap: `docs/architecture/SPRINT_94A_GITHUB_NATIVE_BETA_ARCHITECTURE_CORRECTION.md`
 - GitHub App installation foundation: `docs/architecture/SPRINT_94B_GITHUB_APP_INSTALLATION_FOUNDATION.md`
+- GitHub-native request queue: `docs/architecture/SPRINT_94C_GITHUB_NATIVE_REQUEST_QUEUE.md`
+- Queue contract: `docs/contracts/GITHUB_NATIVE_REQUEST_QUEUE_V1.md`
 - Private control repo setup: `docs/control-plane/GITHUB_APP_PRIVATE_CONTROL_REPO_SETUP.md`
 - Installation identity contract: `docs/contracts/GITHUB_APP_INSTALLATION_IDENTITY_V1.md`
 - Current beta-path quickstart: `docs/onboarding/PARTNER_SELF_SERVICE_QUICKSTART.md`
 - Install guide: `docs/onboarding/INSTALL_REPOBRAIN_EXTERNAL_REPO.md`
 - Command guide: `docs/commands/REPOBRAIN_COMMANDS.md`
 - Troubleshooting: `docs/troubleshooting/REPOBRAIN_EXTERNAL_TROUBLESHOOTING.md`
+- Beta queue workflow example: `docs/examples/repobrain_partner_self_service_workflow.yml`
 - Example workflow: `docs/examples/repobrain_external_pilot_workflow.yml`
-- Experimental hosted workflow shape: `docs/examples/repobrain_partner_self_service_workflow.yml`
 - Sprint 93E historical runbook: `docs/release/SPRINT_93E_TRUSTED_PARTNER_VALIDATION_RUNBOOK.md`
 - Sprint 93E historical evidence template: `docs/release/SPRINT_93E_PHASE1_VALIDATION_EVIDENCE.md`
 - Partner readiness: `docs/release/PARTNER_TESTING_READINESS.md`
@@ -98,12 +104,19 @@ GitHub-native beta control plane target:
 - private TopoCore entrypoint
 - public-safe GitHub response
 
+Current 94C queue-mode truth:
+- partners use `transport_mode: github_app_queue`
+- the public action creates a public-safe queued acknowledgement only
+- the queue marker contains no TopoCore internals, no tokens, and no hosted API dependency
+- final reports require the Sprint 94D private control worker
+
 What this does not require right now:
 - Marketplace
 - public SaaS hosting
 - domain registration
 - TopoCore on partner runners
 - owner-generated onboarding tokens
+- partner private tokens
 
 ## Sprint Foundations Preserved
 
@@ -120,6 +133,7 @@ Useful historical foundations remain in place:
 - Sprint 93E hardened hosted request and response handling and documented trusted validation
 - Sprint 94A reclassifies the hosted path as experimental and future-facing because no real external runtime exists yet
 - Sprint 94B establishes GitHub App installation identity without Marketplace or partner tokens
+- Sprint 94C creates the public-side GitHub-native request queue without running TopoCore on partner runners
 
 Historical sprint truth markers:
 - Sprint 93C hosted-boundary truth remains preserved as documentation lineage

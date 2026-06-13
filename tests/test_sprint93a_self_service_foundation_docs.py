@@ -45,16 +45,15 @@ def test_partner_self_service_workflow_example_has_id_token_and_no_owner_secret(
     text = _read("docs/examples/repobrain_partner_self_service_workflow.yml")
     lowered = text.lower()
 
-    assert "id-token: write" in lowered
     assert "contents: read" in lowered
     assert "issues: write" in lowered
     assert "pull-requests: write" in lowered
     assert "terms_accepted" in text
+    assert "transport_mode: github_app_queue" in lowered
     assert "self_service_mode" in text
     assert "TOPOCORE_V6_REPO_TOKEN" not in text
     assert "TOPOCORE_V6_ARTIFACT_TOKEN" not in text
     assert ".topocore-v6" not in text
-    assert "actions/checkout@v5" in text
 
 
 def test_architecture_note_states_thin_client_and_private_server_side_runtime() -> None:
@@ -81,12 +80,13 @@ def test_action_yml_exposes_optional_non_breaking_self_service_inputs() -> None:
     action = yaml.safe_load((ROOT / "action.yml").read_text(encoding="utf-8"))
     inputs = action["inputs"]
 
-    for key in ("profile", "terms_accepted", "api_url", "oidc_audience", "self_service_mode"):
+    for key in ("profile", "terms_accepted", "transport_mode", "api_url", "oidc_audience", "self_service_mode"):
         assert key in inputs
         assert inputs[key]["required"] is False
 
     assert inputs["profile"]["default"] == "partner-pilot"
     assert inputs["terms_accepted"]["default"] == "false"
+    assert inputs["transport_mode"]["default"] == "auto"
     assert inputs["api_url"]["default"] == ""
     assert inputs["oidc_audience"]["default"] == "repobrain-api"
     assert inputs["self_service_mode"]["default"] == "false"

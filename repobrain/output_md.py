@@ -2852,6 +2852,51 @@ def render_hosted_error_markdown(
     return "\n".join(lines)
 
 
+def render_queue_acknowledgement_markdown(
+    *,
+    command_text: str,
+    transport_mode: str,
+    request_id: str,
+    audit_summary: dict[str, Any],
+) -> str:
+    lines = [
+        "### 🧠 RepoBrain request queued",
+        "RepoBrain request queued for private control-plane processing.",
+        "",
+        f"- Command: `{str(command_text or '/repobrain audit').strip()}`",
+        f"- Transport: `{str(transport_mode or 'github_app_queue').strip()}`",
+        "- Status: `queued`",
+        f"- Request ID: `{str(request_id or 'rbq_unknown').strip()}`",
+        "- Next step: RepoBrain private control worker will process this request after GitHub App installation validation.",
+        "- Final score or audit report is not produced in this queue-only step.",
+        "",
+        *_compact_safety_lines(audit_summary),
+        "",
+        _audit_note(),
+    ]
+    return "\n".join(lines)
+
+
+def render_queue_error_markdown(
+    *,
+    message: str,
+    error_code: str,
+    audit_summary: dict[str, Any],
+) -> str:
+    lines = [
+        "### 🛑 RepoBrain queue error",
+        message.strip() or "GitHub-native queue request failed.",
+        "",
+        f"- Error code: `{str(error_code or 'GITHUB_QUEUE_ERROR').strip()}`",
+        f"- Transport: `{str(audit_summary.get('transport_mode', 'github_app_queue') or 'github_app_queue').strip()}`",
+        "",
+        *_compact_safety_lines(audit_summary),
+        "",
+        _audit_note(),
+    ]
+    return "\n".join(lines)
+
+
 def render_scoped_command_markdown(
     *,
     title: str,
