@@ -20,11 +20,13 @@ Current truth:
 - Sprint 94B adds the GitHub App installation foundation for that direction
 - Sprint 94C adds the GitHub-native request queue for that direction
 - Sprint 94D adds the private control worker foundation that consumes those queue markers through a private TopoCore entrypoint boundary
+- Sprint 94E is the trusted partner beta validation stage for that direction
 - experimental `hosted_api` mode exists, but it requires a real external runtime and is not the default beta path
 - installed private runtime distribution remains a legacy and owner-managed path, not the target self-service beta architecture
 - private TopoCore v6 may still be accessed through legacy credentials such as `TOPOCORE_V6_REPO_TOKEN` in owner-managed paths
 - installed private package remains the preferred legacy runtime wording when that owner-managed path is explicitly authorized
 - trusted partner beta is not ready until Sprint 94E validation
+- trusted partner beta requires live validation evidence before it can be called ready
 - final score and audit reports require the private control worker in Sprint 94D
 - final score and audit reports require the Sprint 94D private control worker to be deployed in an owner-controlled private repo
 
@@ -39,6 +41,7 @@ Current beta path:
 6. `RepoBrain-Action` creates a public-safe queue marker and queued acknowledgement through `github_app_queue`.
 7. The Sprint 94D private control worker foundation executes the request through a private TopoCore entrypoint when deployed in the owner-controlled private repo.
 8. A public-safe final result is posted back to GitHub only by that private control worker.
+9. Trusted partner beta is not ready until Sprint 94E live validation evidence exists.
 
 This flow is being implemented in Sprints 94B-94E.
 
@@ -156,6 +159,7 @@ Current truth:
 - do not expect final reports until the owner deploys the Sprint 94D private worker in the private control repo
 - install the RepoBrain GitHub App when invited
 - do not install from Marketplace for this stage
+- do not claim trusted beta ready until live validation evidence exists
 
 ## Step 4: Verify Permissions
 
@@ -269,6 +273,7 @@ Full troubleshooting guide:
 Important current limitations:
 - GitHub-native control-plane beta is still being implemented in Sprints 94B-94E
 - Sprint 94D adds only the private worker foundation and workflow template, not the final trusted partner validation
+- Sprint 94E is the validation stage and the current truthful package-only status is `SPRINT_94E_VALIDATION_PACKAGE_READY_OPERATOR_SETUP_PENDING`
 - experimental hosted mode is not the default trusted beta path
 - Sprint 94C queue mode only creates a public-safe queued acknowledgement and marker
 - final score and audit reports require the private control worker to be deployed in the owner-controlled private repo

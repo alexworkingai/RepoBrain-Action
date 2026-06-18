@@ -85,6 +85,57 @@ Private control worker setup:
 9. Verify the public result comment.
 10. Verify no token, path, or private data leakage.
 
+## Sprint 94E Live Validation
+
+Move from auth-check setup to trusted partner validation in this order:
+1. confirm the partner workflow is on the repository default branch
+2. confirm `transport_mode: github_app_queue`
+3. confirm there is no `api_url` or `REPOBRAIN_HOSTED_API_URL`
+4. run the worker in dry-run mode first
+5. run the worker in stub TopoCore mode
+6. run the worker in real private TopoCore mode only inside the private control repo
+7. collect queue-comment, control-worker, and final-result references
+8. verify idempotency by re-running on the same markers
+9. run a leakage scan on comments and sanitized worker logs
+
+Dry-run guidance:
+- use `REPOBRAIN_CONTROL_WORKER_DRY_RUN=true`
+- keep `REPOBRAIN_TOPOCORE_ENTRYPOINT_MODE=stub`
+- confirm marker discovery and repo identity without posting final results
+
+Stub mode guidance:
+- set `REPOBRAIN_CONTROL_WORKER_DRY_RUN=false`
+- set `REPOBRAIN_TOPOCORE_ENTRYPOINT_MODE=stub`
+- confirm final public-safe result posting
+- confirm no `hosted_api` path is used
+
+Real private TopoCore guidance:
+- configure the real private TopoCore mode only in the private control repo
+- do not copy the command, path, or token into public `RepoBrain-Action`
+- do not copy the command, path, or token into partner repositories
+- verify the final result remains public-safe
+
+Evidence to collect:
+- queue comment URL or reference
+- `request_id`
+- control worker run URL or reference
+- final result comment URL or reference
+- TopoCore mode used
+- idempotency result
+- leakage scan result
+
+Secret-handling rules:
+- never print installation tokens
+- never print GitHub App private keys
+- never print TopoCore command lines if they reveal private paths
+- never attach raw private request or response payloads to public artifacts
+
+Validation truths:
+- the real private TopoCore configuration is private-control-repo only
+- the public `RepoBrain-Action` repo never stores a TopoCore command, path, or token
+- partner repos never store TopoCore secrets
+- stub mode is not enough for final trusted beta readiness
+
 ## Minimal Validation Target For 94B
 
 The private control repo auth layer should eventually prove:

@@ -14,9 +14,11 @@ Current truth:
 - Sprint 94B adds the GitHub App installation foundation for that control-plane path
 - Sprint 94C adds `github_app_queue` request markers and queued acknowledgements for that control-plane path
 - Sprint 94D adds the private control worker foundation that consumes those queued requests through a private TopoCore entrypoint boundary
+- Sprint 94E is the trusted partner beta validation stage for that path
 - GitHub Marketplace is not the immediate route
 - trusted partners should wait for GitHub App and control-worker beta instructions from Sprints 94B-94E
 - trusted partner beta is not ready until Sprint 94E validation
+- trusted partner beta requires live validation evidence before it can be called ready
 - final score and audit reports require the Sprint 94D private control worker to be deployed in an owner-controlled private repo
 
 Historical Phase 1 truth:
@@ -42,6 +44,7 @@ Current beta path:
 8. The final result is posted back to GitHub only by that private control worker.
 9. Partners receive final reports only after the private control worker is actually deployed by the RepoBrain owner.
 10. Partners receive final reports only after the Sprint 94D private control worker exists.
+11. Trusted partner beta is not ready until Sprint 94E live validation evidence exists.
 
 This flow is being implemented in Sprints 94B-94E.
 
@@ -76,6 +79,7 @@ Current default beta queue mode:
 - do not add a GitHub App private key
 - do not sign up through Marketplace
 - do not claim a final score or audit report from the queue-only partner step
+- do not claim trusted beta ready without live validation evidence
 
 ## Experimental Hosted Mode
 
@@ -140,6 +144,8 @@ Do not claim from this quickstart alone:
 - hosted beta readiness from only setting `REPOBRAIN_HOSTED_API_URL`
 - final score or audit delivery from Sprint 94C queue mode alone
 - trusted beta completion before Sprint 94E live validation
+- public developer beta ready
+- production approved
 
 ## Historical Sprint 93E Note
 

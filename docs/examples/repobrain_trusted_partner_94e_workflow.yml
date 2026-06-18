@@ -1,0 +1,38 @@
+# Trusted partner validation workflow for Sprint 94E.
+# Workflow must be present on the target repository default branch.
+# Warning: for issue_comment validation, this workflow must be present on the
+# target repository default branch or comment-triggered validation may not run.
+
+name: RepoBrain trusted partner validation
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  repobrain:
+    if: >
+      startsWith(github.event.comment.body, '/repobrain score') ||
+      startsWith(github.event.comment.body, '/repobrain audit')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: alexworkingai/RepoBrain-Action@<validated-94d-or-94e-ref>
+        with:
+          profile: partner-pilot
+          terms_accepted: "true"
+          transport_mode: github_app_queue
+
+# Must not include:
+# - api_url
+# - REPOBRAIN_HOSTED_API_URL
+# - TOPOCORE token
+# - GitHub App private key
+# - installation token
+# - owner token
+# - private checkout
+# - hosted_api as the default path
