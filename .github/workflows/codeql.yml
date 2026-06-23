@@ -16,7 +16,7 @@ jobs:
     if: github.event.repository.visibility == 'public' || vars.RB_ENABLE_PRIVATE_CODEQL == '1'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v3
         with:
           languages: python
