@@ -1,4 +1,4 @@
-﻿name: RepoBrain Index Cache
+name: RepoBrain Index Cache
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
       - name: Build RepoBrain index
         run: python scripts/run_index.py
       - name: Save index to cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: artifacts/index-package.zip
           key: repobrain-index-main-${{ github.sha }}
